@@ -4,7 +4,6 @@ import '@mantine/core/styles.css';
 import '@src/styles/mantine.scss';
 // import 'react-json-view-lite/dist/index.css';
 import { MantineProvider } from '@mantine/core';
-import { Analytics } from '@vercel/analytics/react';
 import { theme } from '@/theme';
 
 export const revalidate = 0;
@@ -28,7 +27,6 @@ export default async function RootLayout({ children }: { children: any }) {
         <MantineProvider forceColorScheme={defaultColorScheme} theme={theme}>
           {children}
         </MantineProvider>
-        <Analytics />
       </body>
     </html>
   );

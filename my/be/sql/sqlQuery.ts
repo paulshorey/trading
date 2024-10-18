@@ -33,10 +33,6 @@ export const sqlQuery = async function (query: string, values: any[] = []): Prom
       return row;
     });
 
-    console.log("numKeys", numKeys);
-    console.log("result.fields", result.fields);
-    console.log("result.rows", result.rows);
-
     return result;
   } catch (error) {
     console.error("Error running query:", error);

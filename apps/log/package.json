@@ -20,6 +20,8 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@my/be": "*",
+    "@my/fe": "*",
     "@mantine/code-highlight": "^7.13.2",
     "@mantine/core": "7.13.2",
     "@mantine/hooks": "7.13.2",
@@ -44,7 +46,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@repo/config": "*",
+    "@my/config": "*",
     "@next/eslint-plugin-next": "^14.2.15",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^14.3.1",

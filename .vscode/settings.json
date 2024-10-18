@@ -1,4 +1,12 @@
 {
-  "files": [],
-  "references": [{ "path": "./apps/myApp1" }, { "path": "./apps/myApp2" }]
+  "xfiles.exclude": {
+    "apps/log/public": true,
+    "apps/log/*.*": true,
+    "apps/log/.*": true,
+    "apps/trade/public": true,
+    "apps/trade/*.*": true,
+    "apps/trade/.*": true,
+    "my/**/.eslintrc.js": true,
+    "my/**/tsconfig.json": true
+  }
 }

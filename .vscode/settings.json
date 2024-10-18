@@ -1,0 +1,4 @@
+{
+  "files": [],
+  "references": [{ "path": "./apps/myApp1" }, { "path": "./apps/myApp2" }]
+}

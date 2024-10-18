@@ -2,7 +2,7 @@
 
 import { LogsData, LogsOptions } from "./types";
 import { sqlQuery } from "@my/be/sql/sqlQuery";
-import { getCurrentIpAddress } from "@my/be/getCurrentIpAddress";
+import { getCurrentIpAddress } from "@my/be/nextjs/getCurrentIpAddress";
 
 export const addLog = async function (logData: LogsData, options: LogsOptions = {}) {
   "use server";

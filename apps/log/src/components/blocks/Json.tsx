@@ -2,7 +2,7 @@
 
 import { JsonView, darkStyles } from 'react-json-view-lite';
 import classes from './Json.module.scss';
-import Copy from './Copy';
+import Copy from '../buttons/Copy';
 
 export default function Json({ data }: any) {
   const styles = darkStyles;

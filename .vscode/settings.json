@@ -1,5 +1,5 @@
 {
-  "xfiles.exclude": {
+  "files.exclude": {
     "apps/log/public": true,
     "apps/log/*.*": true,
     "apps/log/.*": true,

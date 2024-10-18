@@ -1,7 +1,7 @@
-import { ErrorTemplate } from '@src/components/ErrorTemplate';
+import { ErrorTemplate } from '@src/components/mains/ErrorTemplate';
 import { getLogs } from '@my/be/sql/getLogs';
-import Json from '@src/components/ui/Json';
-import Logs from '@src/components/ui/Logs';
+import Json from '@src/components/blocks/Json';
+import Logs from '@src/components/mains/Logs';
 
 export default async function () {
   try {

@@ -1,10 +1,6 @@
 'use client';
+import { ErrorTemplate } from '@my/fe/components/mains/ErrorTemplate';
 
-// import { ErrorTemplate } from '@my/fe/components/mains/ErrorTemplate';
-import dynamic from 'next/dynamic';
-const ErrorTemplate = dynamic(() => import('@my/fe/components/mains/ErrorTemplate'), {
-  ssr: false,
-});
 type Props = Readonly<{
   error: Error;
 }>;

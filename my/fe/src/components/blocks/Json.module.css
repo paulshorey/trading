@@ -1,0 +1,69 @@
+@mixin keyLabel {
+  color: orange;
+}
+
+.JsonViewContainer {
+  div {
+  }
+}
+
+.container {
+  /* CSS class name for rendering parent block */
+}
+.basicChildStyle {
+  /* CSS class name for property block containing property name and value */
+  [class*="basicChildStyle"] {
+    padding-left: 1.11rem;
+  }
+}
+.collapseIcon {
+  /* CSS class name for rendering button collapsing Object and Array nodes. Default content is ▾. */
+}
+.expandIcon {
+  /* CSS class name for rendering button expanding Object and Array nodes. Default content is ▸. */
+}
+.collapsedContent {
+  /* CSS class name for rendering placeholder when Object and Array nodes are collapsed. Default contents is .... */
+}
+.label {
+  user-select: none;
+  pointer-events: none;
+}
+.label,
+.clickableLabel {
+  /* CSS class name for rendering property names */
+  color: orange;
+  padding-right: 0.25rem;
+}
+.clickableLabel {
+  /* CSS class name for rendering clickable property names (requires the clickToExpandNode prop to be true) */
+  text-decoration: underline;
+}
+.nullValue {
+  /* CSS class name for rendering null values */
+}
+.undefinedValue {
+  /* CSS class name for rendering undefined values */
+}
+.numberValue {
+  /* CSS class name for rendering numeric values */
+}
+.stringValue {
+  /* CSS class name for rendering string values */
+  &::before,
+  &::after {
+    content: "'";
+    opacity: 0.5;
+  }
+}
+.booleanValue {
+  /* CSS class name for rendering boolean values */
+}
+.otherValue {
+  /* CSS class name for rendering all other values except Object, Arrray, null, undefined, numeric, boolean and string */
+}
+.punctuation {
+  /* CSS class name for rendering ,, [, ], {, } */
+  user-select: none;
+  pointer-events: none;
+}

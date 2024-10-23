@@ -11,7 +11,7 @@ import {
   Network,
   IndexerClient,
 } from '@dydxprotocol/v4-client-js';
-import Json from '@/src/components/ui/Json';
+import Json from '@src/components/ui/Json';
 
 export const revalidate = 0;
 

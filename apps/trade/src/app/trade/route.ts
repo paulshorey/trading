@@ -12,7 +12,7 @@ import {
   IndexerClient,
 } from '@dydxprotocol/v4-client-js';
 
-import { formatResponse } from '@/src/lib/api/formatResponse';
+import { formatResponse } from '@src/lib/api/formatResponse';
 
 type RouteParams = {
   params: {

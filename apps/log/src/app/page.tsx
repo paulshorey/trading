@@ -1,8 +1,8 @@
 import importDynamic from 'next/dynamic';
 import { ErrorTemplate } from '@src/components/ErrorTemplate';
-import { getSql } from '@/src/lib/sql/getSql';
-import Json from '@/src/components/ui/Json';
-// import { cc } from '@/src/lib/cc';
+import { getSql } from '@src/lib/sql/getSql';
+import Json from '@src/components/ui/Json';
+// import { cc } from '@src/lib/cc';
 
 const Logs = importDynamic(() => import('@src/components/ui/Logs'), {
   ssr: false,

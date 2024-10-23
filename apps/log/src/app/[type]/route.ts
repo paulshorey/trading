@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
-import { formatResponse } from '@/src/lib/api/formatResponse';
-import { addLog } from '@/src/lib/sql/addLog';
+import { formatResponse } from '@src/lib/api/formatResponse';
+import { addLog } from '@src/lib/sql/addLog';
 
 type RouteParams = {
   params: {

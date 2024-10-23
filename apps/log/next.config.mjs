@@ -5,12 +5,10 @@ const withBundleAnalyzer = bundleAnalyzer({
 });
 
 export default withBundleAnalyzer({
+  transpilePackages: ['@my/fe', '@my/be'],
   reactStrictMode: false,
   eslint: {
     ignoreDuringBuilds: true,
-  },
-  serverActions: {
-    bodySizeLimit: '1mb',
   },
   experimental: {
     optimizePackageImports: ['@mantine/core', '@mantine/hooks'],

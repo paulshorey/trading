@@ -1,0 +1,20 @@
+.Accordion {
+}
+.AccordionItem {
+}
+.AccordionControl {
+}
+.AccordionPanel {
+  > div {
+    padding: 0 0 0.66rem 0.66rem;
+  }
+}
+
+.Title {
+  display: flex;
+  justify-content: space-between;
+  flex-direction: column;
+  p {
+    margin: 0.33rem 0;
+  }
+}

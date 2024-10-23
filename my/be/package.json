@@ -6,7 +6,7 @@
     "lint": "eslint . --max-warnings 0"
   },
   "devDependencies": {
-    "@my/config": "*",
+    "@my/config": "workspace:*",
     "@turbo/gen": "^1.12.4",
     "@types/node": "^20.11.24",
     "@types/eslint": "^8.56.5",

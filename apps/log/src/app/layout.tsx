@@ -1,10 +1,11 @@
-import '@my/fe/styles/tailwind.css';
-import '@my/fe/styles/global.scss';
+import '@src/styles/tailwind.css';
+import '@src/styles/global.scss';
 import '@mantine/core/styles.css';
-import '@my/fe/styles/mantine.scss';
+import '@src/styles/mantine.scss';
 // import 'react-json-view-lite/dist/index.css';
 import { MantineProvider } from '@mantine/core';
-import { theme } from '@my/fe/styles/theme';
+import { Analytics } from '@vercel/analytics/react';
+import { theme } from '@/theme';
 
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
@@ -27,6 +28,7 @@ export default async function RootLayout({ children }: { children: any }) {
         <MantineProvider forceColorScheme={defaultColorScheme} theme={theme}>
           {children}
         </MantineProvider>
+        <Analytics />
       </body>
     </html>
   );

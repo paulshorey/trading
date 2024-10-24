@@ -1,9 +1,9 @@
 "use server";
 
 import { LogsData, LogsOptions } from "./types";
-import { sqlQuery } from "@my/be/sql/sqlQuery";
-import { getCurrentIpAddress } from "@my/be/nextjs/getCurrentIpAddress";
-import { pool } from "@my/be/sql/pool/events";
+import { sqlQuery } from "../../sql/sqlQuery";
+import { getCurrentIpAddress } from "../../nextjs/getCurrentIpAddress";
+import { pool } from "../../sql/pool/events";
 
 export const add = async function (logData: LogsData, options: LogsOptions = {}) {
   "use server";

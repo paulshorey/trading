@@ -1,12 +1,12 @@
 "use client";
 
 import { Accordion } from "@mantine/core";
-import Json from "@my/fe/components/blocks/Json";
+import Json from "../../components/blocks/Json";
 import classes from "./Logs.module.scss";
-import Collapsed from "@my/fe/components/blocks/Collapsed";
-import LocalShortTime from "@my/fe/components/inline/LocalShortTime";
+import Collapsed from "../../components/blocks/Collapsed";
+import LocalShortTime from "../../components/inline/LocalShortTime";
 // import { cc } from '../../lib/cc';
-import Badge from "@my/fe/components/inline/Badge";
+import Badge from "../../components/inline/Badge";
 
 export default function Logs({ logs }: any) {
   // cc.info(['client', 'Logs.tsx', `logs.length=${logs.length}`]);

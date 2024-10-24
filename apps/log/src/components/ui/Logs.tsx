@@ -1,6 +1,6 @@
 'use client';
 
-import { Accordion } from '@mantine/core';
+import Accordion from '@my/fe/components/blocks/Accordion';
 import Json from '@my/fe/components/blocks/Json';
 import classes from './Logs.module.scss';
 import Collapsed from './LogCollapsed';

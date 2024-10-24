@@ -1,11 +1,11 @@
 import { ErrorTemplate } from '@my/fe/components/mains/ErrorTemplate';
 import { get } from '@my/be/sql/log/get';
 import Json from '@my/fe/components/blocks/Json';
-import Logs from '@src/components/ui/Logs';
-// import dynamic from 'next/dynamic'
-// const Logs = dynamic(() => import('@src/components/ui/Logs'), {
-//   ssr: false
-// })
+// import Logs from '@src/components/ui/Logs';
+import dynamic from 'next/dynamic'
+const Logs = dynamic(() => import('@src/components/ui/Logs'), {
+  ssr: false
+})
 
 
 export default async function () {

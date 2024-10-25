@@ -5,10 +5,9 @@ import { sqlQuery } from "../../sql/sqlQuery";
 import { getCurrentIpAddress } from "../../nextjs/getCurrentIpAddress";
 import { pool } from "../../sql/pool/events";
 
-export const add = async function (logData: LogsData, options: LogsOptions = {}) {
+export const add = async function (type: string, message: string, logData: LogsData, options: LogsOptions = {}) {
   "use server";
 
-  const type = options.type || "log";
   const access_key = options.access_key;
   const dev = process.env.NODE_ENV === "development";
   const server_name = process.env.SERVER_NAME || "";
@@ -18,7 +17,6 @@ export const add = async function (logData: LogsData, options: LogsOptions = {})
   try {
     // Log
     const stack = JSON.stringify({ ...logData, ...addr }, null, " ");
-    const message = options?.title || options?.message || addr?.server_location || addr?.server_ip || "unknown server address";
     await sqlQuery(pool, sql, [type, message, stack, access_key, server_name, app_name, dev, Date.now()]);
     return stack;
     //@ts-ignore
@@ -34,12 +32,12 @@ export const add = async function (logData: LogsData, options: LogsOptions = {})
         null,
         " "
       );
-      const message = "Error lib/sql/addLog.ts catch";
-      await sqlQuery(pool, sql, [type, message, stack, access_key, server_name, app_name, dev, Date.now()]);
+      const message = "Error in try addLog.ts";
+      await sqlQuery(pool, sql, ["Error", message, stack, access_key, server_name, app_name, dev, Date.now()]);
       //@ts-ignore
     } catch (err: Error) {
       // Error sending
-      console.error("catch catch addLog.ts", { logData, options, err });
+      console.error("Error in catch addLog.ts", { logData, options, err });
     }
     return null;
   }

@@ -1,11 +1,11 @@
 'use client'
 
-import Accordion from '@my/fe/components/blocks/Accordion'
-import Json from '@my/fe/components/blocks/Json'
+import Accordion from '@my/fe/src/components/blocks/Accordion'
+import Json from '@my/fe/src/components/blocks/Json'
 import classes from './Logs.module.scss'
 import Collapsed from './LogCollapsed'
-import LocalShortTime from '@my/fe/components/inline/LocalShortTime'
-import Badge from '@my/fe/components/inline/Badge'
+import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
+import Badge from '@my/fe/src/components/inline/Badge'
 import Link from 'next/link'
 // import { cc } from '@my/be/cc';
 // import { useEffect } from 'react';
@@ -44,12 +44,24 @@ export default function Logs({ logs, where }: any) {
               {log.name}{' '}
             </Link>
           </Badge>,
-          log.dev ? (
-            <Badge key="dev" className="pr-2">
+          <Badge className="font-bold pr-2">
+            <Link key="edit" href={`/?app_name=${log.app_name}`}>
               {' '}
-              dev{' '}
-            </Badge>
-          ) : undefined,
+              {log.app_name}{' '}
+            </Link>
+          </Badge>,
+          <Badge className="font-bold pr-2">
+            <Link key="edit" href={`/?server_name=${log.server_name}`}>
+              {' '}
+              {log.server_name}{' '}
+            </Link>
+          </Badge>,
+          <Badge className="font-bold pr-2">
+            <Link key="edit" href={`/?dev=${log.dev}`}>
+              {' '}
+              {log.dev ? 'dev' : 'pro'}{' '}
+            </Link>
+          </Badge>,
           <Badge key="time">
             <LocalShortTime epoch={log.time} />
           </Badge>,

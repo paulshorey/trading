@@ -1,6 +1,6 @@
 import { get } from '@my/be/sql/log/get'
-import Json from '@my/fe/components/blocks/Json'
-import Logs from '@src/components/ui/Logs'
+import Json from '@my/fe/src/components/blocks/Json'
+import Logs from '@src/fe/blocks/Logs'
 
 export default async function Page({
   searchParams,

@@ -1,3 +1,4 @@
+// import stylesheet from @mantine/core/styles.css
 body {
   --mantine-scale: 0.67;
   --mantine-cursor-type: default;
@@ -7,12 +8,12 @@ body {
   --mantine-color-white: #fff;
   --mantine-color-black: #000;
   --mantine-line-height: 1.55;
-  --mantine-font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial,
-    sans-serif, Apple Color Emoji, Segoe UI Emoji;
-  --mantine-font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    Liberation Mono, Courier New, monospace;
-  --mantine-font-family-headings: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica,
-    Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  --mantine-font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  --mantine-font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, Courier New, monospace;
+  --mantine-font-family-headings: -apple-system, BlinkMacSystemFont, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
   --mantine-heading-font-weight: 700;
   --mantine-heading-text-wrap: wrap;
   --mantine-radius-default: 0.25rem;

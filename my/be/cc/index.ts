@@ -2,23 +2,19 @@ import { add } from "../sql/log/add";
 
 export const cc = {
   log: function (...args: any[]) {
-    // const args = Array.from(arguments);
     const message = args.shift();
-    add(args, { type: "log", message });
+    add("log", message, args);
   },
   info: function (...args: any[]) {
-    // const args = Array.from(arguments);
     const message = args.shift();
-    add(args, { type: "info", message });
+    add("info", message, args);
   },
   warn: function (...args: any[]) {
-    // const args = Array.from(arguments);
     const message = args.shift();
-    add(args, { type: "warn", message });
+    add("warn", message, args);
   },
   error: function (...args: any[]) {
-    // const args = Array.from(arguments);
     const message = args.shift();
-    add(args, { type: "error", message });
+    add("error", message, args);
   },
 };

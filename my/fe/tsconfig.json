@@ -1,10 +1,5 @@
 {
   "extends": "@my/config/ts/react-library.json",
-  "compilerOptions": {
-    "paths": {
-      "@my/fe/*": ["./*"]
-    }
-  },
   "include": ["**/*"],
   "exclude": ["node_modules"]
 }

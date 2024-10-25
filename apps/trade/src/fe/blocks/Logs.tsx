@@ -1,28 +1,31 @@
-'use client';
+'use client'
 
-import { Accordion } from '@mantine/core';
-import Json from '@my/fe/components/blocks/Json';
-import classes from './Logs.module.scss';
-import Collapsed from './LogCollapsed';
-import LocalShortTime from '@my/fe/components/inline/LocalShortTime';
+import { Accordion } from '@mantine/core'
+import Json from '@my/fe/src/components/blocks/Json'
+import classes from './Logs.module.scss'
+import Collapsed from './LogCollapsed'
+import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
 // import { cc } from '../../lib/cc';
-import Badge from '@my/fe/components/inline/Badge';
+import Badge from '@my/fe/src/components/inline/Badge'
 
 export default function Logs({ logs }: any) {
   // cc.info(['client', 'Logs.tsx', `logs.length=${logs.length}`]);
   const sections = logs.map((log: any, i: number) => {
-    let string = log.data;
-    if (typeof string === 'string' && (string[0] === '{' || string[0] === '[')) {
-      string = string.substring(1, string.length - 1);
+    let string = log.data
+    if (
+      typeof string === 'string' &&
+      (string[0] === '{' || string[0] === '[')
+    ) {
+      string = string.substring(1, string.length - 1)
     }
-    let dataParsed;
+    let dataParsed
     try {
-      dataParsed = log.data ? JSON.parse(log.data) : null;
+      dataParsed = log.data ? JSON.parse(log.data) : null
     } catch (e) {
-      dataParsed = `Could not serialize log.data=${log.data}`;
+      dataParsed = `Could not serialize log.data=${log.data}`
     }
 
-    const Title = string?.substring(0, 100);
+    const Title = string?.substring(0, 100)
     return (
       <Collapsed
         classNames={{
@@ -43,8 +46,8 @@ export default function Logs({ logs }: any) {
       >
         <Json data={dataParsed} />
       </Collapsed>
-    );
-  });
+    )
+  })
 
-  return <Accordion className={classes.Accordion}>{sections}</Accordion>;
+  return <Accordion className={classes.Accordion}>{sections}</Accordion>
 }

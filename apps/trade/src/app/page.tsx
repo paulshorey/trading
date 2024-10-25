@@ -1,4 +1,4 @@
-import { ErrorTemplate } from '@my/fe/components/mains/ErrorTemplate';
+import { ErrorTemplate } from '@my/fe/src/components/mains/ErrorTemplate'
 import {
   // OrderExecution,
   // OrderSide,
@@ -10,32 +10,34 @@ import {
   // OrderTimeInForce,
   Network,
   IndexerClient,
-} from '@dydxprotocol/v4-client-js';
-import Json from '@my/fe/components/blocks/Json';
+} from '@dydxprotocol/v4-client-js'
+import Json from '@my/fe/src/components/blocks/Json'
 
-export const revalidate = 0;
+export const revalidate = 0
 
 export default async function () {
   try {
-    const NETWORK = Network.mainnet();
-    const indexerClient = new IndexerClient(NETWORK.indexerConfig);
+    const NETWORK = Network.mainnet()
+    const indexerClient = new IndexerClient(NETWORK.indexerConfig)
     // const compositeClient = await CompositeClient.connect(NETWORK);
     // const mnemonic = process.env.DYDX_MNEMONIC || '';
     // const wallet = await LocalWallet.fromMnemonic(mnemonic, BECH32_PREFIX);
     // const subaccount = new SubaccountClient(wallet, 0);
-    const market = 'SOL-USD'; // perpertual market id
+    const market = 'SOL-USD' // perpertual market id
 
     /*
      * GET DATA
      */
-    const response = await indexerClient.utility.getHeight();
+    const response = await indexerClient.utility.getHeight()
 
     const data = {
       // markets: await indexerClient.markets.getPerpetualMarkets()
       blockHeight: response.height,
       blockHeightTime: response.time,
-      candles: (await indexerClient.markets.getPerpetualMarketCandles(market, '1MIN')).candles,
-    };
+      candles: (
+        await indexerClient.markets.getPerpetualMarketCandles(market, '1MIN')
+      ).candles,
+    }
 
     // const NETWORK = Network.mainnet();
     // const client = new IndexerClient(NETWORK.indexerConfig);
@@ -105,7 +107,7 @@ export default async function () {
     // );
     // console.log('tx', tx);
 
-    return <Json data={data} />;
+    return <Json data={data} />
     // @ts-ignore
   } catch (error: Error) {
     // addLog('Error accessing logs page (in app/page.tsx SSR)', error);
@@ -118,6 +120,6 @@ export default async function () {
           stack: error.stack,
         }}
       />
-    );
+    )
   }
 }

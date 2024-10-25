@@ -1,7 +1,9 @@
 import dynamic from 'next/dynamic'
 const Providers = dynamic(
   () =>
-    import('@my/fe/components/wrappers/Providers').then((mod) => mod.Providers),
+    import('@my/fe/src/components/wrappers/Providers').then(
+      (mod) => mod.Providers
+    ),
   {
     ssr: false,
   }

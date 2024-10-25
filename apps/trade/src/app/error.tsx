@@ -1,13 +1,13 @@
-'use client';
+'use client'
 
-import { ErrorTemplate } from '@my/fe/components/mains/ErrorTemplate';
+import { ErrorTemplate } from '@my/fe/src/components/mains/ErrorTemplate'
 
 type Props = Readonly<{
-  error: Error;
-}>;
+  error: Error
+}>
 
 export default function ServerErrorPage({ error }: Props) {
-  console.error('app/error.tsx', error);
+  console.error('app/error.tsx', error)
   return (
     <ErrorTemplate
       server
@@ -18,5 +18,5 @@ export default function ServerErrorPage({ error }: Props) {
         stack: error.stack,
       }}
     />
-  );
+  )
 }

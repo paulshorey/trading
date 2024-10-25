@@ -28,14 +28,12 @@ const handler = async (request: NextRequest, { params }: RouteParams) => {
       }
     }
 
-    const access_key =
-      request.nextUrl.searchParams.get('access_key') ||
-      request.headers.get('x-access_key') ||
-      ''
+    // const access_key =
+    //   request.nextUrl.searchParams.get('access_key') ||
+    //   request.headers.get('x-access_key') ||
+    //   ''
 
-    const data = await add(type, qs.q || qs.title || qs.message || '', body, {
-      access_key,
-    })
+    const data = await add(type, qs.q || qs.title || qs.message || '', body)
     return formatResponse({
       saved: true,
       data,

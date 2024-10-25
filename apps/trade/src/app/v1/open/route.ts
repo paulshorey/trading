@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { dydxScout } from '@src/be/dydx/scout'
 import { add } from '@my/be/sql/log/add'
+// import { dydxScout } from '@src/be/dydx/scout'
 
 type RouteParams = {
   params: {
@@ -11,15 +11,21 @@ type RouteParams = {
 
 const handler = async (request: NextRequest, { params }: RouteParams) => {
   try {
-    const data = dydxScout()
-    // const log = await add(body, {
-    //   'trade-scout',
-    //   access_key,
-    //   message: qs.q || qs.title || qs.message,
-    // })
+    let bodyData
+    let bodyText = ''
+    const contentType = request.headers.get('Content-Type')
+    if (contentType && contentType.includes('form')) {
+      bodyData = Object.fromEntries(await request.formData())
+    } else {
+      bodyText = await request.text()
+    }
+
+    // const data = dydxScout()
+    const log = await add('trade-scout', bodyText, { data: bodyData })
     return formatResponse({
       ok: true,
-      data,
+      log,
+      // data,
     })
 
     // @ts-ignore
@@ -36,6 +42,6 @@ const handler = async (request: NextRequest, { params }: RouteParams) => {
   }
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   return handler(request, { params })
 }

@@ -2,6 +2,8 @@ import { get } from '@my/be/sql/log/get'
 import Json from '@my/fe/src/components/blocks/Json'
 import Logs from '@src/fe/blocks/Logs'
 
+export const revalidate = 0
+
 export default async function Page({
   searchParams,
 }: {

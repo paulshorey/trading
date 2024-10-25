@@ -1,13 +1,14 @@
-import dynamic from 'next/dynamic'
-const Providers = dynamic(
-  () =>
-    import('@my/fe/src/components/wrappers/Providers').then(
-      (mod) => mod.Providers
-    ),
-  {
-    ssr: false,
-  }
-)
+import { Providers } from '@my/fe/src/components/wrappers/Providers'
+// import dynamic from 'next/dynamic'
+// const Providers = dynamic(
+//   () =>
+//     import('@my/fe/src/components/wrappers/Providers').then(
+//       (mod) => mod.Providers
+//     ),
+//   {
+//     ssr: false,
+//   }
+// )
 
 export const revalidate = 0
 export const fetchCache = 'force-no-store'

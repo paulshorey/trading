@@ -8,7 +8,6 @@ export default async function () {
   try {
     const where = { name: 'trade-scout' }
     const { error, result } = await get({ where }) //
-    console.log('output', { error, result })
     return <Json data={result?.rows || { error }} />
     // @ts-ignore
   } catch (error: Error) {

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
 import { add } from '@my/be/sql/log/add'
+import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 // import { dydxScout } from '@src/be/dydx/scout'
 
 //, { params }: RouteParams
@@ -20,6 +21,7 @@ const handler = async (request: NextRequest) => {
     } else {
       bodyText = await request.text()
     }
+    sendToMyselfSMS(bodyText || 'no text in request')
 
     // const data = dydxScout()
     const log = await add('trade-scout', bodyText, { data: bodyData })

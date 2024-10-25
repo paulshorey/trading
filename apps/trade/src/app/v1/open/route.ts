@@ -4,11 +4,11 @@ import { add } from '@my/be/sql/log/add'
 // import { dydxScout } from '@src/be/dydx/scout'
 
 //, { params }: RouteParams
-type RouteParams = {
-  params: {
-    type: string
-  }
-}
+// type RouteParams = {
+//   params: {
+//     type: string
+//   }
+// }
 
 const handler = async (request: NextRequest) => {
   try {
@@ -43,6 +43,9 @@ const handler = async (request: NextRequest) => {
   }
 }
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
-  return handler(request, { params })
+export async function POST(request: NextRequest) {
+  return handler(request)
 }
+
+//, { params }: RouteParams
+//, { params }

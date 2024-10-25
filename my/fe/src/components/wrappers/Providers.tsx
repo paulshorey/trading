@@ -5,11 +5,12 @@ import '../../styles/tailwind.css'
 import '../../styles/global.scss'
 import '@mantine/core/styles.css'
 import '../../styles/mantine.scss'
+import ErrorBoundary from './ErrorBoundary'
 
 export function Providers({ children, defaultColorScheme }: any) {
   return (
     <MantineProvider forceColorScheme={defaultColorScheme} theme={theme}>
-      {children}
+      <ErrorBoundary>{children}</ErrorBoundary>
     </MantineProvider>
   )
 }

@@ -19,7 +19,7 @@ type Props = {
   where?: Record<string, string | string[]>;
 };
 
-export const get = async function ({ where }: Props = {}): Promise<Output> {
+export const getLogs = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
 
   const output = {} as Output;

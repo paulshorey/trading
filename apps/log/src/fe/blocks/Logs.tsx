@@ -1,9 +1,7 @@
 'use client'
 
-import Accordion from '@my/fe/src/components/blocks/Accordion'
 import Json from '@my/fe/src/components/blocks/Json'
-import classes from './Logs.module.scss'
-import Collapsed from './LogCollapsed'
+import Collapsed from '@my/fe/src/components/blocks/Collapsed'
 import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
 import Badge from '@my/fe/src/components/inline/Badge'
 import Link from 'next/link'
@@ -77,8 +75,12 @@ export default function Logs({ logs, where }: any) {
 
   return (
     <div>
-      {tempReset && <Link href="/">◀ clear</Link>}
-      <Accordion className={classes.Accordion}>{sections}</Accordion>
+      {tempReset && (
+        <div>
+          <Link href="/">◀ clear</Link>
+        </div>
+      )}
+      <main>{sections}</main>
     </div>
   )
 }

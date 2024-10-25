@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { add } from '@my/be/sql/log/add'
+import { addLog } from '@my/be/sql/log/add'
 
 type RouteParams = {
   params: {
@@ -33,7 +33,7 @@ const handler = async (request: NextRequest, { params }: RouteParams) => {
     //   request.headers.get('x-access_key') ||
     //   ''
 
-    const data = await add(type, qs.q || qs.title || qs.message || '', body)
+    const data = await addLog(type, qs.q || qs.title || qs.message || '', body)
     return formatResponse({
       saved: true,
       data,

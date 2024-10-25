@@ -2,14 +2,7 @@ import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
 import { add } from '@my/be/sql/log/add'
 import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
-// import { dydxScout } from '@src/be/dydx/scout'
-
-//, { params }: RouteParams
-// type RouteParams = {
-//   params: {
-//     type: string
-//   }
-// }
+import { dydxScout } from '@src/be/dydx/scout'
 
 const handler = async (request: NextRequest) => {
   try {
@@ -21,14 +14,21 @@ const handler = async (request: NextRequest) => {
     } else {
       bodyText = await request.text()
     }
-    sendToMyselfSMS(bodyText || 'no text in request')
 
-    // const data = dydxScout()
+    // notify sms
+    // sendToMyselfSMS(bodyText || 'no text in request')
+
+    // dydx status
+    const data = dydxScout()
+
+    // notify log
     const log = await add('trade-scout', bodyText, { data: bodyData })
+
+    // api response
     return formatResponse({
       ok: true,
+      data,
       log,
-      // data,
     })
 
     // @ts-ignore
@@ -45,9 +45,14 @@ const handler = async (request: NextRequest) => {
   }
 }
 
+//, { params }: RouteParams
+//, { params }
+//, { params }: RouteParams
+// type RouteParams = {
+//   params: {
+//     type: string
+//   }
+// }
 export async function POST(request: NextRequest) {
   return handler(request)
 }
-
-//, { params }: RouteParams
-//, { params }

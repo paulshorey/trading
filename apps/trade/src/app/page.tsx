@@ -1,26 +1,35 @@
-import { ErrorTemplate } from '@my/fe/src/components/mains/ErrorTemplate'
-import Json from '@my/fe/src/components/blocks/Json'
-import { get } from '@my/be/sql/log/get'
+import { getLogs } from '@my/be/sql/log/get'
+import Data from '../fe/blocks/Data'
 
 export const revalidate = 0
 
 export default async function () {
+  let data = {} as Record<string, any>
   try {
     const where = { name: 'trade-scout' }
-    const { error, result } = await get({ where }) //
-    return <Json data={result?.rows || { error }} />
+    const { error, result } = await getLogs({ where })
+
+    if (error) {
+      data['log get error'] = {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      }
+    }
+
+    if (result.rows) {
+      for (let row of result.rows) {
+        data[row.id] = row
+      }
+    }
+
     // @ts-ignore
   } catch (error: Error) {
-    // addLog('Error accessing logs page (in app/page.tsx SSR)', error);
-    return (
-      <ErrorTemplate
-        filePath="app/page.tsx"
-        error={{
-          name: error.name,
-          message: error.message,
-          stack: error.stack,
-        }}
-      />
-    )
+    data['catch error'] = {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    }
   }
+  return <Data data={data} />
 }

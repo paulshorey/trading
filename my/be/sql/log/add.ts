@@ -5,9 +5,9 @@ import { sqlQuery } from "../../sql/sqlQuery";
 import { getCurrentIpAddress } from "../../nextjs/getCurrentIpAddress";
 import { pool } from "../../sql/pool/events";
 
-type LogType = "error" | "info" | "debug" | "warn" | "log" | "trade-error" | "trade-warn" | "trade-info" | "trade-debug" | "trade-log";
+// type LogType = "error" | "info" | "debug" | "warn" | "log" | "trade-error" | "trade-warn" | "trade-info" | "trade-debug" | "trade-log";
 
-export const addLog = async function (type: LogType, message: string, logData: Record<string, any>, options: LogsOptions = {}) {
+export const addLog = async function (type: string, message: string, logData: Record<string, any>, options: LogsOptions = {}) {
   "use server";
 
   const access_key = options.access_key;

@@ -16,18 +16,18 @@ const handler = async (request: NextRequest) => {
       bodyText = (await request.text()) || ''
     }
     let access_key = request.nextUrl.searchParams.get('access_key')
-    if (!access_key) throw new Error('!access_key')
-    if (
-      !(access_key === 'itisverysecretddd' || access_key === 'postmansecret')
-    ) {
-      throw new Error('wrong access_key')
-    }
+    // if (!access_key) throw new Error('!access_key')
+    // if (
+    //   !(access_key === 'itisverysecretddd' || access_key === 'postmansecret')
+    // ) {
+    //   throw new Error('wrong access_key')
+    // }
 
     // notify sms
     // sendToMyselfSMS(`${bodyText} tvline#${access_key}`)
 
     // notify log
-    const log = await addLog('trade-tvline', bodyText, {
+    const log = await addLog('trade-tvline', bodyText + '...' + access_key, {
       data: bodyData,
     })
 

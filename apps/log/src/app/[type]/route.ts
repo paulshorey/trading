@@ -33,6 +33,7 @@ const handler = async (request: NextRequest, { params }: RouteParams) => {
     //   request.headers.get('x-access_key') ||
     //   ''
 
+    // @ts-ignore
     const data = await addLog(type, qs.q || qs.title || qs.message || '', body)
     return formatResponse({
       saved: true,

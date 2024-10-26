@@ -5,6 +5,8 @@ import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 import { addLog } from '@my/be/sql/log/add'
 import { hash } from 'crypto'
 
+export const maxDuration = 70
+
 const handler = async (request: NextRequest) => {
   try {
     let bodyData
@@ -17,20 +19,12 @@ const handler = async (request: NextRequest) => {
     }
 
     // dydx status
-    const data = parseDydxDataTx(
-      await dydxTest({
-        ticker: 'FIL-USD',
-        side: 'LONG',
-      })
-    )
-
-    console.warn(
-      '\n\n\n\n\n',
-      'data await finished',
-      data,
-      'data await finished',
-      '\n\n\n\n\n'
-    )
+    const data = await dydxTest({
+      ticker: 'NEAR-USD',
+      side: 'SHORT',
+      size: 1,
+    })
+    fixDydxDataTx(data)
 
     // api response
     return formatResponse({
@@ -79,7 +73,7 @@ export async function POST(request: NextRequest) {
 //   return formatResponse({ error: 'Unhandled Rejection' }, 500)
 // })
 
-function parseDydxDataTx(data: any) {
+function fixDydxDataTx(data: any) {
   if (typeof data?.tx === 'object' && data?.tx !== null) {
     try {
       if (data.tx.data)

@@ -1,35 +1,34 @@
-import { getLogs } from '@my/be/sql/log/get'
-import Data from '../fe/blocks/Data'
+import Data from '@src/fe/blocks/Data'
+import { dydxScout } from '@src/be/dydx/scout'
 
 export const revalidate = 0
 
-export default async function () {
-  let data = {} as Record<string, any>
-  try {
-    const where = { name: 'trade-scout' }
-    const { error, result } = await getLogs({ where })
-
-    if (error) {
-      data['log get error'] = {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      }
+export default async function Page({}: {}) {
+  const data = await dydxScout()
+  if (!data) {
+    throw new Error('No data from DYDX')
+  }
+  if (data.orders) {
+    let orders = {} as Record<string, any>
+    for (let row of data.orders) {
+      orders[`${row.ticker} ${row.size} ${row.status}`] = row
     }
-
-    if (result.rows) {
-      for (let row of result.rows) {
-        data[row.id] = row
-      }
+    data.orders = orders
+  }
+  if (data.asksAndBids) {
+    let asks = {} as Record<string, any>
+    let bids = {} as Record<string, any>
+    if (data.asksAndBids?.asks.length) {
+      data.asksAndBids?.asks.forEach((row: any, i: number) => {
+        asks[row.price.toString()] = row.size
+      })
     }
-
-    // @ts-ignore
-  } catch (error: Error) {
-    data['catch error'] = {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
+    if (data.asksAndBids?.asks.length) {
+      data.asksAndBids?.bids.forEach((row: any, i: number) => {
+        bids[row.price.toString()] = row.size
+      })
     }
+    data.asksAndBids = { asks, bids }
   }
   return <Data data={data} />
 }

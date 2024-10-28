@@ -37,16 +37,9 @@ export const dydxScout = async (): Promise<Output | undefined> => {
     const blockHeight = await client.utility.getHeight()
     // const trades = (await client.markets.getPerpetualMarketTrades(ticker))
     //   ?.trades
-    const orders = (
+    const orders =
       (await client.account.getSubaccountOrders(address, subaccountNumber)) ||
       []
-    ).filter(
-      (p: any) =>
-        p.ticker === ticker &&
-        p.status !== 'CLOSED' &&
-        p.status !== 'FILLED' &&
-        p.status !== 'CANCELED'
-    )
     const positions = (
       (
         await client.account.getSubaccountPerpetualPositions(
@@ -54,7 +47,7 @@ export const dydxScout = async (): Promise<Output | undefined> => {
           subaccountNumber
         )
       )?.positions || []
-    ).filter((p: any) => p.market === ticker && p.status !== 'CLOSED')
+    ).filter((p: any) => p.status === 'OPEN')
     // const orderbook = await client.markets.getPerpetualMarketOrderbook(ticker)
     // const asksAndBids = { asks: orderbook.asks, bids: orderbook.bids }
     // const sparklines = await client.markets.getPerpetualMarketSparklines()

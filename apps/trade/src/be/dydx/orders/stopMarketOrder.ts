@@ -4,6 +4,7 @@ import {
   OrderTimeInForce,
   OrderSide,
 } from '@dydxprotocol/v4-client-js'
+import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 
 type Props = {
   compositeClient: any
@@ -45,6 +46,11 @@ export const stopMarketOrder = ({
     postOnly,
     reduceOnly,
     triggerPrice
+  )
+  sendToMyselfSMS(
+    `stopMarketOrder: ${ticker} ${side} ${size
+      .toString()
+      .substring(0, 5)} ${triggerPrice.toString().substring(0, 5)}`
   )
   return orderId
 }

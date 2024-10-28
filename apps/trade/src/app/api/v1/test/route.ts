@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { dydxTestMarket } from '@src/be/dydx/tvline'
+import { dydxTest } from '@src/be/dydx/test'
 import { parseLine } from '@src/be/tv/parseLine'
 // import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 // import { addLog } from '@my/be/sql/log/add'
@@ -28,7 +28,7 @@ const handler = async (request: NextRequest) => {
     // dydx status
     const trades = parseLine(bodyText)
     const trade = trades[0]
-    const data = await dydxTestMarket(trade)
+    const data = await dydxTest(trade)
     fixDydxDataTx(data)
 
     // api response

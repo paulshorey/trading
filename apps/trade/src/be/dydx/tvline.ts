@@ -22,7 +22,7 @@ import { defaults } from '@src/be/dydx/constants/defaults'
 
 type Data = Record<string, any> | undefined
 
-export const dydxTestMarket = async ({
+export const dydxTvline = async ({
   ticker,
   side,
   dollar,
@@ -47,8 +47,8 @@ export const dydxTestMarket = async ({
     }
     if (!sl || !isNumber(sl)) {
       // @ts-ignore
-      const stoploss = defaults[ticker][side]
-      sl = stoploss || 1
+      const stoploss = defaults?.[ticker]?.[side]
+      sl = stoploss || 0.33
     }
 
     /*

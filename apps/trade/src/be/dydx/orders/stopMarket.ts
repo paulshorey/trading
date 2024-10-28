@@ -22,8 +22,6 @@ export const stopMarketOrder = ({
   size,
   triggerPrice,
 }: Props) => {
-  size = Math.abs(size) // ignore sign, use side LONG or SHORT
-  const orderSize = side === 'LONG' ? size : -size
   const orderId = Math.ceil(Math.random() * 1000000)
   const type = OrderType.STOP_MARKET // order type
   const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
@@ -38,7 +36,7 @@ export const stopMarketOrder = ({
     type,
     side === 'SHORT' ? OrderSide.SELL : OrderSide.BUY,
     executionPrice,
-    orderSize,
+    size,
     orderId,
     timeInForce,
     goodTilTimeInSeconds,

@@ -21,12 +21,22 @@ const handler = async (request: NextRequest) => {
     // dydx status
     const data = await dydxTestMarket({
       ticker: 'NEAR-USD',
-      side: 'SHORT',
-      size: 1,
+      side: 'LONG',
+      num: 1,
     })
     fixDydxDataTx(data)
 
     // api response
+    if (data?.error) {
+      return formatResponse(
+        {
+          ok: false,
+          data,
+          message: data.error,
+        },
+        405
+      )
+    }
     return formatResponse({
       ok: true,
       data,

@@ -19,7 +19,7 @@ const handler = async (request: NextRequest) => {
 
     // dydx status
     const data = await dydxTestStopMarket({
-      size: 1,
+      amount: 1,
       ticker: 'NEAR-USD',
       side: 'LONG',
       triggerPrice: 4.211,

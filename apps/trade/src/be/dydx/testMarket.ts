@@ -15,25 +15,26 @@ import { addLog } from '@my/be/sql/log/add'
 import { marketOrder } from './orders/market'
 import { getPosition as getPositionRaw } from './actions/getPosition'
 import { catchError } from '@src/be/dydx/actions/catchError'
+import { stopMarketOrder } from '@src/be/dydx/orders/stopMarket'
 
 type Output = Record<string, any> | undefined
 
 export const dydxTestMarket = async ({
   ticker,
   side,
-  size,
+  num,
 }: {
   ticker: string
   side: 'SHORT' | 'LONG'
-  size: number
+  num: number
 }) => {
   const data = {} as Record<string, any>
   try {
     /*
      * Inputs
      */
-    if (!ticker || !side || !size || isNaN(Number(size)) || size <= 0) {
-      data.error = 'bad input: !ticker | !side | !size'
+    if (!ticker || !side || !num || isNaN(Number(num))) {
+      data.error = 'bad input: !ticker | !side | !num'
       throw new Error(data.error)
     }
     if (!/[A-Z]-USD/.test(ticker)) {
@@ -44,7 +45,7 @@ export const dydxTestMarket = async ({
       data.error = 'malformed input: side="' + side + '"'
       throw new Error(data.error)
     }
-    size = side === 'LONG' ? Math.abs(size) : -Math.abs(size) // ignore sign, use side LONG or SHORT
+    const size = side === 'LONG' ? num : -num // ignore sign, use side LONG or SHORT
     data.size_add = size
     data.size_intended = data.size_before + data.size_add
 
@@ -68,30 +69,56 @@ export const dydxTestMarket = async ({
     }
 
     /*
-     * Indexer data
+     * Indexer
      */
     const block = await indexer.client.utility.getHeight()
     const blockHeight = Number(block.height)
     if (!blockHeight || isNaN(blockHeight)) {
       throw new Error('blockHeight is NaN')
     }
-    const getPosition = async () => {
-      return getPositionRaw({ ...indexer, ticker })
-    }
-    const position = await getPosition()
-    data.size_before = position.size
+    const candles =
+      (
+        await indexer.client.markets.getPerpetualMarketCandles(
+          ticker,
+          '1DAY',
+          undefined,
+          undefined,
+          2
+        )
+      )?.candles || []
+    data.price = candles?.[0]?.close
+    data.daily = Array.from([
+      ...new Set(
+        candles.map(
+          (c: any) =>
+            (Number(c?.close || 0) +
+              Number(c?.open || 0) +
+              Number(c?.high || 0) +
+              Number(c?.low || 0)) /
+            4
+        )
+      ),
+    ])
+    data.direction = data.daily?.[0] < data.daily?.[1] ? -1 : 1 // remember: prices array is reversed
+    data.subaccount = (
+      await indexer.client.account.getSubaccount(
+        indexer.address,
+        indexer.subaccountNumber
+      )
+    )?.subaccount
+    data.position = data.subaccount?.openPerpetualPositions[ticker]
+    data.size_before = Number(data.position?.size || 0)
+    data.margin_available = (data.subaccount?.freeCollateral || 0) * 9 //(90% of 10x)
 
     /*
-     * Ignore duplicate order
+     * Check before placing order
      */
-    // if (position?.side === side) {
-    //   // position already exists
-    //   data.message = 'order ignored: duplicate'
-    //   await addLog('trade-log', data.message, {
-    //     position,
-    //   })
-    //   return data
-    // }
+    data.margin_needed = data.price * Math.abs(size)
+    data.enough_margin = data.margin_available > data.price * Math.abs(size)
+    if (!data.enough_margin) {
+      data.error = `Not enough margin: ${data.margin_needed} > ${data.margin_available}`
+      throw new Error(data.error)
+    }
 
     /*
      * Place order
@@ -103,59 +130,67 @@ export const dydxTestMarket = async ({
       side,
       size,
     })
-
-    /*
-     * check1
-     */
-    await new Promise((resolve) =>
-      setTimeout(async () => {
-        // check new positions
-        data.size_5000 = (await getPosition()).size
-        // is balanced upated?
-        data.size_remaining = data.size_intended - data.size_5000
-        // continue
-        resolve(undefined)
-      }, 5000)
-    )
-    if (data.size_remaining === 0) {
-      return data
-    }
-
-    /*
-     * check2
-     */
-    await new Promise((resolve) =>
-      setTimeout(async () => {
-        // check new positions
-        data.size_15000 = (await getPosition()).size
-        // is balanced upated?
-        data.size_remaining = data.size_intended - data.size_15000
-        // continue
-        resolve(undefined)
-      }, 15000)
-    )
-    if (data.size_remaining === 0) {
-      return data
-    }
-
-    /*
-     * Order unfilled error
-     */
-    const message = `${ticker} ${side} ${size} order remains unfilled: ${data.size_remaining}`
-    sendToMyselfSMS(message)
-    await addLog('trade-error', message, {
-      name: 'order-unfilled',
-      message: message,
-      stack: data,
-    })
-    // cancel attempted order
-    composite.client.cancelOrder(
+    const stopOrderId = stopMarketOrder({
+      compositeClient: composite.client,
       subaccount,
-      orderId,
-      0,
       ticker,
-      blockHeight + 15
-    )
+      side: side === 'LONG' ? 'SHORT' : 'LONG',
+      size: size * -1,
+      triggerPrice: data.price * 0.99,
+    })
+
+    // /*
+    //  * check1
+    //  */
+    // await new Promise((resolve) =>
+    //   setTimeout(async () => {
+    //     // check new positions
+    //     data.size_5000 = (await getPositionRaw({ ...indexer, ticker })).size
+    //     // is balanced upated?
+    //     data.size_remaining = data.size_intended - data.size_5000
+    //     // continue
+    //     resolve(undefined)
+    //   }, 5000)
+    // )
+    // if (data.size_remaining === 0) {
+    //   return data
+    // }
+
+    // /*
+    //  * check2
+    //  */
+    // await new Promise((resolve) =>
+    //   setTimeout(async () => {
+    //     // check new positions
+    //     data.size_15000 = (await getPositionRaw({ ...indexer, ticker })).size
+    //     // is balanced upated?
+    //     data.size_remaining = data.size_intended - data.size_15000
+    //     // continue
+    //     resolve(undefined)
+    //   }, 15000)
+    // )
+    // if (data.size_remaining === 0) {
+    //   return data
+    // }
+
+    // /*
+    //  * Order unfilled
+    //  */
+    // const message = `${ticker} ${side} ${size} order remains unfilled: ${data.size_remaining}`
+    // sendToMyselfSMS(message)
+    // await addLog('trade-error', message, {
+    //   name: 'order-unfilled',
+    //   message: message,
+    //   stack: data,
+    // })
+    // // cancel attempted
+    // composite.client.cancelOrder(
+    //   subaccount,
+    //   orderId,
+    //   0,
+    //   ticker,
+    //   blockHeight + 15
+    // )
 
     // @ts-ignore
   } catch (err: Error) {

@@ -4,36 +4,32 @@ import {
   OrderTimeInForce,
   OrderSide,
 } from '@dydxprotocol/v4-client-js'
-import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
+import type { CompositeClient } from '@dydxprotocol/v4-client-js/build/src/clients/composite-client.d.ts'
+import { logAdd } from '@my/be/sql/log/add'
+import { DydxInterface } from '@src/be/dydx'
 
 type Props = {
-  compositeClient: any
-  subaccount: any
   ticker: string
   side: 'SHORT' | 'LONG'
   size: number
-  triggerPrice: number
+  price: number
 }
 
-export const stopMarketOrder = ({
-  compositeClient,
-  subaccount,
-  ticker,
-  side,
-  size: sizeAbs,
-  triggerPrice,
-}: Props) => {
-  const size = side === 'LONG' ? sizeAbs : -sizeAbs
+export async function orderMarket(
+  this: DydxInterface,
+  { ticker, side, size, price }: Props
+) {
+  const compositeClient = await this.getCompositeClient()
   const orderId = Math.ceil(Math.random() * 1000000)
-  const type = OrderType.STOP_MARKET // order type
+  const type = OrderType.MARKET // order type
   const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
-  const goodTilTimeInSeconds = 60 * 60 * 24 * 7 // week
-  const execution = OrderExecution.IOC // OrderExecution.DEFAULT
+  const goodTilTimeInSeconds = Date.now() / 1000 + 60 * 5 // epoch seconds
+  const execution = OrderExecution.DEFAULT
   const executionPrice = side === 'LONG' ? 10000000 : 0.01 //= 30_000; // price of 30,000;
   const postOnly = true // If true, order is post only
   const reduceOnly = false // if true, the order will only reduce the position size
   compositeClient.placeOrder(
-    subaccount,
+    this.subaccount,
     ticker,
     type,
     side === 'SHORT' ? OrderSide.SELL : OrderSide.BUY,
@@ -44,13 +40,16 @@ export const stopMarketOrder = ({
     goodTilTimeInSeconds,
     execution,
     postOnly,
-    reduceOnly,
-    triggerPrice
+    reduceOnly
   )
-  sendToMyselfSMS(
-    `stopMarketOrder: ${ticker} ${side} ${size
+  // notify
+  await logAdd(
+    'info',
+    `marketOrder: ${ticker} ${side} ${size.toString().substring(0, 5)} ${price
       .toString()
-      .substring(0, 5)} ${triggerPrice.toString().substring(0, 5)}`
+      .substring(0, 5)}`,
+    { ticker, side, size, price },
+    { sms: true }
   )
   return orderId
 }

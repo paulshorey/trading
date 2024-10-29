@@ -10,15 +10,21 @@ export const sendToMyselfSMS = (message: string) => {
   formdata.append('From', '19133649396')
   formdata.append('Body', message)
 
-  fetch(
-    'https://api.twilio.com/2010-04-01/Accounts/AC258697f0ec08c434f11a2f19de0ce74b/Messages.json',
-    {
-      method: 'POST',
-      headers: myHeaders,
-      body: formdata,
-    }
-  )
-    .then((response) => response.text())
-    .then((result) => console.log(result))
-    .catch((error) => console.error(error))
+  return new Promise((resolve, reject) => {
+    fetch(
+      'https://api.twilio.com/2010-04-01/Accounts/AC258697f0ec08c434f11a2f19de0ce74b/Messages.json',
+      {
+        method: 'POST',
+        headers: myHeaders,
+        body: formdata,
+      }
+    )
+      .then((response) => {
+        resolve(response.text())
+      })
+      .catch((error) => {
+        console.error(error)
+        reject(error)
+      })
+  })
 }

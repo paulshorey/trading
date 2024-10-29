@@ -1,20 +1,22 @@
-import { addLog } from "../sql/log/add";
+"use server";
+
+import { logAdd } from "../sql/log/add";
 
 export const cc = {
-  log: function (...args: any[]) {
+  log: async function (...args: any[]) {
     const message = args.shift();
-    addLog("log", message, args);
+    await logAdd("log", message, args);
   },
-  info: function (...args: any[]) {
+  info: async function (...args: any[]) {
     const message = args.shift();
-    addLog("info", message, args);
+    await logAdd("info", message, args);
   },
-  warn: function (...args: any[]) {
+  warn: async function (...args: any[]) {
     const message = args.shift();
-    addLog("warn", message, args);
+    await logAdd("warn", message, args);
   },
-  error: function (...args: any[]) {
+  error: async function (...args: any[]) {
     const message = args.shift();
-    addLog("error", message, args);
+    await logAdd("error", message, args);
   },
 };

@@ -1,15 +1,16 @@
 "use server";
 
-import { LogsOptions } from "./types";
+import { LogOptions, LogLevel } from "./types";
 import { sqlQuery } from "../../sql/sqlQuery";
 import { getCurrentIpAddress } from "../../nextjs/getCurrentIpAddress";
 import { pool } from "../../sql/pool/events";
+import { sendToMyselfSMS } from "../../../../apps/trade/src/be/twillio/sendToMyselfSMS";
 
-// type LogType = "error" | "info" | "debug" | "warn" | "log" | "trade-error" | "trade-warn" | "trade-info" | "trade-debug" | "trade-log";
-
-export const addLog = async function (type: string, message: string, logData: Record<string, any>, options: LogsOptions = {}) {
+export const logAdd = async function (level: LogLevel, message: string, logData: Record<string, any>, options: LogOptions = {}) {
   "use server";
-
+  if (options.sms) {
+    await sendToMyselfSMS(`${level}: ${message}`);
+  }
   const access_key = options.access_key;
   const dev = process.env.NODE_ENV === "development";
   const server_name = process.env.SERVER_NAME || "";
@@ -19,7 +20,7 @@ export const addLog = async function (type: string, message: string, logData: Re
   try {
     // Log
     const stack = JSON.stringify({ ...logData, ...addr }, null, " ");
-    await sqlQuery(pool, sql, [type, message, stack, access_key, server_name, app_name, dev, Date.now()]);
+    await sqlQuery(pool, sql, [level.toLowerCase(), message, stack, access_key, server_name, app_name, dev, Date.now()]);
     return stack;
     //@ts-ignore
   } catch (e: Error) {
@@ -34,12 +35,12 @@ export const addLog = async function (type: string, message: string, logData: Re
         null,
         " "
       );
-      const message = "Error in try addLog.ts";
+      const message = "Error in try logAdd.ts";
       await sqlQuery(pool, sql, ["Error", message, stack, access_key, server_name, app_name, dev, Date.now()]);
       //@ts-ignore
     } catch (err: Error) {
       // Error sending
-      console.error("Error in catch addLog.ts", { logData, options, err });
+      console.error("Error in catch logAdd.ts", { logData, options, err });
     }
     return null;
   }

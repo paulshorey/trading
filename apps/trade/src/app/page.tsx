@@ -1,5 +1,5 @@
 import Data from '@src/fe/blocks/Data'
-import { dydxScout } from '@src/be/dydx/scout'
+import { dydxScout } from '@src/be/dydx/info'
 
 export const revalidate = 0
 

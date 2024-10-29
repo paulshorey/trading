@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { addLog } from '@my/be/sql/log/add'
+import { logAdd } from '@my/be/sql/log/add'
 
 type RouteParams = {
   params: {
@@ -34,7 +34,7 @@ const handler = async (request: NextRequest, { params }: RouteParams) => {
     //   ''
 
     // @ts-ignore
-    const data = await addLog(type, qs.q || qs.title || qs.message || '', body)
+    const data = await logAdd(type, qs.q || qs.title || qs.message || '', body)
     return formatResponse({
       saved: true,
       data,

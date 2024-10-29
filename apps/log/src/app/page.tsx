@@ -1,4 +1,4 @@
-import { getLogs } from '@my/be/sql/log/get'
+import { logGets } from '@my/be/sql/log/get'
 import Json from '@my/fe/src/components/blocks/Json'
 import Logs from '@src/fe/blocks/Logs'
 
@@ -14,7 +14,7 @@ export default async function Page({
   if (name) {
     where.name = name
   }
-  const { error, result } = await getLogs({ where })
+  const { error, result } = await logGets({ where })
   if (error) {
     throw error
   }

@@ -11,7 +11,7 @@ import {
   IndexerClient,
 } from '@dydxprotocol/v4-client-js'
 import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
-import { addLog } from '@my/be/sql/log/add'
+import { logAdd } from '@my/be/sql/log/add'
 
 type Output = Record<string, any>
 
@@ -69,7 +69,7 @@ export const dydxScout = async (): Promise<Output | undefined> => {
     // notify sms
     sendToMyselfSMS(message)
     // notify log
-    await addLog('trade-error', message, {
+    await logAdd('error', message, {
       name: err.name,
       message: err.message,
       stack: err.stack,

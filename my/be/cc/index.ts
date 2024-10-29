@@ -1,5 +1,3 @@
-"use server";
-
 import { logAdd } from "../sql/log/add";
 
 export const cc = {

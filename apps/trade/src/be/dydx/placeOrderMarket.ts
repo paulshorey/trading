@@ -10,6 +10,8 @@ export const dydxPlaceOrderMarket = async (
   input: MarketOrderProps
 ): Promise<MarketOrderOutput> => {
   const output = {} as MarketOrderOutput
+  const timeNow = Date.now()
+  output.seconds_passed = (Date.now() - timeNow) / 1000
   try {
     /*
      * Validate Inputs
@@ -72,120 +74,129 @@ export const dydxPlaceOrderMarket = async (
       const size_current = positions?.[0]?.size
       output.size_unfilled = output.size_intended - size_current
       output.size_filled = size_current - output.size_original
-      // IDK DYDX compositeClient's logic, so just guess when it has finished (less than $x)
-      return output.size_unfilled * output.price < 10
+      output.size_is_filled = Math.abs(output.size_unfilled * output.price) < 10
     }
 
     /*
      * Place order
      */
-    const orderId = await dydx.placeOrderMarket({
+    await dydx.placeOrderMarket({
       ticker: input.ticker,
       side: input.side,
       size: output.size_absolute,
       price: output.price,
     })
     output.size_is_filled = false
-
-    await dydx.placeOrderStop({
-      ticker: input.ticker,
-      side: input.side === 'LONG' ? 'SHORT' : 'LONG',
-      size: output.size_absolute,
-      price: output.price,
-      debugData: output,
-    })
+    output.seconds_passed = (Date.now() - timeNow) / 1000
 
     /*
-     * Check 1
+     * Check 10
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 10000)
       )
     }
 
     /*
-     * Check 2
+     * Check 20
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 20000)
       )
     }
 
     /*
-     * Check 3
+     * Check 30
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 30000)
       )
     }
 
     /*
-     * Check 4
+     * Check 40
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 40000)
       )
     }
 
     /*
-     * Check 5
+     * Check 50
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 50000)
       )
     }
 
     /*
-     * Check 6
+     * Check 60
      */
     if (!output.size_is_filled) {
-      output.size_is_filled = await new Promise((resolve) =>
+      await new Promise((resolve) =>
         setTimeout(async () => {
-          resolve(await checkIfFilled())
+          await checkIfFilled()
+          resolve(true)
         }, 60000)
       )
     }
 
     /*
-     * Place stoploss
+     * Stoploss on the filled portion
      */
-    // if (output.size_is_filled) {
-    //   await dydx.placeOrderStop({
-    //     ticker: input.ticker,
-    //     side: input.side === 'LONG' ? 'SHORT' : 'LONG',
-    //     size: output.size_absolute,
-    //     price: output.price,
-    //     debugData: output,
-    //   })
-    // }
+    if (output.size_filled) {
+      await dydx.placeOrderStop({
+        ticker: input.ticker,
+        side: input.side === 'LONG' ? 'SHORT' : 'LONG',
+        size: Math.abs(output.size_filled),
+        price: output.price,
+        debugData: output,
+      })
+    }
 
     /*
      * Order unfilled
      */
-    if (!output.size_is_filled) {
-      await dydx.placeOrderCancel({
-        ticker: input.ticker,
-        side: input.side,
-        orderId,
-        data: output,
-      })
-    }
+    // output.seconds_passed = (Date.now() - timeNow) / 1000
+    // if (!output.size_is_filled) {
+    //   output.seconds_passed_cancelled = (Date.now() - timeNow) / 1000
+    //   // cancel stoploss
+    //   // await dydx.placeOrderCancel({
+    //   //   ticker: input.ticker,
+    //   //   side: input.side,
+    //   //   orderId: orderIdStoploss,
+    //   //   data: output,
+    //   // })
+    //   // // cancel order
+    //   // await dydx.placeOrderCancel({
+    //   //   ticker: input.ticker,
+    //   //   side: input.side,
+    //   //   orderId,
+    //   //   data: output,
+    //   // })
+    // }
 
+    output.seconds_passed = (Date.now() - timeNow) / 1000
     // @ts-ignore
   } catch (err: Error) {
     catchError(err)

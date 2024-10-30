@@ -33,7 +33,7 @@ export async function orderStop(
   const compositeClient = await this.getCompositeClient()
   const slMultiplier = 1 + (side === 'SHORT' ? -slDefined : slDefined) / 100 // if shorting, trigger price is bellow market
   const triggerPrice = price * slMultiplier
-  const size = sizeAbs // UNLIKE MARKET ORDER WHICH REQUIRES NEGATIVE FOR SHORT ORDERS, STOP LOSS SIZE IS ALWAYS ABSOLUTE
+  const size = Math.abs(sizeAbs) // UNLIKE MARKET ORDER WHICH REQUIRES NEGATIVE FOR SHORT ORDERS, STOP LOSS SIZE IS ALWAYS ABSOLUTE
   const orderId = Math.ceil(Math.random() * 1000000)
   const type = OrderType.STOP_MARKET // order type
   const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
@@ -42,7 +42,21 @@ export async function orderStop(
   const executionPrice = side === 'LONG' ? 10000000 : 0.01 //= 30_000; // price of 30,000;
   const postOnly = false // If true, order is post only
   const reduceOnly = false // if true, the order will only reduce the position size
-  compositeClient.placeOrder(
+  console.log('stop order', {
+    ticker,
+    type,
+    side: (side === 'SHORT' ? OrderSide.SELL : OrderSide.BUY).toString(),
+    executionPrice,
+    size,
+    orderId,
+    timeInForce,
+    goodTilTimeInSeconds,
+    execution,
+    postOnly,
+    reduceOnly,
+    triggerPrice,
+  })
+  const tx = compositeClient.placeOrder(
     this.subaccount,
     ticker,
     type,
@@ -57,6 +71,7 @@ export async function orderStop(
     reduceOnly,
     triggerPrice
   )
+  console.log('stop order tx', tx)
   // notify
   await logAdd(
     'info',

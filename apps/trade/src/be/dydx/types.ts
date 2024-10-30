@@ -50,6 +50,9 @@ export type MarketOrderOutput = {
   size_unfilled: number
   size_filled: number
   size_is_filled: boolean
+  seconds_passed: number
+  seconds_passed_stoploss: number
+  seconds_passed_cancelled: number
 }
 
 export type MarketOrderProps = {

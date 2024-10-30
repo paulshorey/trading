@@ -22,6 +22,12 @@ export async function orderCancel(
   this: DydxInterface,
   { ticker, side, orderId, data }: Props
 ) {
+  console.log('cancel inputs', {
+    ticker,
+    side,
+    orderId,
+    data,
+  })
   const indexerClient = await this.getIndexerClient()
   const compositeClient = await this.getCompositeClient()
   // cancel order needs blockheight
@@ -30,14 +36,16 @@ export async function orderCancel(
   if (!blockHeight || isNaN(blockHeight)) {
     throw new Error('blockHeight is NaN')
   }
+  console.log('cancel blockHeight', blockHeight)
   // cancel attempted
-  compositeClient.cancelOrder(
+  const tx = await compositeClient.cancelOrder(
     this.subaccount,
     orderId,
     0,
     ticker,
     blockHeight + 15
   )
+  console.log('cancel tx', tx)
   // notify
   await logAdd(
     'info',

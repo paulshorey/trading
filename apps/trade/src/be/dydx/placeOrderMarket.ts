@@ -94,7 +94,7 @@ export const dydxPlaceOrderMarket = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 3000)
+        }, 10000)
       )
     }
 
@@ -105,7 +105,7 @@ export const dydxPlaceOrderMarket = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 8000)
+        }, 20000)
       )
     }
 
@@ -116,7 +116,7 @@ export const dydxPlaceOrderMarket = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 13000)
+        }, 30000)
       )
     }
 

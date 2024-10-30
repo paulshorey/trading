@@ -87,6 +87,14 @@ export const dydxPlaceOrderMarket = async (
     })
     output.size_is_filled = false
 
+    await dydx.placeOrderStop({
+      ticker: input.ticker,
+      side: input.side === 'LONG' ? 'SHORT' : 'LONG',
+      size: output.size_absolute,
+      price: output.price,
+      debugData: output,
+    })
+
     /*
      * Check 1
      */
@@ -156,15 +164,15 @@ export const dydxPlaceOrderMarket = async (
     /*
      * Place stoploss
      */
-    if (output.size_is_filled) {
-      await dydx.placeOrderStop({
-        ticker: input.ticker,
-        side: input.side === 'LONG' ? 'SHORT' : 'LONG',
-        size: output.size_absolute,
-        price: output.price,
-        debugData: output,
-      })
-    }
+    // if (output.size_is_filled) {
+    //   await dydx.placeOrderStop({
+    //     ticker: input.ticker,
+    //     side: input.side === 'LONG' ? 'SHORT' : 'LONG',
+    //     size: output.size_absolute,
+    //     price: output.price,
+    //     debugData: output,
+    //   })
+    // }
 
     /*
      * Order unfilled

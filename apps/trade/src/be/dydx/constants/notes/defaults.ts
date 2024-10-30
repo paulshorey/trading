@@ -1,4 +1,8 @@
 export const defaults = {
+  default: {
+    LONG: 0.33,
+    SHORT: 0.5,
+  },
   'SOL-USD': {
     LONG: 0.67,
     SHORT: 0.75,
@@ -27,4 +31,4 @@ export const defaults = {
     LONG: 0.11,
     SHORT: 0.11,
   },
-}
+} as Record<string, Record<'LONG' | 'SHORT', number>>

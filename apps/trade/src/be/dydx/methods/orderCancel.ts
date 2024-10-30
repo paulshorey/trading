@@ -9,6 +9,7 @@ import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 import type { IndexerClient } from '@dydxprotocol/v4-client-js/build/src/clients/indexer-client.d.ts'
 import { logAdd } from '@my/be/sql/log/add'
 import { DydxInterface } from '@src/be/dydx'
+import { orderMarket } from '@src/be/dydx/methods/orderMarket'
 
 type Props = {
   ticker: string
@@ -40,7 +41,7 @@ export async function orderCancel(
   // notify
   await logAdd(
     'info',
-    `cancelOrder: ${ticker} ${side} ${orderId} Intended:${data.size_intended} Unfilled:${data.size_remaining}`,
+    `dydx.orderCancel: ${ticker} ${side} ${orderId} Intended:${data.size_intended} Unfilled:${data.size_remaining}`,
     {
       ticker,
       side,

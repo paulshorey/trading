@@ -18,11 +18,12 @@ export async function getPositions(
   )
     .filter((p: any) => {
       let keep = true
-      if (ticker && p.ticker !== ticker) keep = false
+      if (ticker && p.market !== ticker) keep = false
       if (status && p.status !== status) keep = false
       return keep
     })
     .map((p: any) => {
       p.size = numberOrZero(p?.size)
+      return p
     })
 }

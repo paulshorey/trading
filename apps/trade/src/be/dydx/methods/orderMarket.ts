@@ -45,9 +45,9 @@ export async function orderMarket(
   // notify
   await logAdd(
     'info',
-    `marketOrder: ${ticker} ${side} ${size.toString().substring(0, 5)} ${price
+    `dydx.orderMarket: ${ticker} ${side} ${size
       .toString()
-      .substring(0, 5)}`,
+      .substring(0, 5)} ${price.toString().substring(0, 5)}`,
     { ticker, side, size, price },
     { sms: true }
   )

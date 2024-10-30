@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { dydxLineOrder } from '@src/be/dydx/lineOrder'
+import { dydxPlaceOrderStop } from '@src/be/dydx/placeOrderStop'
 import { parseOrdersText } from '@src/be/tv/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 // import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
@@ -43,7 +43,7 @@ const handler = async (request: NextRequest) => {
           405
         )
       }
-      const data = await dydxLineOrder(parsedOrders[0])
+      const data = await dydxPlaceOrderStop(parsedOrders[0])
 
       // api response
       if (data?.error) {

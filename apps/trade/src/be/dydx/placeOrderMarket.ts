@@ -1,29 +1,12 @@
 import { catchError } from '@src/be/dydx/lib/catchError'
 import { isNumber } from '../../lib/numbers'
-import { MarketOrderProps } from '@src/be/types'
 import { defaults } from '@src/be/dydx/constants/notes/defaults'
 import { numberOrZero } from '@src/lib/numbers'
 import Dydx from '.'
-import { orderCancel } from './methods/orderCancel'
+import { MarketOrderOutput, MarketOrderProps } from './types'
+import { validateInputsMarket } from '@src/be/dydx/lib/validateInputsMarket'
 
-type MarketOrderOutput = {
-  error: string
-  price: number
-  daily: number[]
-  direction: string
-  size_original: number
-  margin_available: number
-  size_absolute: number
-  size_add: number
-  size_intended: number
-  margin_needed: number
-  enough_margin: boolean
-  size_unfilled: number
-  size_filled: number
-  size_is_filled: boolean
-}
-
-export const dydxLineOrder = async (
+export const dydxPlaceOrderMarket = async (
   input: MarketOrderProps
 ): Promise<MarketOrderOutput> => {
   const output = {} as MarketOrderOutput
@@ -31,24 +14,7 @@ export const dydxLineOrder = async (
     /*
      * Validate Inputs
      */
-    input.dollar = Math.abs(numberOrZero(input.dollar))
-    if (!input.ticker || !input.side || !input.dollar) {
-      output.error = 'bad input: !ticker | !side | !dollar'
-      throw new Error(output.error)
-    }
-    if (!/[A-Z]-USD/.test(input.ticker)) {
-      output.error = 'malformed input: ticker="' + input.ticker + '"'
-      throw new Error(output.error)
-    }
-    if (input.side !== 'SHORT' && input.side !== 'LONG') {
-      output.error = 'malformed input: side="' + input.side + '"'
-      throw new Error(output.error)
-    }
-    if (!input.sl || !isNumber(input.sl)) {
-      // @ts-ignore
-      const stoploss = defaults?.[input.ticker]?.[input.side]
-      input.sl = stoploss || 0.33
-    }
+    validateInputsMarket(input, output)
 
     /*
      * Connection
@@ -72,8 +38,12 @@ export const dydxLineOrder = async (
         )
       ),
     ]) as number[]
-    // @ts-ignore
-    output.direction = output.daily?.[0] < output.daily?.[1] ? 'down' : 'up' // daily[0] is most recent
+    if (output.price === 0) {
+      throw new Error('Price is 0. Indexer must be down.')
+    }
+    const daily0 = output.daily?.[0] || 0
+    const daily1 = output.daily?.[1] || 0
+    output.price_direction = daily0 < daily1 ? 'down' : 'up' // daily[0] is most recent
     const accountData = await dydx.getAccount()
     const positionData = accountData?.openPerpetualPositions[input.ticker]
     output.margin_available = numberOrZero(accountData?.freeCollateral) * 9 //(90% of 10x)
@@ -98,11 +68,10 @@ export const dydxLineOrder = async (
       throw new Error(output.error)
     }
     async function checkIfFilled() {
-      const newPositionSize = ((
-        await dydx.getPositions(input.ticker, 'OPEN')
-      )?.[0]).size
-      output.size_unfilled = output.size_intended - newPositionSize
-      output.size_filled = newPositionSize - output.size_original
+      const positions = await dydx.getPositions(input.ticker, 'OPEN')
+      const size_current = positions?.[0]?.size
+      output.size_unfilled = output.size_intended - size_current
+      output.size_filled = size_current - output.size_original
       // IDK DYDX compositeClient's logic, so just guess when it has finished (less than $x)
       return output.size_unfilled * output.price < 10
     }
@@ -125,7 +94,7 @@ export const dydxLineOrder = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 5000)
+        }, 3000)
       )
     }
 
@@ -136,7 +105,7 @@ export const dydxLineOrder = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 10000)
+        }, 8000)
       )
     }
 
@@ -147,7 +116,7 @@ export const dydxLineOrder = async (
       output.size_is_filled = await new Promise((resolve) =>
         setTimeout(async () => {
           resolve(await checkIfFilled())
-        }, 15000)
+        }, 13000)
       )
     }
 

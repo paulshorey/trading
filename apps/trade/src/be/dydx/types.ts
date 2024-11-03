@@ -54,7 +54,7 @@ export type MarketOrderOutput = {
   coins_unfilled: number
   coins_filled: number
   coins_is_filled: boolean
-  order_id: number
+  order_client_id: number
 }
 
 export type MarketOrderProps = {

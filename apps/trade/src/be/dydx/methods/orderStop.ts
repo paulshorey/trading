@@ -40,11 +40,12 @@ export async function orderStop(
   const goodTilTimeInSeconds = 60 * 60 * 24 * 7 // week
   const execution = OrderExecution.IOC // OrderExecution.DEFAULT
   const executionPrice = side === 'LONG' ? 10000000 : 0.01 //= 30_000; // price of 30,000;
-  const postOnly = false // If true, order is post only
+  const postOnly = true // If true, order is post only
   const reduceOnly = true // if true, the order will only reduce the position
 
   // record
   await orderAdd({
+    client_id: clientId,
     type: 'STOP_MARKET',
     ticker,
     side,

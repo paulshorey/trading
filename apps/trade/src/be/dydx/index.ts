@@ -31,9 +31,9 @@ export interface DydxInterface {
   getCandles: typeof getCandles
   getOrders: typeof getOrders
   getPositions: typeof getPositions
-  placeOrderStop: typeof orderStop
-  placeOrderMarket: typeof orderMarket
-  placeOrderCancel: typeof orderCancel
+  orderStop: typeof orderStop
+  orderMarket: typeof orderMarket
+  orderCancel: typeof orderCancel
 }
 
 /**
@@ -97,8 +97,8 @@ export class Dydx implements DydxInterface {
   getCandles = getCandles
   getOrders = getOrders
   getPositions = getPositions
-  placeOrderStop = orderStop
-  placeOrderMarket = orderMarket
-  placeOrderCancel = orderCancel
+  orderStop = orderStop
+  orderMarket = orderMarket
+  orderCancel = orderCancel
 }
 export default Dydx

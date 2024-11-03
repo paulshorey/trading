@@ -12,7 +12,7 @@ export const dydxPlaceOrderMarket = async (
   const output = {} as MarketOrderOutput
   const timeNow = Date.now()
   output.seconds_passed = (Date.now() - timeNow) / 1000
-  cc.log('dydx.placeOrderMarket inputs:', input)
+  cc.log('dydx.orderMarket inputs:', input)
   try {
     /*
      * Validate Inputs
@@ -76,11 +76,27 @@ export const dydxPlaceOrderMarket = async (
     }
 
     /*
-     * Place
+     * Cancel old stop orders
      */
-    output.order_id = Math.ceil(Math.random() * 1000000)
-    await dydx.placeOrderMarket({
-      clientId: output.order_id,
+    const orders = await dydx.getOrders(
+      input.ticker,
+      (order) =>
+        order.type.substring(0, 4) === 'STOP' && order.status === 'UNTRIGGERED' // && order.side !== input.side
+    )
+    for (let order of orders) {
+      dydx.orderCancel({
+        ticker: input.ticker,
+        clientId: order.clientId,
+      })
+    }
+    cc.info('orders', orders)
+
+    /*
+     * Place new market order
+     */
+    output.order_client_id = Math.ceil(Math.random() * 1000000)
+    await dydx.orderMarket({
+      clientId: output.order_client_id,
       ticker: input.ticker,
       side: input.side,
       coins: output.coins_add,
@@ -101,37 +117,37 @@ export const dydxPlaceOrderMarket = async (
       )
     }
 
-    /*
-     * Check 20
-     */
-    if (!output.coins_is_filled) {
-      await new Promise((resolve) =>
-        setTimeout(async () => {
-          await updatePosition()
-          resolve(true)
-        }, 20000)
-      )
-    }
+    // /*
+    //  * Check 20
+    //  */
+    // if (!output.coins_is_filled) {
+    //   await new Promise((resolve) =>
+    //     setTimeout(async () => {
+    //       await updatePosition()
+    //       resolve(true)
+    //     }, 20000)
+    //   )
+    // }
 
-    /*
-     * Check 30
-     */
-    if (!output.coins_is_filled) {
-      await new Promise((resolve) =>
-        setTimeout(async () => {
-          await updatePosition()
-          resolve(true)
-        }, 30000)
-      )
-    }
+    // /*
+    //  * Check 30
+    //  */
+    // if (!output.coins_is_filled) {
+    //   await new Promise((resolve) =>
+    //     setTimeout(async () => {
+    //       await updatePosition()
+    //       resolve(true)
+    //     }, 30000)
+    //   )
+    // }
 
     /*
      * Stoploss on the filled portion
      */
     if (output.coins_current) {
-      await dydx.placeOrderStop({
+      await dydx.orderStop({
         ticker: input.ticker,
-        side: input.side === 'LONG' ? 'SHORT' : 'LONG',
+        side: output.coins_current > 0 ? 'SHORT' : 'LONG',
         coins: Math.abs(output.coins_current),
         price: output.price,
         sl: input.sl,
@@ -141,13 +157,11 @@ export const dydxPlaceOrderMarket = async (
     /*
      * Cancel unfilled portion
      */
-    if (output.coins_current) {
-      await dydx.placeOrderStop({
+    if (output.coins_unfilled) {
+      dydx.orderCancel({
         ticker: input.ticker,
-        side: input.side === 'LONG' ? 'SHORT' : 'LONG',
-        coins: Math.abs(output.coins_current),
-        price: output.price,
-        sl: input.sl,
+        clientId: output.order_client_id,
+        short: true,
       })
     }
 

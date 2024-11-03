@@ -3,6 +3,7 @@ import { formatResponse } from '@my/be/api/formatResponse'
 import { dydxPlaceOrderMarket } from '@src/be/dydx/executeOrderMarket'
 import { parseOrdersText } from '@src/be/tv/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
+import { MarketOrderOutput } from '../../../../be/dydx/types'
 // import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 // import { hash } from 'crypto'
 
@@ -43,25 +44,27 @@ const handler = async (request: NextRequest) => {
           405
         )
       }
-      const data = await dydxPlaceOrderMarket(parsedOrders[0])
-
-      // api response
-      if (data?.error) {
-        return formatResponse(
-          {
-            ok: false,
-            message: 'data?.error',
-            data,
-            bodyText,
-            bodyData,
-            parsedOrders,
-          },
-          405
-        )
+      const datas = [] as MarketOrderOutput[]
+      for (let order of parsedOrders) {
+        const data = await dydxPlaceOrderMarket(order)
+        if (data?.error) {
+          return formatResponse(
+            {
+              ok: false,
+              message: 'data?.error',
+              data,
+              bodyText,
+              bodyData,
+              parsedOrders,
+            },
+            405
+          )
+        }
+        datas.push(data)
       }
       return formatResponse({
         ok: true,
-        data,
+        data: datas,
         tvline: 1,
       })
 

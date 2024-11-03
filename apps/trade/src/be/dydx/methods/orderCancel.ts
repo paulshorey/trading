@@ -1,33 +1,49 @@
 import { DydxInterface } from '@src/be/dydx'
 import { cc } from '@my/be/cc'
+import { numberOrZero } from '../../../lib/numbers'
 
 type Props = {
+  short?: boolean
   ticker: string
   clientId: number
 }
 
 export async function orderCancel(this: DydxInterface, input: Props) {
-  if (!input.clientId) throw new Error('dydx.orderCancel !input.clientId')
-  const indexerClient = await this.getIndexerClient()
+  const clientId = numberOrZero(input.clientId)
+  if (!clientId) throw new Error('dydx.orderCancel !clientId')
   const compositeClient = await this.getCompositeClient()
-  const block = await indexerClient.utility.getHeight()
-  const blockHeight = Number(block.height)
-  if (!blockHeight || isNaN(blockHeight)) {
-    throw new Error('blockHeight is NaN')
-  }
   // cancel
-  compositeClient.cancelOrder(
-    this.subaccount,
-    input.clientId,
-    0,
-    input.ticker,
-    blockHeight + 15
-  )
+  if (input.short) {
+    // short term (MARKET)
+    const indexerClient = await this.getIndexerClient()
+    const block = await indexerClient.utility.getHeight()
+    const blockHeight = Number(block.height)
+    if (!blockHeight || isNaN(blockHeight)) {
+      throw new Error('blockHeight is NaN')
+    }
+    await compositeClient.cancelOrder(
+      this.subaccount,
+      clientId,
+      0,
+      input.ticker,
+      blockHeight + 15
+    )
+  } else {
+    // stateful order (STOP_MARKET)
+    await compositeClient.cancelOrder(
+      this.subaccount,
+      clientId,
+      32,
+      input.ticker,
+      0,
+      60 * 60 * 24 * 7
+    )
+  }
   // notify
-  await cc.info(`dydx.orderCancel`, {
+  await cc.warn(`dydx.orderCancel`, {
     ticker: input.ticker,
-    clientId: input.clientId,
+    clientId,
   })
   // done
-  return input.clientId
+  return clientId
 }

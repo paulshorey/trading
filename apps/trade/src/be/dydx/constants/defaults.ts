@@ -21,6 +21,11 @@ export const defaults = {
     LONG: 0.33,
     SHORT: 0.5,
   },
+  'STX-USD': {
+    LONG: 0.33,
+    SHORT: 0.5,
+    floor: 1,
+  },
   'SUI-USD': {
     LONG: 1,
     SHORT: 1.25,
@@ -31,8 +36,13 @@ export const defaults = {
     SHORT: 0.66,
   },
   'ETH-USD': {
-    LONG: 0.11,
-    SHORT: 0.11,
+    LONG: 0.33,
+    SHORT: 0.33,
+    floor: 0.001,
+  },
+  'BCH-USD': {
+    LONG: 0.33,
+    SHORT: 0.33,
     floor: 0.01,
   },
 } as {

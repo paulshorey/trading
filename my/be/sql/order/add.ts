@@ -11,8 +11,9 @@ export const orderAdd = async function (row: OrderRow) {
   const server_name = process.env.SERVER_NAME || "";
   const app_name = process.env.APP_NAME || "";
   try {
-    const sql = "INSERT INTO v1.orders (type, ticker, side, size, price, server_name, app_name, dev, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *";
-    return await sqlQuery(pool, sql, [row.type, row.ticker, row.side, row.price, row.size, server_name, app_name, dev, Date.now()]);
+    const sql =
+      "INSERT INTO v1.orders (client_id, type, ticker, side, size, price, server_name, app_name, dev, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *";
+    return await sqlQuery(pool, sql, [row.client_id, row.type, row.ticker, row.side, row.size, row.price, server_name, app_name, dev, Date.now()]);
 
     //@ts-ignore
   } catch (e: Error) {

@@ -34,6 +34,7 @@ export async function orderMarket(
 
   // record
   await orderAdd({
+    client_id: clientId,
     type: 'MARKET',
     ticker,
     side,

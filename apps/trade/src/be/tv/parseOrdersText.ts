@@ -11,10 +11,10 @@ type Output = {
 export const parseOrdersText = function (text: string): Output[] {
   const trades: Output[] = []
   text = text.trim()
-  const arr = text.split(' ')
+  const arr = text.split(/\s+/)
   for (let str of arr) {
     let trade = {} as Output
-    let split = str.split(/[-:]+/g) as Array<string | number>
+    let split = str.split(':') as Array<string | number>
     // side
     if (split[0] === 'buy' || split[0] === 'long') trade.side = 'LONG'
     if (split[0] === 'sell' || split[0] === 'short') trade.side = 'SHORT'

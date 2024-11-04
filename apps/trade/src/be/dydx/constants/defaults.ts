@@ -1,6 +1,6 @@
 export const defaults = {
   default: {
-    LONG: 0.33,
+    LONG: 0.334,
     SHORT: 0.5,
     floor: 1,
   },
@@ -44,6 +44,11 @@ export const defaults = {
     LONG: 0.33,
     SHORT: 0.33,
     floor: 0.01,
+  },
+  'BTC-USD': {
+    LONG: 0.33,
+    SHORT: 0.33,
+    floor: 0.00001,
   },
 } as {
   [key: string]: {

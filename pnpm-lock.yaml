@@ -178,7 +178,7 @@ importers:
   apps/trade:
     dependencies:
       '@dydxprotocol/v4-client-js':
-        specifier: ^1.12.3
+        specifier: 1.12.3
         version: 1.12.3(bufferutil@4.0.8)
       '@mantine/code-highlight':
         specifier: ^7.13.2

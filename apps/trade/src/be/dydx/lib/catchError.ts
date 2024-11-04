@@ -1,8 +1,11 @@
 import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 import { logAdd } from '@my/be/sql/log/add'
 
-export const catchError = async (error: Error) => {
-  console.error('catch error', error)
+export const catchError = async (
+  error: Error,
+  options: Record<string, any> = {}
+) => {
+  console.error(`${options.file || 'be/dydx/lib'} catchError`, error)
   // Error
   const message =
     `catch in dydx: ` +

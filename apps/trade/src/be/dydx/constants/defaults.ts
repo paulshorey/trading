@@ -14,8 +14,8 @@ export const defaults = {
     SHORT: 0.67,
   },
   'NEAR-USD': {
-    LONG: 0.5,
-    SHORT: 0.67,
+    LONG: 0.67,
+    SHORT: 1.33,
   },
   'FIL-USD': {
     LONG: 0.33,

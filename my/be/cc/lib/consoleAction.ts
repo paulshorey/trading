@@ -2,7 +2,7 @@ const sharedContext = {
   last_action: "",
 };
 
-export const consoleAction = function (action: "log" | "info" | "warn" | "error", ...args: any[]) {
+export const consoleAction = function (action: "log" | "info" | "warn" | "error", message: string, data: any) {
   const BROWSER = typeof window !== "undefined";
   const useColor = true;
   const separateTypes = true;
@@ -20,7 +20,7 @@ export const consoleAction = function (action: "log" | "info" | "warn" | "error"
    * light grey bg      black text     string    escape for next line
    */
   let addColor = "";
-  if (useColor && typeof args[0] === "string") {
+  if (useColor) {
     /*
      * use by NODEJS in terminal
      */
@@ -116,24 +116,24 @@ export const consoleAction = function (action: "log" | "info" | "warn" | "error"
     if (!BROWSER) {
       // NODE JS process logs in terminal
       if (trace) {
-        console[action](addColor, args[0], ...args.map((arg: any) => JSON.stringify(arg, null, 2)), trace);
+        console[action](addColor, message, data, trace);
       } else {
-        console[action](addColor, args[0], ...args.map((arg: any) => JSON.stringify(arg, null, 2)));
+        console[action](addColor, message, data);
       }
     } else {
       // FRONT-END BROWSER logs in DevTools
-      console[action](`%c${args[0]}`, addColor, ...args, trace);
+      console[action](`%c${message}`, addColor, data, trace);
     }
   } else if (!BROWSER) {
     // NODE JS process logs in terminal
     if (trace) {
-      console[action](JSON.stringify(args, null, 2), trace);
+      console[action](message, data, trace);
     } else {
-      console[action](JSON.stringify(args, null, 2));
+      console[action](message, data);
     }
   } else if (trace) {
-    console[action](...args, trace);
+    console[action](message, data, trace);
   } else {
-    console[action](...args);
+    console[action](message, data);
   }
 };

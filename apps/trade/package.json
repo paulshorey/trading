@@ -20,7 +20,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@dydxprotocol/v4-client-js": "^1.12.3",
+    "@dydxprotocol/v4-client-js": "1.12.3",
     "@mantine/code-highlight": "^7.13.2",
     "@mantine/core": "7.13.4",
     "@mantine/hooks": "7.13.4",

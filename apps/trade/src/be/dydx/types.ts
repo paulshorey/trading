@@ -37,7 +37,6 @@ export type MarketOrderOutput = {
   inputs: MarketOrderProps
   error: string
   price: number
-  // price_direction: 'up' | 'down'
   hourly: number[]
   daily: number[]
   direction: string
@@ -47,13 +46,22 @@ export type MarketOrderOutput = {
   seconds_passed: number
   seconds_passed_stoploss: number
   seconds_passed_cancelled: number
-  coins_original: number
-  coins_current: number
+  /*
+   * size_ is signed
+   */
+  size_current: number
+  size_intended: number
+  /*
+   * coins_ is absolute
+   */
   coins_add: number
-  coins_intended: number
   coins_unfilled: number
   coins_filled: number
-  coins_is_filled: boolean
+  coins_stop_order: number
+  /**
+   * order completion
+   */
+  order_is_filled: boolean
   order_client_id: number
 }
 

@@ -5,14 +5,24 @@ import Dydx from '.'
 import { MarketOrderOutput, MarketOrderProps } from './types'
 import { validateInputsMarket } from '@src/be/dydx/lib/validateInputsMarket'
 import { cc } from '@my/be/cc'
+import { Order } from './methods/getOrders'
 
-export const dydxPlaceOrderMarket = async (
+export const executeOrderMarket = async (
   input: MarketOrderProps
 ): Promise<MarketOrderOutput> => {
-  const output = {} as MarketOrderOutput
-  const timeNow = Date.now()
-  output.seconds_passed = (Date.now() - timeNow) / 1000
-  cc.log('dydx.orderMarket inputs:', input)
+  const output = {
+    order_is_filled: false,
+    coins_unfilled: 0,
+    size_current: 0,
+    coins_intended: 0,
+    coins_add: 0,
+    coins_stop_order: 0,
+  } as unknown as MarketOrderOutput
+  const timeStarted = Date.now()
+  function timer() {
+    output.seconds_passed = (Date.now() - timeStarted) / 1000
+  }
+  timer()
   try {
     /*
      * Validate Inputs
@@ -23,27 +33,40 @@ export const dydxPlaceOrderMarket = async (
      * Connection
      */
     const dydx = new Dydx()
+
+    /*
+     * Helpers
+     */
     async function updatePosition() {
       const positionData = (await dydx.getPositions(input.ticker, 'OPEN'))?.[0]
-      output.coins_current = numberOrZero(positionData?.size)
-      output.coins_unfilled = output.coins_intended - output.coins_current
-      output.coins_is_filled =
+      output.size_current = numberOrZero(positionData?.size)
+      output.coins_unfilled = output.size_intended - output.size_current
+      output.order_is_filled =
         Math.abs(output.coins_unfilled * output.price) < 10
     }
-    async function updateMargin() {
+    async function updateFloorCheckMargin() {
+      // Size
+      const floor =
+        defaults?.[input.ticker]?.floor || defaults?.default?.floor || 1
+      output.coins_add =
+        Math.floor(input.dollars / output.price / floor) * floor
+      output.size_intended =
+        output.size_current +
+        (input.side === 'LONG' ? output.coins_add : -output.coins_add)
+      // Equity
       const accountData = await dydx.getAccount()
-      output.margin_available = numberOrZero(accountData?.freeCollateral) * 9 // 90% of 10x
-      if (input.dollars > output.margin_available) {
-        output.error = `Not enough margin: $${input.dollars} > ${output.margin_available}`
-        throw new Error(output.error)
-      }
+      const cashAvailable = numberOrZero(accountData?.freeCollateral)
+      // Margin
+      output.margin_available = cashAvailable * 9 // 90% of 10x
       output.margin_needed = output.price * output.coins_add
-      output.enough_margin =
-        output.margin_available > output.price * output.coins_add
-      if (!output.enough_margin) {
+      // Not enough margin!
+      if (output.margin_available < output.margin_needed) {
         output.error = `Not enough margin: ${output.margin_needed} > ${output.margin_available}`
+        output.order_is_filled = true // can not fill any more, stop everything!
+        return false
       }
-      return output.enough_margin
+      // Enough, continue
+      return true
     }
     async function updatePrice() {
       const candles = await dydx.getCandles(input.ticker, '1HOUR', 48)
@@ -56,119 +79,248 @@ export const dydxPlaceOrderMarket = async (
     }
 
     /*
-     * Fetch Data
+     * Order attempt #1 - limit
      */
+    // Get latest price, current position, and margin
     await updatePrice()
     await updatePosition()
-    output.coins_original = output.coins_current
-    const floor =
-      defaults?.[input.ticker]?.floor || defaults?.default?.floor || 1
-    output.coins_add = Math.floor(input.dollars / output.price / floor) * floor
-    output.coins_intended =
-      output.coins_current +
-      (input.side === 'LONG' ? output.coins_add : -output.coins_add)
-
-    /*
-     * Validate
-     */
-    if (!updateMargin()) {
+    // Check that I have enough available cash margin to place this order
+    if (!updateFloorCheckMargin()) {
       throw new Error(output.error)
     }
-
-    /*
-     * Cancel old stop orders
-     */
-    const orders = await dydx.getOrders(
-      input.ticker,
-      (order) =>
-        order.type.substring(0, 4) === 'STOP' && order.status === 'UNTRIGGERED' // && order.side !== input.side
-    )
-    for (let order of orders) {
-      dydx.orderCancel({
-        ticker: input.ticker,
-        clientId: order.clientId,
-      })
-    }
-    cc.info('orders', orders)
-
-    /*
-     * Place new market order
-     */
+    // Place limit order
     output.order_client_id = Math.ceil(Math.random() * 1000000)
-    await dydx.orderMarket({
+    await dydx.orderLimit({
       clientId: output.order_client_id,
       ticker: input.ticker,
       side: input.side,
       coins: output.coins_add,
       price: output.price,
+      x1: 0.0001,
     })
-    output.coins_is_filled = false
-    output.seconds_passed = (Date.now() - timeNow) / 1000
+    output.order_is_filled = false
+    timer()
+    // check that it's filled
+    await new Promise((resolve) =>
+      setTimeout(async () => {
+        await updatePosition()
+        resolve(true)
+      }, 15000)
+    )
+    timer()
 
     /*
-     * Check 10
+     * Order attempt #2 - limit
      */
-    if (!output.coins_is_filled) {
+    if (!output.order_is_filled) {
+      // Get latest price, current position, and margin
+      await updatePrice()
+      await updatePosition()
+      // Check that I have enough available cash margin to place this order
+      if (!updateFloorCheckMargin()) {
+        throw new Error(output.error)
+      }
+      // Place limit order
+      output.order_client_id = Math.ceil(Math.random() * 1000000)
+      await dydx.orderLimit({
+        clientId: output.order_client_id,
+        ticker: input.ticker,
+        side: input.side,
+        coins: output.coins_add,
+        price: output.price,
+        x1: 0.001,
+      })
+      output.order_is_filled = false
+      timer()
+      // check that it's filled
       await new Promise((resolve) =>
         setTimeout(async () => {
           await updatePosition()
           resolve(true)
-        }, 10000)
+        }, 15000)
       )
-    }
-
-    // /*
-    //  * Check 20
-    //  */
-    // if (!output.coins_is_filled) {
-    //   await new Promise((resolve) =>
-    //     setTimeout(async () => {
-    //       await updatePosition()
-    //       resolve(true)
-    //     }, 20000)
-    //   )
-    // }
-
-    // /*
-    //  * Check 30
-    //  */
-    // if (!output.coins_is_filled) {
-    //   await new Promise((resolve) =>
-    //     setTimeout(async () => {
-    //       await updatePosition()
-    //       resolve(true)
-    //     }, 30000)
-    //   )
-    // }
-
-    /*
-     * Stoploss on the filled portion
-     */
-    if (output.coins_current) {
-      await dydx.orderStop({
-        ticker: input.ticker,
-        side: output.coins_current > 0 ? 'SHORT' : 'LONG',
-        coins: Math.abs(output.coins_current),
-        price: output.price,
-        sl: input.sl,
-      })
+      timer()
     }
 
     /*
-     * Cancel unfilled portion
+     * Order attempt #3 - limit
      */
-    if (output.coins_unfilled) {
-      dydx.orderCancel({
-        ticker: input.ticker,
+    if (!output.order_is_filled) {
+      // Get latest price, current position, and margin
+      await updatePrice()
+      await updatePosition()
+      // Check that I have enough available cash margin to place this order
+      if (!updateFloorCheckMargin()) {
+        throw new Error(output.error)
+      }
+      // Place limit order
+      output.order_client_id = Math.ceil(Math.random() * 1000000)
+      await dydx.orderLimit({
         clientId: output.order_client_id,
-        short: true,
+        ticker: input.ticker,
+        side: input.side,
+        coins: output.coins_add,
+        price: output.price,
+        x1: 0.01,
+      })
+      output.order_is_filled = false
+      timer()
+      // check that it's filled
+      await new Promise((resolve) =>
+        setTimeout(async () => {
+          await updatePosition()
+          resolve(true)
+        }, 15000)
+      )
+      timer()
+    }
+
+    /*
+     * Order attempt #4 - market
+     */
+    if (!output.order_is_filled) {
+      // Get latest price, current position, and margin
+      await updatePrice()
+      await updatePosition()
+      // Check that I have enough available cash margin to place this order
+      if (!updateFloorCheckMargin()) {
+        throw new Error(output.error)
+      }
+      // Place market order
+      output.order_client_id = Math.ceil(Math.random() * 1000000)
+      await dydx.orderMarket({
+        clientId: output.order_client_id,
+        ticker: input.ticker,
+        side: input.side,
+        coins: output.coins_add,
+        price: output.price,
+      })
+      output.order_is_filled = false
+      timer()
+      // check that it's filled
+      await new Promise((resolve) =>
+        setTimeout(async () => {
+          timer()
+          await updatePosition()
+          resolve(true)
+        }, 15000)
+      )
+      timer()
+    }
+
+    /*
+     * Order attempt #5 - market
+     */
+    if (!output.order_is_filled) {
+      // Get latest price, current position, and margin
+      await updatePrice()
+      await updatePosition()
+      // Check that I have enough available cash margin to place this order
+      if (!updateFloorCheckMargin()) {
+        throw new Error(output.error)
+      }
+      // Place market order
+      output.order_client_id = Math.ceil(Math.random() * 1000000)
+      await dydx.orderMarket({
+        clientId: output.order_client_id,
+        ticker: input.ticker,
+        side: input.side,
+        coins: output.coins_add,
+        price: output.price,
+      })
+      output.order_is_filled = false
+      timer()
+      // check that it's filled
+      await new Promise((resolve) =>
+        setTimeout(async () => {
+          timer()
+          await updatePosition()
+          resolve(true)
+        }, 15000)
+      )
+      timer()
+    }
+
+    /**
+     * Cancel any old stop orders that are not exactly like the new one
+     * @returns order with same size as new one, or undefined if none found
+     */
+    const findSameStopOrder = async (
+      size: number,
+      side: 'SHORT' | 'LONG'
+    ): Promise<Order | undefined> => {
+      // get all open orders
+      const orders = await dydx.getOrders(
+        input.ticker,
+        (order) =>
+          order.type.substring(0, 4) === 'STOP' &&
+          (order.status === 'UNTRIGGERED' ||
+            order.status === 'OPEN' ||
+            order.status === 'UNFILLED') // && order.side !== input.side
+      )
+      // find the same size stop order, to avoid creating a duplicate new one
+      return orders.find((order) => {
+        // found one with same size! No need to start a new one
+        if (
+          Math.abs(numberOrZero(order.size)) === size &&
+          order.side === side
+        ) {
+          return true
+        } else {
+          // cancel all other unfilled orders before adding the new one
+          dydx.orderCancel({
+            ticker: input.ticker,
+            clientId: order.clientId,
+          })
+          return false
+        }
       })
     }
 
-    output.seconds_passed = (Date.now() - timeNow) / 1000
+    /*
+     * Stoploss on the current position
+     */
+    await updatePrice()
+    let whileStopAttemptNumber = 0
+    if (output.size_current !== 0) {
+      output.coins_stop_order = 0
+      // keep checking after every dydx.orderStop if it was placed
+      while (!output.coins_stop_order) {
+        whileStopAttemptNumber++
+        // make sure to have stop order opposite of current position
+        const stopCoins = Math.abs(output.size_current)
+        const stopSide = output.size_current > 0 ? 'SHORT' : 'LONG'
+        // try to find an existing order with same exact parameters
+        const stopOrder = await findSameStopOrder(stopCoins, stopSide)
+        if (stopOrder) {
+          // if found done, else place another
+          output.coins_stop_order = stopCoins
+        } else {
+          // create new order if none found with same parameters
+          await dydx.orderStop({
+            ticker: input.ticker,
+            side: stopSide,
+            coins: stopCoins,
+            price: output.price,
+            sl: input.sl,
+          })
+          timer()
+          // wait 10 seconds for the new stop order to take effect
+          await new Promise((resolve) =>
+            setTimeout(async () => {
+              resolve(true)
+            }, 10000)
+          )
+          timer()
+        }
+      }
+    }
+
+    timer()
     // @ts-ignore
   } catch (err: Error) {
-    catchError(err)
+    catchError(err, { file: 'executeOrderMarket' })
   }
+  timer()
   return output
 }

@@ -11,6 +11,7 @@ import { getOrders } from './methods/getOrders'
 import { getPositions } from '@src/be/dydx/methods/getPositions'
 import { orderStop } from '@src/be/dydx/methods/orderStop'
 import { orderMarket } from '@src/be/dydx/methods/orderMarket'
+import { orderLimit } from '@src/be/dydx/methods/orderLimit'
 import { orderCancel } from '@src/be/dydx/methods/orderCancel'
 import { getCandles } from '@src/be/dydx/methods/getCandles'
 import { getAccount } from '@src/be/dydx/methods/getAccount'
@@ -33,6 +34,7 @@ export interface DydxInterface {
   getPositions: typeof getPositions
   orderStop: typeof orderStop
   orderMarket: typeof orderMarket
+  orderLimit: typeof orderLimit
   orderCancel: typeof orderCancel
 }
 
@@ -99,6 +101,7 @@ export class Dydx implements DydxInterface {
   getPositions = getPositions
   orderStop = orderStop
   orderMarket = orderMarket
+  orderLimit = orderLimit
   orderCancel = orderCancel
 }
 export default Dydx

@@ -28,7 +28,7 @@ type OrderRaw = {
   ticker: string // 'SUI-USD'
   subaccountNumber: number // 0
 }
-type OrderFixed = {
+export type Order = {
   id: string //'35044b5e-528b-57c6-a195-8197d3dd4b2c'
   subaccountId: string // '0a14c52f-2b2a-531f-93b5-c3ed21f9acc0'
   clientId: number // '53923'
@@ -59,8 +59,8 @@ type OrderFixed = {
 export async function getOrders(
   this: DydxInterface,
   ticker?: string,
-  status?: string | ((order: OrderFixed) => boolean)
-): Promise<OrderFixed[]> {
+  status?: string | ((order: Order) => boolean)
+): Promise<Order[]> {
   const indexer = await this.getIndexerClient()
   return (
     (await indexer.account.getSubaccountOrders(
@@ -69,7 +69,7 @@ export async function getOrders(
     )) || []
   )
     .map(
-      (p: OrderRaw): OrderFixed => ({
+      (p: OrderRaw): Order => ({
         ...p,
         clientId: parseInt(p.clientId),
         clobPairId: parseInt(p.clobPairId),
@@ -85,7 +85,7 @@ export async function getOrders(
         side: p.side === 'SELL' ? 'SHORT' : p.side === 'BUY' ? 'LONG' : '',
       })
     )
-    .filter((p: OrderFixed) => {
+    .filter((p: Order) => {
       // @ts-ignore see comparison in .map
       if (p.side === '') return false
       // immediately filter out if wrong ticker

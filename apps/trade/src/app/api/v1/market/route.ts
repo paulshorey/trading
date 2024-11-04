@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { dydxPlaceOrderMarket } from '@src/be/dydx/executeOrderMarket'
+import { executeOrderMarket } from '@src/be/dydx/executeOrderMarket'
 import { parseOrdersText } from '@src/be/tv/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 import { MarketOrderOutput } from '../../../../be/dydx/types'
 // import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
 // import { hash } from 'crypto'
 
-export const maxDuration = 70
+export const maxDuration = 80
 
 const handler = async (request: NextRequest) => {
   try {
@@ -46,7 +46,7 @@ const handler = async (request: NextRequest) => {
       }
       const datas = [] as MarketOrderOutput[]
       for (let order of parsedOrders) {
-        const data = await dydxPlaceOrderMarket(order)
+        const data = await executeOrderMarket(order)
         if (data?.error) {
           return formatResponse(
             {

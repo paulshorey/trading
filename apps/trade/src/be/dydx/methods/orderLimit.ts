@@ -17,27 +17,32 @@ type Props = {
   side: 'SHORT' | 'LONG'
   coins: number
   price: number
+  /**
+   * Fraction of 1%
+   */
+  x1: number
 }
 
-export async function orderMarket(
+export async function orderLimit(
   this: DydxInterface,
-  { clientId, ticker, side, coins, price }: Props
+  { clientId, ticker, side, coins, price, x1 }: Props
 ) {
   try {
-    await cc.info('dydx.orderMarket input:', { ticker, side, coins, price })
+    await cc.info('dydx.orderLimit input:', { ticker, side, coins, price })
     const compositeClient = await this.getCompositeClient()
-    const type = OrderType.MARKET // order type
+    const type = OrderType.LIMIT // order type
     const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
     const goodTilTimeInSeconds = 15 // 20 seconds
     const execution = OrderExecution.DEFAULT
-    const executionPrice = side === 'LONG' ? 10000000 : 0.01
+    const multiplier = 1 + (side === 'LONG' ? x1 : -x1) // buy high / sell low
+    const executionPrice = price * multiplier
     const postOnly = false
     const reduceOnly = false
 
     // record
     await orderAdd({
       client_id: clientId,
-      type: 'MARKET',
+      type: 'LIMIT',
       ticker,
       side,
       size: coins,
@@ -62,15 +67,17 @@ export async function orderMarket(
 
     // notify
     await cc.warn(
-      `dydx.orderMarket: ${ticker} ${side} ${coins
-        .toString()
-        .substring(0, 5)} ${price.toString().substring(0, 5)}`,
+      `dydx.orderLimit: ${ticker} ${side} n:${coins.toString().substring(0, 5)} 
+      p:${price.toString().substring(0, 7)} 
+      x:${executionPrice.toString().substring(0, 7)}
+      %:${(executionPrice / price).toString().substring(0, 7)}
+      `,
       { ticker, side, coins, price }
     )
     return clientId
 
     // @ts-ignore
   } catch (err: Error) {
-    catchError(err, { file: 'dydx.orderMarket' })
+    catchError(err, { file: 'dydx.orderLimit' })
   }
 }

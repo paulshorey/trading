@@ -34,13 +34,13 @@ export interface DydxInterface {
 }
 
 export type MarketOrderOutput = {
-  inputs: MarketOrderProps
-  error: string
+  inputs: MarketOrderInput
+  error?: string
+  message?: string
   price: number
-  floor: number
+  precision: number
   hourly: number[]
   daily: number[]
-  direction: string
   margin_available: number
   margin_needed: number
   enough_margin: boolean
@@ -50,14 +50,17 @@ export type MarketOrderOutput = {
   /*
    * size_ is signed
    */
+  size_add: number
   size_original: number
   size_current: number
+  size_current_floor: number
   size_intended: number
+  size_unfilled: number
   /*
    * coins_ is absolute
    */
+  size_max: number
   coins_add: number
-  size_unfilled: number
   coins_filled: number
   coins_stop_order: number
   /**
@@ -67,13 +70,14 @@ export type MarketOrderOutput = {
   order_client_id: number
 }
 
-export type MarketOrderProps = {
+export type MarketOrderInput = {
   ticker: string
   side: 'SHORT' | 'LONG'
   /**
    * Size in dollars. Absolute amount to buy or sell. Sign will be ignored.
    */
   dollars: number
+  dollarsMax: number
   /**
    * 1= 0.01%
    */

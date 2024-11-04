@@ -4,11 +4,9 @@ import {
   OrderTimeInForce,
   OrderSide,
 } from '@dydxprotocol/v4-client-js'
-import type { CompositeClient } from '@dydxprotocol/v4-client-js/build/src/clients/composite-client.d.ts'
 import { cc } from '@my/be/cc'
 import { orderAdd } from '@my/be/sql/order/add'
 import { DydxInterface } from '@src/be/dydx'
-import { orderToHash } from '@src/lib/numbers'
 import { catchError } from '@src/be/dydx/lib/catchError'
 
 type Props = {
@@ -21,11 +19,12 @@ type Props = {
    * Fraction of 1%
    */
   x1: number
+  reduce?: boolean
 }
 
 export async function orderLimit(
   this: DydxInterface,
-  { clientId, ticker, side, coins, price, x1 }: Props
+  { clientId, ticker, side, coins, price, x1, reduce }: Props
 ) {
   try {
     await cc.info('dydx.orderLimit input:', { ticker, side, coins, price })
@@ -37,7 +36,7 @@ export async function orderLimit(
     const multiplier = 1 + (side === 'LONG' ? x1 : -x1) // buy high / sell low
     const executionPrice = price * multiplier
     const postOnly = false
-    const reduceOnly = false
+    const reduceOnly = !!reduce
 
     // record
     await orderAdd({
@@ -67,7 +66,8 @@ export async function orderLimit(
 
     // notify
     await cc.warn(
-      `dydx.orderLimit: ${ticker} ${side} n:${coins.toString().substring(0, 5)} 
+      `dydx.orderLimit: ${ticker} ${side} ${reduceOnly ? 'reduce' : ''}
+      n:${coins.toString().substring(0, 5)} 
       p:${price.toString().substring(0, 7)} 
       x:${executionPrice.toString().substring(0, 7)}
       %:${(executionPrice / price).toString().substring(0, 7)}

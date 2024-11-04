@@ -74,9 +74,10 @@ export async function orderStop(
 
     // notify
     await cc.warn(
-      `dydx.orderStop: ${ticker} ${side} ${coins
+      `dydx.orderStop: ${ticker} ${side} 
+      n:${coins.toString().substring(0, 5)} ${triggerPrice
         .toString()
-        .substring(0, 5)} ${triggerPrice.toString().substring(0, 5)}
+        .substring(0, 5)}
       p:${price.toString().substring(0, 7)} 
       x:${triggerPrice.toString().substring(0, 7)}
       %:${(triggerPrice / price).toString().substring(0, 7)}

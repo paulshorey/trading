@@ -1,8 +1,8 @@
 import { isNumber, numberOrZero } from '@src/lib/numbers'
-import { MarketOrderProps, MarketOrderOutput } from '../types'
+import { MarketOrderInput, MarketOrderOutput } from '../types'
 
 export const validateInputsMarket = (
-  input: MarketOrderProps,
+  input: MarketOrderInput,
   output: MarketOrderOutput
 ): void => {
   input.dollars = Math.abs(numberOrZero(input.dollars))

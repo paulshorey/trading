@@ -1,5 +1,4 @@
-import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
-import { logAdd } from '@my/be/sql/log/add'
+import { cc } from '@my/be/cc'
 
 export const catchError = async (
   error: Error,
@@ -11,9 +10,7 @@ export const catchError = async (
     `catch in dydx: ` +
     (typeof error?.message === 'string' ? error?.message : '!message')
   // notify sms
-  sendToMyselfSMS(message)
-  // notify log
-  await logAdd('error', message, {
+  cc.error(message, {
     name: error.name,
     message: error.message,
     stack: error.stack,

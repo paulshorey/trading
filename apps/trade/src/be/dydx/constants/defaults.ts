@@ -2,12 +2,12 @@ export const defaults = {
   default: {
     LONG: 0.334,
     SHORT: 0.5,
-    floor: 1,
+    precision: 1,
   },
   'SOL-USD': {
     LONG: 0.67,
     SHORT: 0.75,
-    floor: 0.1,
+    precision: 0.1,
   },
   'AVAX-USD': {
     LONG: 0.5,
@@ -21,15 +21,10 @@ export const defaults = {
     LONG: 0.33,
     SHORT: 0.5,
   },
-  'STX-USD': {
-    LONG: 0.33,
-    SHORT: 0.5,
-    floor: 1,
-  },
   'SUI-USD': {
     LONG: 1,
     SHORT: 1.25,
-    floor: 10,
+    precision: 10,
   },
   'ATOM-USD': {
     LONG: 0.66,
@@ -38,22 +33,22 @@ export const defaults = {
   'ETH-USD': {
     LONG: 0.33,
     SHORT: 0.33,
-    floor: 0.001,
+    precision: 0.001,
   },
   'BCH-USD': {
     LONG: 0.33,
     SHORT: 0.33,
-    floor: 0.01,
+    precision: 0.01,
   },
   'BTC-USD': {
     LONG: 0.33,
     SHORT: 0.33,
-    floor: 0.00001,
+    precision: 0.00001,
   },
 } as {
   [key: string]: {
     LONG: number
     SHORT: number
-    floor?: number
+    precision?: number
   }
 }

@@ -4,12 +4,12 @@ import { LogOptions, LogLevel } from "./types";
 import { sqlQuery } from "../../sql/sqlQuery";
 import { getCurrentIpAddress } from "../../nextjs/getCurrentIpAddress";
 import { pool } from "../../sql/pool/events";
-import { sendToMyselfSMS } from "../../../../apps/trade/src/be/twillio/sendToMyselfSMS";
+import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 
 export const logAdd = async function (level: LogLevel, message: string, logData: Record<string, any>, options: LogOptions = {}) {
   "use server";
   if (options.sms) {
-    await sendToMyselfSMS(`${level}: ${message}`);
+    await sendToMyselfSMS(message); //`${level}: ${message}`);
   }
   const access_key = options.access_key;
   const dev = process.env.NODE_ENV === "development";

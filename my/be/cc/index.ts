@@ -3,8 +3,8 @@ import { consoleAction } from "./lib/consoleAction";
 
 export const cc = {
   // @ts-ignore
-  no: async function (message: string, data: any, options: Record<string, any> = {}) {},
-  log: async function (message: string, data: any, options: Record<string, any> = {}) {
+  no: async function (message: string, data?: any, options: Record<string, any> = {}) {},
+  log: async function (message: string, data?: any, options: Record<string, any> = {}) {
     try {
       consoleAction("log", message, data);
       // await logAdd("log", message, data);
@@ -12,7 +12,7 @@ export const cc = {
       console.error(e);
     }
   },
-  info: async function (message: string, data: any, options: Record<string, any> = {}) {
+  info: async function (message: string, data?: any, options: Record<string, any> = {}) {
     try {
       consoleAction("info", message, data);
       await logAdd("info", message, data, options);
@@ -20,7 +20,7 @@ export const cc = {
       console.error(e);
     }
   },
-  warn: async function (message: string, data: any, options: Record<string, any> = {}) {
+  warn: async function (message: string, data?: any, options: Record<string, any> = {}) {
     try {
       consoleAction("warn", message, data);
       await logAdd("warn", message, data, { sms: true, ...options });
@@ -28,7 +28,7 @@ export const cc = {
       console.error(e);
     }
   },
-  error: async function (message: string, data: any, options: Record<string, any> = {}) {
+  error: async function (message: string, data?: any, options: Record<string, any> = {}) {
     try {
       consoleAction("error", message, data);
       await logAdd("error", message, data, { sms: true, ...options });

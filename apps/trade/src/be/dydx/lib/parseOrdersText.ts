@@ -1,10 +1,11 @@
 import { cc } from '@my/be/cc'
-import { isNumber, numberOrZero } from '../../lib/numbers'
+import { isNumber, numberOrZero } from '../../../lib/numbers'
 
 type Output = {
   side: 'LONG' | 'SHORT'
   ticker: string
   dollars: number
+  dollarsMax: number
   sl?: number
   reduce?: boolean
 }
@@ -23,9 +24,11 @@ export const parseOrdersText = function (text: string): Output[] {
     if (typeof split[1] === 'string')
       trade.ticker = split[1].toUpperCase() + '-USD'
     // dollars amount
-    split[2] = numberOrZero(split[2])
-    if (isNumber(split[2]) && split[2] >= 1 && split[2] <= 1000)
-      trade.dollars = split[2]
+    let narr = split[2]?.toString().split('/')
+    let num = numberOrZero(narr?.[0])
+    if (isNumber(num) && num >= 1 && num <= 1000) trade.dollars = num
+    // max dollars is required. If undefined will be 0 (reduce only)
+    trade.dollarsMax = numberOrZero(narr?.[1])
     // stop loss | reduce
     let sl = Number(split[3])
     if (isNumber(sl)) {

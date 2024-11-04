@@ -1,3 +1,8 @@
+export function roundToCustomDecimal(number: number, precision: number) {
+  const factor = Math.pow(10, -Math.log10(precision))
+  return Math.round(number * factor) / factor
+}
+
 /**
  * Because JS isNaN and Number can't be trusted with whitespace, null, and boolean!
  * Fun fact:
@@ -28,14 +33,14 @@ export function stringToHash(str: string): number {
   return hash
 }
 
-type HashableOrder = {
-  type: string
-  ticker: string
-  side: 'LONG' | 'SHORT'
-}
-export function orderToHash(data: HashableOrder): number {
-  return stringToHash(`${data.type}:${data.ticker}:${data.side}`)
-}
+// type HashableOrder = {
+//   type: string
+//   ticker: string
+//   side: 'LONG' | 'SHORT'
+// }
+// export function orderToHash(data: HashableOrder): number {
+//   return stringToHash(`${data.type}:${data.ticker}:${data.side}`)
+// }
 
 type Candle = {
   open: number

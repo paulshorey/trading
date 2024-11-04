@@ -1,11 +1,9 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
 import { executeOrderMarket } from '@src/be/dydx/executeOrderMarket'
-import { parseOrdersText } from '@src/be/tv/parseOrdersText'
+import { parseOrdersText } from '@src/be/dydx/lib/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 import { MarketOrderOutput } from '../../../../be/dydx/types'
-// import { sendToMyselfSMS } from '@src/be/twillio/sendToMyselfSMS'
-// import { hash } from 'crypto'
 
 export const maxDuration = 160
 

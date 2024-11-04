@@ -39,21 +39,31 @@ export const executeOrderMarket = async (
      */
     async function updatePosition() {
       const positionData = (await dydx.getPositions(input.ticker, 'OPEN'))?.[0]
-      output.size_current = numberOrZero(positionData?.size)
-      output.coins_unfilled = output.size_intended - output.size_current
-      output.order_is_filled =
-        Math.abs(output.coins_unfilled * output.price) < 10
-    }
-    async function updateFloorCheckMargin() {
-      // Size
-      const floor =
+      // DYDX rounds to nearest "floor" fraction of coin (different per each crypto)
+      output.floor =
         defaults?.[input.ticker]?.floor || defaults?.default?.floor || 1
+      output.size_current = numberOrZero(positionData?.size)
+      cc.log('output.size_current', output.size_current)
       output.coins_add =
-        Math.floor(input.dollars / output.price / floor) * floor
-      output.size_intended =
-        output.size_current +
-        (input.side === 'LONG' ? output.coins_add : -output.coins_add)
+        Math.max(Math.floor(input.dollars / output.price / output.floor), 1) *
+        output.floor
+      cc.log('output.coins_add', output.coins_add)
+      // Only add this the first time this function is run.
+      // Every subsequent time this function is run, it should not change the original intention.
+      if (!output.size_original) {
+        output.size_original = output.size_current
+        output.size_intended =
+          output.size_original +
+          (input.side === 'LONG' ? output.coins_add : -output.coins_add)
+      }
+      cc.log('output.size_intended', output.size_intended)
+      // Finished adding to position?
+      output.size_unfilled = output.size_intended - output.size_current
+      output.order_is_filled = Math.abs(output.size_unfilled) < output.floor
+    }
+    async function updatePositionCheckMargin() {
       // Equity
+      await updatePosition()
       const accountData = await dydx.getAccount()
       const cashAvailable = numberOrZero(accountData?.freeCollateral)
       // Margin
@@ -81,33 +91,32 @@ export const executeOrderMarket = async (
     /*
      * Order attempt #1 - limit
      */
-    // Get latest price, current position, and margin
-    await updatePrice()
-    await updatePosition()
-    // Check that I have enough available cash margin to place this order
-    if (!updateFloorCheckMargin()) {
-      throw new Error(output.error)
-    }
-    // Place limit order
-    output.order_client_id = Math.ceil(Math.random() * 1000000)
-    await dydx.orderLimit({
-      clientId: output.order_client_id,
-      ticker: input.ticker,
-      side: input.side,
-      coins: output.coins_add,
-      price: output.price,
-      x1: 0.0001,
-    })
-    output.order_is_filled = false
-    timer()
-    // check that it's filled
-    await new Promise((resolve) =>
-      setTimeout(async () => {
-        await updatePosition()
-        resolve(true)
-      }, 15000)
-    )
-    timer()
+    // // Get latest price, current position, and margin
+    // await updatePrice()
+    // // Check that I have enough available cash margin to place this order
+    // if (!await updatePositionCheckMargin()) {
+    //   throw new Error(output.error)
+    // }
+    // // Place limit order
+    // output.order_client_id = Math.ceil(Math.random() * 1000000)
+    // await dydx.orderLimit({
+    //   clientId: output.order_client_id,
+    //   ticker: input.ticker,
+    //   side: input.side,
+    //   coins: output.coins_add,
+    //   price: output.price,
+    //   x1: 0.0001,
+    // })
+    // output.order_is_filled = false
+    // timer()
+    // // check that it's filled
+    // await new Promise((resolve) =>
+    //   setTimeout(async () => {
+    //     await updatePosition()
+    //     resolve(true)
+    //   }, 15000)
+    // )
+    // timer()
 
     /*
      * Order attempt #2 - limit
@@ -115,9 +124,8 @@ export const executeOrderMarket = async (
     if (!output.order_is_filled) {
       // Get latest price, current position, and margin
       await updatePrice()
-      await updatePosition()
       // Check that I have enough available cash margin to place this order
-      if (!updateFloorCheckMargin()) {
+      if (!(await updatePositionCheckMargin())) {
         throw new Error(output.error)
       }
       // Place limit order
@@ -148,9 +156,8 @@ export const executeOrderMarket = async (
     if (!output.order_is_filled) {
       // Get latest price, current position, and margin
       await updatePrice()
-      await updatePosition()
       // Check that I have enough available cash margin to place this order
-      if (!updateFloorCheckMargin()) {
+      if (!(await updatePositionCheckMargin())) {
         throw new Error(output.error)
       }
       // Place limit order
@@ -181,9 +188,8 @@ export const executeOrderMarket = async (
     if (!output.order_is_filled) {
       // Get latest price, current position, and margin
       await updatePrice()
-      await updatePosition()
       // Check that I have enough available cash margin to place this order
-      if (!updateFloorCheckMargin()) {
+      if (!(await updatePositionCheckMargin())) {
         throw new Error(output.error)
       }
       // Place market order
@@ -214,9 +220,8 @@ export const executeOrderMarket = async (
     if (!output.order_is_filled) {
       // Get latest price, current position, and margin
       await updatePrice()
-      await updatePosition()
       // Check that I have enough available cash margin to place this order
-      if (!updateFloorCheckMargin()) {
+      if (!(await updatePositionCheckMargin())) {
         throw new Error(output.error)
       }
       // Place market order
@@ -280,7 +285,6 @@ export const executeOrderMarket = async (
     /*
      * Stoploss on the current position
      */
-    await updatePrice()
     let whileStopAttemptNumber = 0
     if (output.size_current !== 0) {
       output.coins_stop_order = 0

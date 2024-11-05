@@ -152,7 +152,6 @@ ${input.ticker} ${input.side} $${input.dollars} <$${input.dollarsMax}
         coins: Math.abs(output.size_add),
         price: output.price,
         x1: 0.005,
-        reduce: input.dollarsMax === 0,
       })
       output.order_is_filled = false
       timer()
@@ -185,7 +184,6 @@ ${input.ticker} ${input.side} $${input.dollars} <$${input.dollarsMax}
         coins: Math.abs(output.size_add),
         price: output.price,
         x1: 0.01,
-        reduce: input.dollarsMax === 0,
       })
       output.order_is_filled = false
       timer()

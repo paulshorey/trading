@@ -5,8 +5,8 @@ export const defaults = {
     precision: 1,
   },
   'SOL-USD': {
-    LONG: 0.67,
-    SHORT: 0.75,
+    LONG: 0.5,
+    SHORT: 0.67,
     precision: 0.1,
   },
   'AVAX-USD': {

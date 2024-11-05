@@ -5,7 +5,6 @@ import Dydx from '.'
 import { MarketOrderOutput, MarketOrderInput } from './types'
 import { validateInputsMarket } from '@src/be/dydx/lib/validateInputsMarket'
 import { cc } from '@my/be/cc'
-import { Order } from './methods/getOrders'
 
 export const executeOrderMarket = async (
   input: MarketOrderInput
@@ -35,6 +34,52 @@ ${input.ticker} ${input.side} $${input.dollars} <$${input.dollarsMax}
      * Connection
      */
     const dydx = new Dydx()
+    // dydx.init is async, takes a bit of time
+    await new Promise((resolve) =>
+      setTimeout(async () => {
+        resolve(true)
+      }, 500)
+    )
+
+    /**
+     * Cancel any old stop orders that are not exactly like the new one (or all if unspecified)
+     * @returns true if exact match was found (new stop order successfully created)
+     */
+    async function cancelOtherStops(size?: number, side?: 'SHORT' | 'LONG') {
+      // get all open orders
+      const orders = await dydx.getOrders(
+        input.ticker,
+        (order) =>
+          order.type.substring(0, 4) === 'STOP' &&
+          (order.status === 'UNTRIGGERED' ||
+            order.status === 'OPEN' ||
+            order.status === 'UNFILLED') // && order.side !== input.side
+      )
+      // find the same size stop order, to avoid creating a duplicate new one
+      let foundTheOne = false
+      for (let order of orders) {
+        // found one with same size! No need to start a new one
+        if (
+          Math.abs(numberOrZero(order.size)) === size &&
+          order.side === side
+        ) {
+          // do not cancel the first match, return it
+          if (!foundTheOne) {
+            foundTheOne = true
+            continue
+          }
+          // but if it's not the first, then go on to cancel
+        }
+        // cancel all other unfilled orders before adding the new one
+        await dydx.orderCancel({
+          ticker: input.ticker,
+          clientId: order.clientId,
+        })
+      }
+      return foundTheOne
+    }
+    // start by cancelling all stop orders - will make more later
+    cancelOtherStops()
 
     /*
      * Helpers
@@ -261,44 +306,6 @@ ${input.ticker} ${input.side} $${input.dollars} <$${input.dollarsMax}
         }, 15000)
       )
       timer()
-    }
-
-    /**
-     * Cancel any old stop orders that are not exactly like the new one
-     * @returns true if exact match was found (new stop order successfully created)
-     */
-    const cancelOtherStops = async (size: number, side: 'SHORT' | 'LONG') => {
-      // get all open orders
-      const orders = await dydx.getOrders(
-        input.ticker,
-        (order) =>
-          order.type.substring(0, 4) === 'STOP' &&
-          (order.status === 'UNTRIGGERED' ||
-            order.status === 'OPEN' ||
-            order.status === 'UNFILLED') // && order.side !== input.side
-      )
-      // find the same size stop order, to avoid creating a duplicate new one
-      let foundTheOne = false
-      for (let order of orders) {
-        // found one with same size! No need to start a new one
-        if (
-          Math.abs(numberOrZero(order.size)) === size &&
-          order.side === side
-        ) {
-          // do not cancel the first match, return it
-          if (!foundTheOne) {
-            foundTheOne = true
-            continue
-          }
-          // but if it's not the first, then go on to cancel
-        }
-        // cancel all other unfilled orders before adding the new one
-        await dydx.orderCancel({
-          ticker: input.ticker,
-          clientId: order.clientId,
-        })
-      }
-      return foundTheOne
     }
 
     /*

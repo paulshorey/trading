@@ -107,10 +107,9 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
       return true
     }
     async function updatePrice() {
-      const candles = await dydx.getCandles(input.ticker, '1HOUR', 48)
+      const candles = await dydx.getCandles(input.ticker, '1MIN', 60)
       output.price = numberOrZero(candles?.[0]?.close)
-      output.hourly = [ohlc4(candles?.[0]), ohlc4(candles?.[1])]
-      output.daily = [ohlc4(candles?.[23]), ohlc4(candles?.[47])]
+      output.hourly = [ohlc4(candles?.[0]), ohlc4(candles?.[59])]
       if (output.price === 0) {
         throw new Error('Price is 0. Indexer must be down.')
       }

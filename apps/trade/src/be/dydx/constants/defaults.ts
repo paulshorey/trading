@@ -45,10 +45,13 @@ export const defaults = {
     SHORT: 0.33,
     precision: 0.0001,
   },
+  'SUNDOG-USD': {
+    precision: 1000,
+  },
 } as {
   [key: string]: {
-    LONG: number
-    SHORT: number
+    LONG?: number
+    SHORT?: number
     precision?: number
   }
 }

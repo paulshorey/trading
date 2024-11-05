@@ -73,7 +73,7 @@ export async function orderStop(
     )
 
     // notify
-    await cc.warn(
+    await cc.info(
       `dydx.orderStop: ${ticker} ${side} 
       n:${coins.toString().substring(0, 5)} 
       p:${price.toString().substring(0, 7)} 

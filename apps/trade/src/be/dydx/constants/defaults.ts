@@ -1,7 +1,7 @@
 export const defaults = {
   default: {
     LONG: 0.33,
-    SHORT: 0.5,
+    SHORT: 0.33,
     precision: 1,
   },
   'SOL-USD': {

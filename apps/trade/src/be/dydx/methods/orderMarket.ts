@@ -61,7 +61,8 @@ export async function orderMarket(
     )
 
     // notify
-    await cc.warn(
+    let action = side === 'LONG' ? ('warn' as const) : ('info' as const)
+    await cc[action](
       `dydx.order Market ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
         reduceOnly ? 'reduce' : ''
       }

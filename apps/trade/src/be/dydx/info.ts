@@ -63,11 +63,14 @@ export const dydxScout = async (): Promise<Output | undefined> => {
       const raw = positions[ticker]
       const position = {} as Record<string, any>
       output.account.positions[ticker] = position
+      position.to_stoploss = 0
+      position.dollars = 0
       // Price
       let candles = await dydx.getCandles(ticker, '1MIN', 1)
       // position.side = raw.side
       position.price = numberOrZero(candles[0]?.close)
       position.size = numberOrZero(raw.size)
+      position.dollars = Math.round(position.size * position.price)
       // Entry price
       // const entryPrice = Number(
       //   numberOrZero(raw.entryPrice).toString().substring(0, 7)
@@ -79,7 +82,7 @@ export const dydxScout = async (): Promise<Output | undefined> => {
       // position.entryPrice = entryPrice
       // Orders
       position.orders = {}
-      position.sl = 0
+      let position_sl = 0
       let sl_size_total = 0
       for (let ord of orders) {
         if (ord.ticker === ticker) {
@@ -97,8 +100,8 @@ export const dydxScout = async (): Promise<Output | undefined> => {
           if (ord.type.substring(0, 4) === 'STOP') {
             // instead of averaging all stop loss amounts,
             // simply record the sl value for the largest order
-            if (!position.sl || order.size > sl_size_total) {
-              position.sl = order.price
+            if (!position_sl || order.size > sl_size_total) {
+              position_sl = order.price
             }
             // increment order size after calculating sl value
             sl_size_total += order.size
@@ -115,14 +118,14 @@ export const dydxScout = async (): Promise<Output | undefined> => {
       }
 
       // PNL vs SL
-      const pnl_sl = (position.price / position.sl - 1) * -100
-      if (pnl_sl > 0) {
-        position.stoploss =
-          '+ ' + Math.abs(pnl_sl).toFixed(2).replace('0.', '.') + '  %'
+      const pnl_sl = ((position.price - position_sl) / position_sl) * -100
+      if (position.size > 0) {
+        position.to_stoploss =
+          ' ' + Math.abs(pnl_sl).toFixed(2).replace('0.', '.') + '  %'
       }
-      if (pnl_sl < 0) {
-        position.stoploss =
-          '- ' + Math.abs(pnl_sl).toFixed(2).replace('0.', '.') + '  %'
+      if (position.size < 0) {
+        position.to_stoploss =
+          ' ' + Math.abs(pnl_sl).toFixed(2).replace('0.', '.') + '  %'
       }
 
       // Cleanup before returning

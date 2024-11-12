@@ -73,7 +73,11 @@ export async function orderLimit(
       x:${executionPrice.toString().substring(0, 7)}
       %:${(executionPrice / price).toString().substring(0, 7)}
       `,
-      { ticker, side, coins, price }
+      { ticker, side, coins, price },
+      {
+        category: 'order',
+        tag: 'place',
+      }
     )
     return clientId
 

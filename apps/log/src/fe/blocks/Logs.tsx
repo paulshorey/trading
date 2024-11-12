@@ -5,6 +5,7 @@ import Collapsed from '@my/fe/src/components/blocks/Collapsed'
 import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
 import Badge from '@my/fe/src/components/inline/Badge'
 import Link from 'next/link'
+import Copy from '../../../../../my/fe/src/components/buttons/Copy'
 // import { cc } from '@my/be/cc';
 // import { useEffect } from 'react';
 
@@ -27,15 +28,29 @@ export default function Logs({ logs, where }: any) {
       dataParsed = `Could not serialize log.stack=${log.stack}`
     }
 
-    const Title = message
     return (
       <Collapsed
         classNames={{
-          content: 'rounded-md bg-gray-800',
+          content: 'rou🔻nded-md bg-gray-800',
         }}
         key={i}
-        title={Title}
+        title={message}
         buttonsRight={[
+          <span>
+            <Copy text={message} className="align-middle self-center" />
+          </span>,
+          <Badge className="font-bold pr-2">
+            <Link key="edit" href={`/?category=${log.category}`}>
+              {' '}
+              {log.category}{' '}
+            </Link>
+          </Badge>,
+          <Badge className="font-bold pr-2">
+            <Link key="edit" href={`/?tag=${log.tag}`}>
+              {' '}
+              {log.tag}{' '}
+            </Link>
+          </Badge>,
           <Badge className="font-bold pr-2">
             <Link key="edit" href={`/?name=${log.name}`}>
               {' '}

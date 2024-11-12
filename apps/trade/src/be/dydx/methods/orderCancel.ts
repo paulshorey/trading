@@ -43,11 +43,18 @@ export async function orderCancel(this: DydxInterface, input: Props) {
       )
     }
     // notify
-    await cc.info(`dydx.order Cancel`, {
-      ticker: input.ticker,
-      clientId,
-      type: input.orderType,
-    })
+    await cc.info(
+      `dydx.order Cancel`,
+      {
+        ticker: input.ticker,
+        clientId,
+        type: input.orderType,
+      },
+      {
+        category: 'order',
+        tag: 'cancel',
+      }
+    )
     // done
     return clientId
 

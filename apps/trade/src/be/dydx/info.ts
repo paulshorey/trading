@@ -145,14 +145,17 @@ export const dydxScout = async (): Promise<Output | undefined> => {
       if (position.size < 0) {
         position.to_stoploss = Number((Math.abs(pnl_sl) + 0.25).toFixed(2))
       }
+      if (position.dollars < 0) {
+        position.to_stoploss = -position.to_stoploss
+      }
 
       // Summary
       output.account.coins[ticker.replace('-USD', '')] = position.to_stoploss
       if (position.to_stoploss) {
         output.account.stop -=
-          position.dollars * (Math.abs(position.to_stoploss) / 100)
+          Math.abs(position.dollars) * (Math.abs(position.to_stoploss) / 100)
       } else {
-        output.account.stop -= position.dollars * 0.05
+        output.account.stop -= Math.abs(position.dollars) * 0.05
       }
       output.account.risk = Number(
         (

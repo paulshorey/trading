@@ -16,11 +16,12 @@ export const logAdd = async function (level: LogLevel, message: string, logData:
   const server_name = process.env.SERVER_NAME || "";
   const app_name = process.env.APP_NAME || "";
   const addr = (await getCurrentIpAddress()) || {};
-  const sql = "INSERT INTO v1.logs (name, message, stack, access_key, server_name, app_name, dev, time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *";
+  const sql =
+    "INSERT INTO v1.logs (name, message, stack, access_key, server_name, app_name, dev, time, category, tag) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *";
   try {
     // Log
     const stack = JSON.stringify({ ...logData, ...addr }, null, " ");
-    await sqlQuery(pool, sql, [level.toLowerCase(), message, stack, access_key, server_name, app_name, dev, Date.now()]);
+    await sqlQuery(pool, sql, [level.toLowerCase(), message, stack, access_key, server_name, app_name, dev, Date.now(), options.category, options.tag]);
     return stack;
     //@ts-ignore
   } catch (e: Error) {

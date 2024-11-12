@@ -96,10 +96,14 @@ export async function orderStop(
           reduceOnly,
           triggerPrice,
         },
+        input: {
+          price,
+          slMultiplier,
+        },
       },
       {
-        price,
-        slMultiplier,
+        category: 'order',
+        tag: 'stop',
       }
     )
     return clientId

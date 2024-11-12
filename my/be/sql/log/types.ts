@@ -4,6 +4,8 @@ export type LogOptions = {
   message?: string;
   title?: string;
   sms?: boolean;
+  category?: string;
+  tag?: string;
 };
 
 export type LogLevel =

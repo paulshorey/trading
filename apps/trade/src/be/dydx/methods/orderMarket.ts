@@ -69,7 +69,11 @@ export async function orderMarket(
       $:${(coins * price).toString().substring(0, 7)} 
       n:${coins.toString().substring(0, 5)} 
       p:${price.toString().substring(0, 7)}`,
-      { ticker, side, coins, price }
+      { ticker, side, coins, price },
+      {
+        category: 'order',
+        tag: 'place',
+      }
     )
     return clientId
 

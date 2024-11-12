@@ -33,6 +33,7 @@ export default function Json({ data, expandUntil = 3 }: Props) {
   }
   return (
     <div
+      suppressHydrationWarning
       className={`relative px-1 pb-1 bg-slate-800 ${classes.JsonViewContainer}`}
     >
       <Copy

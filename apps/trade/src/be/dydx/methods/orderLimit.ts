@@ -19,11 +19,12 @@ type Props = {
    * Fraction of 1%
    */
   x1: number
+  postOnly?: boolean
 }
 
 export async function orderLimit(
   this: DydxInterface,
-  { clientId, ticker, side, coins, price, x1 }: Props
+  { clientId, ticker, side, coins, price, x1, postOnly }: Props
 ) {
   try {
     await cc.info('dydx.orderLimit input:', { ticker, side, coins, price })
@@ -34,8 +35,8 @@ export async function orderLimit(
     const execution = OrderExecution.DEFAULT
     const multiplier = 1 + (side === 'LONG' ? x1 : -x1) // buy high / sell low
     const executionPrice = price * multiplier
-    const postOnly = false
     const reduceOnly = false
+    postOnly = !!postOnly // default false
 
     // record
     await orderAdd({
@@ -66,7 +67,9 @@ export async function orderLimit(
     // notify
     let action = side === 'LONG' ? ('warn' as const) : ('info' as const)
     await cc[action](
-      `dydx.order Limit ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker}  
+      `order Limit ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
+        reduceOnly ? 'reduce' : ''
+      }  
       $:${(coins * price).toString().substring(0, 7)} 
       n:${coins.toString().substring(0, 5)} 
       p:${price.toString().substring(0, 7)} 

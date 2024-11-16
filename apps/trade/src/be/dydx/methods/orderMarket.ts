@@ -4,7 +4,6 @@ import {
   OrderTimeInForce,
   OrderSide,
 } from '@dydxprotocol/v4-client-js'
-import type { CompositeClient } from '@dydxprotocol/v4-client-js/build/src/clients/composite-client.d.ts'
 import { cc } from '@my/be/cc'
 import { orderAdd } from '@my/be/sql/order/add'
 import { DydxInterface } from '@src/be/dydx'
@@ -16,12 +15,12 @@ type Props = {
   side: 'SHORT' | 'LONG'
   coins: number
   price: number
-  reduce?: boolean
+  reduceOnly?: boolean
 }
 
 export async function orderMarket(
   this: DydxInterface,
-  { clientId, ticker, side, coins, price, reduce }: Props
+  { clientId, ticker, side, coins, price, reduceOnly }: Props
 ) {
   try {
     await cc.info('dydx.orderMarket input:', { ticker, side, coins, price })
@@ -32,7 +31,7 @@ export async function orderMarket(
     const execution = OrderExecution.DEFAULT
     const executionPrice = side === 'LONG' ? 10000000 : 0.01
     const postOnly = false
-    const reduceOnly = !!reduce
+    reduceOnly = !!reduceOnly // default false
 
     // record
     await orderAdd({
@@ -63,7 +62,7 @@ export async function orderMarket(
     // notify
     let action = side === 'LONG' ? ('warn' as const) : ('info' as const)
     await cc[action](
-      `dydx.order Market ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
+      `order Market ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
         reduceOnly ? 'reduce' : ''
       }
       $:${(coins * price).toString().substring(0, 7)} 

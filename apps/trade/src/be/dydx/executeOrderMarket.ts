@@ -126,6 +126,10 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
     if (!(await updatePositionCheckMargin())) {
       throw new Error(output.error)
     }
+    // New position = wait, in case there are outstanding orders still processing
+    if (output.size_intended > output.size_original) {
+      await cancelOtherStops()
+    }
     // #1 order attempt, updatePrice() and updatePositionCheckMargin()
     // must go outside of !output.order_is_filled check
     if (!output.order_is_filled) {
@@ -206,7 +210,7 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
           side: output.side,
           coins: Math.abs(output.size_unfilled),
           price: output.price,
-          reduce: output.size_intended === 0,
+          reduceOnly: output.size_intended === 0,
         })
         output.order_is_filled = false
         timer()
@@ -241,7 +245,7 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
           side: output.side,
           coins: Math.abs(output.size_unfilled),
           price: output.price,
-          reduce: output.size_intended === 0,
+          reduceOnly: output.size_intended === 0,
         })
         output.order_is_filled = false
         timer()

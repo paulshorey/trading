@@ -8,8 +8,6 @@ export const defaults = {
     precision: 0.1,
   },
   'SUI-USD': {
-    LONG: 7.5,
-    SHORT: 7.5,
     precision: 10,
   },
   'ETH-USD': {

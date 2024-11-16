@@ -139,12 +139,15 @@ export const dydxScout = async (): Promise<Output | undefined> => {
 
       // PNL vs SL
       const pnl_sl = ((position.price - position_sl) / position_sl) * -100
+
+      // LONG
       if (position.size > 0) {
         position.to_stoploss = Number((Math.abs(pnl_sl) + 0.25).toFixed(2))
       }
       if (position.size < 0) {
         position.to_stoploss = Number((Math.abs(pnl_sl) + 0.25).toFixed(2))
       }
+      // SHORT
       if (position.dollars < 0) {
         position.to_stoploss = -position.to_stoploss
       }

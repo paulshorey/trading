@@ -5,7 +5,7 @@ import '../../styles/tailwind.css'
 import '../../styles/global.scss'
 import '@mantine/core/styles.css'
 import '../../styles/mantine.scss'
-import ErrorBoundary from './ErrorBoundary'
+import { ErrorBoundary } from './ErrorBoundary'
 
 export function Providers({ children, defaultColorScheme }: any) {
   return (

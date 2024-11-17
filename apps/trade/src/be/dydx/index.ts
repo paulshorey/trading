@@ -15,6 +15,9 @@ import { orderLimit } from '@src/be/dydx/methods/orderLimit'
 import { orderCancel } from '@src/be/dydx/methods/orderCancel'
 import { getCandles } from '@src/be/dydx/methods/getCandles'
 import { getAccount } from '@src/be/dydx/methods/getAccount'
+import { getAsksAndBids } from '@src/be/dydx/methods/getAsksAndBids'
+import { getSparklines } from '@src/be/dydx/methods/getSparklines'
+import { getPerpetualMarket } from '@src/be/dydx/methods/getPerpetualMarket'
 
 export interface DydxInterface {
   network: Network
@@ -95,6 +98,9 @@ export class Dydx implements DydxInterface {
     return this.validatorClient
   }
 
+  getPerpetualMarket = getPerpetualMarket
+  getAsksAndBids = getAsksAndBids
+  getSparklines = getSparklines
   getAccount = getAccount
   getCandles = getCandles
   getOrders = getOrders

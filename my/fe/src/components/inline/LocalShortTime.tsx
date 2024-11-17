@@ -4,7 +4,7 @@ type Props = {
   epoch: number
 }
 
-export default function LocalShortTime({ epoch }: Props) {
+export function LocalShortTime({ epoch }: Props) {
   epoch = Number(epoch)
   const now = new Date()
   const midnight = new Date(

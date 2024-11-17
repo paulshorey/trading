@@ -1,3 +1,1 @@
-import { Accordion } from "@mantine/core";
-
-export default Accordion;
+export { Accordion } from '@mantine/core'

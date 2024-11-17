@@ -1,3 +1,5 @@
+'use server'
+
 import { catchError } from '@src/be/dydx/lib/catchError'
 import { defaults } from '@src/be/dydx/constants/defaults'
 import { numberOrZero, ohlc4, roundToCustomDecimal } from '@src/lib/numbers'

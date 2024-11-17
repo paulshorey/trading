@@ -1,4 +1,4 @@
-import ErrorBoundary from '@my/fe/src/components/wrappers/ErrorBoundary'
+import { ErrorBoundary } from '@my/fe/src/components/wrappers/ErrorBoundary'
 import { Providers } from '@my/fe/src/components/wrappers/Providers'
 // import dynamic from 'next/dynamic'
 // const Providers = dynamic(

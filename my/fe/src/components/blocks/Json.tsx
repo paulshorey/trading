@@ -2,14 +2,14 @@
 
 import { JsonView, darkStyles } from 'react-json-view-lite'
 import classes from './Json.module.scss'
-import Copy from '../buttons/Copy'
+import { Copy } from '../buttons/Copy'
 
 type Props = {
   data: Record<string, any>
   expandUntil?: number
 }
 
-export default function Json({ data, expandUntil = 3 }: Props) {
+export function Json({ data, expandUntil = 3 }: Props) {
   const styles = darkStyles
   for (const key in styles) {
     if (classes[key]) {

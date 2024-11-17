@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 
-export default function Collapsed({
+export function Collapsed({
   children,
   title,
   openDefault = false,

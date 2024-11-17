@@ -1,14 +1,14 @@
 'use client'
 
 import { Accordion } from '@mantine/core'
-import Json from '../blocks/Json'
+import { Json } from '../blocks/Json'
 import classes from './Logs.module.scss'
-import Collapsed from '../blocks/Collapsed'
-import LocalShortTime from '../inline/LocalShortTime'
+import { Collapsed } from '../blocks/Collapsed'
+import { LocalShortTime } from '../inline/LocalShortTime'
 // import { cc } from '../../lib/cc';
-import Badge from '../inline/Badge'
+import { Badge } from '../inline/Badge'
 
-export default function Logs({ logs }: any) {
+export function Logs({ logs }: any) {
   // cc.info(['client', 'Logs.tsx', `logs.length=${logs.length}`]);
   const sections = logs.map((log: any, i: number) => {
     let string = log.data

@@ -13,7 +13,7 @@ interface State {
 }
 
 // ErrorBoundary must be an old-fashioned class component. Hooks are not supported.
-class ErrorBoundary extends Component<Props, State> {
+export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: {
@@ -32,5 +32,3 @@ class ErrorBoundary extends Component<Props, State> {
     return this.props.children
   }
 }
-
-export default ErrorBoundary

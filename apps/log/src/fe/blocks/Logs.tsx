@@ -1,15 +1,15 @@
 'use client'
 
-import Json from '@my/fe/src/components/blocks/Json'
-import Collapsed from '@my/fe/src/components/blocks/Collapsed'
-import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
-import Badge from '@my/fe/src/components/inline/Badge'
-import Link from 'next/link'
-import Copy from '../../../../../my/fe/src/components/buttons/Copy'
+import { Json } from '@my/fe/src/components/blocks/Json'
+import { Collapsed } from '@my/fe/src/components/blocks/Collapsed'
+import { LocalShortTime } from '@my/fe/src/components/inline/LocalShortTime'
+import { Badge } from '@my/fe/src/components/inline/Badge'
+import { Link } from 'next/link'
+import { Copy } from '../../../../../my/fe/src/components/buttons/Copy'
 // import { cc } from '@my/be/cc';
 // import { useEffect } from 'react';
 
-export default function Logs({ logs, where }: any) {
+export function Logs({ logs, where }: any) {
   // cc.info('Logs client rendered', ['client', 'Logs.tsx', `logs.length=${logs.length}`]);
   // useEffect(() => {
   //   cc.info('Logs client useEffect', ['client', 'Logs.tsx', `logs.length=${logs.length}`]);

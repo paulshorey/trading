@@ -177,6 +177,9 @@ importers:
 
   apps/trade:
     dependencies:
+      '@data-ui/histogram':
+        specifier: ^0.0.84
+        version: 0.0.84(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@dydxprotocol/v4-client-js':
         specifier: 1.12.3
         version: 1.12.3(bufferutil@4.0.8)
@@ -746,6 +749,21 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       postcss-selector-parser: ^6.1.0
+
+  '@data-ui/histogram@0.0.84':
+    resolution: {integrity: sha512-JuAUd3cgbDvXd1PKddB3L3SvZj5VFXTLG9za0RlqgbEsddR2dgUfJJQ5GacJ7a3o/SpmJ0zRGJVXb5VZozjj2Q==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+      react-dom: ^15.0.0-0 || ^16.0.0-0
+
+  '@data-ui/shared@0.0.84':
+    resolution: {integrity: sha512-MsDLsFzBHFEREr/eF2/RX1o/cXioEg+VQTsM8gViW5ywGQ7Xo5+EqUOaBSrwqKAkvp3e8PaEZVkchPC54IBhrA==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+      react-dom: ^15.0.0-0 || ^16.0.0-0
+
+  '@data-ui/theme@0.0.84':
+    resolution: {integrity: sha512-jIoHftC/5c/LVJYF4VSBjjVjrjc0yj4mLkGe8p0eVO7qUYKVvlWx7PrpM7ucyefvuAaKIwlr+Nh2xPGPdADjaA==}
 
   '@discoveryjs/json-ext@0.5.7':
     resolution: {integrity: sha512-dBVuXR082gk3jsFp7Rd/JI4kytwGHecnCoTtXFb7DB6CNHp4rg5k1bhg0nWdLGLnOV71lmDzGQaLMy8iPLY0pw==}
@@ -1574,6 +1592,87 @@ packages:
       typescript:
         optional: true
 
+  '@vx/axis@0.0.179':
+    resolution: {integrity: sha512-FtUcdJxejYn5jgixSgSk9AdA96VwP9sCRATVfGvugEL0gtTKWYDbJEgSgqXfKqpeUdsDdf/JT7NVbLMc1hzrZg==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/bounds@0.0.165':
+    resolution: {integrity: sha512-ZvRb72/4QNs1ZrytZTZxd0hfAb/KKfhsdkcYtIQkmdF6dTsjigMQZ+h2bLvLnbZb/RxyCCoxdiZSGXd+T1c//Q==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+      react-dom: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/curve@0.0.165':
+    resolution: {integrity: sha512-fiQAGrKNGjJbL+eixUckJqIZDWXH/1NtIyyDbSz3J7ksk0QpYr5BgWcNJN76HLNt7wfcLwNzCHeNs4iVYyFGTg==}
+
+  '@vx/event@0.0.165':
+    resolution: {integrity: sha512-FsQiw0f3s5DQB6aBQmBcoWk9e4q65LcDobHIyV8qrmpW2QgV2NvQFM1w0Q300ohpRMgJDzGk68HHHQgFOJvApw==}
+
+  '@vx/event@0.0.179':
+    resolution: {integrity: sha512-wEwqKsxrzoRV/A9Va/f/CHPmV9asrTH/kW/f88jCydsVXd5W/nrJZiVpozN2Zr1Ernv0i1gW5896FWo/LHRg0A==}
+
+  '@vx/glyph@0.0.179':
+    resolution: {integrity: sha512-RO7adwyG+9gGzjFdfmplrojgWCT+gsOnIFcRgJNJjx41+P6hWdI9X4OpsLx8VVqNhp7g+hxBDZWte8AxTvLQGw==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/gradient@0.0.165':
+    resolution: {integrity: sha512-FjRXMTmcy7k0TWsfDzWWXw6T9WXKP+6LS/GRgnguq271pab/P+AdOJThsVxtBgUc8ZOAPbub3/2Gggz9d8tocg==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/group@0.0.165':
+    resolution: {integrity: sha512-gi1DSg8AAaVRseyWiq8y4bzyvKiQIXT6vDUYBVRmv2LBcpHocBGaxNiNK0X602RgLG0XmNyRv6qSCWLOaBs3Mg==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/group@0.0.170':
+    resolution: {integrity: sha512-RnDdRoy0YI5hokk+YWXc8t39Kp51i4BdCpiwkDJU4YypGycTYnDFjicam6jigUmZ/6wyMirDf/aQboWviFLt2Q==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/pattern@0.0.179':
+    resolution: {integrity: sha512-qvJsK07oUnSbuzj9jo7b/1Up13DknIeTlj9FDIhg0UNmz90ikVN2CZIWtdJyc2I1AFDEg0odOqYXzUx9aEBRfg==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/point@0.0.165':
+    resolution: {integrity: sha512-spoHilhjcWNgccrSzBUPw+PXV81tYxeyEWBkgr35aGVU4m7YT86Ywvfemwp7AVVGPn+XJHrhB0ujAhDoyqFPoA==}
+
+  '@vx/responsive@0.0.192':
+    resolution: {integrity: sha512-HaXVwhSJXUfRbzRV+glxsX0ki2Hi1mdpz42iuGArVQgDPJEmBHjkXyoiXU8U6v66M7FAH+OyKgtc5j2bfhyYzA==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/scale@0.0.179':
+    resolution: {integrity: sha512-j40WiGu4VcHZdaSQAl12ig2w5c4Q9EVn7qqYf9PX7uoS5PbxRYNnHeKZ7e5Bf8O6b57iv5jFTfUV7HkpNF4vvg==}
+
+  '@vx/shape@0.0.168':
+    resolution: {integrity: sha512-urKZkwSafMpPQ0wI/L5FJmufRiAR4UsgYUCKxROjfE1Cf4jWNlK6mlVIIASxCdHlh9CGBbIrRMdl5Yv5lzqhjA==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/shape@0.0.179':
+    resolution: {integrity: sha512-YHVNx4xGpbjolkW3Lb5pEgJB0+u349vfnLI976DJlinY0hRNa4TZbWXOB4ywLIrYzQEXXPMUR8WtdubNxg6g0w==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/text@0.0.179':
+    resolution: {integrity: sha512-UD3/8o15+AQfjDI8LQ1Zj3EdQCwA3cfuQMR/M2F/Le4+JXQNMheeWz4xGyF4ZDs6r7c5cUI9Cd1RaPmGhYsX9g==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/tooltip@0.0.165':
+    resolution: {integrity: sha512-/x1NZc67QGQ4e/WNT7Ks5LYRyeLSqp8lG04gX5J6leUS0zscAVzo3aE5u65Qqbc0cnMyMPRZ2Qtb4klWTLg+eQ==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
+  '@vx/tooltip@0.0.179':
+    resolution: {integrity: sha512-BjMURtNpc1g3Li00iHt4bA9lbhk1FnsxCemYI1OF5tSSKHHal2ZAdxRS7o1sR9+jIa3RyD9flfIa1ibtrJh2Ew==}
+    peerDependencies:
+      react: ^15.0.0-0 || ^16.0.0-0
+
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
     engines: {node: '>=6.5'}
@@ -1768,6 +1867,9 @@ packages:
     resolution: {integrity: sha512-ESAc/RJvGTFEzRwOTT4+lNDk/GNHMkKbNzsvT0qKRfDyyYTskxB5rnU2njIDYVxXCBHHEI1c0YwHob3WaYujOg==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
+  babel-plugin-lodash@3.3.4:
+    resolution: {integrity: sha512-yDZLjK7TCkWl1gpBeBGmuaDIFhZKmkoL+Cu2MUUjv5VxUZx/z7tBGBCBcQs5RI1Bkz5LLmNdjx7paOyQtMovyg==}
+
   babel-preset-current-node-syntax@1.1.0:
     resolution: {integrity: sha512-ldYss8SbBlWva1bs28q78Ju5Zq1F+8BrqBZZ0VFhLBvhh6lCpC2o3gDJi/5DRLs9FgYZCnmPYIVFU4lRXCkyUw==}
     peerDependencies:
@@ -1781,6 +1883,9 @@ packages:
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
+
+  balanced-match@0.4.2:
+    resolution: {integrity: sha512-STw03mQKnGUYtoNjmowo4F2cRmIIxYEGiMsjjwla/u5P1lxadj/05WkNaFjNiKTgJkj8KiXbgAiRTmcQRwQNtg==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -1931,6 +2036,9 @@ packages:
   cjs-module-lexer@1.4.1:
     resolution: {integrity: sha512-cuSVIHi9/9E/+821Qjdvngor+xpnlwnuwIyZOaLmHBVdXL+gP+I6QQB9VkO7RI77YIcTV+S1W9AreJ5eN63JBA==}
 
+  classnames@2.5.1:
+    resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
+
   clean-regexp@1.0.0:
     resolution: {integrity: sha512-GfisEZEJvzKrmGWkvfhgzcz/BllN1USeqD2V6tg14OAOgaCD2Z/PUEuxnAZ/nPvmaHRG7a8y77p1T/IRQ4D1Hw==}
     engines: {node: '>=4'}
@@ -2079,6 +2187,42 @@ packages:
 
   csstype@3.1.3:
     resolution: {integrity: sha512-M1uQkMl8rQK/szD0LNhtqxIPLpimGm8sOBwU7lLnCpSbTyY3yeU1Vc7l4KT5zT4s/yOxHH5O7tIuuLOCnLADRw==}
+
+  d3-array@1.2.4:
+    resolution: {integrity: sha512-KHW6M86R+FUPYGb3R5XiYjXPq7VzwxZ22buHhAEVG5ztoEcZZMLov530mmccaqA1GghZArjQV46fuc8kUqhhHw==}
+
+  d3-collection@1.0.7:
+    resolution: {integrity: sha512-ii0/r5f4sjKNTfh84Di+DpztYwqKhEyUlKoPrzUFfeSkWxjW49xU2QzO9qrPrNkpdI0XJkfzvmTu8V2Zylln6A==}
+
+  d3-color@1.4.1:
+    resolution: {integrity: sha512-p2sTHSLCJI2QKunbGb7ocOh7DgTAn8IrLx21QRc/BSnodXM4sv6aLQlnfpvehFMLZEfBc6g9pH9SWQccFYfJ9Q==}
+
+  d3-format@1.4.5:
+    resolution: {integrity: sha512-J0piedu6Z8iB6TbIGfZgDzfXxUFN3qQRMofy2oPdXzQibYGqPB/9iMcxr/TGalU+2RsyDO+U4f33id8tbnSRMQ==}
+
+  d3-interpolate@1.4.0:
+    resolution: {integrity: sha512-V9znK0zc3jOPV4VD2zZn0sDhZU3WAE2bmlxdIwwQPPzPjvyLkd8B3JUVdS1IDUFDkWZ72c9qnv1GK2ZagTZ8EA==}
+
+  d3-path@1.0.9:
+    resolution: {integrity: sha512-VLaYcn81dtHVTjEHd8B+pbe9yHWpXKZUC87PzoFmsFrJqgFwDe/qxfp5MlfsfM1V5E/iVt0MmEbWQ7FVIXh/bg==}
+
+  d3-scale@1.0.7:
+    resolution: {integrity: sha512-KvU92czp2/qse5tUfGms6Kjig0AhHOwkzXG0+PqIJB3ke0WUv088AHMZI0OssO9NCkXt4RP8yju9rpH8aGB7Lw==}
+
+  d3-scale@2.2.2:
+    resolution: {integrity: sha512-LbeEvGgIb8UMcAa0EATLNX0lelKWGYDQiPdHj+gLblGVhGLyNbaCn3EvrJf0A3Y/uOOU5aD6MTh5ZFCdEwGiCw==}
+
+  d3-shape@1.3.7:
+    resolution: {integrity: sha512-EUkvKjqPFUAZyOlhY5gzCxCeI0Aep04LwIRpsZ/mLFelJiUfnK56jo5JMDSE7yyP2kLSb6LtF+S5chMk7uqPqw==}
+
+  d3-time-format@2.3.0:
+    resolution: {integrity: sha512-guv6b2H37s2Uq/GefleCDtbe0XZAuy7Wa49VGkPVPMfLL9qObgBST3lEHJBMUp8S7NdLQAGIvr2KXk8Hc98iKQ==}
+
+  d3-time@1.1.0:
+    resolution: {integrity: sha512-Xh0isrZ5rPYYdqhAVk8VLnMEidhz5aP7htAADH6MfzgmmicPkTo8LhkLxci61/lCB7n7UmE3bN0leRt+qvkLxA==}
+
+  d3-timer@1.0.10:
+    resolution: {integrity: sha512-B1JDm0XDaQC+uvo4DT79H0XmBskgS3l6Ve+1SBCfxgmtIb1AVrPIoqd+nPSv+loMX8szQ0sVUhGngL7D5QPiXw==}
 
   damerau-levenshtein@1.0.8:
     resolution: {integrity: sha512-sdQSFB7+llfUcQHUQO3+B8ERRj0Oa4w9POWMI/puGtuf7gFywGmkaLCElnudfTiKZV+NvHqL0ifzdrI8Ro7ESA==}
@@ -3530,6 +3674,9 @@ packages:
   makeerror@1.0.12:
     resolution: {integrity: sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg==}
 
+  math-expression-evaluator@1.4.0:
+    resolution: {integrity: sha512-4vRUvPyxdO8cWULGTh9dZWL2tZK6LDBvj+OGHBER7poH9Qdt7kXEoj20wiz4lQUbUXQZFjPbe5mVDo9nutizCw==}
+
   mathml-tag-names@2.1.3:
     resolution: {integrity: sha512-APMBEanjybaPzUrfqU0IMU5I0AswKMH7k8OTLs0vvV4KZpExkTkY87nR/zpbuTPj+gARop7aGUbl11pnDfW6xg==}
 
@@ -4224,11 +4371,19 @@ packages:
     peerDependencies:
       react: ^16.13.1 || ^17.0.0 || ^18.0.0
 
+  react-lifecycles-compat@3.0.4:
+    resolution: {integrity: sha512-fBASbA6LnOU9dOU2eW7aQ8xmYBSXUIWr+UmF9b1efZBazGNO+rcXT/icdKnYm2pTwcRylVUYwW7H1PHfLekVzA==}
+
   react-markdown@9.0.1:
     resolution: {integrity: sha512-186Gw/vF1uRkydbsOIkcGXw7aHq0sZOCRFFjGrr7b9+nVZg4UfA4enXCaxm4fUzecU38sWfrNDitGhshuU7rdg==}
     peerDependencies:
       '@types/react': '>=18'
       react: '>=18'
+
+  react-move@2.9.1:
+    resolution: {integrity: sha512-5qKYsJrKKpSypEaaYyR2HBbBgX65htRqKDa8o5OGDkq2VfklmTCbLawtYFpdmcJRqbz4jCYpzo2Rrsazq9HA8Q==}
+    peerDependencies:
+      react: ^15.4.0 || ^16.0.0
 
   react-number-format@5.4.2:
     resolution: {integrity: sha512-cg//jVdS49PYDgmcYoBnMMHl4XNTMuV723ZnHD2aXYtWWWqbVF3hjQ8iB+UZEuXapLbeA8P8H+1o6ZB1lcw3vg==}
@@ -4316,6 +4471,12 @@ packages:
     resolution: {integrity: sha512-6tDA8g98We0zd0GvVeMT9arEOnTw9qM03L9cJXaCjrip1OO764RDBLBfrB4cwzNGDj5OA5ioymC9GkizgWJDUg==}
     engines: {node: '>=8'}
 
+  reduce-css-calc@1.3.0:
+    resolution: {integrity: sha512-0dVfwYVOlf/LBA2ec4OwQ6p3X9mYxn/wOl2xTcLwjnPYrkgEfPx3VI4eGCH3rQLlPISG5v9I9bkZosKsNRTRKA==}
+
+  reduce-function-call@1.0.3:
+    resolution: {integrity: sha512-Hl/tuV2VDgWgCSEeWMLwxLZqX7OK59eU1guxXsRKTAyeYimivsKdtcV4fu3r710tpG5GmDKDhQ0HSZLExnNmyQ==}
+
   reflect.getprototypeof@1.0.6:
     resolution: {integrity: sha512-fmfw4XgoDke3kdI6h4xcUz1dG8uaiv5q9gcEwLS4Pnth2kxT+GZ7YehS1JTMGBQmtV7Y4GFGbs2re2NqhdozUg==}
     engines: {node: '>= 0.4'}
@@ -4355,6 +4516,12 @@ packages:
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
+
+  require-package-name@2.0.1:
+    resolution: {integrity: sha512-uuoJ1hU/k6M0779t3VMVIYpb2VMJk05cehCaABFhXaibcbvfgR8wKiozLjVFSzJPmQMRqIcO0HMyTFqfV09V6Q==}
+
+  resize-observer-polyfill@1.5.0:
+    resolution: {integrity: sha512-M2AelyJDVR/oLnToJLtuDJRBBWUGUvvGigj1411hXhAdyFWqMaqHp7TixW3FpiLuVaikIcR1QL+zqoJoZlOgpg==}
 
   resolve-cwd@3.0.0:
     resolution: {integrity: sha512-OrZaX2Mb+rJCpH/6CpSqt9xFVpN++x01XnN2ie9g6P5/3xelLAkXWVADpdz1IHD/KFfEXyE6V0U01OQ3UO2rEg==}
@@ -5588,6 +5755,44 @@ snapshots:
     dependencies:
       postcss-selector-parser: 6.1.2
 
+  '@data-ui/histogram@0.0.84(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      '@data-ui/shared': 0.0.84(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      '@data-ui/theme': 0.0.84
+      '@vx/axis': 0.0.179(react@18.2.0)
+      '@vx/curve': 0.0.165
+      '@vx/event': 0.0.179
+      '@vx/glyph': 0.0.179(react@18.2.0)
+      '@vx/gradient': 0.0.165(react@18.2.0)
+      '@vx/group': 0.0.170(react@18.2.0)
+      '@vx/pattern': 0.0.179(react@18.2.0)
+      '@vx/responsive': 0.0.192(react@18.2.0)
+      '@vx/scale': 0.0.179
+      '@vx/shape': 0.0.179(react@18.2.0)
+      '@vx/tooltip': 0.0.179(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      d3-array: 1.2.4
+      d3-scale: 1.0.7
+      prop-types: 15.8.1
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+      react-move: 2.9.1(react@18.2.0)
+    transitivePeerDependencies:
+      - supports-color
+
+  '@data-ui/shared@0.0.84(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      '@data-ui/theme': 0.0.84
+      '@vx/event': 0.0.165
+      '@vx/group': 0.0.165(react@18.2.0)
+      '@vx/shape': 0.0.168(react@18.2.0)
+      '@vx/tooltip': 0.0.165(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      d3-array: 1.2.4
+      prop-types: 15.8.1
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+
+  '@data-ui/theme@0.0.84': {}
+
   '@discoveryjs/json-ext@0.5.7': {}
 
   '@dual-bundle/import-meta-resolve@4.1.0': {}
@@ -6719,6 +6924,130 @@ snapshots:
       - jest
       - supports-color
 
+  '@vx/axis@0.0.179(react@18.2.0)':
+    dependencies:
+      '@vx/group': 0.0.170(react@18.2.0)
+      '@vx/point': 0.0.165
+      '@vx/shape': 0.0.179(react@18.2.0)
+      '@vx/text': 0.0.179(react@18.2.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 18.2.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@vx/bounds@0.0.165(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      prop-types: 15.8.1
+      react: 18.2.0
+      react-dom: 18.2.0(react@18.2.0)
+
+  '@vx/curve@0.0.165':
+    dependencies:
+      d3-shape: 1.3.7
+
+  '@vx/event@0.0.165':
+    dependencies:
+      '@vx/point': 0.0.165
+
+  '@vx/event@0.0.179':
+    dependencies:
+      '@vx/point': 0.0.165
+
+  '@vx/glyph@0.0.179(react@18.2.0)':
+    dependencies:
+      '@vx/group': 0.0.170(react@18.2.0)
+      classnames: 2.5.1
+      d3-shape: 1.3.7
+      prop-types: 15.8.1
+      react: 18.2.0
+
+  '@vx/gradient@0.0.165(react@18.2.0)':
+    dependencies:
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 18.2.0
+
+  '@vx/group@0.0.165(react@18.2.0)':
+    dependencies:
+      classnames: 2.5.1
+      react: 18.2.0
+
+  '@vx/group@0.0.170(react@18.2.0)':
+    dependencies:
+      classnames: 2.5.1
+      react: 18.2.0
+
+  '@vx/pattern@0.0.179(react@18.2.0)':
+    dependencies:
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 18.2.0
+
+  '@vx/point@0.0.165': {}
+
+  '@vx/responsive@0.0.192(react@18.2.0)':
+    dependencies:
+      lodash: 4.17.21
+      prop-types: 15.8.1
+      react: 18.2.0
+      resize-observer-polyfill: 1.5.0
+
+  '@vx/scale@0.0.179':
+    dependencies:
+      d3-scale: 2.2.2
+
+  '@vx/shape@0.0.168(react@18.2.0)':
+    dependencies:
+      '@vx/curve': 0.0.165
+      '@vx/group': 0.0.165(react@18.2.0)
+      '@vx/point': 0.0.165
+      classnames: 2.5.1
+      d3-path: 1.0.9
+      d3-shape: 1.3.7
+      prop-types: 15.8.1
+      react: 18.2.0
+
+  '@vx/shape@0.0.179(react@18.2.0)':
+    dependencies:
+      '@vx/curve': 0.0.165
+      '@vx/group': 0.0.170(react@18.2.0)
+      '@vx/point': 0.0.165
+      classnames: 2.5.1
+      d3-path: 1.0.9
+      d3-shape: 1.3.7
+      prop-types: 15.8.1
+      react: 18.2.0
+
+  '@vx/text@0.0.179(react@18.2.0)':
+    dependencies:
+      babel-plugin-lodash: 3.3.4
+      classnames: 2.5.1
+      lodash: 4.17.21
+      prop-types: 15.8.1
+      react: 18.2.0
+      reduce-css-calc: 1.3.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@vx/tooltip@0.0.165(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      '@vx/bounds': 0.0.165(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 18.2.0
+    transitivePeerDependencies:
+      - react-dom
+
+  '@vx/tooltip@0.0.179(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+    dependencies:
+      '@vx/bounds': 0.0.165(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      classnames: 2.5.1
+      prop-types: 15.8.1
+      react: 18.2.0
+    transitivePeerDependencies:
+      - react-dom
+
   abort-controller@3.0.0:
     dependencies:
       event-target-shim: 5.0.1
@@ -6965,6 +7294,16 @@ snapshots:
       '@types/babel__core': 7.20.5
       '@types/babel__traverse': 7.20.6
 
+  babel-plugin-lodash@3.3.4:
+    dependencies:
+      '@babel/helper-module-imports': 7.25.9
+      '@babel/types': 7.25.9
+      glob: 7.2.3
+      lodash: 4.17.21
+      require-package-name: 2.0.1
+    transitivePeerDependencies:
+      - supports-color
+
   babel-preset-current-node-syntax@1.1.0(@babel/core@7.25.9):
     dependencies:
       '@babel/core': 7.25.9
@@ -6991,6 +7330,8 @@ snapshots:
       babel-preset-current-node-syntax: 1.1.0(@babel/core@7.25.9)
 
   bail@2.0.2: {}
+
+  balanced-match@0.4.2: {}
 
   balanced-match@1.0.2: {}
 
@@ -7153,6 +7494,8 @@ snapshots:
 
   cjs-module-lexer@1.4.1: {}
 
+  classnames@2.5.1: {}
+
   clean-regexp@1.0.0:
     dependencies:
       escape-string-regexp: 1.0.5
@@ -7295,6 +7638,51 @@ snapshots:
   cssesc@3.0.0: {}
 
   csstype@3.1.3: {}
+
+  d3-array@1.2.4: {}
+
+  d3-collection@1.0.7: {}
+
+  d3-color@1.4.1: {}
+
+  d3-format@1.4.5: {}
+
+  d3-interpolate@1.4.0:
+    dependencies:
+      d3-color: 1.4.1
+
+  d3-path@1.0.9: {}
+
+  d3-scale@1.0.7:
+    dependencies:
+      d3-array: 1.2.4
+      d3-collection: 1.0.7
+      d3-color: 1.4.1
+      d3-format: 1.4.5
+      d3-interpolate: 1.4.0
+      d3-time: 1.1.0
+      d3-time-format: 2.3.0
+
+  d3-scale@2.2.2:
+    dependencies:
+      d3-array: 1.2.4
+      d3-collection: 1.0.7
+      d3-format: 1.4.5
+      d3-interpolate: 1.4.0
+      d3-time: 1.1.0
+      d3-time-format: 2.3.0
+
+  d3-shape@1.3.7:
+    dependencies:
+      d3-path: 1.0.9
+
+  d3-time-format@2.3.0:
+    dependencies:
+      d3-time: 1.1.0
+
+  d3-time@1.1.0: {}
+
+  d3-timer@1.0.10: {}
 
   damerau-levenshtein@1.0.8: {}
 
@@ -9274,6 +9662,8 @@ snapshots:
     dependencies:
       tmpl: 1.0.5
 
+  math-expression-evaluator@1.4.0: {}
+
   mathml-tag-names@2.1.3: {}
 
   mdast-util-from-markdown@2.0.1:
@@ -10135,6 +10525,8 @@ snapshots:
     dependencies:
       react: 18.2.0
 
+  react-lifecycles-compat@3.0.4: {}
+
   react-markdown@9.0.1(@types/react@18.2.34)(react@18.2.0):
     dependencies:
       '@types/hast': 3.0.4
@@ -10168,6 +10560,15 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  react-move@2.9.1(react@18.2.0):
+    dependencies:
+      '@babel/runtime': 7.25.9
+      d3-interpolate: 1.4.0
+      d3-timer: 1.0.10
+      prop-types: 15.8.1
+      react: 18.2.0
+      react-lifecycles-compat: 3.0.4
 
   react-number-format@5.4.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0):
     dependencies:
@@ -10305,6 +10706,16 @@ snapshots:
       indent-string: 4.0.0
       strip-indent: 3.0.0
 
+  reduce-css-calc@1.3.0:
+    dependencies:
+      balanced-match: 0.4.2
+      math-expression-evaluator: 1.4.0
+      reduce-function-call: 1.0.3
+
+  reduce-function-call@1.0.3:
+    dependencies:
+      balanced-match: 1.0.2
+
   reflect.getprototypeof@1.0.6:
     dependencies:
       call-bind: 1.0.7
@@ -10359,6 +10770,10 @@ snapshots:
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
+
+  require-package-name@2.0.1: {}
+
+  resize-observer-polyfill@1.5.0: {}
 
   resolve-cwd@3.0.0:
     dependencies:

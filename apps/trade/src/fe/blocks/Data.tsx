@@ -1,13 +1,13 @@
 'use client'
 
 import classes from './Data.module.scss'
-import Json from '@my/fe/src/components/blocks/Json'
-import Collapsed from '@my/fe/src/components/blocks/Collapsed'
+import { Json } from '@my/fe/src/components/blocks/Json'
+import { Collapsed } from '@my/fe/src/components/blocks/Collapsed'
 // import LocalShortTime from '@my/fe/src/components/inline/LocalShortTime'
 // import Badge from '@my/fe/src/components/inline/Badge'
 // import Link from 'next/link'
 
-export default function Data({
+export function Data({
   data,
   expandUntil,
 }: {

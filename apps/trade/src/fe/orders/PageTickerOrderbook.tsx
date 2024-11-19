@@ -1,6 +1,5 @@
 'use client'
 
-import { Data } from '@src/fe/blocks/Data'
 import { infoTicker } from '@src/be/dydx/infoTicker'
 import { VolumeColumn } from '@src/fe/orders/ColumnVolume'
 import useSWR from 'swr'
@@ -8,13 +7,11 @@ import classes from './PageTickerOrderbook.module.scss'
 import { roundToCustomDecimal } from '@src/lib/numbers'
 import { asksAndBids, summary } from './types'
 import { useState } from 'react'
-import { infoAccount } from '@src/be/dydx/infoAccount'
 import { useSearchParams } from 'next/navigation'
-
-export const revalidate = 0
+import { Controls } from './Controls'
 
 type Params = {
-  ticker: string
+  coin: string
 }
 type Output = {
   summary: summary
@@ -29,13 +26,6 @@ let initialPrice = 1000000
 let numberAsksAndBidsTotal = 70
 let numberAsksOrBidsOnScreen = 20
 
-function updateTicker(oldTicker: string, newValue: string) {
-  window.location.href = window.location.href.replace(
-    '/' + oldTicker.replace('-USD', '').toLowerCase(),
-    '/' + newValue
-  )
-}
-
 export function PageTickerOrderbook({ params }: { params: Params }) {
   const searchParams = useSearchParams()
   const access_key = searchParams.get('access_key')
@@ -49,7 +39,7 @@ export function PageTickerOrderbook({ params }: { params: Params }) {
   const [buyDollars, setBuyDollars] = useState(100)
   const [sellDollars, setSellDollars] = useState(100)
   const [refreshInterval, setRefreshInterval] = useState(3000)
-  const ticker = (params.ticker.toUpperCase() + '-USD').replace(
+  const ticker = (params.coin.toUpperCase() + '-USD').replace(
     '-USD-USD',
     '-USD'
   )
@@ -238,101 +228,7 @@ export function PageTickerOrderbook({ params }: { params: Params }) {
   return (
     <div className={classes.container}>
       <div className={classes.floatingLabels}></div>
-      <div className={classes.floatingTools}>
-        <div>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(1000)}
-          >
-            <input type="radio" checked={refreshInterval === 1000} />
-            1s
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(3000)}
-          >
-            <input type="radio" checked={refreshInterval === 3000} />
-            3s
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(5000)}
-          >
-            <input type="radio" checked={refreshInterval === 5000} />
-            5s
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(15000)}
-          >
-            <input type="radio" checked={refreshInterval === 15000} />
-            15s
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(60000)}
-          >
-            <input type="radio" checked={refreshInterval === 60000} />
-            60s
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setRefreshInterval(600000)}
-          >
-            <input type="radio" checked={refreshInterval === 600000} />
-            600s
-          </span>
-        </div>
-        <div>
-          <span className={classes.inputLabel}>Primarily:</span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setPrimarilyBuy(true)}
-          >
-            <input type="radio" checked={!!primarilyBuy} /> Buy
-          </span>
-          <span
-            className={classes.inputLabel}
-            onClick={() => setPrimarilyBuy(false)}
-          >
-            <input type="radio" checked={!primarilyBuy} /> Sell
-          </span>
-        </div>
-        <div>
-          <span className={classes.inputLabel}>Buy$:</span>
-          <input
-            className={classes.input}
-            type="number"
-            value={buyDollars}
-            onChange={(e) => setBuyDollars(Number(e.target.value))}
-          />
-        </div>
-        <div>
-          <span className={classes.inputLabel}>Sell$:</span>
-          <input
-            className={classes.input}
-            type="number"
-            value={sellDollars}
-            onChange={(e) => setSellDollars(Number(e.target.value))}
-          />
-        </div>
-        <div>
-          <span className={classes.inputLabel}>Coin:</span>
-          <input
-            className={classes.input}
-            type="text"
-            onChange={(e) => {
-              setTickerInput(e.target.value)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                updateTicker(ticker, tickerInput)
-              }
-            }}
-          />
-        </div>
-      </div>
-      {/* <Data data={output} expandUntil={5} /> */}
+      <Controls coin={params.coin} />
       <VolumeColumn
         summary={output.summary}
         asksAndBids={output.asksAndBids}

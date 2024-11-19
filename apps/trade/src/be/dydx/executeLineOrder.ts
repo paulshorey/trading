@@ -8,7 +8,7 @@ import { MarketOrderOutput, MarketOrderInput } from './types'
 import { validateInputsMarket } from '@src/be/dydx/lib/validateInputsMarket'
 import { cc } from '@my/be/cc'
 
-export const executeOrderMarket = async (
+export const executeLineOrder = async (
   input: MarketOrderInput
 ): Promise<MarketOrderOutput> => {
   const output = {} as unknown as MarketOrderOutput
@@ -20,7 +20,7 @@ export const executeOrderMarket = async (
   cc.log(
     `
   
-new executeOrderMarket 
+new executeLineOrder 
 ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}   
   
 `,
@@ -129,9 +129,9 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
       throw new Error(output.error)
     }
     // New position = wait, in case there are outstanding orders still processing
-    if (output.size_intended > output.size_original) {
-      await cancelOtherStops()
-    }
+    // if (output.size_intended > output.size_original) {
+    //   await cancelOtherStops()
+    // }
     // #1 order attempt, updatePrice() and updatePositionCheckMargin()
     // must go outside of !output.order_is_filled check
     if (!output.order_is_filled) {
@@ -348,7 +348,7 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
     timer()
     // @ts-ignore
   } catch (err: Error) {
-    catchError(err, { file: 'executeOrderMarket' })
+    catchError(err, { file: 'executeLineOrder' })
   }
   timer()
   return output

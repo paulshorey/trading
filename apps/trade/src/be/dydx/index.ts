@@ -9,6 +9,7 @@ import {
 } from '@dydxprotocol/v4-client-js'
 import { getOrders } from './methods/getOrders'
 import { getPositions } from '@src/be/dydx/methods/getPositions'
+import { orderReduce } from '@src/be/dydx/methods/orderReduce'
 import { orderStop } from '@src/be/dydx/methods/orderStop'
 import { orderMarket } from '@src/be/dydx/methods/orderMarket'
 import { orderLimit } from '@src/be/dydx/methods/orderLimit'
@@ -109,5 +110,6 @@ export class Dydx implements DydxInterface {
   orderMarket = orderMarket
   orderLimit = orderLimit
   orderCancel = orderCancel
+  orderReduce = orderReduce
 }
 export default Dydx

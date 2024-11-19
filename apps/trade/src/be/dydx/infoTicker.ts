@@ -29,12 +29,8 @@ type Output = Record<string, any>
  * Throws error if something went wrong!
  */
 export const infoTicker = async (
-  tickerString: string
+  ticker: string
 ): Promise<Output | undefined> => {
-  const ticker = (tickerString.toUpperCase() + '-USD').replace(
-    '-USD-USD',
-    '-USD'
-  )
   const output = {} as Output
   try {
     /*

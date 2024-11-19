@@ -1,4 +1,4 @@
-import { PageTicker } from '@src/fe/pages/PageTicker'
+import { PageTickerOrderbook } from '@src/fe/orders/PageTickerOrderbook'
 
 export const revalidate = 0
 
@@ -7,5 +7,5 @@ type Params = {
 }
 
 export default async function Page({ params }: { params: Params }) {
-  return <PageTicker params={params} />
+  return <PageTickerOrderbook params={params} />
 }

@@ -1,3 +1,8 @@
+export function log001(value: number) {
+  const logValue = Math.log10(1 + value * 99) / Math.log10(100)
+  return logValue
+}
+
 export function roundToCustomDecimal(
   number: number,
   precision: number,

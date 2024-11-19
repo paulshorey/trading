@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { formatResponse } from '@my/be/api/formatResponse'
-import { executeOrderMarket } from '@src/be/dydx/executeOrderMarket'
+import { executeLineOrder } from '@src/be/dydx/executeLineOrder'
 import { parseOrdersText } from '@src/be/dydx/lib/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 import { MarketOrderOutput } from '../../../../be/dydx/types'
@@ -20,7 +20,7 @@ const handler = async (request: NextRequest) => {
 
     let access_key = request.nextUrl.searchParams.get('access_key')
     if (!access_key) throw new Error('!access_key')
-    if (!(access_key === 'testkeyx' || access_key === 'postmansecret')) {
+    if (!(access_key === 'testkeyx')) {
       throw new Error('wrong access_key')
     }
 
@@ -44,7 +44,7 @@ const handler = async (request: NextRequest) => {
       }
       const datas = [] as MarketOrderOutput[]
       for (let order of parsedOrders) {
-        const data = await executeOrderMarket(order)
+        const data = await executeLineOrder(order)
         if (data?.error) {
           return formatResponse(
             {

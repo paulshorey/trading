@@ -29,6 +29,7 @@ type Output = Record<string, any>
  * Throws error if something went wrong!
  */
 export const infoAccount = async (): Promise<Output | undefined> => {
+  'use server'
   const output = {
     account: {},
     data: {},

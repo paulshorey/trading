@@ -19,24 +19,23 @@ type Props = {
    * Fraction of 1%
    */
   x1: number
-  postOnly?: boolean
 }
 
-export async function orderLimit(
+export async function orderReduce(
   this: DydxInterface,
-  { clientId, ticker, side, coins, price, x1, postOnly }: Props
+  { clientId, ticker, side, coins, price, x1 }: Props
 ) {
   try {
-    await cc.info('dydx.orderLimit input:', { ticker, side, coins, price })
+    await cc.info('dydx.orderReduce input:', { ticker, side, coins, price })
     const compositeClient = await this.getCompositeClient()
     const type = OrderType.LIMIT // order type
-    const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
+    const timeInForce = OrderTimeInForce.IOC // UX TimeInForce
     const goodTilTimeInSeconds = 15 // 20 seconds
     const execution = OrderExecution.DEFAULT
     const multiplier = 1 + (side === 'LONG' ? x1 : -x1) // buy high / sell low
     const executionPrice = price * multiplier
-    const reduceOnly = false
-    postOnly = !!postOnly // default false
+    const reduceOnly = true
+    const postOnly = false
     clientId = clientId || Math.ceil(Math.random() * 1000000)
 
     // record
@@ -87,6 +86,6 @@ export async function orderLimit(
 
     // @ts-ignore
   } catch (err: Error) {
-    catchError(err, { file: 'dydx.orderLimit' })
+    catchError(err, { file: 'dydx.orderReduce' })
   }
 }

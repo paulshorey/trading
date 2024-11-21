@@ -22,7 +22,7 @@ export function VolumeColumn({
   initialTime,
   buyDollars,
   sellDollars,
-  primarilyBuy,
+  positionBuy,
 }: {
   summary: summary
   asksAndBids: asksAndBids
@@ -30,7 +30,7 @@ export function VolumeColumn({
   initialTime: number
   buyDollars: number
   sellDollars: number
-  primarilyBuy: boolean
+  positionBuy: boolean
 }) {
   let {
     // minPrice: min,
@@ -63,10 +63,12 @@ export function VolumeColumn({
                 // between initial and current price
                 (ask <= initialPrice && ask > summary.price)
               }
-              data-xvol={xvol((sizes[ask] - minSize) / sizeDiff)}
+              data-xvol={
+                sizeDiff ? xvol((sizes[ask] - minSize) / sizeDiff) : 'x0'
+              }
               className={classes.step}
               onClick={() => {
-                if (primarilyBuy) {
+                if (positionBuy) {
                   executeImmediateLimit({
                     ticker: summary.ticker,
                     side: 'LONG',
@@ -123,9 +125,11 @@ export function VolumeColumn({
                 (bid >= initialPrice && bid < summary.price)
               }
               className={classes.step}
-              data-xvol={xvol((sizes[bid] - minSize) / sizeDiff)}
+              data-xvol={
+                sizeDiff ? xvol((sizes[bid] - minSize) / sizeDiff) : 'x0'
+              }
               onClick={() => {
-                if (primarilyBuy) {
+                if (positionBuy) {
                   executeImmediateReduce({
                     ticker: summary.ticker,
                     side: 'SHORT',

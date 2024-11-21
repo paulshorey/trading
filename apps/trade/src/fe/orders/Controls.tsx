@@ -1,5 +1,3 @@
-'use client'
-
 // import { useRouter } from 'next/navigation'
 import classes from './Controls.module.scss'
 import { useState } from 'react'
@@ -8,14 +6,30 @@ export const revalidate = 0
 
 type Props = {
   coin: string
+  positionBuy: boolean
+  setPositionBuy: (value: boolean) => void
+  tickerInput: string
+  setTickerInput: (value: string) => void
+  buyDollars: number
+  setBuyDollars: (value: number) => void
+  sellDollars: number
+  setSellDollars: (value: number) => void
+  refreshInterval: number
+  setRefreshInterval: (value: number) => void
 }
 
-export function Controls({ coin }: Props) {
-  const [coinInput, setCoinInput] = useState('')
-  const [positionBuy, setPositionBuy] = useState(true)
-  const [buyDollars, setBuyDollars] = useState(100)
-  const [sellDollars, setSellDollars] = useState(100)
-  const [refreshInterval, setRefreshInterval] = useState(3000)
+export function Controls({
+  coin,
+  positionBuy,
+  setPositionBuy,
+  buyDollars,
+  setBuyDollars,
+  sellDollars,
+  setSellDollars,
+  refreshInterval,
+  setRefreshInterval,
+}: Props) {
+  const [coinInput, setCoinInput] = useState(coin)
   // const router = useRouter()
   function updateTicker(oldTicker: string, newValue: string) {
     const fullHref = window.location.href.replace(

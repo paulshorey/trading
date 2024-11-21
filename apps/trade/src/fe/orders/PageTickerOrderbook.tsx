@@ -35,9 +35,9 @@ export function PageTickerOrderbook({ params }: { params: Params }) {
   }
 
   const [tickerInput, setTickerInput] = useState('')
-  const [primarilyBuy, setPrimarilyBuy] = useState(true)
-  const [buyDollars, setBuyDollars] = useState(100)
-  const [sellDollars, setSellDollars] = useState(100)
+  const [positionBuy, setPositionBuy] = useState(true)
+  const [buyDollars, setBuyDollars] = useState(500)
+  const [sellDollars, setSellDollars] = useState(1000)
   const [refreshInterval, setRefreshInterval] = useState(3000)
   const ticker = (params.coin.toUpperCase() + '-USD').replace(
     '-USD-USD',
@@ -228,7 +228,19 @@ export function PageTickerOrderbook({ params }: { params: Params }) {
   return (
     <div className={classes.container}>
       <div className={classes.floatingLabels}></div>
-      <Controls coin={params.coin} />
+      <Controls
+        coin={params.coin}
+        tickerInput={tickerInput}
+        setTickerInput={setTickerInput}
+        positionBuy={positionBuy}
+        setPositionBuy={setPositionBuy}
+        buyDollars={buyDollars}
+        setBuyDollars={setBuyDollars}
+        sellDollars={sellDollars}
+        setSellDollars={setSellDollars}
+        refreshInterval={refreshInterval}
+        setRefreshInterval={setRefreshInterval}
+      />
       <VolumeColumn
         summary={output.summary}
         asksAndBids={output.asksAndBids}
@@ -236,7 +248,7 @@ export function PageTickerOrderbook({ params }: { params: Params }) {
         initialTime={initialTime}
         buyDollars={buyDollars}
         sellDollars={sellDollars}
-        primarilyBuy={primarilyBuy}
+        positionBuy={positionBuy}
       />
     </div>
   )

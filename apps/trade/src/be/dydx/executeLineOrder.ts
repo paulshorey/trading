@@ -128,10 +128,14 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}
     if (!(await updatePositionCheckMargin())) {
       throw new Error(output.error)
     }
-    // New position = wait, in case there are outstanding orders still processing
-    // if (output.size_intended > output.size_original) {
-    //   await cancelOtherStops()
-    // }
+    // Wait in case there are outstanding orders still processing
+    await cancelOtherStops()
+    // In case the alert was triggered by a momentary spike, good to wait a bit
+    await new Promise((resolve) =>
+      setTimeout(async () => {
+        resolve(true)
+      }, 130000)
+    )
     // #1 order attempt, updatePrice() and updatePositionCheckMargin()
     // must go outside of !output.order_is_filled check
     if (!output.order_is_filled) {

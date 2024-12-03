@@ -1,0 +1,11 @@
+.avatar {
+  span:global(.mantine-Avatar-placeholder) {
+    background: none !important;
+  }
+  &[data-size='xl'] {
+    svg {
+      width: 85% !important;
+      height: 85% !important;
+    }
+  }
+}

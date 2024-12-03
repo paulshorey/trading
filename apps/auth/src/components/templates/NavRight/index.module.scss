@@ -1,0 +1,16 @@
+.trigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.triggerContent {
+  margin: 0.75rem 0.75rem;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dropdown {
+  white-space: nowrap;
+}

@@ -1,0 +1,32 @@
+.container {
+  text-align: center;
+}
+
+.title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 2.5rem 0 0;
+}
+
+.accordion {
+  margin: 2.5rem 0 2rem 0;
+  width: 375px;
+  display: inline-block;
+  user-select: none;
+}
+
+.accordionItem {
+  &[data-active] {
+    padding-top: 2.5rem;
+    padding-bottom: 2.75rem;
+    &:first-child {
+      padding-top: 0;
+    }
+    span:global(.mantine-Accordion-chevron) {
+      visibility: hidden;
+    }
+    button:global(.mantine-Accordion-control) {
+      display: none;
+    }
+  }
+}

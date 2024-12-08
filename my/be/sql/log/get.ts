@@ -40,7 +40,14 @@ export const logGets = async function ({ where, groupBy, limit }: Props = {}): P
           whereArr.push(`${key} IS NOT NULL'`);
         } else {
           let op = "=";
-          if (val[0] === "!") {
+          if (val[0] === ">") {
+            op = ">=";
+            val = val.substring(1, val.length);
+            continue;
+          } else if (val[0] === "<") {
+            op = "<=";
+            val = val.substring(1, val.length);
+          } else if (val[0] === "!") {
             op = "!=";
             val = val.substring(1, val.length);
           }

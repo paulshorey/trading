@@ -12,6 +12,7 @@ import {
   ControlsAndResultsProvider,
   useControlsAndResults,
 } from '@src/state/ControlsAndResults'
+import { Log } from '@src/state/types'
 
 export function Logs() {
   const [href, setHref] = useState('/')
@@ -24,7 +25,7 @@ export function Logs() {
     return <div>Loading...</div>
   }
   let previousMessage = ''
-  const sections = results.map((log: any, i: number) => {
+  const sections = results.map((log: Log, i: number) => {
     let dataParsed
     try {
       dataParsed = log.stack ? JSON.parse(log.stack) : null
@@ -88,7 +89,7 @@ export function Logs() {
             <HoverTooltip label="server_name">
               <span
                 onClick={() =>
-                  addControls({ where: { server_name: log.server_nam } })
+                  addControls({ where: { server_name: log.server_name } })
                 }
               >
                 {log.server_name || '-'}
@@ -103,12 +104,18 @@ export function Logs() {
             </HoverTooltip>
           </span>,
           <span key="time" className={classes.badge}>
-            <HoverTooltip label={log.time}>
-              <LocalShortTime epoch={log.time} />
+            <HoverTooltip label={log.time.toString()}>
+              <span
+                onClick={() => addControls({ where: { time: '<' + log.time } })}
+              >
+                <LocalShortTime epoch={log.time} />
+              </span>
             </HoverTooltip>
           </span>,
         ]}
-        openDefault={i === 0}
+        openDefault={
+          i === 0 && (results[0] as Log)?.time > Date.now() - 1000 * 60 * 60
+        }
         isClickToToggle
         className="relative px-4 pt-3 pb-3 border-b border-gray-600 "
         suppressHydrationWarning

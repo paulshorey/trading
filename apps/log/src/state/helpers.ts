@@ -20,12 +20,12 @@ export function makeControlsFromSearchParams(
 
 export function pushRouterFromControls(controls: Controls) {}
 
-function constructHref(href: string, key: string, val: string) {
-  let out =
-    href.replace(key + '=' + val, '') +
-    (href.includes('?') ? '&' : '?') +
-    key +
-    '=' +
-    val
-  return out
-}
+// function constructHref(href: string, key: string, val: string) {
+//   let out =
+//     href.replace(key + '=' + val, '') +
+//     (href.includes('?') ? '&' : '?') +
+//     key +
+//     '=' +
+//     val
+//   return out
+// }

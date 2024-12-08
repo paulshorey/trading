@@ -13,20 +13,23 @@ const defaultControls: Controls = {
 }
 
 export const ControlsAndResultsProvider = ({ children }: ProviderProps) => {
-  const searchParams = Object.fromEntries(useSearchParams()?.entries())
+  const nextSearchParams = useSearchParams()
+  const searchParams = Object.fromEntries(nextSearchParams?.entries())
+  console.log('ControlsAndResultsProvider() searchParams=', searchParams)
 
   /*
    * User updates controls (form fields and selectors)
    */
   const [controls, setControls] = useState<Controls>(defaultControls)
-  const addControls = (addControls: Partial<Controls>) => {
+  const addControls = (addedControls: Partial<Controls>) => {
     const newControls = {
       ...controls,
-      ...addControls,
+      ...addedControls,
     }
-    setControls(controls)
+    console.warn('addControls() newControls=', addedControls)
+    setControls(newControls)
     pushRouterFromControls(newControls)
-    fetchResults()
+    fetchResults(newControls)
   }
   // initial page load, create controls from querysting
   useEffect(() => {
@@ -36,12 +39,12 @@ export const ControlsAndResultsProvider = ({ children }: ProviderProps) => {
   /*
    * App fetches new data based on user filters
    */
-  const [results, setResults] = useState<Results[]>([])
-  const fetchResults = async () => {
+  const [results, setResults] = useState<Results>([])
+  const fetchResults = async (newControls: Controls) => {
     console.log('fetchResults() called')
     const { error, result } = await logGets({
-      where: controls.where,
-      groupBy: controls.groupBy,
+      where: newControls.where,
+      groupBy: newControls.groupBy,
       limit: 200,
     })
     if (error) {

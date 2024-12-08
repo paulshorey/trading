@@ -14,6 +14,7 @@ export default function SessionProvider({
   children,
 }: {
   session: SessionData
+  // @ts-ignore
   children: React.ReactNode
 }) {
   return (

@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Button, Fieldset, TextInput, Checkbox } from '@mantine/core'
 import styles from './index.module.scss'
 import stytchPasswordAuthenticate from '@my/be/auth/actions/stytchPasswordAuthenticate'
-import phoneOrEmail from '../../../ui/functions/string/phoneOrEmail'
+import phoneOrEmail from '@my/be/functions/string/phoneOrEmail'
 import useAuthReaction from '../../hooks/useAuthReaction'
 
 export default function SignupPassword({ csrfToken }: any = {}) {

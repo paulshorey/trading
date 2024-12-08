@@ -1,10 +1,10 @@
 'use client'
 
 import classes from './Data.module.scss'
-import { Json } from '@my/fe/src/src/components/blocks/Json'
-import { Collapsed } from '@my/fe/src/src/components/blocks/Collapsed'
-// import LocalShortTime from '@my/fe/src/src/components/inline/LocalShortTime'
-// import Badge from '@my/fe/src/src/components/inline/Badge'
+import { Json } from '@my/fe/src/ui/components/blocks/Json'
+import { Collapsed } from '@my/fe/src/ui/components/blocks/Collapsed'
+// import LocalShortTime from '@my/fe/src/ui/components/inline/LocalShortTime'
+// import Badge from '@my/fe/src/ui/components/inline/Badge'
 // import Link from 'next/link'
 
 export function Data({

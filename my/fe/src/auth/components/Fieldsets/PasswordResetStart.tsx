@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import { Button, Fieldset, TextInput } from '@mantine/core'
-import phoneOrEmail from '../../../ui/functions/string/phoneOrEmail'
+import phoneOrEmail from '@my/be/functions/string/phoneOrEmail'
 // import stytchApi from '@src/functions/stytchApi';
 import stytchPasswordResetStart from '@my/be/auth/actions/stytchPasswordResetStart'
 import FieldErrorMessage from '../../../ui/components/blocks/FieldErrorMessage'
@@ -30,7 +30,7 @@ export default function SignupResetPassword({ csrfToken }: any = {}) {
                 String(value),
               ])
             )
-            const [, email] = phoneOrEmail(data.email)
+            const [, email] = phoneOrEmail(data.email || '')
             if (!email) {
               setErrorMessage('Please enter a valid email address.')
               return

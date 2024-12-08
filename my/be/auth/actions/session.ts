@@ -5,7 +5,7 @@
 import { getIronSession, SessionOptions } from "iron-session";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import objectsMergeMutable from "../../pf/object/objectsMergeMutable";
+import objectsMergeMutable from "../../functions/object/objectsMergeMutable";
 import { SessionData, sessionDefault } from "../../auth/actions/types";
 
 const sessionOptions: SessionOptions = {

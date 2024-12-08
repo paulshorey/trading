@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { Accordion, AccordionValue } from '@mantine/core'
 import styles from './index.module.scss'
-import PasswordSet from './Fieldsets/PasswordResetContinue'
+import PasswordSet from '../Fieldsets/PasswordResetContinue'
 // import SignupOtpCode from '@src/components/auth/Fieldsets/OtpCode';
 // import makeToast from '@src/functions/makeToast';
 
@@ -30,9 +30,7 @@ export default function PasswordResetContinue({ error, csrfToken }: any = {}) {
 
       {!!error && (
         <div className={styles.error}>
-          <span className="text-red-500">
-            <b>x</b> &nbsp;{error}
-          </span>
+          <b>x</b> &nbsp;{error}
         </div>
       )}
 

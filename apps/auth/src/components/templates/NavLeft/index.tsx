@@ -17,8 +17,6 @@ export default function NavLeft() {
     setOpen(false)
   })
   const pathname = usePathname()
-  // const session = React.useContext(SessionContext);
-  // console.log('SideNav session', session);
 
   const links = nav.map((item, i) => (
     <Link

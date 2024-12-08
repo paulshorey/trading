@@ -1,12 +1,12 @@
-'use server';
+"use server";
 
-import { Client } from 'stytch';
-import { sessionStart } from '@src/app/auth/actions/session';
-import { SessionData, sessionDataFromStytchResponse } from '@src/app/auth/actions/types';
+import { Client } from "stytch";
+import { sessionStart } from "./session";
+import { SessionData, sessionDataFromStytchResponse } from "./types";
 
 const stytchClient = new Client({
-  project_id: process.env.STYTCH_PROJECTID || '',
-  secret: process.env.STYTCH_SECRET || '',
+  project_id: process.env.STYTCH_PROJECTID || "",
+  secret: process.env.STYTCH_SECRET || "",
 });
 
 type responseType = {
@@ -15,11 +15,8 @@ type responseType = {
   session?: SessionData;
 };
 
-export default async function stytchPasswordResetAuthenticate(post: {
-  password: string;
-  token: string;
-}): Promise<responseType> {
-  console.error('\n\n\n', ['stytchPasswordAuthenticate'], '\n', post, '\n\n\n');
+export default async function stytchPasswordResetAuthenticate(post: { password: string; token: string }): Promise<responseType> {
+  console.error("\n\n\n", ["stytchPasswordAuthenticate"], "\n", post, "\n\n\n");
   try {
     const data = await stytchClient.passwords.email.reset({
       password: post.password,

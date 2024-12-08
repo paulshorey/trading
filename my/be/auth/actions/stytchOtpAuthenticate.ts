@@ -1,12 +1,12 @@
-'use server';
+"use server";
 
-import { Client } from 'stytch';
-import { SessionData, sessionDataFromStytchResponse } from '@src/app/auth/actions/types';
-import { sessionStart } from '@src/app/auth/actions/session';
+import { Client } from "stytch";
+import { SessionData, sessionDataFromStytchResponse } from "./types";
+import { sessionStart } from "./session";
 
 const stytchClient = new Client({
-  project_id: process.env.STYTCH_PROJECTID || '',
-  secret: process.env.STYTCH_SECRET || '',
+  project_id: process.env.STYTCH_PROJECTID || "",
+  secret: process.env.STYTCH_SECRET || "",
 });
 
 type responseType = {
@@ -15,12 +15,8 @@ type responseType = {
   session?: SessionData;
 };
 
-export default async function stytchOtpAuthenticate(post: {
-  code: string;
-  method_id: string;
-  long_session?: boolean;
-}): Promise<responseType> {
-  console.error('\n\n\n', ['stytchOtpAuthenticate'], '\n', post, '\n\n\n');
+export default async function stytchOtpAuthenticate(post: { code: string; method_id: string; long_session?: boolean }): Promise<responseType> {
+  console.error("\n\n\n", ["stytchOtpAuthenticate"], "\n", post, "\n\n\n");
   try {
     const data = await stytchClient.otps.authenticate({
       code: post.code,
@@ -29,7 +25,7 @@ export default async function stytchOtpAuthenticate(post: {
     });
     const session = await sessionStart(sessionDataFromStytchResponse(data));
     await stytchClient.users.update({
-      user_id: data.user_id || '',
+      user_id: data.user_id || "",
       untrusted_metadata: {
         last_login_time: new Date().toISOString(),
       },

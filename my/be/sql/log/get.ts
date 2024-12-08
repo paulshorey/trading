@@ -33,7 +33,7 @@ export const logGets = async function ({ where, groupBy, limit }: Props = {}): P
     let whereArr = [];
     if (where) {
       for (let key in where) {
-        let val = where[key];
+        let val = where[key]?.toString();
         if (Array.isArray(val)) {
           whereArr.push(`${key} IN ('${val.join("','")}')`);
         } else if (!val) {

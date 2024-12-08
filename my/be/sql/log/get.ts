@@ -16,7 +16,7 @@ type Output = {
 };
 
 type Props = {
-  where?: Record<string, string | string[]>;
+  where?: Record<string, string | number | boolean>;
   groupBy?: string;
   limit?: number;
 };

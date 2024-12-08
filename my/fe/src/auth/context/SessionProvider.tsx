@@ -7,14 +7,13 @@ export const SessionContext = createContext<SessionData>({
   ui: {},
   user: {},
   session: {},
-})
+}) as any
 
 export default function SessionProvider({
   session,
   children,
 }: {
   session: SessionData
-  // @ts-ignore
   children: any
 }) {
   return (

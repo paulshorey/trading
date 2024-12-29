@@ -8,7 +8,7 @@ import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 
 export const logAdd = async function (level: LogLevel, message: string, logData: Record<string, any>, options: LogOptions = {}) {
   "use server";
-  message = message.substring(0, 1000);
+  message = message.substring(0, 1000); 
   if (options.sms) {
     await sendToMyselfSMS(message); //`${level}: ${message}`);
   }

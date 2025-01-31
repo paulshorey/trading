@@ -55,7 +55,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
         stack: e.stack,
       };
       output.error = error;
-      cc.error("@my/be/sql/log Error", error);
+      cc.error("@my/be/sql/log/get Error", error);
       //@ts-ignore
       // eslint-disable-next-line @typescript-eslint/no-shadow
     } catch (e: Error) {

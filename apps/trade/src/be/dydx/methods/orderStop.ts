@@ -24,13 +24,6 @@ export async function orderStop(
 ) {
   try {
     coins = Math.abs(coins) // UNLIKE MARKET ORDER WHICH REQUIRES NEGATIVE FOR SHORT ORDERS, STOP LOSS SIZE IS ALWAYS ABSOLUTE
-    await cc.info('dydx.orderStop input:', {
-      ticker,
-      side,
-      coins,
-      price,
-      sl,
-    })
     const slDefined =
       sl || defaults?.[ticker]?.[side] || defaults?.default?.[side] || 0.33
     const compositeClient = await this.getCompositeClient()

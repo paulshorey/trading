@@ -27,7 +27,6 @@ export async function orderLimit(
   { clientId, ticker, side, coins, price, x1, postOnly }: Props
 ) {
   try {
-    await cc.info('dydx.orderLimit input:', { ticker, side, coins, price })
     const compositeClient = await this.getCompositeClient()
     const type = OrderType.LIMIT // order type
     const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
@@ -65,18 +64,17 @@ export async function orderLimit(
     )
 
     // notify
-    let action = side === 'LONG' ? ('warn' as const) : ('info' as const)
-    await cc[action](
+    await cc.warn(
       `order Limit ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
         reduceOnly ? 'reduce' : ''
-      }  
-      $:${(coins * price).toString().substring(0, 7)} 
-      n:${coins.toString().substring(0, 5)} 
-      p:${price.toString().substring(0, 7)} 
-      x:${executionPrice.toString().substring(0, 7)}
-      %:${(executionPrice / price).toString().substring(0, 7)}
-      `,
-      { ticker, side, coins, price },
+      }`,
+      {
+        ticker,
+        side,
+        coins: coins.toPrecision(5),
+        price: price.toPrecision(7),
+        amount: (coins * price).toPrecision(5),
+      },
       {
         category: 'order',
         tag: 'place',

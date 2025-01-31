@@ -23,7 +23,6 @@ export async function orderMarket(
   { clientId, ticker, side, coins, price, reduceOnly }: Props
 ) {
   try {
-    await cc.info('dydx.orderMarket input:', { ticker, side, coins, price })
     const compositeClient = await this.getCompositeClient()
     const type = OrderType.MARKET // order type
     const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
@@ -60,15 +59,17 @@ export async function orderMarket(
     )
 
     // notify
-    let action = side === 'LONG' ? ('warn' as const) : ('info' as const)
-    await cc[action](
+    await cc.warn(
       `order Market ${side === 'LONG' ? 'Buy' : 'Sell'} ${ticker} ${
         reduceOnly ? 'reduce' : ''
-      }
-      $:${(coins * price).toString().substring(0, 7)} 
-      n:${coins.toString().substring(0, 5)} 
-      p:${price.toString().substring(0, 7)}`,
-      { ticker, side, coins, price },
+      }`,
+      {
+        ticker,
+        side,
+        coins: coins.toPrecision(5),
+        price: price.toPrecision(7),
+        amount: (coins * price).toPrecision(5),
+      },
       {
         category: 'order',
         tag: 'place',

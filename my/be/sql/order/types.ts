@@ -5,4 +5,8 @@ export type OrderRow = {
   side: "LONG" | "SHORT";
   size: number;
   price: number;
+  server_name?: string;
+  app_name?: string;
+  node_env?: string;
+  time?: EpochTimeStamp;
 };

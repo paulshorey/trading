@@ -42,7 +42,7 @@ export const orderGet = async function ({ where }: Props = {}): Promise<Output> 
     if (whereArr.length) {
       whereSQL = "WHERE " + whereArr.join(" AND ");
     }
-    const result = await sqlQuery(pool, `SELECT * FROM v1.orders ${whereSQL} ORDER BY time DESC LIMIT 100`);
+    const result = await sqlQuery(pool, `SELECT * FROM orders_v1 ${whereSQL} ORDER BY time DESC LIMIT 100`);
     output.ip = ip;
     output.result = result;
     //@ts-ignore

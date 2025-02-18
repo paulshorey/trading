@@ -51,7 +51,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/@dydxprotocol/v4-client-js": "1.16.0",
     "@my/config": "workspace:*",
     "@next/eslint-plugin-next": "^14.2.15",
     "@testing-library/jest-dom": "^6.5.0",

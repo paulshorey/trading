@@ -5,7 +5,7 @@ import { parseOrdersText } from '@src/be/dydx/lib/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 import { MarketOrderOutput } from '../../../../be/dydx/types'
 
-export const maxDuration = 160
+export const maxDuration = 60
 
 const handler = async (request: NextRequest) => {
   try {

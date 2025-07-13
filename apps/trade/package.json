@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@data-ui/histogram": "^0.0.84",
-    "@dydxprotocol/v4-client-js": "1.16.0",
+    "@dydxprotocol/v4-client-js": "1.21.1",
     "@mantine/code-highlight": "^7.13.2",
     "@mantine/core": "7.13.4",
     "@mantine/hooks": "7.13.4",

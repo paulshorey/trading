@@ -4,6 +4,7 @@ import { executeOrderMarket } from '@src/be/dydx/executeOrderMarket'
 import { parseOrdersText } from '@src/be/dydx/lib/parseOrdersText'
 import { logAdd } from '@my/be/sql/log/add'
 import { MarketOrderOutput } from '../../../../be/dydx/types'
+import { sendToMyselfSMS } from '@my/be/twillio/sendToMyselfSMS'
 
 export const maxDuration = 60
 
@@ -28,6 +29,7 @@ const handler = async (request: NextRequest) => {
       // dydx status
       const parsedOrders = parseOrdersText(bodyText)
       if (!parsedOrders[0]) {
+        sendToMyselfSMS(bodyText)
         await logAdd({
           name: 'warn',
           message: `parseOrdersText failed`,
@@ -96,14 +98,16 @@ export async function POST(request: NextRequest) {
 }
 
 // process.on('uncaughtException', async (err) => {
-//   const message = `Uncaught Exception: ${
-//     err?.message ? err.message : err.toString()
-//   }`
+//   const message = `Uncaught Exception: ${err?.message ? err.message : err.toString()}`
 //   console.error(message, err)
 //   sendToMyselfSMS(message)
-//   await logAdd('error', message, {
-//     str: err?.toString(),
-//     json: JSON.stringify(err),
+//   await logAdd({
+//     name: 'error',
+//     message,
+//     stack: {
+//       str: err?.toString(),
+//       json: JSON.stringify(err),
+//     },
 //   })
 //   return formatResponse({ error: 'Uncaught Exception' }, 500)
 // })
@@ -111,9 +115,13 @@ export async function POST(request: NextRequest) {
 //   const message = `Unhandled Rejection: ${reason ? reason : promise.toString()}`
 //   console.error(message, promise, 'reason:', reason)
 //   sendToMyselfSMS(message)
-//   await logAdd('error', message, {
-//     str: reason?.toString(),
-//     json: JSON.stringify(reason),
+//   await logAdd({
+//     name: 'error',
+//     message,
+//     stack: {
+//       str: reason?.toString(),
+//       json: JSON.stringify(reason),
+//     },
 //   })
 //   return formatResponse({ error: 'Unhandled Rejection' }, 500)
 // })
@@ -121,10 +129,8 @@ export async function POST(request: NextRequest) {
 // function fixDydxDataTx(data: any) {
 //   if (typeof data?.tx === 'object' && data?.tx !== null) {
 //     try {
-//       if (data.tx.data)
-//         data.tx.data = btoa(String.fromCharCode.apply(null, data.tx.data))
-//       if (data.tx.hash)
-//         data.tx.hash = btoa(String.fromCharCode.apply(null, data.tx.hash))
+//       if (data.tx.data) data.tx.data = btoa(String.fromCharCode.apply(null, data.tx.data))
+//       if (data.tx.hash) data.tx.hash = btoa(String.fromCharCode.apply(null, data.tx.hash))
 //       data.tx = {
 //         code: data.tx.code,
 //         codespace: data.tx.codespace,

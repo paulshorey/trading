@@ -181,8 +181,8 @@ importers:
         specifier: ^0.0.84
         version: 0.0.84(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@dydxprotocol/v4-client-js':
-        specifier: 1.16.0
-        version: 1.16.0(bufferutil@4.0.8)
+        specifier: 1.21.1
+        version: 1.21.1(bufferutil@4.0.8)
       '@mantine/code-highlight':
         specifier: ^7.13.2
         version: 7.13.4(@mantine/core@7.13.4(@mantine/hooks@7.13.4(react@18.2.0))(@types/react@18.2.34)(react-dom@18.2.0(react@18.2.0))(react@18.2.0))(@mantine/hooks@7.13.4(react@18.2.0))(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -779,8 +779,8 @@ packages:
   '@dual-bundle/import-meta-resolve@4.1.0':
     resolution: {integrity: sha512-+nxncfwHM5SgAtrVzgpzJOI1ol0PkumhVo469KCf9lUi21IGcY90G98VuHm9VRrUypmAzawAHO9bs6hqeADaVg==}
 
-  '@dydxprotocol/v4-client-js@1.16.0':
-    resolution: {integrity: sha512-yBOkYmhHYhSBQs29u0pClaKGsL0tbUG4SFj2FVo+N5WUhMmRJrQ75FDq/OLBXebWnpIOiGI/6iKuJTrawgWkDA==}
+  '@dydxprotocol/v4-client-js@1.21.1':
+    resolution: {integrity: sha512-9aGIuHbZNM0w2XHu1FHZTNh2LBvMBsn/8yN2O/VnHuPSNnNbD5jh4/kO6vlqzVu8nZHXkDZ3sP/oQHq8CJAZpQ==}
 
   '@dydxprotocol/v4-proto@8.0.0':
     resolution: {integrity: sha512-QO4YLuptOH2BhkdKpXOvdSdGCy5IYUPYl/w4Xj3aoTrxCTa4Dp41HBC69ji8dzQ40eTLyCx5K+/+PCcBdZt4iw==}
@@ -6010,7 +6010,7 @@ snapshots:
 
   '@dual-bundle/import-meta-resolve@4.1.0': {}
 
-  '@dydxprotocol/v4-client-js@1.16.0(bufferutil@4.0.8)':
+  '@dydxprotocol/v4-client-js@1.21.1(bufferutil@4.0.8)':
     dependencies:
       '@cosmjs/amino': 0.32.4
       '@cosmjs/encoding': 0.32.4

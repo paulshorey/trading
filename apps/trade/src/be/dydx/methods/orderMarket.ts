@@ -17,8 +17,8 @@ export async function orderMarket(this: DydxInterface, { clientId, ticker, side,
   try {
     const compositeClient = await this.getCompositeClient()
     const type = OrderType.MARKET // order type
-    const timeInForce = OrderTimeInForce.GTT // UX TimeInForce
-    const goodTilTimeInSeconds = 15 // 20 seconds
+    const timeInForce = OrderTimeInForce.IOC // UX TimeInForce (GTT old, IOC maybe new better)
+    const goodTilTimeInSeconds = 20 // 20 seconds
     const execution = OrderExecution.DEFAULT
     const executionPrice = side === 'LONG' ? 10000000 : 0.01
     const postOnly = false

@@ -10,7 +10,7 @@ export const logAdd = async function (row: LogRow) {
   "use server";
 
   // SMS
-  if (row.sms || row.name === "error" || row.name === "warn") {
+  if (row.sms || row.name === "error") {
     await sendToMyselfSMS(row.message);
   }
 

@@ -88,7 +88,7 @@ export function PageAccount() {
         <button className="p-2" type="submit" disabled={isPolling}>
           {isPolling ? '...' : '✔️'}
         </button>
-        {isPolling && <span className="p-2">{secondsPassed}s</span>}
+        {isPolling && <span className="p-2">{secondsPassed}</span>}
       </form>
 
       <Data data={accountData} expandUntil={5} />

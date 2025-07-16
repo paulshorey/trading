@@ -5,6 +5,7 @@ import { POST } from '@src/app/api/v1/market/route'
 import { parseOrdersText } from '@src/be/dydx/lib/parseOrdersText'
 import { NextRequest } from 'next/server'
 import Dydx from '@src/be/dydx'
+import { sendToMyselfSMS } from '@my/be/twillio/sendToMyselfSMS'
 
 const mockOrderMarket = jest.fn()
 const mockGetPositions = jest.fn()
@@ -27,9 +28,7 @@ jest.mock('@my/be/sql/log/add', () => ({
   logAdd: jest.fn(),
 }))
 
-jest.mock('@my/be/twillio/sendToMyselfSMS', () => ({
-  sendToMyselfSMS: jest.fn(),
-}))
+jest.mock('@my/be/twillio/sendToMyselfSMS')
 
 describe('/api/v1/market', () => {
   afterEach(() => {
@@ -79,4 +78,21 @@ describe('/api/v1/market', () => {
     },
     30000
   )
+
+  const edgeCaseInputs = ['0', 'SUI', 'GC1!, 9 Less Than Trend Line']
+
+  it.each(edgeCaseInputs)('should not call orderMarket and should call sendToMyselfSMS for invalid input "%s"', async (bodyText) => {
+    ;(parseOrdersText as jest.Mock).mockReturnValue([])
+
+    const request = new NextRequest('http://localhost/api/v1/market?access_key=testkeyx', {
+      method: 'POST',
+      body: bodyText,
+    })
+
+    await POST(request)
+
+    expect(sendToMyselfSMS).toHaveBeenCalledWith(bodyText)
+    expect(Dydx).not.toHaveBeenCalled()
+    expect(mockOrderMarket).not.toHaveBeenCalled()
+  })
 })

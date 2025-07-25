@@ -4,11 +4,18 @@ import classes from './Data.module.scss'
 import { Json } from '@my/fe/src/components/blocks/Json'
 import { Collapsed } from '@my/fe/src/components/blocks/Collapsed'
 
-export function Data({ data, expandUntil }: { data: Record<string, unknown>; expandUntil: number }) {
+type Props = {
+  data: Record<string, unknown>
+  expandUntil: number
+  allExpanded?: boolean
+}
+
+export function Data({ data, expandUntil, allExpanded = false }: Props) {
   const sections = Object.entries(data).map(([key, obj], i: number) => {
     let heading = key
     let dataParsed = obj
     if (!expandUntil) expandUntil || (key === 'orders' ? 1 : 2)
+    const isClickToToggle = !allExpanded
 
     return (
       <Collapsed
@@ -17,9 +24,9 @@ export function Data({ data, expandUntil }: { data: Record<string, unknown>; exp
         }}
         key={i}
         title={heading}
-        openDefault={i === 0}
-        isClickToToggle
-        className="relative px-4 pt-3 pb-3 border-b border-gray-600 "
+        openDefault={allExpanded || i === 0}
+        isClickToToggle={isClickToToggle}
+        className={`relative px-4 pt-3 pb-3 border-b border-gray-600 ${isClickToToggle ? 'cursor-pointer' : 'cursor-default'}`}
       >
         <Json data={dataParsed as Record<string, unknown>} expandUntil={expandUntil} />
       </Collapsed>

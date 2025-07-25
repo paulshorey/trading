@@ -31,7 +31,12 @@ jest.mock('@my/be/sql/log/add', () => ({
 jest.mock('@my/be/twillio/sendToMyselfSMS')
 
 describe('/api/v1/market', () => {
+  beforeEach(() => {
+    jest.useFakeTimers()
+  })
+
   afterEach(() => {
+    jest.useRealTimers()
     jest.clearAllMocks()
     ;(Dydx as jest.Mock).mockClear()
   })
@@ -61,23 +66,20 @@ describe('/api/v1/market', () => {
     },
   ]
 
-  it.each(testCases)(
-    'should handle $description for "$bodyText"',
-    async ({ bodyText, position, currentPositionSize, expected }) => {
-      mockGetPositions.mockResolvedValue([{ size: currentPositionSize }])
-      ;(parseOrdersText as jest.Mock).mockReturnValue([{ ticker: 'SUI-USD', position }])
+  it.each(testCases)('should handle $description for "$bodyText"', async ({ bodyText, position, currentPositionSize, expected }) => {
+    mockGetPositions.mockResolvedValue([{ size: currentPositionSize }])
+    ;(parseOrdersText as jest.Mock).mockReturnValue([{ ticker: 'SUI-USD', position }])
 
-      const request = new NextRequest('http://localhost/api/v1/market?access_key=testkeyx', {
-        method: 'POST',
-        body: bodyText,
-      })
+    const request = new NextRequest('http://localhost/api/v1/market?access_key=testkeyx', {
+      method: 'POST',
+      body: bodyText,
+    })
+    const postPromise = POST(request)
+    await jest.advanceTimersByTimeAsync(20000)
+    await postPromise
 
-      await POST(request)
-
-      expect(mockOrderMarket).toHaveBeenCalledWith(expect.objectContaining(expected))
-    },
-    30000
-  )
+    expect(mockOrderMarket).toHaveBeenCalledWith(expect.objectContaining(expected))
+  })
 
   const edgeCaseInputs = ['0', 'SUI', 'GC1!, 9 Less Than Trend Line']
 

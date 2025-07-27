@@ -32,7 +32,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
   try {
     const { where: whereSQL, params } = buildWhereClause(where);
     const result = await sqlQuery(pool, `SELECT * FROM logs_v1 ${whereSQL} ORDER BY time DESC LIMIT 100`, params);
-    output.ip = ip;
+    // output.ip = ip;
     output.result = result;
     //@ts-ignore
   } catch (e: Error) {

@@ -21,7 +21,10 @@ Directory:
 ./my/be/cc - error logging and reporting
 ./my/be/... - miscellaneous back-end functions and files, but they are not finished and most are not used
 
-
 Use pnpm:
 
 If you need to run `npm i` or `npm install`, run `pnpm i` instead.
+
+Most important:
+
+This is a mono-repo of multiple projects. When running any terminal command including pnpm, please make sure to be in the correct folder. If editing the "Logs" project then `cd ./apps/log`. If editing the "Trade" project then `cd ./apps/trade`.

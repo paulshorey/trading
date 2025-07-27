@@ -1,7 +1,62 @@
 {
-  "github.copilot.inlineSuggest.enable": true,
-  "files.exclude": {
-    "xapps/*/*.*": true,
-    "xapps/*/.*": true
-  }
+  "settings.cycle": [
+    {
+      "overrideWorkspaceSettings": true,
+      "id": "toggleFileExclusion",
+      "values": [
+        {
+          "files.exclude": {
+            ".idea": true,
+            ".turbo": true,
+            ".wrangler": true,
+            "*.storyshot": true,
+            "**/__snapshots__/**": true,
+            "**/_imageshots_/**": true,
+            "**/.git": false,
+            "**/*Tests.cs": true,
+            "**/node_modules": true,
+            "**/tsconfig.tsbuildinfo": true,
+            "**/turbo-build.log": true,
+            "backstop_data": true,
+            "build/**": true,
+            "playwright-tests": true,
+            "tests/e2e": true,
+            "X.next": true,
+            "X**/*.spec.*": true,
+            "X**/*.test.*": true,
+            "apps/*/*.*": true,
+            "apps/*/.*": true,
+            "my/*/*.*": true,
+            "my/*/.*": true
+          }
+        },
+        {
+          "files.exclude": {
+            ".idea": true,
+            ".turbo": true,
+            ".wrangler": true,
+            "*.storyshot": true,
+            "**/__snapshots__/**": true,
+            "**/_imageshots_/**": true,
+            "**/.git": false,
+            "**/*Tests.cs": true,
+            "**/node_modules": true,
+            "**/tsconfig.tsbuildinfo": true,
+            "**/turbo-build.log": true,
+            "backstop_data": true,
+            "build/**": true,
+            "playwright-tests": true,
+            "tests/e2e": true,
+            "X.next": true,
+            "X**/*.spec.*": true,
+            "X**/*.test.*": true,
+            "apps/*/*.*": false,
+            "apps/*/.*": false,
+            "my/*/*.*": false,
+            "my/*/.*": false
+          }
+        }
+      ]
+    }
+  ]
 }

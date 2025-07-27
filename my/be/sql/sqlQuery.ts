@@ -1,10 +1,5 @@
-import { QueryResult, Pool, types } from "pg";
+import { QueryResult, Pool } from "pg";
 import { cc } from "../cc";
-
-// @ts-ignore
-types.setTypeParser(1700, (val) => {
-  return parseFloat(val);
-});
 
 /**
  * Executes a SQL query using a connection from the provided pool.

@@ -1,7 +1,7 @@
 {
   "github.copilot.inlineSuggest.enable": true,
   "files.exclude": {
-    "apps/*/*.*": true,
-    "apps/*/.*": true
+    "xapps/*/*.*": true,
+    "xapps/*/.*": true
   }
 }

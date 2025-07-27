@@ -11,11 +11,13 @@ export function FilterBadgeTime({ time }: { time: number }) {
   }
 
   const { startOfDay, endOfDay } = getDayRange(time)
+  const [localTime, localDate] = LocalShortTime({ epoch: time })
 
   return (
     <Badge className="font-bold pr-2">
+      <span className="mr-1">{localTime}</span>
       <Link key="edit" href={`/?time_start=${startOfDay}&time_end=${endOfDay}`}>
-        <LocalShortTime epoch={time} />
+        {localDate}
       </Link>
     </Badge>
   )

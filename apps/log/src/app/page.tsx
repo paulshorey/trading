@@ -28,11 +28,12 @@ export default async function Page({
     }
   }
 
-  if (searchParams.time_start && searchParams.time_end) {
-    where.time = {
-      start: searchParams.time_start,
-      end: searchParams.time_end,
-    }
+  if (searchParams.time_start) {
+    where.time_start = Number(searchParams.time_start)
+  }
+
+  if (searchParams.time_end) {
+    where.time_end = Number(searchParams.time_end)
   }
 
   try {

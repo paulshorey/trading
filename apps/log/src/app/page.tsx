@@ -8,21 +8,26 @@ export default async function Page({
 }: {
   searchParams: { [key: string]: string | string[] | undefined }
 }) {
+  const awaitedSearchParams = await searchParams
   const where: Record<string, any> = {}
 
-  if (searchParams.name) where.name = searchParams.name
-  if (searchParams.category) where.category = searchParams.category
-  if (searchParams.tag) where.tag = searchParams.tag
-  if (searchParams.app_name) where.app_name = searchParams.app_name
-  if (searchParams.server_name) where.server_name = searchParams.server_name
-  if (searchParams.dev !== undefined) where.dev = searchParams.dev === 'true'
+  if (awaitedSearchParams.name) where.name = awaitedSearchParams.name
+  if (awaitedSearchParams.category)
+    where.category = awaitedSearchParams.category
+  if (awaitedSearchParams.tag) where.tag = awaitedSearchParams.tag
+  if (awaitedSearchParams.app_name)
+    where.app_name = awaitedSearchParams.app_name
+  if (awaitedSearchParams.server_name)
+    where.server_name = awaitedSearchParams.server_name
+  if (awaitedSearchParams.dev !== undefined)
+    where.dev = awaitedSearchParams.dev === 'true'
 
-  if (searchParams.time_start) {
-    where.time_start = Number(searchParams.time_start)
+  if (awaitedSearchParams.time_start) {
+    where.time_start = Number(awaitedSearchParams.time_start)
   }
 
-  if (searchParams.time_end) {
-    where.time_end = Number(searchParams.time_end)
+  if (awaitedSearchParams.time_end) {
+    where.time_end = Number(awaitedSearchParams.time_end)
   }
 
   try {

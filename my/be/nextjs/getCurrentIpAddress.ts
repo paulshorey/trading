@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 export const getCurrentIpAddress = async function () {
   'use server';
 
-  const headersList = headers();
+  const headersList = await headers();
   const client_ip = headersList.get('x-forwarded-for') || headersList.get('remote-addr') || '';
   let server_ip = '';
   let server_location = '';

@@ -8,23 +8,10 @@
       }
     ],
     "paths": {
-      "@src/*": [
-        "src/*"
-      ],
-      "@my/be/*": [
-        "../../my/be/*"
-      ]
+      "@src/*": ["src/*"],
+      "@my/be/*": ["../../my/be/*"]
     }
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "next-env.d.ts",
-    "next.config.mjs",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    ".next"
-  ]
+  "include": ["next-env.d.ts", "next.config.mjs", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", ".next"]
 }

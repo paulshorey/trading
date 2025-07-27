@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import React from 'react'
 import { LogRowGet } from '@my/be/sql/log/types'
 import { Where } from '@my/be/sql/types'
 import { Json } from '@my/fe/src/components/blocks/Json'
@@ -10,7 +9,6 @@ import { AccordionItem } from '@src/list/components/accordion/AccordionItem'
 import { Header } from '../nav/Header'
 import { FilterBadge } from '../accordion/FilterBadge'
 import { FilterBadgeTime } from '../accordion/FilterBadgeTime'
-import { cc } from '@my/be/cc'
 
 export function LogsWrapper({
   logs: initialLogs,

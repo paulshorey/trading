@@ -4,12 +4,13 @@ import { OrdersWrapper } from '@src/list/components/data/OrdersWrapper'
 
 export const revalidate = 0
 
-// interface PageProps {
-//   params: { [key: string]: string | string[] | undefined }
-//   searchParams: { [key: string]: string | string[] | undefined }
-// }
-
-export default async function Page({ searchParams }: any) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: {}
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   const where: Record<string, any> = {}
   const validFilters = [
     'type',

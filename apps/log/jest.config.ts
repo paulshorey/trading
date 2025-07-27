@@ -6,10 +6,7 @@
 import type { Config } from 'jest'
 import nextJest from 'next/jest.js'
 
-const createJestConfig = nextJest({
-  // Provide the path to your Next.js app to load next.config.js and .env files in your test environment
-  dir: './',
-})
+const createJestConfig = nextJest()
 
 // Add any custom config to be passed to Jest
 const config: Config = {
@@ -19,8 +16,8 @@ const config: Config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@src/(.*)$': '<rootDir>/src/$1',
+    '^@my/be/(.*)$': '<rootDir>/../../my/be/$1',
   },
-  preset: 'ts-jest',
   testEnvironmentOptions: {
     customExportConditions: [''],
   },

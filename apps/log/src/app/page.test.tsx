@@ -1,6 +1,4 @@
-/* eslint-disable testing-library/prefer-screen-queries */
-import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import Page from './page'
 import { logGets } from '@my/be/sql/log/gets'
 import { LogsWrapper } from '@src/list/components/data/LogsWrapper'
@@ -43,7 +41,7 @@ describe('Page component', () => {
     mockedLogGets.mockResolvedValue({ result: { rows: [mockLog] } })
     const searchParams = { category: 'test' }
 
-    const PageComponent = await Page({ searchParams })
+    const PageComponent = await Page({ searchParams, params: {} })
     render(PageComponent)
 
     expect(MockedLogsWrapper).toHaveBeenCalledWith(
@@ -62,7 +60,7 @@ describe('Page component', () => {
     })
     const searchParams = {}
 
-    const PageComponent = await Page({ searchParams })
+    const PageComponent = await Page({ searchParams, params: {} })
     render(PageComponent)
 
     expect(MockedLogsWrapper).toHaveBeenCalledWith(
@@ -78,7 +76,9 @@ describe('Page component', () => {
     const dbError = new Error('Database error')
     mockedLogGets.mockRejectedValue(dbError)
 
-    await expect(Page({ searchParams: {} })).rejects.toThrow('Database error')
+    await expect(Page({ searchParams: {}, params: {} })).rejects.toThrow(
+      'Database error'
+    )
 
     expect(console.error).toHaveBeenCalledWith(dbError)
     expect(MockedLogsWrapper).not.toHaveBeenCalled()

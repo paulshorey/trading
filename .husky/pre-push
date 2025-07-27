@@ -1,0 +1,9 @@
+#!/bin/sh
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+
+if [ "$BRANCH_NAME" = "main" ]; then
+  echo "On 'main' branch, running pre-commit checks..."
+  npx turbo run test
+else
+  echo "Not on 'main' branch, skipping pre-commit checks."
+fi

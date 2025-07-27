@@ -16,7 +16,7 @@ type Output = {
 };
 
 type Props = {
-  where?: Record<string, string | string[]>;
+  where?: Record<string, any>;
 };
 
 export const logGets = async function ({ where }: Props = {}): Promise<Output> {
@@ -31,6 +31,11 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
     let whereArr = [];
     if (where) {
       for (let key in where) {
+        if (key === "time" && where.time.start && where.time.end) {
+          whereArr.push(`time >= ${where.time.start}`);
+          whereArr.push(`time <= ${where.time.end}`);
+          continue;
+        }
         let val = where[key];
         if (Array.isArray(val)) {
           whereArr.push(`${key} IN ('${val.join("','")}')`);

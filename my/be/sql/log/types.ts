@@ -8,32 +8,8 @@ export type LogSchema = {
   server_name: string;
   app_name: string;
   node_env: string;
-  time?: string;
+  time?: EpochTimeStamp;
 };
-// export type RowAddKeys = {
-//   0: "name";
-//   1: "message";
-//   2?: "stack";
-//   3?: "access_key";
-//   4?: "server_name";
-//   5?: "app_name";
-//   6?: "node_env";
-//   7?: "time";
-//   8?: "category";
-//   9?: "tag";
-// };
-// const logExample: LogSchema = {
-//   name: "",
-//   message: "",
-//   stack: "",
-//   access_key: "",
-//   server_name: "",
-//   app_name: "",
-//   node_env: "",
-//   time: "",
-//   category: "",
-//   tag: "",
-// };
 
 export type LogRow = {
   name: LogLevel;

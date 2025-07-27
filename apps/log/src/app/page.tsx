@@ -29,6 +29,13 @@ export default async function Page({
     }
   }
 
+  if (searchParams.time_start && searchParams.time_end) {
+    where.time = {
+      start: searchParams.time_start,
+      end: searchParams.time_end,
+    }
+  }
+
   try {
     const { error, result } = await logGets({ where })
     if (error) {

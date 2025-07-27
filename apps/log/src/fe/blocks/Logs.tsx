@@ -9,6 +9,7 @@ import { FilterBadge } from './FilterBadge'
 import { Log } from '@src/types'
 import React from 'react'
 import { AccordionItem } from '@src/fe/components/AccordionItem'
+import { FilterBadgeTime } from './FilterBadgeTime'
 
 export function Logs({
   logs,
@@ -53,9 +54,7 @@ export function Logs({
             value={log.server_name}
           />,
           <FilterBadge key="dev" field="dev" value={log.dev} />,
-          <Badge key="time">
-            <LocalShortTime epoch={log.time} />
-          </Badge>,
+          <FilterBadgeTime key="time" time={log.time} />,
         ]}
         open={openIndex === i}
         onToggle={() => setOpenIndex(openIndex === i ? null : i)}

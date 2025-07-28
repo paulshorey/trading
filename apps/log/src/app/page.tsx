@@ -1,46 +1,26 @@
-import { logGets } from '@apps/common/sql/log/gets'
-import { LogsWrapper } from '@src/list/components/data/LogsWrapper'
+import dynamic from 'next/dynamic'
+const ListData = dynamic(
+  () =>
+    import('@src/list/components/data/ListData').then((mod) => mod.ListData),
+  {
+    ssr: false,
+  }
+)
 
 export const revalidate = 0
 
-export default async function Page({
-  searchParams,
-}: {
+type PageProps = {
   searchParams: { [key: string]: string | string[] | undefined }
-}) {
-  const awaitedSearchParams = await searchParams
-  const where: Record<string, any> = {}
+}
 
-  if (awaitedSearchParams.name) where.name = awaitedSearchParams.name
-  if (awaitedSearchParams.category)
-    where.category = awaitedSearchParams.category
-  if (awaitedSearchParams.tag) where.tag = awaitedSearchParams.tag
-  if (awaitedSearchParams.app_name)
-    where.app_name = awaitedSearchParams.app_name
-  if (awaitedSearchParams.server_name)
-    where.server_name = awaitedSearchParams.server_name
-  if (awaitedSearchParams.dev !== undefined)
-    where.dev = awaitedSearchParams.dev === 'true'
-
-  if (awaitedSearchParams.time_start) {
-    where.time_start = Number(awaitedSearchParams.time_start)
-  }
-
-  if (awaitedSearchParams.time_end) {
-    where.time_end = Number(awaitedSearchParams.time_end)
-  }
-
-  try {
-    const { error, result } = await logGets({ where })
-    if (error) {
-      console.error(error)
-      throw error
+export default async function Page({ searchParams }: PageProps) {
+  const table = 'logs'
+  const filters = ['category', 'tag', 'name', 'app_name', 'server_name', 'time']
+  const where: Record<string, string> = {}
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (filters.includes(key)) {
+      where[key] = value as string
     }
-    let logs = result?.rows || []
-    logs = logs.filter((log) => log.tag !== 'place')
-    return <LogsWrapper logs={logs} where={where} />
-  } catch (error) {
-    console.error(error)
-    throw error
   }
+  return <ListData filters={filters} where={where} table={table} />
 }

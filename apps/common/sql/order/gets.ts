@@ -10,7 +10,7 @@ import { Where } from '../types'
 
 type Output = {
   ip?: string
-  result?: Record<string, any> & { rows: OrderRowGet[] }
+  rows?: OrderRowGet[]
   error?: {
     name: string
     message: string
@@ -42,7 +42,7 @@ export const orderGets = async function ({
       params
     )
     output.ip = ip
-    output.result = result
+    output.rows = result?.rows
     //@ts-ignore
   } catch (e: Error) {
     try {

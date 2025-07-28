@@ -1,51 +1,26 @@
-import { OrderRowGet } from '@apps/common/sql/order/types'
-import { orderGets } from '@apps/common/sql/order/gets'
-import { OrdersWrapper } from '@src/list/components/data/OrdersWrapper'
+import dynamic from 'next/dynamic'
+const ListData = dynamic(
+  () =>
+    import('@src/list/components/data/ListData').then((mod) => mod.ListData),
+  {
+    ssr: false,
+  }
+)
 
 export const revalidate = 0
 
-export default async function Page(props: {
-  params: Promise<{}>
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  const searchParams = await props.searchParams
-  const where: Record<string, any> = {}
-  const validFilters = [
-    'type',
-    'ticker',
-    'side',
-    'app_name',
-    'server_name',
-    'dev',
-  ]
+type PageProps = {
+  searchParams: { [key: string]: string | string[] | undefined }
+}
 
-  for (const key of validFilters) {
-    if (searchParams[key] !== undefined) {
-      if (key === 'dev') {
-        where[key] = searchParams[key] === 'true'
-      } else {
-        where[key] = searchParams[key]
-      }
+export default async function Page({ searchParams }: PageProps) {
+  const table = 'orders'
+  const filters = ['type', 'ticker', 'side', 'app_name', 'server_name', 'time']
+  const where: Record<string, string> = {}
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (filters.includes(key)) {
+      where[key] = value as string
     }
   }
-
-  if (searchParams.time_start) {
-    where.time_start = Number(searchParams.time_start)
-  }
-
-  if (searchParams.time_end) {
-    where.time_end = Number(searchParams.time_end)
-  }
-
-  try {
-    const { error, result } = await orderGets({ where })
-    if (error) {
-      throw error
-    }
-    const orders = (result?.rows as OrderRowGet[]) || []
-    return <OrdersWrapper orders={orders} where={where} />
-  } catch (error) {
-    console.error(error)
-    throw error
-  }
+  return <ListData filters={filters} where={where} table={table} />
 }

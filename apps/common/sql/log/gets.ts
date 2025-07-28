@@ -10,7 +10,7 @@ import { Where } from '../types'
 
 type Output = {
   ip?: string
-  result?: Record<string, any> & { rows: LogRowGet[] }
+  rows?: LogRowGet[]
   error?: {
     name: string
     message: string
@@ -26,7 +26,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
   'use server'
 
   const output = {} as Output
-  const headersList = await headers()
+  const headersList = headers()
   const ip =
     headersList.get('x-forwarded-for') ||
     headersList.get('remote-addr') ||
@@ -39,22 +39,22 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
       `SELECT * FROM logs_v1 ${whereSQL} ORDER BY time DESC LIMIT 100`,
       params
     )
-    // output.ip = ip;
-    output.result = result
-    //@ts-ignore
-  } catch (e: Error) {
+    output.ip = ip
+    output.rows = result.rows
+    //@ts-ignore - this Error type is correct
+  } catch (e: any) {
     try {
       const error = {
         name: 'Error lib/sql/logsGet.ts catch',
-        message: e.message,
-        stack: e.stack,
+        message: e?.message?.toString(),
+        stack: e?.stack?.toString(),
       }
       output.error = error
       cc.error('sql/log/gets Error', error)
       //@ts-ignore
       // eslint-disable-next-line @typescript-eslint/no-shadow
     } catch (e: Error) {
-      console.error(output.error)
+      console.error(e)
     }
   }
   return output

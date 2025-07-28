@@ -10,7 +10,7 @@ export function FilterBadge({
   value,
 }: {
   field: string
-  value: string | boolean
+  value: unknown
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -40,7 +40,7 @@ export function FilterBadge({
         }}
       >
         {' '}
-        {displayValue}{' '}
+        {displayValue.toString()}{' '}
       </Link>
     </Badge>
   )

@@ -59,6 +59,5 @@ export const orderGets = async function ({
       console.error(output.error)
     }
   }
-  console.log('output', output)
   return output
 }

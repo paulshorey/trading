@@ -76,7 +76,7 @@ export async function orderStop(this: DydxInterface, { ticker, side, coins, pric
     // @ts-ignore
   } catch (err: Error) {
     if (err?.message) {
-      console.log('catch error dydx.oroderStop', err.message)
+      console.error('catch error dydx.orderStop', err.message)
     } else {
       catchError(err, { file: 'dydx.orderStop' })
     }

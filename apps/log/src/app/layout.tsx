@@ -1,9 +1,8 @@
-import '../../global.css'
-import { Providers } from '@my/fe/src/components/wrappers/Providers'
+import { Providers } from '@apps/common/src/components/wrappers/Providers'
 // import dynamic from 'next/dynamic'
 // const Providers = dynamic(
 //   () =>
-//     import('@my/fe/src/components/wrappers/Providers').then(
+//     import('@apps/common/src/components/wrappers/Providers').then(
 //       (mod) => mod.Providers
 //     ),
 //   {

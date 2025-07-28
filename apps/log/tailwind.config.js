@@ -3,7 +3,7 @@ module.exports = {
   relative: true,
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
-    '../../my/fe/src/**/*.{js,ts,jsx,tsx,mdx}',
+    '@apps/common/src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {

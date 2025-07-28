@@ -9,8 +9,7 @@
     ],
     "paths": {
       "@src/*": ["src/*"],
-      "@my/fe/*": ["../../my/fe/*"],
-      "@my/be/*": ["../../my/be/*"]
+      "@apps/common/*": ["@apps/common/*"]
     }
   },
   "include": [

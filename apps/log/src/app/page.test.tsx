@@ -1,9 +1,9 @@
 import { render } from '@testing-library/react'
 import Page from './page'
-import { logGets } from '@my/be/sql/log/gets'
+import { logGets } from '@apps/common/sql/log/gets'
 import { LogsWrapper } from '@src/list/components/data/LogsWrapper'
 
-jest.mock('@my/be/sql/log/gets', () => ({
+jest.mock('@apps/common/sql/log/gets', () => ({
   __esModule: true,
   logGets: jest.fn(),
 }))

@@ -1,5 +1,5 @@
 export default {
-  transpilePackages: ['@my/fe', '@my/be'],
+  transpilePackages: ['@apps/common'],
   reactStrictMode: false,
   eslint: {
     ignoreDuringBuilds: true,

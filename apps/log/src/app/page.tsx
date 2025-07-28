@@ -1,4 +1,4 @@
-import { logGets } from '@my/be/sql/log/gets'
+import { logGets } from '@apps/common/sql/log/gets'
 import { LogsWrapper } from '@src/list/components/data/LogsWrapper'
 
 export const revalidate = 0

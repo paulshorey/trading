@@ -1,6 +1,6 @@
 'use client'
 
-import { Badge } from '@my/fe/src/components/inline/Badge'
+import { Badge } from '@apps/common/src/components/inline/Badge'
 import { colors } from '@src/constants/ui'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'

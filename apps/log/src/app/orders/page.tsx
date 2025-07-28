@@ -1,16 +1,14 @@
-import { OrderRowGet } from '@my/be/sql/order/types'
-import { orderGets } from '@my/be/sql/order/gets'
+import { OrderRowGet } from '@apps/common/sql/order/types'
+import { orderGets } from '@apps/common/sql/order/gets'
 import { OrdersWrapper } from '@src/list/components/data/OrdersWrapper'
 
 export const revalidate = 0
 
-export default async function Page(
-  props: {
-    params: Promise<{}>
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-  }
-) {
-  const searchParams = await props.searchParams;
+export default async function Page(props: {
+  params: Promise<{}>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const searchParams = await props.searchParams
   const where: Record<string, any> = {}
   const validFilters = [
     'type',

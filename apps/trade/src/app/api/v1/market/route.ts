@@ -29,9 +29,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // dydx status
       const parsedOrders = parseOrdersText(bodyText)
       if (!parsedOrders[0]) {
+        // relay message to myself
         sendToMyselfSMS(bodyText)
+        // log to db
         await sqlLogAdd({
-          name: 'warn',
+          name: 'log',
           message: `parseOrdersText failed`,
           stack: {
             bodyText,

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "postinstall": "npx prisma generate --no-engine",
+    "x-postinstall": "npx prisma generate --no-engine",
     "dev": "next dev --turbopack --port 5555",
     "build": "next build",
     "start": "next start",

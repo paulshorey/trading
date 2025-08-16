@@ -19,7 +19,7 @@
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
     "prepare": "husky",
-    "postinstall": "./scripts/post-install.sh"
+    "postinstall": "./scripts/copy-prisma.sh"
   },
   "dependencies": {
     "@apps/data": "workspace:*",

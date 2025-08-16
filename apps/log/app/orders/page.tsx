@@ -1,4 +1,3 @@
-import dynamic from 'next/dynamic'
 import { ListData } from '@/list/components/data/ListData'
 
 export const revalidate = 0

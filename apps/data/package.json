@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "./scripts/auth-secret.sh",
     "dev": "next dev --port 5555",
     "build": "next build",
     "start": "next start",

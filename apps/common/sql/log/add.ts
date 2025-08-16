@@ -2,7 +2,7 @@
 
 import { LogRowAdd } from "./types";
 import { prisma } from "../../lib/prisma";
-import { getCurrentIpAddress } from "../../next/lib/getCurrentIpAddress";
+import { getCurrentIpAddress } from "../../lib/nextjs/getCurrentIpAddress";
 import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 
 /**

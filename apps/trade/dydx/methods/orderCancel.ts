@@ -1,5 +1,5 @@
 import { DydxInterface } from '@/dydx'
-import { numberOrZero } from '../../../lib/numbers'
+import { numberOrZero } from '@/lib/numbers'
 import { sqlLogAdd } from '@apps/data/sql/log/add'
 // import { catchError } from '@/src/be/dydx/lib/catchError'
 

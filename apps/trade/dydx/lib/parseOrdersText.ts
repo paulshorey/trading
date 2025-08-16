@@ -1,4 +1,4 @@
-import { isNumber } from '../../../lib/numbers'
+import { isNumber } from '@/lib/numbers'
 import { MarketOrderInput } from '@/dydx/types'
 
 export const parseOrdersText = function (text: string): MarketOrderInput[] {

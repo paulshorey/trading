@@ -1,6 +1,6 @@
 import { DydxInterface } from '@/dydx'
 import { Data } from '@dydxprotocol/v4-client-js/build/src/clients/types'
-import { numberOrZero } from '../../../lib/numbers'
+import { numberOrZero } from '@/lib/numbers'
 
 export async function getPositions(this: DydxInterface, ticker?: string, status = 'OPEN'): Promise<Data> {
   const indexer = await this.getIndexerClient()

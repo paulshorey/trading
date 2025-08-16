@@ -1,9 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
-  output   = "../prisma/..prisma/client"
+  output   = "..prisma"
 }
 
 datasource db {
@@ -11,21 +8,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// NextAuth.js tables
 model Account {
-  id                       String  @id @default(cuid())
-  userId                   String
-  type                     String
-  provider                 String
-  providerAccountId        String
-  refresh_token            String? @db.Text
-  access_token             String? @db.Text
-  expires_at               Int?
-  token_type               String?
-  scope                    String?
-  id_token                 String? @db.Text
-  session_state            String?
-  refresh_token_expires_in Int?
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -35,8 +30,8 @@ model Account {
 
 model Session {
   id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -47,8 +42,10 @@ model User {
   id            String    @id @default(cuid())
   name          String?
   email         String?   @unique
-  emailVerified DateTime?
+  emailVerified DateTime? @map("email_verified")
   image         String?
+  dydx_seed_public String?
+  dydx_seed_secret String?
   accounts      Account[]
   sessions      Session[]
 
@@ -57,59 +54,41 @@ model User {
 
 model VerificationToken {
   identifier String
-  token      String   @unique
+  token      String
   expires    DateTime
 
   @@unique([identifier, token])
-  @@map("verificationtokens")
+  @@map("verification_tokens")
 }
 
-// Application tables
 model Log {
-  id          String   @id @default(cuid())
-  level       String   @default("info") // info, warn, error, debug
-  message     String   @db.Text
-  metadata    Json?    @db.JsonB
-  source      String?  // app name or source identifier
-  userId      String?  // optional user association
-  ipAddress   String?
-  userAgent   String?
-  timestamp   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String
+  message     String
+  stack       Json?
+  access_key  String?
+  server_name String?
+  app_name    String?
+  node_env    String?
+  category    String?
+  tag         String?
+  time        DateTime @default(now())
 
-  // Index for efficient querying
-  @@index([level])
-  @@index([source])
-  @@index([userId])
-  @@index([timestamp])
-  @@map("logs")
+  @@map("logs_v1")
 }
 
 model Order {
-  id              String   @id @default(cuid())
-  userId          String?  // optional user association
-  symbol          String   // trading symbol (e.g., "AAPL", "TSLA")
-  side            String   // "buy" or "sell"
-  orderType       String   // "market", "limit", "stop", etc.
-  quantity        Decimal  @db.Decimal(20, 8) // number of shares/units
-  price           Decimal? @db.Decimal(20, 8) // price per unit (null for market orders)
-  stopPrice       Decimal? @db.Decimal(20, 8) // stop price for stop orders
-  status          String   @default("pending") // pending, filled, cancelled, rejected
-  filledQuantity  Decimal  @default(0) @db.Decimal(20, 8) // quantity filled so far
-  averageFillPrice Decimal? @db.Decimal(20, 8) // average price of fills
-  commission      Decimal? @db.Decimal(20, 8) // trading commission/fees
-  metadata        Json?    @db.JsonB // additional order data
-  placedAt        DateTime @default(now())
-  filledAt        DateTime? // when order was completely filled
-  cancelledAt     DateTime? // when order was cancelled
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  client_id   Int
+  type        String   // "MARKET" | "LIMIT" | "STOP_MARKET"
+  ticker      String
+  side        String   // "LONG" | "SHORT"
+  amount      Decimal
+  price       Decimal
+  server_name String?
+  app_name    String?
+  node_env    String?
+  time        DateTime @default(now())
 
-  // Indexes for efficient querying
-  @@index([userId])
-  @@index([symbol])
-  @@index([status])
-  @@index([placedAt])
-  @@map("orders")
+  @@map("orders_v1")
 }

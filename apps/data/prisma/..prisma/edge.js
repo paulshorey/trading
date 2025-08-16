@@ -222,7 +222,8 @@ const config = {
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null
+    "rootEnvPath": null,
+    "schemaEnvPath": "../../.env"
   },
   "relativePath": "..",
   "clientVersion": "6.14.0",
@@ -242,7 +243,7 @@ const config = {
   },
   "inlineSchema": "generator client {\n  provider = \"prisma-client-js\"\n  output   = \"..prisma\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n  url      = env(\"DATABASE_URL\")\n}\n\nmodel Account {\n  id                String  @id @default(cuid())\n  userId            String  @map(\"user_id\")\n  type              String\n  provider          String\n  providerAccountId String  @map(\"provider_account_id\")\n  refresh_token     String? @db.Text\n  access_token      String? @db.Text\n  expires_at        Int?\n  token_type        String?\n  scope             String?\n  id_token          String? @db.Text\n  session_state     String?\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([provider, providerAccountId])\n  @@map(\"accounts\")\n}\n\nmodel Session {\n  id           String   @id @default(cuid())\n  sessionToken String   @unique @map(\"session_token\")\n  userId       String   @map(\"user_id\")\n  expires      DateTime\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@map(\"sessions\")\n}\n\nmodel User {\n  id               String    @id @default(cuid())\n  name             String?\n  email            String?   @unique\n  emailVerified    DateTime? @map(\"email_verified\")\n  image            String?\n  dydx_seed_public String?\n  dydx_seed_secret String?\n  accounts         Account[]\n  sessions         Session[]\n\n  @@map(\"users\")\n}\n\nmodel VerificationToken {\n  identifier String\n  token      String\n  expires    DateTime\n\n  @@unique([identifier, token])\n  @@map(\"verification_tokens\")\n}\n\nmodel Log {\n  id          Int      @id @default(autoincrement())\n  name        String\n  message     String\n  stack       Json?\n  access_key  String?\n  server_name String?\n  app_name    String?\n  node_env    String?\n  category    String?\n  tag         String?\n  time        DateTime @default(now())\n\n  @@map(\"logs_v1\")\n}\n\nmodel Order {\n  id          Int      @id @default(autoincrement())\n  client_id   Int\n  type        String // \"MARKET\" | \"LIMIT\" | \"STOP_MARKET\"\n  ticker      String\n  side        String // \"LONG\" | \"SHORT\"\n  amount      Decimal\n  price       Decimal\n  server_name String?\n  app_name    String?\n  node_env    String?\n  time        DateTime @default(now())\n\n  @@map(\"orders_v1\")\n}\n",
   "inlineSchemaHash": "ff074d4f68c96e7804482cb0badab0f58b0fb63ad571d930c631de19edeff988",
-  "copyEngine": false
+  "copyEngine": true
 }
 config.dirname = '/'
 

@@ -66,6 +66,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
         timestamp: logData.timestamp,
       },
     })
+    // @ts-ignore
   } catch (error: Error) {
     // Log the error as well
     try {

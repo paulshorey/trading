@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../prisma/..prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth.js tables
+model Account {
+  id                       String  @id @default(cuid())
+  userId                   String
+  type                     String
+  provider                 String
+  providerAccountId        String
+  refresh_token            String? @db.Text
+  access_token             String? @db.Text
+  expires_at               Int?
+  token_type               String?
+  scope                    String?
+  id_token                 String? @db.Text
+  session_state            String?
+  refresh_token_expires_in Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+// Application tables
+model Log {
+  id          String   @id @default(cuid())
+  level       String   @default("info") // info, warn, error, debug
+  message     String   @db.Text
+  metadata    Json?    @db.JsonB
+  source      String?  // app name or source identifier
+  userId      String?  // optional user association
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Index for efficient querying
+  @@index([level])
+  @@index([source])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("logs")
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  userId          String?  // optional user association
+  symbol          String   // trading symbol (e.g., "AAPL", "TSLA")
+  side            String   // "buy" or "sell"
+  orderType       String   // "market", "limit", "stop", etc.
+  quantity        Decimal  @db.Decimal(20, 8) // number of shares/units
+  price           Decimal? @db.Decimal(20, 8) // price per unit (null for market orders)
+  stopPrice       Decimal? @db.Decimal(20, 8) // stop price for stop orders
+  status          String   @default("pending") // pending, filled, cancelled, rejected
+  filledQuantity  Decimal  @default(0) @db.Decimal(20, 8) // quantity filled so far
+  averageFillPrice Decimal? @db.Decimal(20, 8) // average price of fills
+  commission      Decimal? @db.Decimal(20, 8) // trading commission/fees
+  metadata        Json?    @db.JsonB // additional order data
+  placedAt        DateTime @default(now())
+  filledAt        DateTime? // when order was completely filled
+  cancelledAt     DateTime? // when order was cancelled
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Indexes for efficient querying
+  @@index([userId])
+  @@index([symbol])
+  @@index([status])
+  @@index([placedAt])
+  @@map("orders")
+}

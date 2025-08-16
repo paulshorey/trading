@@ -1,0 +1,106 @@
+// import stylesheet from @mantine/core/styles.css
+body {
+  --mantine-scale: 0.67;
+  --mantine-cursor-type: default;
+  --mantine-color-scheme: light dark;
+  --mantine-webkit-font-smoothing: antialiased;
+  --mantine-moz-font-smoothing: grayscale;
+  --mantine-color-white: #fff;
+  --mantine-color-black: #000;
+  --mantine-line-height: 1.55;
+  --mantine-font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
+    Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  --mantine-font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, Liberation Mono, Courier New, monospace;
+  --mantine-font-family-headings: -apple-system, BlinkMacSystemFont, Segoe UI,
+    Roboto, Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji;
+  --mantine-heading-font-weight: 700;
+  --mantine-heading-text-wrap: wrap;
+  --mantine-radius-default: 0.25rem;
+  --mantine-breakpoint-xs: 36em;
+  --mantine-breakpoint-sm: 48em;
+  --mantine-breakpoint-md: 62em;
+  --mantine-breakpoint-lg: 75em;
+  --mantine-breakpoint-xl: 88em;
+  --mantine-spacing-xs: 0.5rem;
+  --mantine-spacing-sm: 0.625rem;
+  --mantine-spacing-md: 0.75rem;
+  --mantine-spacing-lg: 1rem;
+  --mantine-spacing-xl: 1.25rem;
+  --mantine-font-size-xs: 1.67rem;
+  --mantine-font-size-sm: 0.75rem;
+  --mantine-font-size-md: 0.875rem;
+  --mantine-font-size-lg: 1rem;
+  --mantine-font-size-xl: 1.125rem;
+  --mantine-line-height-xs: 1.4;
+  --mantine-line-height-sm: 1.45;
+  --mantine-line-height-md: 1.55;
+  --mantine-line-height-lg: 1.6;
+  --mantine-line-height-xl: 1.65;
+  --mantine-shadow-xs: 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05),
+    0 0.0625rem 0.125rem rgba(0, 0, 0, 0.1);
+  --mantine-shadow-sm: 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05),
+    rgba(0, 0, 0, 0.05) 0 0.625rem 0.9375rem -0.3125rem,
+    rgba(0, 0, 0, 0.04) 0 0.4375rem 0.4375rem -0.3125rem;
+  --mantine-shadow-md: 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05),
+    rgba(0, 0, 0, 0.05) 0 1.25rem 1.5625rem -0.3125rem,
+    rgba(0, 0, 0, 0.04) 0 0.625rem 0.625rem -0.3125rem;
+  --mantine-shadow-lg: 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05),
+    rgba(0, 0, 0, 0.05) 0 1.75rem 1.4375rem -0.4375rem,
+    rgba(0, 0, 0, 0.04) 0 0.75rem 0.75rem -0.4375rem;
+  --mantine-shadow-xl: 0 0.0625rem 0.1875rem rgba(0, 0, 0, 0.05),
+    rgba(0, 0, 0, 0.05) 0 2.25rem 1.75rem -0.4375rem,
+    rgba(0, 0, 0, 0.04) 0 1.0625rem 1.0625rem -0.4375rem;
+  --mantine-radius-xs: 0.125rem;
+  --mantine-radius-sm: 0.25rem;
+  --mantine-radius-md: 0.5rem;
+  --mantine-radius-lg: 1rem;
+  --mantine-radius-xl: 2rem;
+  --mantine-h1-font-size: 2.125rem;
+  --mantine-h1-line-height: 1.3;
+  --mantine-h1-font-weight: 700;
+  --mantine-h2-font-size: 1.625rem;
+  --mantine-h2-line-height: 1.35;
+  --mantine-h2-font-weight: 700;
+  --mantine-h3-font-size: 1.375rem;
+  --mantine-h3-line-height: 1.4;
+  --mantine-h3-font-weight: 700;
+  --mantine-h4-font-size: 1.125rem;
+  --mantine-h4-line-height: 1.45;
+  --mantine-h4-font-weight: 700;
+  --mantine-h5-font-size: 1rem;
+  --mantine-h5-line-height: 1.5;
+  --mantine-h5-font-weight: 700;
+  --mantine-h6-font-size: 0.875rem;
+  --mantine-h6-line-height: 1.5;
+  --mantine-h6-font-weight: 700;
+}
+
+.text-xs {
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height-sm);
+}
+.text-sm {
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height-sm);
+}
+.text-md {
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height-sm);
+}
+.text-lg {
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height-sm);
+}
+.text-xl {
+  font-size: var(--mantine-font-size-sm);
+  line-height: var(--mantine-line-height-sm);
+}
+
+.mantine-focus-auto:focus-visible,
+.mantine-focus-auto:focus-within,
+.mantine-focus-auto:focus {
+  background: rgba(123, 123, 123, 0.123);
+  outline: none !important; // 2px solid rgba(255, 255, 255, 0.5);
+  // outline-offset: calc(0.125rem * var(--mantine-scale));
+}

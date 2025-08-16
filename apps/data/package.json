@@ -1,0 +1,46 @@
+{
+  "name": "@apps/data",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 5555",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate:dev": "node scripts/prisma-generate.js dev",
+    "prisma:generate:prod": "node scripts/prisma-generate.js prod",
+    "prisma:migrate:dev": "dotenv -e .env.local -- npx prisma migrate dev",
+    "prisma:migrate:prod": "dotenv -e .env.production.local -- npx prisma migrate deploy",
+    "prisma:push:dev": "dotenv -e .env.local -- npx prisma db push",
+    "prisma:push:prod": "dotenv -e .env.production.local -- npx prisma db push",
+    "prisma:studio:dev": "dotenv -e .env.local -- npx prisma studio",
+    "prisma:studio:prod": "dotenv -e .env.production.local -- npx prisma studio"
+  },
+  "dependencies": {
+    "@mantine/code-highlight": "^7.17.8",
+    "@mantine/core": "7.17.8",
+    "@mantine/hooks": "7.17.8",
+    "@mantine/notifications": "^7.17.8",
+    "@tabler/icons-react": "^2.47.0",
+    "@auth/prisma-adapter": "^2.10.0",
+    "@prisma/client": "^6.13.0",
+    "next": "^14.2.5",
+    "next-auth": "^5.0.0-beta.29",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-json-view-lite": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.20",
+    "dotenv-cli": "^7.4.2",
+    "postcss": "^8.5.3",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "prisma": "^6.13.0",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5"
+  }
+}

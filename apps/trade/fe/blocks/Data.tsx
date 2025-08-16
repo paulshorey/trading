@@ -1,0 +1,37 @@
+'use client'
+
+import classes from './Data.module.scss'
+import { Json } from '@apps/data/src/components/blocks/Json'
+import { Collapsed } from '@apps/data/src/components/blocks/Collapsed'
+
+type Props = {
+  data: Record<string, unknown>
+  expandUntil: number
+  allExpanded?: boolean
+}
+
+export function Data({ data, expandUntil, allExpanded = false }: Props) {
+  const sections = Object.entries(data).map(([key, obj], i: number) => {
+    let heading = key
+    let dataParsed = obj
+    if (!expandUntil) expandUntil || (key === 'orders' ? 1 : 2)
+    const isClickToToggle = !allExpanded
+
+    return (
+      <Collapsed
+        classNames={{
+          content: 'rounded-md bg-gray-800',
+        }}
+        key={i}
+        title={heading}
+        openDefault={allExpanded || i === 0}
+        isClickToToggle={isClickToToggle}
+        className={`relative px-4 pt-3 pb-3 border-b border-gray-600 ${isClickToToggle ? 'cursor-pointer' : 'cursor-default'}`}
+      >
+        <Json data={dataParsed as Record<string, unknown>} expandUntil={expandUntil} />
+      </Collapsed>
+    )
+  })
+
+  return <main className={classes.container}>{sections}</main>
+}

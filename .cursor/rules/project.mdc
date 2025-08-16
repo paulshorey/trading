@@ -6,12 +6,12 @@ This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo t
 
 - ./apps/log - logging and observability app
 - ./apps/trade - day trading and investment positions management
-- ./apps/common - a library of utility functions, components, and server actions. Technically it is also a NextJS app like the others, but it is not used as such.
+- ./apps/data - common files imported by other apps, mostly helping with user and database management, but also containing useful utilities, functions, components, and server actions to accomplish various tasks and integrate with 3rd party services
 
-- ./apps/common/\* - common files imported by other apps
-  - ./apps/common/src - src - client-side React components, hooks, and utility functions
-  - ./apps/common/sql - sql - functions, types, and interfaces for interacting with databases (DEPRECATED: should be migrated to ./apps/data)
-  - ./apps/common/cc - cc - saves console logs to the cloud after printing them in the terminal
+- ./apps/data/sql - functions, types, and interfaces for interacting with databases
+- ./apps/data/twillio - integration with Twillio to send logs and alerts via SMS message
+- ./apps/data/src - client-side React components, hooks, and utility functions
+- ./apps/data/cc - saves console logs to the cloud after printing them in the terminal
 
 PNPM instead of NPM:
 
@@ -21,7 +21,6 @@ Important note about navigating these project folders:
 
 Before running any terminal command including pnpm, please make sure to be in the correct folder.
 
-apps (./apps/data, ./apps/log, ./apps/trade) use project-relative import paths starting with `@src/path/to/file`
-They can also reference the root of the common app with path `@apps/common/path/to/file`.
+./apps/log and ./apps/trade use project-relative import paths starting with `@/src/path/to/file`
 
-However, ./apps/common is only a collection of common files, so it can not reference itself with `@src` or other apps with `@apps`.
+However, ./apps/data is used as common library of utilities, so it should not reference itself with `@src` or other apps with `@apps`. Instead, inside ./apps/data, always use relative import paths like `../../`.

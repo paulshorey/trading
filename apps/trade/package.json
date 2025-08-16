@@ -21,7 +21,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@apps/common": "workspace:*",
+    "@apps/data": "workspace:*",
     "@dydxprotocol/v4-client-js": "1.21.1",
     "@mantine/code-highlight": "^7.17.8",
     "@mantine/core": "7.17.8",

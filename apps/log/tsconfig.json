@@ -3,8 +3,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["src/*"],
-      "@apps/common/*": ["../common/*"]
+      "@/*": ["./*"],
+      "@apps/data/*": ["../data/*"]
     },
     "skipLibCheck": true
   },

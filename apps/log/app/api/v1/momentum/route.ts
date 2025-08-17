@@ -8,6 +8,7 @@ export const maxDuration = 60
 /**
  * Parses momentum data from text format: key=value key=value
  * Example: ticker=ETHUSD interval=30 time=2025-08-17T16:30:00Z timenow=2025-08-17T16:33:56Z volumeStrength=20.598249148121855 priceMovement=-20.44094088810119 priceMovementMa=-17.217636614376822
+ * TradingView message: ticker={{ticker}} interval={{interval}} time={{time}} timenow={{timenow}} volumeStrength={{plot("volumeStrength")}} priceMovement={{plot("priceMovement")}} priceMovementMa={{plot("priceMovementMa")}}
  */
 function parseMomentumText(bodyText: string) {
   const data: Record<string, string> = {}

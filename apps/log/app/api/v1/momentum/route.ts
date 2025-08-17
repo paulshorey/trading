@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { formatResponse } from '@apps/data/lib/nextjs/formatResponse'
-import { momentumAdd } from '@apps/data/sql/momentum'
+import { momentumAdd, MomentumRowAdd } from '@apps/data/sql/momentum'
 import { sqlLogAdd } from '@apps/data/sql/log/add'
 
 export const maxDuration = 60
@@ -11,7 +11,7 @@ export const maxDuration = 60
  * TradingView message: ticker={{ticker}} interval={{interval}} time={{time}} timenow={{timenow}} volumeStrength={{plot("volumeStrength")}} priceMovement={{plot("priceMovement")}} priceMovementMa={{plot("priceMovementMa")}}
  */
 function parseMomentumText(bodyText: string) {
-  const data: Record<string, string> = {}
+  const data = {} as MomentumRowAdd
 
   // Split by spaces and parse key=value pairs
   const pairs = bodyText.trim().split(/\s+/)
@@ -19,35 +19,24 @@ function parseMomentumText(bodyText: string) {
   for (const pair of pairs) {
     const [key, value] = pair.split('=')
     if (key && value !== undefined) {
-      data[key] = value
+      if (key === 'ticker') {
+        data.ticker = value
+      } else if (key === 'interval') {
+        data.interval = parseInt(value)
+      } else if (key === 'time') {
+        data.time = new Date(value)
+      } else if (key === 'timenow') {
+        data.timenow = new Date(value)
+      } else if (key === 'volumeStrength') {
+        data.volumeStrength = parseFloat(value)
+      } else if (key === 'priceMovement') {
+        data.priceMovement = parseFloat(value)
+      } else if (key === 'priceMovementMa') {
+        data.priceMovementMa = parseFloat(value)
+      }
     }
   }
-
-  // Validate required fields
-  const requiredFields = [
-    'ticker',
-    'interval',
-    'time',
-    'timenow',
-    'volumeStrength',
-    'priceMovement',
-    'priceMovementMa',
-  ]
-  for (const field of requiredFields) {
-    if (!data[field]) {
-      throw new Error(`Missing required field: ${field}`)
-    }
-  }
-
-  return {
-    ticker: data.ticker,
-    interval: parseInt(data.interval),
-    time: new Date(data.time),
-    timenow: new Date(data.timenow),
-    volumeStrength: parseFloat(data.volumeStrength),
-    priceMovement: parseFloat(data.priceMovement),
-    priceMovementMa: parseFloat(data.priceMovementMa),
-  }
+  return data
 }
 
 async function handleRequest(request: NextRequest): Promise<NextResponse> {

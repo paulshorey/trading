@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { formatResponse } from '@apps/data/lib/nextjs/formatResponse'
-import { momentumAdd, MomentumRowAdd } from '@apps/data/sql/momentum'
+import { fractalAdd, FractalRowAdd } from '@apps/data/sql/fractal'
 import { sqlLogAdd } from '@apps/data/sql/log/add'
 
 export const maxDuration = 60
 
 /**
- * Parses momentum data from text format: key=value key=value
- * Example body text: ticker=ETHUSD interval=2 time=2025-08-17T20:46:00Z timenow=2025-08-17T20:46:34Z volumeStrength=33.32665822909558 priceStrength=-14.005869947279702 priceVolumeStrength=-49.941121303580324 volumeStrengthMa=36.30304183354799 priceStrengthMa=-12.175479058829573 priceVolumeStrengthMa=-45.76830524619087
+ * Parses fractal data from text format: key=value key=value
+ * Example: ticker=ETHUSD interval=2 time=2025-08-17T20:46:00Z timenow=2025-08-17T20:46:34Z volumeStrength=33.32665822909558 priceStrength=-14.005869947279702 priceVolumeStrength=-49.941121303580324 volumeStrengthMa=36.30304183354799 priceStrengthMa=-12.175479058829573 priceVolumeStrengthMa=-45.76830524619087
  * TradingView message: ticker={{ticker}} interval={{interval}} time={{time}} timenow={{timenow}} volumeStrength={{plot("volumeStrength")}} priceStrength={{plot("priceStrength")}} priceVolumeStrength={{plot("priceVolumeStrength")}} volumeStrengthMa={{plot("volumeStrengthMa")}} priceStrengthMa={{plot("priceStrengthMa")}} priceVolumeStrengthMa={{plot("priceVolumeStrengthMa")}}
  */
-function parseMomentumText(bodyText: string) {
-  const data = {} as MomentumRowAdd
+function parseFractalText(bodyText: string) {
+  const data = {} as FractalRowAdd
 
   // Split by spaces and parse key=value pairs
   const pairs = bodyText.trim().split(/\s+/)
@@ -29,10 +29,16 @@ function parseMomentumText(bodyText: string) {
         data.timenow = new Date(value)
       } else if (key === 'volumeStrength') {
         data.volumeStrength = parseFloat(value)
-      } else if (key === 'priceMovement') {
-        data.priceMovement = parseFloat(value)
-      } else if (key === 'priceMovementMa') {
-        data.priceMovementMa = parseFloat(value)
+      } else if (key === 'priceStrength') {
+        data.priceStrength = parseFloat(value)
+      } else if (key === 'priceVolumeStrength') {
+        data.priceVolumeStrength = parseFloat(value)
+      } else if (key === 'volumeStrengthMa') {
+        data.volumeStrengthMa = parseFloat(value)
+      } else if (key === 'priceStrengthMa') {
+        data.priceStrengthMa = parseFloat(value)
+      } else if (key === 'priceVolumeStrengthMa') {
+        data.priceVolumeStrengthMa = parseFloat(value)
       }
     }
   }
@@ -60,46 +66,49 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       throw new Error('No body text provided')
     }
 
-    // Parse the momentum data
-    const momentumData = parseMomentumText(bodyText)
+    // Parse the fractal data
+    const fractalData = parseFractalText(bodyText)
 
     // Validate parsed data
-    if (isNaN(momentumData.interval)) {
+    if (isNaN(fractalData.interval)) {
       throw new Error('Invalid interval value')
     }
-    if (isNaN(momentumData.time.getTime())) {
+    if (isNaN(fractalData.time.getTime())) {
       throw new Error('Invalid time format')
     }
-    if (isNaN(momentumData.timenow.getTime())) {
+    if (isNaN(fractalData.timenow.getTime())) {
       throw new Error('Invalid timenow format')
     }
     if (
-      isNaN(momentumData.volumeStrength) ||
-      isNaN(momentumData.priceMovement) ||
-      isNaN(momentumData.priceMovementMa)
+      isNaN(fractalData.volumeStrength) ||
+      isNaN(fractalData.priceStrength) ||
+      isNaN(fractalData.priceVolumeStrength) ||
+      isNaN(fractalData.volumeStrengthMa) ||
+      isNaN(fractalData.priceStrengthMa) ||
+      isNaN(fractalData.priceVolumeStrengthMa)
     ) {
       throw new Error('Invalid numeric values')
     }
 
     // Save to database
-    const result = await momentumAdd(momentumData)
+    const result = await fractalAdd(fractalData)
 
     // Log success
     await sqlLogAdd({
       name: 'info',
-      message: `Momentum data saved for ${momentumData.ticker}`,
+      message: `Fractal data saved for ${fractalData.ticker}`,
       stack: {
-        momentumData,
+        fractalData,
         result,
       },
     })
 
     return formatResponse({
       ok: true,
-      message: 'Momentum data saved successfully',
+      message: 'Fractal data saved successfully',
       data: {
         id: result?.id,
-        ticker: momentumData.ticker,
+        ticker: fractalData.ticker,
         timestamp: new Date().toISOString(),
       },
     })
@@ -107,7 +116,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     // Log the error
     await sqlLogAdd({
       name: 'error',
-      message: `Momentum endpoint error: ${error.message}`,
+      message: `Fractal endpoint error: ${error.message}`,
       stack: {
         error: error.stack,
         method: request.method,

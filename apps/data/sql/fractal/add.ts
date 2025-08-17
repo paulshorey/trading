@@ -1,13 +1,13 @@
 "use server";
 
-import { MomentumRowAdd } from "./types";
+import { FractalRowAdd } from "./types";
 import { prisma } from "../../lib/prisma";
 import { cc } from "../../cc";
 
 /**
- * Inserts a new momentum record into the `momentum_v1` table.
+ * Inserts a new fractal record into the `fractal_v1` table.
  *
- * This function takes a `MomentumRowAdd` object, which contains the details of the momentum data,
+ * This function takes a `FractalRowAdd` object, which contains the details of the fractal data,
  * and inserts it into the database. It uses Prisma to execute the INSERT operation.
  *
  * The `server_name`, `app_name`, and `node_env` are retrieved from environment variables and
@@ -17,36 +17,39 @@ import { cc } from "../../cc";
  * and logged using the `cc.error` function, which ensures that error details are
  * recorded for debugging.
  *
- * @param row - A `MomentumRowAdd` object containing the momentum details.
+ * @param row - A `FractalRowAdd` object containing the fractal details.
  * @returns The result of the SQL query, which includes the newly inserted row.
  */
-export const momentumAdd = async function (row: MomentumRowAdd) {
+export const fractalAdd = async function (row: FractalRowAdd) {
   "use server";
   const server_name = process.env.SERVER_NAME || "";
   const app_name = process.env.APP_NAME || "";
   const node_env = process.env.NODE_ENV || "";
 
   try {
-    const momentum = await prisma.momentum.create({
+    const fractal = await prisma.fractal.create({
       data: {
         ticker: row.ticker,
         interval: row.interval,
         time: row.time,
         timenow: row.timenow,
         volumeStrength: row.volumeStrength,
-        priceMovement: row.priceMovement,
-        priceMovementMa: row.priceMovementMa,
+        priceStrength: row.priceStrength,
+        priceVolumeStrength: row.priceVolumeStrength,
+        volumeStrengthMa: row.volumeStrengthMa,
+        priceStrengthMa: row.priceStrengthMa,
+        priceVolumeStrengthMa: row.priceVolumeStrengthMa,
         server_name,
         app_name,
         node_env,
       },
     });
-    return momentum;
+    return fractal;
 
     //@ts-ignore
   } catch (e: Error) {
     const error = {
-      name: "Error momentum/add.ts catch",
+      name: "Error fractal/add.ts catch",
       message: e.message || "",
       stack: e.stack || "",
     };

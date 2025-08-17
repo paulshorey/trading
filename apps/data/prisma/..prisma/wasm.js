@@ -186,15 +186,18 @@ exports.Prisma.OrderScalarFieldEnum = {
   time: 'time'
 };
 
-exports.Prisma.MomentumScalarFieldEnum = {
+exports.Prisma.FractalScalarFieldEnum = {
   id: 'id',
   ticker: 'ticker',
   interval: 'interval',
   time: 'time',
   timenow: 'timenow',
   volumeStrength: 'volumeStrength',
-  priceMovement: 'priceMovement',
-  priceMovementMa: 'priceMovementMa',
+  priceStrength: 'priceStrength',
+  priceVolumeStrength: 'priceVolumeStrength',
+  volumeStrengthMa: 'volumeStrengthMa',
+  priceStrengthMa: 'priceStrengthMa',
+  priceVolumeStrengthMa: 'priceVolumeStrengthMa',
   server_name: 'server_name',
   app_name: 'app_name',
   node_env: 'node_env',
@@ -235,7 +238,7 @@ exports.Prisma.ModelName = {
   VerificationToken: 'VerificationToken',
   Log: 'Log',
   Order: 'Order',
-  Momentum: 'Momentum'
+  Fractal: 'Fractal'
 };
 
 /**

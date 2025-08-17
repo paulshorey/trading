@@ -44,10 +44,10 @@ export type Log = $Result.DefaultSelection<Prisma.$LogPayload>
  */
 export type Order = $Result.DefaultSelection<Prisma.$OrderPayload>
 /**
- * Model Momentum
+ * Model Fractal
  * 
  */
-export type Momentum = $Result.DefaultSelection<Prisma.$MomentumPayload>
+export type Fractal = $Result.DefaultSelection<Prisma.$FractalPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -228,14 +228,14 @@ export class PrismaClient<
   get order(): Prisma.OrderDelegate<ExtArgs, ClientOptions>;
 
   /**
-   * `prisma.momentum`: Exposes CRUD operations for the **Momentum** model.
+   * `prisma.fractal`: Exposes CRUD operations for the **Fractal** model.
     * Example usage:
     * ```ts
-    * // Fetch zero or more Momentums
-    * const momentums = await prisma.momentum.findMany()
+    * // Fetch zero or more Fractals
+    * const fractals = await prisma.fractal.findMany()
     * ```
     */
-  get momentum(): Prisma.MomentumDelegate<ExtArgs, ClientOptions>;
+  get fractal(): Prisma.FractalDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -682,7 +682,7 @@ export namespace Prisma {
     VerificationToken: 'VerificationToken',
     Log: 'Log',
     Order: 'Order',
-    Momentum: 'Momentum'
+    Fractal: 'Fractal'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -701,7 +701,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "account" | "session" | "user" | "verificationToken" | "log" | "order" | "momentum"
+      modelProps: "account" | "session" | "user" | "verificationToken" | "log" | "order" | "fractal"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -1149,77 +1149,77 @@ export namespace Prisma {
           }
         }
       }
-      Momentum: {
-        payload: Prisma.$MomentumPayload<ExtArgs>
-        fields: Prisma.MomentumFieldRefs
+      Fractal: {
+        payload: Prisma.$FractalPayload<ExtArgs>
+        fields: Prisma.FractalFieldRefs
         operations: {
           findUnique: {
-            args: Prisma.MomentumFindUniqueArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload> | null
+            args: Prisma.FractalFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload> | null
           }
           findUniqueOrThrow: {
-            args: Prisma.MomentumFindUniqueOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           findFirst: {
-            args: Prisma.MomentumFindFirstArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload> | null
+            args: Prisma.FractalFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload> | null
           }
           findFirstOrThrow: {
-            args: Prisma.MomentumFindFirstOrThrowArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           findMany: {
-            args: Prisma.MomentumFindManyArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>[]
+            args: Prisma.FractalFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>[]
           }
           create: {
-            args: Prisma.MomentumCreateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           createMany: {
-            args: Prisma.MomentumCreateManyArgs<ExtArgs>
+            args: Prisma.FractalCreateManyArgs<ExtArgs>
             result: BatchPayload
           }
           createManyAndReturn: {
-            args: Prisma.MomentumCreateManyAndReturnArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>[]
+            args: Prisma.FractalCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>[]
           }
           delete: {
-            args: Prisma.MomentumDeleteArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           update: {
-            args: Prisma.MomentumUpdateArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           deleteMany: {
-            args: Prisma.MomentumDeleteManyArgs<ExtArgs>
+            args: Prisma.FractalDeleteManyArgs<ExtArgs>
             result: BatchPayload
           }
           updateMany: {
-            args: Prisma.MomentumUpdateManyArgs<ExtArgs>
+            args: Prisma.FractalUpdateManyArgs<ExtArgs>
             result: BatchPayload
           }
           updateManyAndReturn: {
-            args: Prisma.MomentumUpdateManyAndReturnArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>[]
+            args: Prisma.FractalUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>[]
           }
           upsert: {
-            args: Prisma.MomentumUpsertArgs<ExtArgs>
-            result: $Utils.PayloadToResult<Prisma.$MomentumPayload>
+            args: Prisma.FractalUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FractalPayload>
           }
           aggregate: {
-            args: Prisma.MomentumAggregateArgs<ExtArgs>
-            result: $Utils.Optional<AggregateMomentum>
+            args: Prisma.FractalAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFractal>
           }
           groupBy: {
-            args: Prisma.MomentumGroupByArgs<ExtArgs>
-            result: $Utils.Optional<MomentumGroupByOutputType>[]
+            args: Prisma.FractalGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FractalGroupByOutputType>[]
           }
           count: {
-            args: Prisma.MomentumCountArgs<ExtArgs>
-            result: $Utils.Optional<MomentumCountAggregateOutputType> | number
+            args: Prisma.FractalCountArgs<ExtArgs>
+            result: $Utils.Optional<FractalCountAggregateOutputType> | number
           }
         }
       }
@@ -1321,7 +1321,7 @@ export namespace Prisma {
     verificationToken?: VerificationTokenOmit
     log?: LogOmit
     order?: OrderOmit
-    momentum?: MomentumOmit
+    fractal?: FractalOmit
   }
 
   /* Types for Logging */
@@ -7985,72 +7985,87 @@ export namespace Prisma {
 
 
   /**
-   * Model Momentum
+   * Model Fractal
    */
 
-  export type AggregateMomentum = {
-    _count: MomentumCountAggregateOutputType | null
-    _avg: MomentumAvgAggregateOutputType | null
-    _sum: MomentumSumAggregateOutputType | null
-    _min: MomentumMinAggregateOutputType | null
-    _max: MomentumMaxAggregateOutputType | null
+  export type AggregateFractal = {
+    _count: FractalCountAggregateOutputType | null
+    _avg: FractalAvgAggregateOutputType | null
+    _sum: FractalSumAggregateOutputType | null
+    _min: FractalMinAggregateOutputType | null
+    _max: FractalMaxAggregateOutputType | null
   }
 
-  export type MomentumAvgAggregateOutputType = {
+  export type FractalAvgAggregateOutputType = {
     id: number | null
     interval: number | null
     volumeStrength: Decimal | null
-    priceMovement: Decimal | null
-    priceMovementMa: Decimal | null
+    priceStrength: Decimal | null
+    priceVolumeStrength: Decimal | null
+    volumeStrengthMa: Decimal | null
+    priceStrengthMa: Decimal | null
+    priceVolumeStrengthMa: Decimal | null
   }
 
-  export type MomentumSumAggregateOutputType = {
+  export type FractalSumAggregateOutputType = {
     id: number | null
     interval: number | null
     volumeStrength: Decimal | null
-    priceMovement: Decimal | null
-    priceMovementMa: Decimal | null
+    priceStrength: Decimal | null
+    priceVolumeStrength: Decimal | null
+    volumeStrengthMa: Decimal | null
+    priceStrengthMa: Decimal | null
+    priceVolumeStrengthMa: Decimal | null
   }
 
-  export type MomentumMinAggregateOutputType = {
-    id: number | null
-    ticker: string | null
-    interval: number | null
-    time: Date | null
-    timenow: Date | null
-    volumeStrength: Decimal | null
-    priceMovement: Decimal | null
-    priceMovementMa: Decimal | null
-    server_name: string | null
-    app_name: string | null
-    node_env: string | null
-    created_at: Date | null
-  }
-
-  export type MomentumMaxAggregateOutputType = {
+  export type FractalMinAggregateOutputType = {
     id: number | null
     ticker: string | null
     interval: number | null
     time: Date | null
     timenow: Date | null
     volumeStrength: Decimal | null
-    priceMovement: Decimal | null
-    priceMovementMa: Decimal | null
+    priceStrength: Decimal | null
+    priceVolumeStrength: Decimal | null
+    volumeStrengthMa: Decimal | null
+    priceStrengthMa: Decimal | null
+    priceVolumeStrengthMa: Decimal | null
     server_name: string | null
     app_name: string | null
     node_env: string | null
     created_at: Date | null
   }
 
-  export type MomentumCountAggregateOutputType = {
+  export type FractalMaxAggregateOutputType = {
+    id: number | null
+    ticker: string | null
+    interval: number | null
+    time: Date | null
+    timenow: Date | null
+    volumeStrength: Decimal | null
+    priceStrength: Decimal | null
+    priceVolumeStrength: Decimal | null
+    volumeStrengthMa: Decimal | null
+    priceStrengthMa: Decimal | null
+    priceVolumeStrengthMa: Decimal | null
+    server_name: string | null
+    app_name: string | null
+    node_env: string | null
+    created_at: Date | null
+  }
+
+  export type FractalCountAggregateOutputType = {
     id: number
     ticker: number
     interval: number
     time: number
     timenow: number
     volumeStrength: number
-    priceMovement: number
-    priceMovementMa: number
+    priceStrength: number
+    priceVolumeStrength: number
+    volumeStrengthMa: number
+    priceStrengthMa: number
+    priceVolumeStrengthMa: number
     server_name: number
     app_name: number
     node_env: number
@@ -8059,61 +8074,76 @@ export namespace Prisma {
   }
 
 
-  export type MomentumAvgAggregateInputType = {
+  export type FractalAvgAggregateInputType = {
     id?: true
     interval?: true
     volumeStrength?: true
-    priceMovement?: true
-    priceMovementMa?: true
+    priceStrength?: true
+    priceVolumeStrength?: true
+    volumeStrengthMa?: true
+    priceStrengthMa?: true
+    priceVolumeStrengthMa?: true
   }
 
-  export type MomentumSumAggregateInputType = {
+  export type FractalSumAggregateInputType = {
     id?: true
     interval?: true
     volumeStrength?: true
-    priceMovement?: true
-    priceMovementMa?: true
+    priceStrength?: true
+    priceVolumeStrength?: true
+    volumeStrengthMa?: true
+    priceStrengthMa?: true
+    priceVolumeStrengthMa?: true
   }
 
-  export type MomentumMinAggregateInputType = {
+  export type FractalMinAggregateInputType = {
     id?: true
     ticker?: true
     interval?: true
     time?: true
     timenow?: true
     volumeStrength?: true
-    priceMovement?: true
-    priceMovementMa?: true
+    priceStrength?: true
+    priceVolumeStrength?: true
+    volumeStrengthMa?: true
+    priceStrengthMa?: true
+    priceVolumeStrengthMa?: true
     server_name?: true
     app_name?: true
     node_env?: true
     created_at?: true
   }
 
-  export type MomentumMaxAggregateInputType = {
+  export type FractalMaxAggregateInputType = {
     id?: true
     ticker?: true
     interval?: true
     time?: true
     timenow?: true
     volumeStrength?: true
-    priceMovement?: true
-    priceMovementMa?: true
+    priceStrength?: true
+    priceVolumeStrength?: true
+    volumeStrengthMa?: true
+    priceStrengthMa?: true
+    priceVolumeStrengthMa?: true
     server_name?: true
     app_name?: true
     node_env?: true
     created_at?: true
   }
 
-  export type MomentumCountAggregateInputType = {
+  export type FractalCountAggregateInputType = {
     id?: true
     ticker?: true
     interval?: true
     time?: true
     timenow?: true
     volumeStrength?: true
-    priceMovement?: true
-    priceMovementMa?: true
+    priceStrength?: true
+    priceVolumeStrength?: true
+    volumeStrengthMa?: true
+    priceStrengthMa?: true
+    priceVolumeStrengthMa?: true
     server_name?: true
     app_name?: true
     node_env?: true
@@ -8121,190 +8151,205 @@ export namespace Prisma {
     _all?: true
   }
 
-  export type MomentumAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Filter which Momentum to aggregate.
+     * Filter which Fractal to aggregate.
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
      * 
-     * Determine the order of Momentums to fetch.
+     * Determine the order of Fractals to fetch.
      */
-    orderBy?: MomentumOrderByWithRelationInput | MomentumOrderByWithRelationInput[]
+    orderBy?: FractalOrderByWithRelationInput | FractalOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
      * Sets the start position
      */
-    cursor?: MomentumWhereUniqueInput
+    cursor?: FractalWhereUniqueInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Take `±n` Momentums from the position of the cursor.
+     * Take `±n` Fractals from the position of the cursor.
      */
     take?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Skip the first `n` Momentums.
+     * Skip the first `n` Fractals.
      */
     skip?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
-     * Count returned Momentums
+     * Count returned Fractals
     **/
-    _count?: true | MomentumCountAggregateInputType
+    _count?: true | FractalCountAggregateInputType
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
      * Select which fields to average
     **/
-    _avg?: MomentumAvgAggregateInputType
+    _avg?: FractalAvgAggregateInputType
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
      * Select which fields to sum
     **/
-    _sum?: MomentumSumAggregateInputType
+    _sum?: FractalSumAggregateInputType
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
      * Select which fields to find the minimum value
     **/
-    _min?: MomentumMinAggregateInputType
+    _min?: FractalMinAggregateInputType
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
      * Select which fields to find the maximum value
     **/
-    _max?: MomentumMaxAggregateInputType
+    _max?: FractalMaxAggregateInputType
   }
 
-  export type GetMomentumAggregateType<T extends MomentumAggregateArgs> = {
-        [P in keyof T & keyof AggregateMomentum]: P extends '_count' | 'count'
+  export type GetFractalAggregateType<T extends FractalAggregateArgs> = {
+        [P in keyof T & keyof AggregateFractal]: P extends '_count' | 'count'
       ? T[P] extends true
         ? number
-        : GetScalarType<T[P], AggregateMomentum[P]>
-      : GetScalarType<T[P], AggregateMomentum[P]>
+        : GetScalarType<T[P], AggregateFractal[P]>
+      : GetScalarType<T[P], AggregateFractal[P]>
   }
 
 
 
 
-  export type MomentumGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    where?: MomentumWhereInput
-    orderBy?: MomentumOrderByWithAggregationInput | MomentumOrderByWithAggregationInput[]
-    by: MomentumScalarFieldEnum[] | MomentumScalarFieldEnum
-    having?: MomentumScalarWhereWithAggregatesInput
+  export type FractalGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FractalWhereInput
+    orderBy?: FractalOrderByWithAggregationInput | FractalOrderByWithAggregationInput[]
+    by: FractalScalarFieldEnum[] | FractalScalarFieldEnum
+    having?: FractalScalarWhereWithAggregatesInput
     take?: number
     skip?: number
-    _count?: MomentumCountAggregateInputType | true
-    _avg?: MomentumAvgAggregateInputType
-    _sum?: MomentumSumAggregateInputType
-    _min?: MomentumMinAggregateInputType
-    _max?: MomentumMaxAggregateInputType
+    _count?: FractalCountAggregateInputType | true
+    _avg?: FractalAvgAggregateInputType
+    _sum?: FractalSumAggregateInputType
+    _min?: FractalMinAggregateInputType
+    _max?: FractalMaxAggregateInputType
   }
 
-  export type MomentumGroupByOutputType = {
+  export type FractalGroupByOutputType = {
     id: number
     ticker: string
     interval: number
     time: Date
     timenow: Date
     volumeStrength: Decimal
-    priceMovement: Decimal
-    priceMovementMa: Decimal
+    priceStrength: Decimal
+    priceVolumeStrength: Decimal
+    volumeStrengthMa: Decimal
+    priceStrengthMa: Decimal
+    priceVolumeStrengthMa: Decimal
     server_name: string | null
     app_name: string | null
     node_env: string | null
     created_at: Date
-    _count: MomentumCountAggregateOutputType | null
-    _avg: MomentumAvgAggregateOutputType | null
-    _sum: MomentumSumAggregateOutputType | null
-    _min: MomentumMinAggregateOutputType | null
-    _max: MomentumMaxAggregateOutputType | null
+    _count: FractalCountAggregateOutputType | null
+    _avg: FractalAvgAggregateOutputType | null
+    _sum: FractalSumAggregateOutputType | null
+    _min: FractalMinAggregateOutputType | null
+    _max: FractalMaxAggregateOutputType | null
   }
 
-  type GetMomentumGroupByPayload<T extends MomentumGroupByArgs> = Prisma.PrismaPromise<
+  type GetFractalGroupByPayload<T extends FractalGroupByArgs> = Prisma.PrismaPromise<
     Array<
-      PickEnumerable<MomentumGroupByOutputType, T['by']> &
+      PickEnumerable<FractalGroupByOutputType, T['by']> &
         {
-          [P in ((keyof T) & (keyof MomentumGroupByOutputType))]: P extends '_count'
+          [P in ((keyof T) & (keyof FractalGroupByOutputType))]: P extends '_count'
             ? T[P] extends boolean
               ? number
-              : GetScalarType<T[P], MomentumGroupByOutputType[P]>
-            : GetScalarType<T[P], MomentumGroupByOutputType[P]>
+              : GetScalarType<T[P], FractalGroupByOutputType[P]>
+            : GetScalarType<T[P], FractalGroupByOutputType[P]>
         }
       >
     >
 
 
-  export type MomentumSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type FractalSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     ticker?: boolean
     interval?: boolean
     time?: boolean
     timenow?: boolean
     volumeStrength?: boolean
-    priceMovement?: boolean
-    priceMovementMa?: boolean
+    priceStrength?: boolean
+    priceVolumeStrength?: boolean
+    volumeStrengthMa?: boolean
+    priceStrengthMa?: boolean
+    priceVolumeStrengthMa?: boolean
     server_name?: boolean
     app_name?: boolean
     node_env?: boolean
     created_at?: boolean
-  }, ExtArgs["result"]["momentum"]>
+  }, ExtArgs["result"]["fractal"]>
 
-  export type MomentumSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type FractalSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     ticker?: boolean
     interval?: boolean
     time?: boolean
     timenow?: boolean
     volumeStrength?: boolean
-    priceMovement?: boolean
-    priceMovementMa?: boolean
+    priceStrength?: boolean
+    priceVolumeStrength?: boolean
+    volumeStrengthMa?: boolean
+    priceStrengthMa?: boolean
+    priceVolumeStrengthMa?: boolean
     server_name?: boolean
     app_name?: boolean
     node_env?: boolean
     created_at?: boolean
-  }, ExtArgs["result"]["momentum"]>
+  }, ExtArgs["result"]["fractal"]>
 
-  export type MomentumSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type FractalSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     ticker?: boolean
     interval?: boolean
     time?: boolean
     timenow?: boolean
     volumeStrength?: boolean
-    priceMovement?: boolean
-    priceMovementMa?: boolean
+    priceStrength?: boolean
+    priceVolumeStrength?: boolean
+    volumeStrengthMa?: boolean
+    priceStrengthMa?: boolean
+    priceVolumeStrengthMa?: boolean
     server_name?: boolean
     app_name?: boolean
     node_env?: boolean
     created_at?: boolean
-  }, ExtArgs["result"]["momentum"]>
+  }, ExtArgs["result"]["fractal"]>
 
-  export type MomentumSelectScalar = {
+  export type FractalSelectScalar = {
     id?: boolean
     ticker?: boolean
     interval?: boolean
     time?: boolean
     timenow?: boolean
     volumeStrength?: boolean
-    priceMovement?: boolean
-    priceMovementMa?: boolean
+    priceStrength?: boolean
+    priceVolumeStrength?: boolean
+    volumeStrengthMa?: boolean
+    priceStrengthMa?: boolean
+    priceVolumeStrengthMa?: boolean
     server_name?: boolean
     app_name?: boolean
     node_env?: boolean
     created_at?: boolean
   }
 
-  export type MomentumOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ticker" | "interval" | "time" | "timenow" | "volumeStrength" | "priceMovement" | "priceMovementMa" | "server_name" | "app_name" | "node_env" | "created_at", ExtArgs["result"]["momentum"]>
+  export type FractalOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ticker" | "interval" | "time" | "timenow" | "volumeStrength" | "priceStrength" | "priceVolumeStrength" | "volumeStrengthMa" | "priceStrengthMa" | "priceVolumeStrengthMa" | "server_name" | "app_name" | "node_env" | "created_at", ExtArgs["result"]["fractal"]>
 
-  export type $MomentumPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
-    name: "Momentum"
+  export type $FractalPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Fractal"
     objects: {}
     scalars: $Extensions.GetPayloadResult<{
       id: number
@@ -8313,142 +8358,145 @@ export namespace Prisma {
       time: Date
       timenow: Date
       volumeStrength: Prisma.Decimal
-      priceMovement: Prisma.Decimal
-      priceMovementMa: Prisma.Decimal
+      priceStrength: Prisma.Decimal
+      priceVolumeStrength: Prisma.Decimal
+      volumeStrengthMa: Prisma.Decimal
+      priceStrengthMa: Prisma.Decimal
+      priceVolumeStrengthMa: Prisma.Decimal
       server_name: string | null
       app_name: string | null
       node_env: string | null
       created_at: Date
-    }, ExtArgs["result"]["momentum"]>
+    }, ExtArgs["result"]["fractal"]>
     composites: {}
   }
 
-  type MomentumGetPayload<S extends boolean | null | undefined | MomentumDefaultArgs> = $Result.GetResult<Prisma.$MomentumPayload, S>
+  type FractalGetPayload<S extends boolean | null | undefined | FractalDefaultArgs> = $Result.GetResult<Prisma.$FractalPayload, S>
 
-  type MomentumCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
-    Omit<MomentumFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
-      select?: MomentumCountAggregateInputType | true
+  type FractalCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FractalFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FractalCountAggregateInputType | true
     }
 
-  export interface MomentumDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
-    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Momentum'], meta: { name: 'Momentum' } }
+  export interface FractalDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Fractal'], meta: { name: 'Fractal' } }
     /**
-     * Find zero or one Momentum that matches the filter.
-     * @param {MomentumFindUniqueArgs} args - Arguments to find a Momentum
+     * Find zero or one Fractal that matches the filter.
+     * @param {FractalFindUniqueArgs} args - Arguments to find a Fractal
      * @example
-     * // Get one Momentum
-     * const momentum = await prisma.momentum.findUnique({
+     * // Get one Fractal
+     * const fractal = await prisma.fractal.findUnique({
      *   where: {
      *     // ... provide filter here
      *   }
      * })
      */
-    findUnique<T extends MomentumFindUniqueArgs>(args: SelectSubset<T, MomentumFindUniqueArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    findUnique<T extends FractalFindUniqueArgs>(args: SelectSubset<T, FractalFindUniqueArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find one Momentum that matches the filter or throw an error with `error.code='P2025'`
+     * Find one Fractal that matches the filter or throw an error with `error.code='P2025'`
      * if no matches were found.
-     * @param {MomentumFindUniqueOrThrowArgs} args - Arguments to find a Momentum
+     * @param {FractalFindUniqueOrThrowArgs} args - Arguments to find a Fractal
      * @example
-     * // Get one Momentum
-     * const momentum = await prisma.momentum.findUniqueOrThrow({
+     * // Get one Fractal
+     * const fractal = await prisma.fractal.findUniqueOrThrow({
      *   where: {
      *     // ... provide filter here
      *   }
      * })
      */
-    findUniqueOrThrow<T extends MomentumFindUniqueOrThrowArgs>(args: SelectSubset<T, MomentumFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    findUniqueOrThrow<T extends FractalFindUniqueOrThrowArgs>(args: SelectSubset<T, FractalFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find the first Momentum that matches the filter.
+     * Find the first Fractal that matches the filter.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumFindFirstArgs} args - Arguments to find a Momentum
+     * @param {FractalFindFirstArgs} args - Arguments to find a Fractal
      * @example
-     * // Get one Momentum
-     * const momentum = await prisma.momentum.findFirst({
+     * // Get one Fractal
+     * const fractal = await prisma.fractal.findFirst({
      *   where: {
      *     // ... provide filter here
      *   }
      * })
      */
-    findFirst<T extends MomentumFindFirstArgs>(args?: SelectSubset<T, MomentumFindFirstArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    findFirst<T extends FractalFindFirstArgs>(args?: SelectSubset<T, FractalFindFirstArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find the first Momentum that matches the filter or
+     * Find the first Fractal that matches the filter or
      * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumFindFirstOrThrowArgs} args - Arguments to find a Momentum
+     * @param {FractalFindFirstOrThrowArgs} args - Arguments to find a Fractal
      * @example
-     * // Get one Momentum
-     * const momentum = await prisma.momentum.findFirstOrThrow({
+     * // Get one Fractal
+     * const fractal = await prisma.fractal.findFirstOrThrow({
      *   where: {
      *     // ... provide filter here
      *   }
      * })
      */
-    findFirstOrThrow<T extends MomentumFindFirstOrThrowArgs>(args?: SelectSubset<T, MomentumFindFirstOrThrowArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    findFirstOrThrow<T extends FractalFindFirstOrThrowArgs>(args?: SelectSubset<T, FractalFindFirstOrThrowArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find zero or more Momentums that matches the filter.
+     * Find zero or more Fractals that matches the filter.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @param {FractalFindManyArgs} args - Arguments to filter and select certain fields only.
      * @example
-     * // Get all Momentums
-     * const momentums = await prisma.momentum.findMany()
+     * // Get all Fractals
+     * const fractals = await prisma.fractal.findMany()
      * 
-     * // Get first 10 Momentums
-     * const momentums = await prisma.momentum.findMany({ take: 10 })
+     * // Get first 10 Fractals
+     * const fractals = await prisma.fractal.findMany({ take: 10 })
      * 
      * // Only select the `id`
-     * const momentumWithIdOnly = await prisma.momentum.findMany({ select: { id: true } })
+     * const fractalWithIdOnly = await prisma.fractal.findMany({ select: { id: true } })
      * 
      */
-    findMany<T extends MomentumFindManyArgs>(args?: SelectSubset<T, MomentumFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+    findMany<T extends FractalFindManyArgs>(args?: SelectSubset<T, FractalFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
 
     /**
-     * Create a Momentum.
-     * @param {MomentumCreateArgs} args - Arguments to create a Momentum.
+     * Create a Fractal.
+     * @param {FractalCreateArgs} args - Arguments to create a Fractal.
      * @example
-     * // Create one Momentum
-     * const Momentum = await prisma.momentum.create({
+     * // Create one Fractal
+     * const Fractal = await prisma.fractal.create({
      *   data: {
-     *     // ... data to create a Momentum
+     *     // ... data to create a Fractal
      *   }
      * })
      * 
      */
-    create<T extends MomentumCreateArgs>(args: SelectSubset<T, MomentumCreateArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    create<T extends FractalCreateArgs>(args: SelectSubset<T, FractalCreateArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Create many Momentums.
-     * @param {MomentumCreateManyArgs} args - Arguments to create many Momentums.
+     * Create many Fractals.
+     * @param {FractalCreateManyArgs} args - Arguments to create many Fractals.
      * @example
-     * // Create many Momentums
-     * const momentum = await prisma.momentum.createMany({
+     * // Create many Fractals
+     * const fractal = await prisma.fractal.createMany({
      *   data: [
      *     // ... provide data here
      *   ]
      * })
      *     
      */
-    createMany<T extends MomentumCreateManyArgs>(args?: SelectSubset<T, MomentumCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+    createMany<T extends FractalCreateManyArgs>(args?: SelectSubset<T, FractalCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
-     * Create many Momentums and returns the data saved in the database.
-     * @param {MomentumCreateManyAndReturnArgs} args - Arguments to create many Momentums.
+     * Create many Fractals and returns the data saved in the database.
+     * @param {FractalCreateManyAndReturnArgs} args - Arguments to create many Fractals.
      * @example
-     * // Create many Momentums
-     * const momentum = await prisma.momentum.createManyAndReturn({
+     * // Create many Fractals
+     * const fractal = await prisma.fractal.createManyAndReturn({
      *   data: [
      *     // ... provide data here
      *   ]
      * })
      * 
-     * // Create many Momentums and only return the `id`
-     * const momentumWithIdOnly = await prisma.momentum.createManyAndReturn({
+     * // Create many Fractals and only return the `id`
+     * const fractalWithIdOnly = await prisma.fractal.createManyAndReturn({
      *   select: { id: true },
      *   data: [
      *     // ... provide data here
@@ -8458,28 +8506,28 @@ export namespace Prisma {
      * Read more here: https://pris.ly/d/null-undefined
      * 
      */
-    createManyAndReturn<T extends MomentumCreateManyAndReturnArgs>(args?: SelectSubset<T, MomentumCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+    createManyAndReturn<T extends FractalCreateManyAndReturnArgs>(args?: SelectSubset<T, FractalCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
 
     /**
-     * Delete a Momentum.
-     * @param {MomentumDeleteArgs} args - Arguments to delete one Momentum.
+     * Delete a Fractal.
+     * @param {FractalDeleteArgs} args - Arguments to delete one Fractal.
      * @example
-     * // Delete one Momentum
-     * const Momentum = await prisma.momentum.delete({
+     * // Delete one Fractal
+     * const Fractal = await prisma.fractal.delete({
      *   where: {
-     *     // ... filter to delete one Momentum
+     *     // ... filter to delete one Fractal
      *   }
      * })
      * 
      */
-    delete<T extends MomentumDeleteArgs>(args: SelectSubset<T, MomentumDeleteArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    delete<T extends FractalDeleteArgs>(args: SelectSubset<T, FractalDeleteArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Update one Momentum.
-     * @param {MomentumUpdateArgs} args - Arguments to update one Momentum.
+     * Update one Fractal.
+     * @param {FractalUpdateArgs} args - Arguments to update one Fractal.
      * @example
-     * // Update one Momentum
-     * const momentum = await prisma.momentum.update({
+     * // Update one Fractal
+     * const fractal = await prisma.fractal.update({
      *   where: {
      *     // ... provide filter here
      *   },
@@ -8489,30 +8537,30 @@ export namespace Prisma {
      * })
      * 
      */
-    update<T extends MomentumUpdateArgs>(args: SelectSubset<T, MomentumUpdateArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    update<T extends FractalUpdateArgs>(args: SelectSubset<T, FractalUpdateArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Delete zero or more Momentums.
-     * @param {MomentumDeleteManyArgs} args - Arguments to filter Momentums to delete.
+     * Delete zero or more Fractals.
+     * @param {FractalDeleteManyArgs} args - Arguments to filter Fractals to delete.
      * @example
-     * // Delete a few Momentums
-     * const { count } = await prisma.momentum.deleteMany({
+     * // Delete a few Fractals
+     * const { count } = await prisma.fractal.deleteMany({
      *   where: {
      *     // ... provide filter here
      *   }
      * })
      * 
      */
-    deleteMany<T extends MomentumDeleteManyArgs>(args?: SelectSubset<T, MomentumDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+    deleteMany<T extends FractalDeleteManyArgs>(args?: SelectSubset<T, FractalDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
-     * Update zero or more Momentums.
+     * Update zero or more Fractals.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumUpdateManyArgs} args - Arguments to update one or more rows.
+     * @param {FractalUpdateManyArgs} args - Arguments to update one or more rows.
      * @example
-     * // Update many Momentums
-     * const momentum = await prisma.momentum.updateMany({
+     * // Update many Fractals
+     * const fractal = await prisma.fractal.updateMany({
      *   where: {
      *     // ... provide filter here
      *   },
@@ -8522,14 +8570,14 @@ export namespace Prisma {
      * })
      * 
      */
-    updateMany<T extends MomentumUpdateManyArgs>(args: SelectSubset<T, MomentumUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+    updateMany<T extends FractalUpdateManyArgs>(args: SelectSubset<T, FractalUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
-     * Update zero or more Momentums and returns the data updated in the database.
-     * @param {MomentumUpdateManyAndReturnArgs} args - Arguments to update many Momentums.
+     * Update zero or more Fractals and returns the data updated in the database.
+     * @param {FractalUpdateManyAndReturnArgs} args - Arguments to update many Fractals.
      * @example
-     * // Update many Momentums
-     * const momentum = await prisma.momentum.updateManyAndReturn({
+     * // Update many Fractals
+     * const fractal = await prisma.fractal.updateManyAndReturn({
      *   where: {
      *     // ... provide filter here
      *   },
@@ -8538,8 +8586,8 @@ export namespace Prisma {
      *   ]
      * })
      * 
-     * // Update zero or more Momentums and only return the `id`
-     * const momentumWithIdOnly = await prisma.momentum.updateManyAndReturn({
+     * // Update zero or more Fractals and only return the `id`
+     * const fractalWithIdOnly = await prisma.fractal.updateManyAndReturn({
      *   select: { id: true },
      *   where: {
      *     // ... provide filter here
@@ -8552,56 +8600,56 @@ export namespace Prisma {
      * Read more here: https://pris.ly/d/null-undefined
      * 
      */
-    updateManyAndReturn<T extends MomentumUpdateManyAndReturnArgs>(args: SelectSubset<T, MomentumUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+    updateManyAndReturn<T extends FractalUpdateManyAndReturnArgs>(args: SelectSubset<T, FractalUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
     /**
-     * Create or update one Momentum.
-     * @param {MomentumUpsertArgs} args - Arguments to update or create a Momentum.
+     * Create or update one Fractal.
+     * @param {FractalUpsertArgs} args - Arguments to update or create a Fractal.
      * @example
-     * // Update or create a Momentum
-     * const momentum = await prisma.momentum.upsert({
+     * // Update or create a Fractal
+     * const fractal = await prisma.fractal.upsert({
      *   create: {
-     *     // ... data to create a Momentum
+     *     // ... data to create a Fractal
      *   },
      *   update: {
      *     // ... in case it already exists, update
      *   },
      *   where: {
-     *     // ... the filter for the Momentum we want to update
+     *     // ... the filter for the Fractal we want to update
      *   }
      * })
      */
-    upsert<T extends MomentumUpsertArgs>(args: SelectSubset<T, MomentumUpsertArgs<ExtArgs>>): Prisma__MomentumClient<$Result.GetResult<Prisma.$MomentumPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+    upsert<T extends FractalUpsertArgs>(args: SelectSubset<T, FractalUpsertArgs<ExtArgs>>): Prisma__FractalClient<$Result.GetResult<Prisma.$FractalPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
 
     /**
-     * Count the number of Momentums.
+     * Count the number of Fractals.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumCountArgs} args - Arguments to filter Momentums to count.
+     * @param {FractalCountArgs} args - Arguments to filter Fractals to count.
      * @example
-     * // Count the number of Momentums
-     * const count = await prisma.momentum.count({
+     * // Count the number of Fractals
+     * const count = await prisma.fractal.count({
      *   where: {
-     *     // ... the filter for the Momentums we want to count
+     *     // ... the filter for the Fractals we want to count
      *   }
      * })
     **/
-    count<T extends MomentumCountArgs>(
-      args?: Subset<T, MomentumCountArgs>,
+    count<T extends FractalCountArgs>(
+      args?: Subset<T, FractalCountArgs>,
     ): Prisma.PrismaPromise<
       T extends $Utils.Record<'select', any>
         ? T['select'] extends true
           ? number
-          : GetScalarType<T['select'], MomentumCountAggregateOutputType>
+          : GetScalarType<T['select'], FractalCountAggregateOutputType>
         : number
     >
 
     /**
-     * Allows you to perform aggregations operations on a Momentum.
+     * Allows you to perform aggregations operations on a Fractal.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @param {FractalAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
      * @example
      * // Ordered by age ascending
      * // Where email contains prisma.io
@@ -8621,13 +8669,13 @@ export namespace Prisma {
      *   take: 10,
      * })
     **/
-    aggregate<T extends MomentumAggregateArgs>(args: Subset<T, MomentumAggregateArgs>): Prisma.PrismaPromise<GetMomentumAggregateType<T>>
+    aggregate<T extends FractalAggregateArgs>(args: Subset<T, FractalAggregateArgs>): Prisma.PrismaPromise<GetFractalAggregateType<T>>
 
     /**
-     * Group by Momentum.
+     * Group by Fractal.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {MomentumGroupByArgs} args - Group by arguments.
+     * @param {FractalGroupByArgs} args - Group by arguments.
      * @example
      * // Group by city, order by createdAt, get count
      * const result = await prisma.user.groupBy({
@@ -8642,14 +8690,14 @@ export namespace Prisma {
      * 
     **/
     groupBy<
-      T extends MomentumGroupByArgs,
+      T extends FractalGroupByArgs,
       HasSelectOrTake extends Or<
         Extends<'skip', Keys<T>>,
         Extends<'take', Keys<T>>
       >,
       OrderByArg extends True extends HasSelectOrTake
-        ? { orderBy: MomentumGroupByArgs['orderBy'] }
-        : { orderBy?: MomentumGroupByArgs['orderBy'] },
+        ? { orderBy: FractalGroupByArgs['orderBy'] }
+        : { orderBy?: FractalGroupByArgs['orderBy'] },
       OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
       ByFields extends MaybeTupleToUnion<T['by']>,
       ByValid extends Has<ByFields, OrderFields>,
@@ -8698,20 +8746,20 @@ export namespace Prisma {
             ? never
             : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
         }[OrderFields]
-    >(args: SubsetIntersection<T, MomentumGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMomentumGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+    >(args: SubsetIntersection<T, FractalGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFractalGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
   /**
-   * Fields of the Momentum model
+   * Fields of the Fractal model
    */
-  readonly fields: MomentumFieldRefs;
+  readonly fields: FractalFieldRefs;
   }
 
   /**
-   * The delegate class that acts as a "Promise-like" for Momentum.
+   * The delegate class that acts as a "Promise-like" for Fractal.
    * Why is this prefixed with `Prisma__`?
    * Because we want to prevent naming conflicts as mentioned in
    * https://github.com/prisma/prisma-client-js/issues/707
    */
-  export interface Prisma__MomentumClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+  export interface Prisma__FractalClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -8739,384 +8787,387 @@ export namespace Prisma {
 
 
   /**
-   * Fields of the Momentum model
+   * Fields of the Fractal model
    */
-  interface MomentumFieldRefs {
-    readonly id: FieldRef<"Momentum", 'Int'>
-    readonly ticker: FieldRef<"Momentum", 'String'>
-    readonly interval: FieldRef<"Momentum", 'Int'>
-    readonly time: FieldRef<"Momentum", 'DateTime'>
-    readonly timenow: FieldRef<"Momentum", 'DateTime'>
-    readonly volumeStrength: FieldRef<"Momentum", 'Decimal'>
-    readonly priceMovement: FieldRef<"Momentum", 'Decimal'>
-    readonly priceMovementMa: FieldRef<"Momentum", 'Decimal'>
-    readonly server_name: FieldRef<"Momentum", 'String'>
-    readonly app_name: FieldRef<"Momentum", 'String'>
-    readonly node_env: FieldRef<"Momentum", 'String'>
-    readonly created_at: FieldRef<"Momentum", 'DateTime'>
+  interface FractalFieldRefs {
+    readonly id: FieldRef<"Fractal", 'Int'>
+    readonly ticker: FieldRef<"Fractal", 'String'>
+    readonly interval: FieldRef<"Fractal", 'Int'>
+    readonly time: FieldRef<"Fractal", 'DateTime'>
+    readonly timenow: FieldRef<"Fractal", 'DateTime'>
+    readonly volumeStrength: FieldRef<"Fractal", 'Decimal'>
+    readonly priceStrength: FieldRef<"Fractal", 'Decimal'>
+    readonly priceVolumeStrength: FieldRef<"Fractal", 'Decimal'>
+    readonly volumeStrengthMa: FieldRef<"Fractal", 'Decimal'>
+    readonly priceStrengthMa: FieldRef<"Fractal", 'Decimal'>
+    readonly priceVolumeStrengthMa: FieldRef<"Fractal", 'Decimal'>
+    readonly server_name: FieldRef<"Fractal", 'String'>
+    readonly app_name: FieldRef<"Fractal", 'String'>
+    readonly node_env: FieldRef<"Fractal", 'String'>
+    readonly created_at: FieldRef<"Fractal", 'DateTime'>
   }
     
 
   // Custom InputTypes
   /**
-   * Momentum findUnique
+   * Fractal findUnique
    */
-  export type MomentumFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter, which Momentum to fetch.
+     * Filter, which Fractal to fetch.
      */
-    where: MomentumWhereUniqueInput
+    where: FractalWhereUniqueInput
   }
 
   /**
-   * Momentum findUniqueOrThrow
+   * Fractal findUniqueOrThrow
    */
-  export type MomentumFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter, which Momentum to fetch.
+     * Filter, which Fractal to fetch.
      */
-    where: MomentumWhereUniqueInput
+    where: FractalWhereUniqueInput
   }
 
   /**
-   * Momentum findFirst
+   * Fractal findFirst
    */
-  export type MomentumFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter, which Momentum to fetch.
+     * Filter, which Fractal to fetch.
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
      * 
-     * Determine the order of Momentums to fetch.
+     * Determine the order of Fractals to fetch.
      */
-    orderBy?: MomentumOrderByWithRelationInput | MomentumOrderByWithRelationInput[]
+    orderBy?: FractalOrderByWithRelationInput | FractalOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
-     * Sets the position for searching for Momentums.
+     * Sets the position for searching for Fractals.
      */
-    cursor?: MomentumWhereUniqueInput
+    cursor?: FractalWhereUniqueInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Take `±n` Momentums from the position of the cursor.
+     * Take `±n` Fractals from the position of the cursor.
      */
     take?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Skip the first `n` Momentums.
+     * Skip the first `n` Fractals.
      */
     skip?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
      * 
-     * Filter by unique combinations of Momentums.
+     * Filter by unique combinations of Fractals.
      */
-    distinct?: MomentumScalarFieldEnum | MomentumScalarFieldEnum[]
+    distinct?: FractalScalarFieldEnum | FractalScalarFieldEnum[]
   }
 
   /**
-   * Momentum findFirstOrThrow
+   * Fractal findFirstOrThrow
    */
-  export type MomentumFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter, which Momentum to fetch.
+     * Filter, which Fractal to fetch.
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
      * 
-     * Determine the order of Momentums to fetch.
+     * Determine the order of Fractals to fetch.
      */
-    orderBy?: MomentumOrderByWithRelationInput | MomentumOrderByWithRelationInput[]
+    orderBy?: FractalOrderByWithRelationInput | FractalOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
-     * Sets the position for searching for Momentums.
+     * Sets the position for searching for Fractals.
      */
-    cursor?: MomentumWhereUniqueInput
+    cursor?: FractalWhereUniqueInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Take `±n` Momentums from the position of the cursor.
+     * Take `±n` Fractals from the position of the cursor.
      */
     take?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Skip the first `n` Momentums.
+     * Skip the first `n` Fractals.
      */
     skip?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
      * 
-     * Filter by unique combinations of Momentums.
+     * Filter by unique combinations of Fractals.
      */
-    distinct?: MomentumScalarFieldEnum | MomentumScalarFieldEnum[]
+    distinct?: FractalScalarFieldEnum | FractalScalarFieldEnum[]
   }
 
   /**
-   * Momentum findMany
+   * Fractal findMany
    */
-  export type MomentumFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter, which Momentums to fetch.
+     * Filter, which Fractals to fetch.
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
      * 
-     * Determine the order of Momentums to fetch.
+     * Determine the order of Fractals to fetch.
      */
-    orderBy?: MomentumOrderByWithRelationInput | MomentumOrderByWithRelationInput[]
+    orderBy?: FractalOrderByWithRelationInput | FractalOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
-     * Sets the position for listing Momentums.
+     * Sets the position for listing Fractals.
      */
-    cursor?: MomentumWhereUniqueInput
+    cursor?: FractalWhereUniqueInput
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Take `±n` Momentums from the position of the cursor.
+     * Take `±n` Fractals from the position of the cursor.
      */
     take?: number
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
      * 
-     * Skip the first `n` Momentums.
+     * Skip the first `n` Fractals.
      */
     skip?: number
-    distinct?: MomentumScalarFieldEnum | MomentumScalarFieldEnum[]
+    distinct?: FractalScalarFieldEnum | FractalScalarFieldEnum[]
   }
 
   /**
-   * Momentum create
+   * Fractal create
    */
-  export type MomentumCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * The data needed to create a Momentum.
+     * The data needed to create a Fractal.
      */
-    data: XOR<MomentumCreateInput, MomentumUncheckedCreateInput>
+    data: XOR<FractalCreateInput, FractalUncheckedCreateInput>
   }
 
   /**
-   * Momentum createMany
+   * Fractal createMany
    */
-  export type MomentumCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * The data used to create many Momentums.
+     * The data used to create many Fractals.
      */
-    data: MomentumCreateManyInput | MomentumCreateManyInput[]
+    data: FractalCreateManyInput | FractalCreateManyInput[]
     skipDuplicates?: boolean
   }
 
   /**
-   * Momentum createManyAndReturn
+   * Fractal createManyAndReturn
    */
-  export type MomentumCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelectCreateManyAndReturn<ExtArgs> | null
+    select?: FractalSelectCreateManyAndReturn<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * The data used to create many Momentums.
+     * The data used to create many Fractals.
      */
-    data: MomentumCreateManyInput | MomentumCreateManyInput[]
+    data: FractalCreateManyInput | FractalCreateManyInput[]
     skipDuplicates?: boolean
   }
 
   /**
-   * Momentum update
+   * Fractal update
    */
-  export type MomentumUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * The data needed to update a Momentum.
+     * The data needed to update a Fractal.
      */
-    data: XOR<MomentumUpdateInput, MomentumUncheckedUpdateInput>
+    data: XOR<FractalUpdateInput, FractalUncheckedUpdateInput>
     /**
-     * Choose, which Momentum to update.
+     * Choose, which Fractal to update.
      */
-    where: MomentumWhereUniqueInput
+    where: FractalWhereUniqueInput
   }
 
   /**
-   * Momentum updateMany
+   * Fractal updateMany
    */
-  export type MomentumUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * The data used to update Momentums.
+     * The data used to update Fractals.
      */
-    data: XOR<MomentumUpdateManyMutationInput, MomentumUncheckedUpdateManyInput>
+    data: XOR<FractalUpdateManyMutationInput, FractalUncheckedUpdateManyInput>
     /**
-     * Filter which Momentums to update
+     * Filter which Fractals to update
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
-     * Limit how many Momentums to update.
+     * Limit how many Fractals to update.
      */
     limit?: number
   }
 
   /**
-   * Momentum updateManyAndReturn
+   * Fractal updateManyAndReturn
    */
-  export type MomentumUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelectUpdateManyAndReturn<ExtArgs> | null
+    select?: FractalSelectUpdateManyAndReturn<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * The data used to update Momentums.
+     * The data used to update Fractals.
      */
-    data: XOR<MomentumUpdateManyMutationInput, MomentumUncheckedUpdateManyInput>
+    data: XOR<FractalUpdateManyMutationInput, FractalUncheckedUpdateManyInput>
     /**
-     * Filter which Momentums to update
+     * Filter which Fractals to update
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
-     * Limit how many Momentums to update.
+     * Limit how many Fractals to update.
      */
     limit?: number
   }
 
   /**
-   * Momentum upsert
+   * Fractal upsert
    */
-  export type MomentumUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * The filter to search for the Momentum to update in case it exists.
+     * The filter to search for the Fractal to update in case it exists.
      */
-    where: MomentumWhereUniqueInput
+    where: FractalWhereUniqueInput
     /**
-     * In case the Momentum found by the `where` argument doesn't exist, create a new Momentum with this data.
+     * In case the Fractal found by the `where` argument doesn't exist, create a new Fractal with this data.
      */
-    create: XOR<MomentumCreateInput, MomentumUncheckedCreateInput>
+    create: XOR<FractalCreateInput, FractalUncheckedCreateInput>
     /**
-     * In case the Momentum was found with the provided `where` argument, update it with this data.
+     * In case the Fractal was found with the provided `where` argument, update it with this data.
      */
-    update: XOR<MomentumUpdateInput, MomentumUncheckedUpdateInput>
+    update: XOR<FractalUpdateInput, FractalUncheckedUpdateInput>
   }
 
   /**
-   * Momentum delete
+   * Fractal delete
    */
-  export type MomentumDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
     /**
-     * Filter which Momentum to delete.
+     * Filter which Fractal to delete.
      */
-    where: MomentumWhereUniqueInput
+    where: FractalWhereUniqueInput
   }
 
   /**
-   * Momentum deleteMany
+   * Fractal deleteMany
    */
-  export type MomentumDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Filter which Momentums to delete
+     * Filter which Fractals to delete
      */
-    where?: MomentumWhereInput
+    where?: FractalWhereInput
     /**
-     * Limit how many Momentums to delete.
+     * Limit how many Fractals to delete.
      */
     limit?: number
   }
 
   /**
-   * Momentum without action
+   * Fractal without action
    */
-  export type MomentumDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+  export type FractalDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
-     * Select specific fields to fetch from the Momentum
+     * Select specific fields to fetch from the Fractal
      */
-    select?: MomentumSelect<ExtArgs> | null
+    select?: FractalSelect<ExtArgs> | null
     /**
-     * Omit specific fields from the Momentum
+     * Omit specific fields from the Fractal
      */
-    omit?: MomentumOmit<ExtArgs> | null
+    omit?: FractalOmit<ExtArgs> | null
   }
 
 
@@ -9218,22 +9269,25 @@ export namespace Prisma {
   export type OrderScalarFieldEnum = (typeof OrderScalarFieldEnum)[keyof typeof OrderScalarFieldEnum]
 
 
-  export const MomentumScalarFieldEnum: {
+  export const FractalScalarFieldEnum: {
     id: 'id',
     ticker: 'ticker',
     interval: 'interval',
     time: 'time',
     timenow: 'timenow',
     volumeStrength: 'volumeStrength',
-    priceMovement: 'priceMovement',
-    priceMovementMa: 'priceMovementMa',
+    priceStrength: 'priceStrength',
+    priceVolumeStrength: 'priceVolumeStrength',
+    volumeStrengthMa: 'volumeStrengthMa',
+    priceStrengthMa: 'priceStrengthMa',
+    priceVolumeStrengthMa: 'priceVolumeStrengthMa',
     server_name: 'server_name',
     app_name: 'app_name',
     node_env: 'node_env',
     created_at: 'created_at'
   };
 
-  export type MomentumScalarFieldEnum = (typeof MomentumScalarFieldEnum)[keyof typeof MomentumScalarFieldEnum]
+  export type FractalScalarFieldEnum = (typeof FractalScalarFieldEnum)[keyof typeof FractalScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -9791,93 +9845,108 @@ export namespace Prisma {
     time?: DateTimeWithAggregatesFilter<"Order"> | Date | string
   }
 
-  export type MomentumWhereInput = {
-    AND?: MomentumWhereInput | MomentumWhereInput[]
-    OR?: MomentumWhereInput[]
-    NOT?: MomentumWhereInput | MomentumWhereInput[]
-    id?: IntFilter<"Momentum"> | number
-    ticker?: StringFilter<"Momentum"> | string
-    interval?: IntFilter<"Momentum"> | number
-    time?: DateTimeFilter<"Momentum"> | Date | string
-    timenow?: DateTimeFilter<"Momentum"> | Date | string
-    volumeStrength?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    server_name?: StringNullableFilter<"Momentum"> | string | null
-    app_name?: StringNullableFilter<"Momentum"> | string | null
-    node_env?: StringNullableFilter<"Momentum"> | string | null
-    created_at?: DateTimeFilter<"Momentum"> | Date | string
+  export type FractalWhereInput = {
+    AND?: FractalWhereInput | FractalWhereInput[]
+    OR?: FractalWhereInput[]
+    NOT?: FractalWhereInput | FractalWhereInput[]
+    id?: IntFilter<"Fractal"> | number
+    ticker?: StringFilter<"Fractal"> | string
+    interval?: IntFilter<"Fractal"> | number
+    time?: DateTimeFilter<"Fractal"> | Date | string
+    timenow?: DateTimeFilter<"Fractal"> | Date | string
+    volumeStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    server_name?: StringNullableFilter<"Fractal"> | string | null
+    app_name?: StringNullableFilter<"Fractal"> | string | null
+    node_env?: StringNullableFilter<"Fractal"> | string | null
+    created_at?: DateTimeFilter<"Fractal"> | Date | string
   }
 
-  export type MomentumOrderByWithRelationInput = {
+  export type FractalOrderByWithRelationInput = {
     id?: SortOrder
     ticker?: SortOrder
     interval?: SortOrder
     time?: SortOrder
     timenow?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
     server_name?: SortOrderInput | SortOrder
     app_name?: SortOrderInput | SortOrder
     node_env?: SortOrderInput | SortOrder
     created_at?: SortOrder
   }
 
-  export type MomentumWhereUniqueInput = Prisma.AtLeast<{
+  export type FractalWhereUniqueInput = Prisma.AtLeast<{
     id?: number
-    AND?: MomentumWhereInput | MomentumWhereInput[]
-    OR?: MomentumWhereInput[]
-    NOT?: MomentumWhereInput | MomentumWhereInput[]
-    ticker?: StringFilter<"Momentum"> | string
-    interval?: IntFilter<"Momentum"> | number
-    time?: DateTimeFilter<"Momentum"> | Date | string
-    timenow?: DateTimeFilter<"Momentum"> | Date | string
-    volumeStrength?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    server_name?: StringNullableFilter<"Momentum"> | string | null
-    app_name?: StringNullableFilter<"Momentum"> | string | null
-    node_env?: StringNullableFilter<"Momentum"> | string | null
-    created_at?: DateTimeFilter<"Momentum"> | Date | string
+    AND?: FractalWhereInput | FractalWhereInput[]
+    OR?: FractalWhereInput[]
+    NOT?: FractalWhereInput | FractalWhereInput[]
+    ticker?: StringFilter<"Fractal"> | string
+    interval?: IntFilter<"Fractal"> | number
+    time?: DateTimeFilter<"Fractal"> | Date | string
+    timenow?: DateTimeFilter<"Fractal"> | Date | string
+    volumeStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    server_name?: StringNullableFilter<"Fractal"> | string | null
+    app_name?: StringNullableFilter<"Fractal"> | string | null
+    node_env?: StringNullableFilter<"Fractal"> | string | null
+    created_at?: DateTimeFilter<"Fractal"> | Date | string
   }, "id">
 
-  export type MomentumOrderByWithAggregationInput = {
+  export type FractalOrderByWithAggregationInput = {
     id?: SortOrder
     ticker?: SortOrder
     interval?: SortOrder
     time?: SortOrder
     timenow?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
     server_name?: SortOrderInput | SortOrder
     app_name?: SortOrderInput | SortOrder
     node_env?: SortOrderInput | SortOrder
     created_at?: SortOrder
-    _count?: MomentumCountOrderByAggregateInput
-    _avg?: MomentumAvgOrderByAggregateInput
-    _max?: MomentumMaxOrderByAggregateInput
-    _min?: MomentumMinOrderByAggregateInput
-    _sum?: MomentumSumOrderByAggregateInput
+    _count?: FractalCountOrderByAggregateInput
+    _avg?: FractalAvgOrderByAggregateInput
+    _max?: FractalMaxOrderByAggregateInput
+    _min?: FractalMinOrderByAggregateInput
+    _sum?: FractalSumOrderByAggregateInput
   }
 
-  export type MomentumScalarWhereWithAggregatesInput = {
-    AND?: MomentumScalarWhereWithAggregatesInput | MomentumScalarWhereWithAggregatesInput[]
-    OR?: MomentumScalarWhereWithAggregatesInput[]
-    NOT?: MomentumScalarWhereWithAggregatesInput | MomentumScalarWhereWithAggregatesInput[]
-    id?: IntWithAggregatesFilter<"Momentum"> | number
-    ticker?: StringWithAggregatesFilter<"Momentum"> | string
-    interval?: IntWithAggregatesFilter<"Momentum"> | number
-    time?: DateTimeWithAggregatesFilter<"Momentum"> | Date | string
-    timenow?: DateTimeWithAggregatesFilter<"Momentum"> | Date | string
-    volumeStrength?: DecimalWithAggregatesFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalWithAggregatesFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalWithAggregatesFilter<"Momentum"> | Decimal | DecimalJsLike | number | string
-    server_name?: StringNullableWithAggregatesFilter<"Momentum"> | string | null
-    app_name?: StringNullableWithAggregatesFilter<"Momentum"> | string | null
-    node_env?: StringNullableWithAggregatesFilter<"Momentum"> | string | null
-    created_at?: DateTimeWithAggregatesFilter<"Momentum"> | Date | string
+  export type FractalScalarWhereWithAggregatesInput = {
+    AND?: FractalScalarWhereWithAggregatesInput | FractalScalarWhereWithAggregatesInput[]
+    OR?: FractalScalarWhereWithAggregatesInput[]
+    NOT?: FractalScalarWhereWithAggregatesInput | FractalScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"Fractal"> | number
+    ticker?: StringWithAggregatesFilter<"Fractal"> | string
+    interval?: IntWithAggregatesFilter<"Fractal"> | number
+    time?: DateTimeWithAggregatesFilter<"Fractal"> | Date | string
+    timenow?: DateTimeWithAggregatesFilter<"Fractal"> | Date | string
+    volumeStrength?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalWithAggregatesFilter<"Fractal"> | Decimal | DecimalJsLike | number | string
+    server_name?: StringNullableWithAggregatesFilter<"Fractal"> | string | null
+    app_name?: StringNullableWithAggregatesFilter<"Fractal"> | string | null
+    node_env?: StringNullableWithAggregatesFilter<"Fractal"> | string | null
+    created_at?: DateTimeWithAggregatesFilter<"Fractal"> | Date | string
   }
 
   export type AccountCreateInput = {
@@ -10342,102 +10411,123 @@ export namespace Prisma {
     time?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
-  export type MomentumCreateInput = {
+  export type FractalCreateInput = {
     ticker: string
     interval: number
     time: Date | string
     timenow: Date | string
     volumeStrength: Decimal | DecimalJsLike | number | string
-    priceMovement: Decimal | DecimalJsLike | number | string
-    priceMovementMa: Decimal | DecimalJsLike | number | string
+    priceStrength: Decimal | DecimalJsLike | number | string
+    priceVolumeStrength: Decimal | DecimalJsLike | number | string
+    volumeStrengthMa: Decimal | DecimalJsLike | number | string
+    priceStrengthMa: Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa: Decimal | DecimalJsLike | number | string
     server_name?: string | null
     app_name?: string | null
     node_env?: string | null
     created_at?: Date | string
   }
 
-  export type MomentumUncheckedCreateInput = {
+  export type FractalUncheckedCreateInput = {
     id?: number
     ticker: string
     interval: number
     time: Date | string
     timenow: Date | string
     volumeStrength: Decimal | DecimalJsLike | number | string
-    priceMovement: Decimal | DecimalJsLike | number | string
-    priceMovementMa: Decimal | DecimalJsLike | number | string
+    priceStrength: Decimal | DecimalJsLike | number | string
+    priceVolumeStrength: Decimal | DecimalJsLike | number | string
+    volumeStrengthMa: Decimal | DecimalJsLike | number | string
+    priceStrengthMa: Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa: Decimal | DecimalJsLike | number | string
     server_name?: string | null
     app_name?: string | null
     node_env?: string | null
     created_at?: Date | string
   }
 
-  export type MomentumUpdateInput = {
+  export type FractalUpdateInput = {
     ticker?: StringFieldUpdateOperationsInput | string
     interval?: IntFieldUpdateOperationsInput | number
     time?: DateTimeFieldUpdateOperationsInput | Date | string
     timenow?: DateTimeFieldUpdateOperationsInput | Date | string
     volumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     server_name?: NullableStringFieldUpdateOperationsInput | string | null
     app_name?: NullableStringFieldUpdateOperationsInput | string | null
     node_env?: NullableStringFieldUpdateOperationsInput | string | null
     created_at?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
-  export type MomentumUncheckedUpdateInput = {
+  export type FractalUncheckedUpdateInput = {
     id?: IntFieldUpdateOperationsInput | number
     ticker?: StringFieldUpdateOperationsInput | string
     interval?: IntFieldUpdateOperationsInput | number
     time?: DateTimeFieldUpdateOperationsInput | Date | string
     timenow?: DateTimeFieldUpdateOperationsInput | Date | string
     volumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     server_name?: NullableStringFieldUpdateOperationsInput | string | null
     app_name?: NullableStringFieldUpdateOperationsInput | string | null
     node_env?: NullableStringFieldUpdateOperationsInput | string | null
     created_at?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
-  export type MomentumCreateManyInput = {
+  export type FractalCreateManyInput = {
     id?: number
     ticker: string
     interval: number
     time: Date | string
     timenow: Date | string
     volumeStrength: Decimal | DecimalJsLike | number | string
-    priceMovement: Decimal | DecimalJsLike | number | string
-    priceMovementMa: Decimal | DecimalJsLike | number | string
+    priceStrength: Decimal | DecimalJsLike | number | string
+    priceVolumeStrength: Decimal | DecimalJsLike | number | string
+    volumeStrengthMa: Decimal | DecimalJsLike | number | string
+    priceStrengthMa: Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa: Decimal | DecimalJsLike | number | string
     server_name?: string | null
     app_name?: string | null
     node_env?: string | null
     created_at?: Date | string
   }
 
-  export type MomentumUpdateManyMutationInput = {
+  export type FractalUpdateManyMutationInput = {
     ticker?: StringFieldUpdateOperationsInput | string
     interval?: IntFieldUpdateOperationsInput | number
     time?: DateTimeFieldUpdateOperationsInput | Date | string
     timenow?: DateTimeFieldUpdateOperationsInput | Date | string
     volumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     server_name?: NullableStringFieldUpdateOperationsInput | string | null
     app_name?: NullableStringFieldUpdateOperationsInput | string | null
     node_env?: NullableStringFieldUpdateOperationsInput | string | null
     created_at?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
-  export type MomentumUncheckedUpdateManyInput = {
+  export type FractalUncheckedUpdateManyInput = {
     id?: IntFieldUpdateOperationsInput | number
     ticker?: StringFieldUpdateOperationsInput | string
     interval?: IntFieldUpdateOperationsInput | number
     time?: DateTimeFieldUpdateOperationsInput | Date | string
     timenow?: DateTimeFieldUpdateOperationsInput | Date | string
     volumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovement?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
-    priceMovementMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrength?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    volumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
+    priceVolumeStrengthMa?: DecimalFieldUpdateOperationsInput | Decimal | DecimalJsLike | number | string
     server_name?: NullableStringFieldUpdateOperationsInput | string | null
     app_name?: NullableStringFieldUpdateOperationsInput | string | null
     node_env?: NullableStringFieldUpdateOperationsInput | string | null
@@ -10956,65 +11046,80 @@ export namespace Prisma {
     _max?: NestedDecimalFilter<$PrismaModel>
   }
 
-  export type MomentumCountOrderByAggregateInput = {
+  export type FractalCountOrderByAggregateInput = {
     id?: SortOrder
     ticker?: SortOrder
     interval?: SortOrder
     time?: SortOrder
     timenow?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
     server_name?: SortOrder
     app_name?: SortOrder
     node_env?: SortOrder
     created_at?: SortOrder
   }
 
-  export type MomentumAvgOrderByAggregateInput = {
+  export type FractalAvgOrderByAggregateInput = {
     id?: SortOrder
     interval?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
   }
 
-  export type MomentumMaxOrderByAggregateInput = {
+  export type FractalMaxOrderByAggregateInput = {
     id?: SortOrder
     ticker?: SortOrder
     interval?: SortOrder
     time?: SortOrder
     timenow?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
     server_name?: SortOrder
     app_name?: SortOrder
     node_env?: SortOrder
     created_at?: SortOrder
   }
 
-  export type MomentumMinOrderByAggregateInput = {
+  export type FractalMinOrderByAggregateInput = {
     id?: SortOrder
     ticker?: SortOrder
     interval?: SortOrder
     time?: SortOrder
     timenow?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
     server_name?: SortOrder
     app_name?: SortOrder
     node_env?: SortOrder
     created_at?: SortOrder
   }
 
-  export type MomentumSumOrderByAggregateInput = {
+  export type FractalSumOrderByAggregateInput = {
     id?: SortOrder
     interval?: SortOrder
     volumeStrength?: SortOrder
-    priceMovement?: SortOrder
-    priceMovementMa?: SortOrder
+    priceStrength?: SortOrder
+    priceVolumeStrength?: SortOrder
+    volumeStrengthMa?: SortOrder
+    priceStrengthMa?: SortOrder
+    priceVolumeStrengthMa?: SortOrder
   }
 
   export type UserCreateNestedOneWithoutAccountsInput = {

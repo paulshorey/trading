@@ -70,7 +70,7 @@ export default function FractalChartControlled({
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
-  const [hoursBack, setHoursBack] = useState<number>(6) // Hours to look back from latest data
+  const [hoursBack, setHoursBack] = useState<number>(80) // Hours to look back from latest data
 
   // Synchronized cursor position
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
@@ -442,6 +442,33 @@ export default function FractalChartControlled({
 
   return (
     <div className="fractal-charts">
+      {/* Master Controls */}
+      <div className="controls-panel">
+        {/* <div className="mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Time Range: Past{' '}
+            {hoursBack >= 24
+              ? `${Math.round((hoursBack / 24) * 10) / 10} ${
+                  hoursBack === 24 ? 'day' : 'days'
+                }`
+              : `${hoursBack} hours`}
+          </label>
+        </div> */}
+        <input
+          type="range"
+          min="4"
+          max="80"
+          step="1"
+          value={hoursBack}
+          onChange={(e) => setHoursBack(parseInt(e.target.value))}
+          className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+        />
+        {/* <div className="flex justify-between text-xs text-gray-500 mt-1">
+          <span>4 hours</span>
+          <span>80 hours</span>
+        </div> */}
+      </div>
+
       {/* Render all charts stacked vertically */}
       {CHART_CONFIGS.map((config, index) => {
         const isLoading = loadingStates[index]
@@ -449,7 +476,11 @@ export default function FractalChartControlled({
         const hasData = allChartsData[index] !== null
 
         return (
-          <div key={config.fileName} className="fractal-chart relative">
+          <div
+            key={config.fileName}
+            className="fractal-chart relative"
+            style={{ marginBottom: '-12px' }}
+          >
             {/* Chart container */}
             <div
               ref={(el) => {
@@ -498,28 +529,6 @@ export default function FractalChartControlled({
           </div>
         )
       })}
-
-      {/* Master Controls */}
-      <div className="controls-panel mb-6">
-        <div className="mb-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Time Range: Past {hoursBack} hours
-          </label>
-        </div>
-        <input
-          type="range"
-          min="6"
-          max="24"
-          step="1"
-          value={hoursBack}
-          onChange={(e) => setHoursBack(parseInt(e.target.value))}
-          className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-        />
-        <div className="flex justify-between text-xs text-gray-500 mt-1">
-          <span>6 hours</span>
-          <span>24 hours</span>
-        </div>
-      </div>
     </div>
   )
 }

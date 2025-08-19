@@ -492,9 +492,9 @@ export default function FractalChartControlled({
             {/* Chart title positioned above chart but overlapping */}
             <div
               style={{ zIndex: 1000, top: 0, left: 0 }}
-              className="absolute bg-gray-700 bg-opacity-90 px-2 py-1 rounded shadow-sm pointer-events-none font-bold"
+              className="absolute bg-[var(--mantine-color-body)] opacity-50 bg-opacity-90 pl-2 pr-3 py-1 rounded-br-xl shadow-sm pointer-events-none font-bold"
             >
-              <h3 className="text-sm font-semibold text-gray-800 leading-tight">
+              <h3 className="text-sm font-semibold leading-tight">
                 {config.displayName}
               </h3>
 

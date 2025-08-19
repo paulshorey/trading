@@ -70,7 +70,7 @@ export default function FractalChartControlled({
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
-  const [hoursBack, setHoursBack] = useState<number>(80) // Hours to look back from latest data
+  const [hoursBack, setHoursBack] = useState<number>(84) // Hours to look back from latest data
 
   // Synchronized cursor position
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
@@ -444,20 +444,10 @@ export default function FractalChartControlled({
     <div className="mx-auto w-full max-w-[600px]">
       {/* Master Controls */}
       <div className="controls-panel">
-        {/* <div className="mb-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Time Range: Past{' '}
-            {hoursBack >= 24
-              ? `${Math.round((hoursBack / 24) * 10) / 10} ${
-                  hoursBack === 24 ? 'day' : 'days'
-                }`
-              : `${hoursBack} hours`}
-          </label>
-        </div> */}
         <input
           type="range"
-          min="4"
-          max="80"
+          min="24"
+          max="168"
           step="1"
           value={hoursBack}
           onChange={(e) => setHoursBack(parseInt(e.target.value))}

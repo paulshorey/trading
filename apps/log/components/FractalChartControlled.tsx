@@ -51,7 +51,7 @@ const CHART_CONFIGS: ChartConfig[] = [
 ]
 
 export default function FractalChartControlled({
-  width = 800,
+  width = 1000,
   height = 250,
 }: FractalChartControlledProps) {
   const chartRefs = useRef<(IChartApi | null)[]>([])
@@ -441,7 +441,7 @@ export default function FractalChartControlled({
   }, [])
 
   return (
-    <div className="fractal-charts">
+    <div className="mx-auto w-full max-w-[600px] overflow-auto">
       {/* Master Controls */}
       <div className="controls-panel">
         {/* <div className="mb-2">
@@ -478,7 +478,7 @@ export default function FractalChartControlled({
         return (
           <div
             key={config.fileName}
-            className="fractal-chart relative"
+            className="fractal-chart relative flex justify-end overflow-x-auto"
             style={{ marginBottom: '-12px' }}
           >
             {/* Chart container */}

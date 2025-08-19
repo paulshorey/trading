@@ -83,15 +83,6 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
     const result = await fractalAdd(fractalData)
 
     // Log success
-    await sqlLogAdd({
-      name: 'info',
-      message: `Fractal data saved for ${fractalData.ticker}`,
-      stack: {
-        fractalData,
-        result,
-      },
-    })
-
     return formatResponse({
       ok: true,
       message: 'Fractal data saved successfully',

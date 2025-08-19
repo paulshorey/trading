@@ -10,10 +10,10 @@ import {
   MouseEventParams,
   ISeriesApi,
 } from 'lightweight-charts'
-import { FractalData, parseFractalCSV } from '../lib/parseFractalCSV'
+import { FractalRowGet, fractalGets } from '@apps/data/sql/fractal'
 
 interface ChartConfig {
-  fileName: string
+  interval: string
   displayName: string
 }
 
@@ -24,34 +24,30 @@ interface FractalChartControlledProps {
 
 // Configuration for all CSV files
 const CHART_CONFIGS: ChartConfig[] = [
-  // {
-  //   fileName: '/fractal/ETHUSD-30S.csv',
-  //   displayName: 'ETHUSD-30S',
-  // },
   {
-    fileName: '/fractal/ETHUSD-2.csv',
+    interval: '30s',
+    displayName: 'ETHUSD-30s',
+  },
+  {
+    interval: '2',
     displayName: 'ETHUSD-2',
   },
   {
-    fileName: '/fractal/ETHUSD-6.csv',
-    displayName: 'ETHUSD-6',
-  },
-  {
-    fileName: '/fractal/ETHUSD-8.csv',
+    interval: '8',
     displayName: 'ETHUSD-8',
   },
   {
-    fileName: '/fractal/ETHUSD-30.csv',
+    interval: '30',
     displayName: 'ETHUSD-30',
   },
   {
-    fileName: '/fractal/ETHUSD-90.csv',
+    interval: '90',
     displayName: 'ETHUSD-90',
   },
 ]
 
 export default function FractalChartControlled({
-  width = 1000,
+  width = 600,
   height = 250,
 }: FractalChartControlledProps) {
   const chartRefs = useRef<(IChartApi | null)[]>([])
@@ -62,15 +58,15 @@ export default function FractalChartControlled({
   const [errors, setErrors] = useState<(string | null)[]>(
     new Array(CHART_CONFIGS.length).fill(null)
   )
-  const [allChartsData, setAllChartsData] = useState<(FractalData[] | null)[]>(
-    new Array(CHART_CONFIGS.length).fill(null)
-  )
+  const [allChartsData, setAllChartsData] = useState<
+    (FractalRowGet[] | null)[]
+  >(new Array(CHART_CONFIGS.length).fill(null))
 
   // Master time controls
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
-  const [hoursBack, setHoursBack] = useState<number>(84) // Hours to look back from latest data
+  const [hoursBack, setHoursBack] = useState<number>(48) // Hours to look back from latest data
 
   // Synchronized cursor position
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
@@ -85,14 +81,14 @@ export default function FractalChartControlled({
 
   // Helper function to convert fractal data to chart data
   const convertToChartData = (
-    data: FractalData[],
-    field: keyof Omit<FractalData, 'time'>
+    data: FractalRowGet[],
+    field: keyof Omit<FractalRowGet, 'time' | 'timenow' | 'created_at'>
   ): LineData[] => {
     return data.map((item) => {
       const value = item[field]
       const numericValue = typeof value === 'string' ? parseFloat(value) : value
       return {
-        time: (new Date(item.time).getTime() / 1000) as any,
+        time: (new Date(item.timenow).getTime() / 1000) as any,
         value: numericValue,
       }
     })
@@ -100,15 +96,15 @@ export default function FractalChartControlled({
 
   // Helper function to calculate time range based on hours back from latest data
   // Always keeps the end of data on the right edge
-  const calculateVisibleRange = (data: FractalData[]) => {
+  const calculateVisibleRange = (data: FractalRowGet[]) => {
     if (data.length === 0) return null
 
     const firstItem = data[0]
     const lastItem = data[data.length - 1]
     if (!firstItem || !lastItem) return null
 
-    const firstTime = new Date(firstItem.time).getTime() / 1000
-    const lastTime = new Date(lastItem.time).getTime() / 1000
+    const firstTime = new Date(firstItem.timenow).getTime() / 1000
+    const lastTime = new Date(lastItem.timenow).getTime() / 1000
 
     // Calculate start time based on hours back from latest data
     const hoursBackInSeconds = hoursBack * 60 * 60 // Convert hours to seconds
@@ -167,7 +163,7 @@ export default function FractalChartControlled({
   // Helper function to create a single chart
   const createSingleChart = (
     container: HTMLDivElement,
-    fractalData: FractalData[],
+    fractalData: FractalRowGet[],
     chartIndex: number
   ): IChartApi => {
     const chart = createChart(container, {
@@ -196,8 +192,14 @@ export default function FractalChartControlled({
           style: 0, // Solid line
         },
         horzLine: {
-          visible: false, // Hide horizontal price line
+          visible: true,
+          color: '#758391',
+          width: 1,
+          style: 0, // Solid line
         },
+        // horzLine: {
+        //   visible: false, // Hide horizontal price line
+        // },
       },
       // Disable zoom/scroll but allow crosshair interactions
       handleScroll: false,
@@ -206,7 +208,7 @@ export default function FractalChartControlled({
 
     // Create line series for each metric
     const volumeStrengthSeries = chart.addSeries(LineSeries, {
-      color: '#4CAF50',
+      color: '#4caf4f12',
       lineWidth: 2,
       crosshairMarkerVisible: false, // Hide cursor markers
       priceLineVisible: false, // Hide horizontal price line
@@ -216,11 +218,8 @@ export default function FractalChartControlled({
       convertToChartData(fractalData, 'volumeStrength')
     )
 
-    // Store the first series reference for crosshair synchronization
-    seriesRefs.current[chartIndex] = volumeStrengthSeries
-
     const volumeStrengthMaSeries = chart.addSeries(LineSeries, {
-      color: '#388E3C',
+      color: '#388e3c10',
       lineWidth: 2,
       crosshairMarkerVisible: false, // Hide cursor markers
       priceLineVisible: false, // Hide horizontal price line
@@ -231,7 +230,7 @@ export default function FractalChartControlled({
     )
 
     const priceVolumeStrengthSeries = chart.addSeries(LineSeries, {
-      color: '#FF9800',
+      color: '#ff99007d',
       lineWidth: 2,
       crosshairMarkerVisible: false, // Hide cursor markers
       priceLineVisible: false, // Hide horizontal price line
@@ -242,7 +241,7 @@ export default function FractalChartControlled({
     )
 
     const priceVolumeStrengthMaSeries = chart.addSeries(LineSeries, {
-      color: '#F57C00',
+      color: '#f57b009f',
       lineWidth: 2,
       crosshairMarkerVisible: false, // Hide cursor markers
       priceLineVisible: false, // Hide horizontal price line
@@ -253,7 +252,7 @@ export default function FractalChartControlled({
     )
 
     const priceStrengthSeries = chart.addSeries(LineSeries, {
-      color: '#2196F3',
+      color: '#2195f3a1',
       lineWidth: 2,
       crosshairMarkerVisible: false, // Hide cursor markers
       priceLineVisible: false, // Hide horizontal price line
@@ -266,13 +265,16 @@ export default function FractalChartControlled({
     const priceStrengthMaSeries = chart.addSeries(LineSeries, {
       color: '#1976D2',
       lineWidth: 2,
-      crosshairMarkerVisible: false, // Hide cursor markers
+      crosshairMarkerVisible: true,
       priceLineVisible: false, // Hide horizontal price line
       lastValueVisible: false, // Hide last value label
     })
     priceStrengthMaSeries.setData(
       convertToChartData(fractalData, 'priceStrengthMa')
     )
+
+    // Store the priceStrengthMaSeries reference for crosshair synchronization
+    seriesRefs.current[chartIndex] = priceStrengthMaSeries
 
     // Add crosshair event handlers for cursor synchronization
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -299,14 +301,21 @@ export default function FractalChartControlled({
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        // Load all CSV files in parallel for better performance
+        // Load all chart data in parallel for better performance
         const dataPromises = CHART_CONFIGS.map(async (config, index) => {
           try {
-            const data = await parseFractalCSV(config.fileName)
-            if (data.length === 0) {
-              throw new Error(`No data found in ${config.fileName}`)
+            const { rows, error } = await fractalGets({
+              where: { ticker: 'ETHUSD', interval: config.interval },
+            })
+
+            if (error) {
+              throw new Error(error.message)
             }
-            return { index, data, error: null }
+
+            if (!rows || rows.length === 0) {
+              throw new Error(`No data found for interval ${config.interval}`)
+            }
+            return { index, data: rows, error: null }
           } catch (err) {
             return {
               index,
@@ -446,7 +455,7 @@ export default function FractalChartControlled({
       <div className="controls-panel">
         <input
           type="range"
-          min="24"
+          min="12"
           max="168"
           step="1"
           value={hoursBack}
@@ -467,10 +476,10 @@ export default function FractalChartControlled({
 
         return (
           <div
-            key={config.fileName}
-            id={`fractal-chart-${config.fileName}`}
+            key={config.interval}
+            id={`fractal-chart-${config.interval}`}
             className=" relative overflow-x-auto"
-            style={{ marginBottom: '-12px' }}
+            style={{ marginBottom: '-12px', marginTop: '-12px' }}
             dir="rtl"
           >
             {/* Chart container */}

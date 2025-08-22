@@ -28,25 +28,32 @@ export const fractalAdd = async function (row: FractalRowAdd) {
 
   const client = await getDb().connect();
   try {
+    const columns = ["ticker", "interval", "time", "timenow", "server_name", "app_name", "node_env"];
+    const values: (string | number | Date)[] = [row.ticker, row.interval, row.time, row.timenow, server_name, app_name, node_env];
+
+    const numericColumns = [
+      "volume_strength",
+      "price_strength",
+      "price_volume_strength",
+      "volume_strength_ma",
+      "price_strength_ma",
+      "price_volume_strength_ma",
+    ] as const;
+
+    for (const col of numericColumns) {
+      const value = row[col];
+      if (typeof value === "number" && !isNaN(value)) {
+        columns.push(col);
+        values.push(value);
+      }
+    }
+
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
     const queryText = `
-      INSERT INTO fractal_v1(ticker, interval, time, timenow, volume_strength, price_strength, price_volume_strength, volume_strength_ma, price_strength_ma, price_volume_strength_ma, server_name, app_name, node_env)
-      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      INSERT INTO fractal_v1(${columns.join(", ")})
+      VALUES(${placeholders})
       RETURNING *`;
-    const values = [
-      row.ticker,
-      row.interval,
-      row.time,
-      row.timenow,
-      row.volume_strength,
-      row.price_strength,
-      row.price_volume_strength,
-      row.volume_strength_ma,
-      row.price_strength_ma,
-      row.price_volume_strength_ma,
-      server_name,
-      app_name,
-      node_env,
-    ];
+
     const res = await client.query(queryText, values);
     return res.rows[0];
   } catch (e: any) {

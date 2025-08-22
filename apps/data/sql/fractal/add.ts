@@ -22,14 +22,11 @@ import { cc } from "../../cc";
  */
 export const fractalAdd = async function (row: FractalRowAdd) {
   "use server";
-  const server_name = process.env.SERVER_NAME || "";
-  const app_name = process.env.APP_NAME || "";
-  const node_env = process.env.NODE_ENV || "";
 
   const client = await getDb().connect();
   try {
-    const columns = ["ticker", "interval", "time", "timenow", "server_name", "app_name", "node_env"];
-    const values: (string | number | Date)[] = [row.ticker, row.interval, row.time, row.timenow, server_name, app_name, node_env];
+    const columns = ["ticker", "interval", "time", "timenow"];
+    const values: (string | number | Date)[] = [row.ticker, row.interval, row.time, row.timenow];
 
     const numericColumns = [
       "volume_strength",

@@ -1,14 +1,14 @@
 "use server";
 
 import { FractalRowAdd } from "./types";
-import { prisma } from "../../lib/prisma";
+import { getDb } from "../../lib/neon";
 import { cc } from "../../cc";
 
 /**
  * Inserts a new fractal record into the `fractal_v1` table.
  *
  * This function takes a `FractalRowAdd` object, which contains the details of the fractal data,
- * and inserts it into the database. It uses Prisma to execute the INSERT operation.
+ * and inserts it into the database. It uses Neon SQL to execute the INSERT operation.
  *
  * The `server_name`, `app_name`, and `node_env` are retrieved from environment variables and
  * added to the database record for tracking purposes.
@@ -26,33 +26,37 @@ export const fractalAdd = async function (row: FractalRowAdd) {
   const app_name = process.env.APP_NAME || "";
   const node_env = process.env.NODE_ENV || "";
 
+  const client = await getDb().connect();
   try {
-    const fractal = await prisma.fractal.create({
-      data: {
-        ticker: row.ticker,
-        interval: row.interval,
-        time: row.time,
-        timenow: row.timenow,
-        volumeStrength: row.volumeStrength,
-        priceStrength: row.priceStrength,
-        priceVolumeStrength: row.priceVolumeStrength,
-        volumeStrengthMa: row.volumeStrengthMa,
-        priceStrengthMa: row.priceStrengthMa,
-        priceVolumeStrengthMa: row.priceVolumeStrengthMa,
-        server_name,
-        app_name,
-        node_env,
-      },
-    });
-    return fractal;
-
-    //@ts-ignore
-  } catch (e: Error) {
+    const queryText = `
+      INSERT INTO fractal_v1(ticker, interval, time, timenow, volumeStrength, priceStrength, priceVolumeStrength, volumeStrengthMa, priceStrengthMa, priceVolumeStrengthMa, server_name, app_name, node_env)
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *`;
+    const values = [
+      row.ticker,
+      row.interval,
+      row.time,
+      row.timenow,
+      row.volumeStrength,
+      row.priceStrength,
+      row.priceVolumeStrength,
+      row.volumeStrengthMa,
+      row.priceStrengthMa,
+      row.priceVolumeStrengthMa,
+      server_name,
+      app_name,
+      node_env,
+    ];
+    const res = await client.query(queryText, values);
+    return res.rows[0];
+  } catch (e: any) {
     const error = {
       name: "Error fractal/add.ts catch",
       message: e.message || "",
       stack: e.stack || "",
     };
-    cc.error(`${error.name} ${e.message} ${e.stack?.substring(0, e.stack.indexOf(/\n/))}`, error);
+    cc.error(`${error.name} ${e.message} ${e.stack?.substring(0, e.stack?.indexOf("\n"))}`, error);
+  } finally {
+    client.release();
   }
 };

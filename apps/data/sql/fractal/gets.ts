@@ -1,9 +1,8 @@
 "use server";
 
-import { Prisma } from "../../prisma/..prisma/client";
-import { prisma } from "../../lib/prisma";
 import { cc } from "../../cc";
 import { FractalRowGet } from "./types";
+import { getDb } from "../../lib/neon";
 
 type Output = {
   rows?: FractalRowGet[];
@@ -19,7 +18,37 @@ type Props = {
     ticker?: string;
     interval?: string;
   };
+  take?: number;
 };
+
+function avgFrNum(
+  key: keyof FractalRowGet,
+  fr0: FractalRowGet,
+  fr1?: FractalRowGet,
+  fr2?: FractalRowGet,
+  fr3?: FractalRowGet,
+  fr4?: FractalRowGet,
+  fr5?: FractalRowGet
+): number {
+  if (fr5?.[key]) {
+    return (
+      (Number(fr0[key]) + (Number(fr0[key]) + Number(fr1?.[key]) + Number(fr2?.[key]) + Number(fr3?.[key]) + Number(fr4?.[key]) + Number(fr5?.[key])) / 6) / 2
+    );
+  }
+  if (fr4?.[key]) {
+    return (Number(fr0[key]) + (Number(fr0[key]) + Number(fr1?.[key]) + Number(fr2?.[key]) + Number(fr3?.[key]) + Number(fr4?.[key])) / 5) / 2;
+  }
+  if (fr3?.[key]) {
+    return (Number(fr0[key]) + (Number(fr0[key]) + Number(fr1?.[key]) + Number(fr2?.[key]) + Number(fr3?.[key])) / 4) / 2;
+  }
+  if (fr2?.[key]) {
+    return (Number(fr0[key]) + (Number(fr0[key]) + Number(fr1?.[key]) + Number(fr2?.[key])) / 3) / 2;
+  }
+  if (fr1?.[key]) {
+    return (Number(fr0[key]) + (Number(fr0[key]) + Number(fr1?.[key])) / 2) / 2;
+  }
+  return Number(fr0[key]);
+}
 
 export const fractalGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
@@ -27,42 +56,72 @@ export const fractalGets = async function ({ where }: Props = {}): Promise<Outpu
   const output = {} as Output;
 
   try {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
-    const query = {
-      where: {
-        ...(where?.ticker && { ticker: where.ticker }),
-        ...(where?.interval && { interval: where.interval }),
-        timenow: {
-          gte: sevenDaysAgo,
-        },
-      },
-      distinct: [Prisma.FractalScalarFieldEnum.timenow],
-      orderBy: { timenow: "asc" as const },
-    };
-    const fractals = await prisma.fractal.findMany(query);
+    const client = await getDb().connect();
+    try {
+      let queryText = `
+        SELECT * FROM (
+          SELECT DISTINCT ON (timenow) *
+          FROM fractal_v1
+          ORDER BY timenow DESC
+        ) AS distinct_fractals
+        WHERE timenow >= $1
+      `;
+      const params: any[] = [twoDaysAgo];
 
-    // Convert Prisma results to FractalRowGet format
-    const rows: FractalRowGet[] = fractals.map((fractal) => ({
-      id: fractal.id,
-      ticker: fractal.ticker,
-      interval: fractal.interval,
-      time: fractal.time.toISOString(),
-      timenow: fractal.timenow.toISOString(),
-      volumeStrength: Number(fractal.volumeStrength),
-      priceStrength: Number(fractal.priceStrength),
-      priceVolumeStrength: Number(fractal.priceVolumeStrength),
-      volumeStrengthMa: Number(fractal.volumeStrengthMa),
-      priceStrengthMa: Number(fractal.priceStrengthMa),
-      priceVolumeStrengthMa: Number(fractal.priceVolumeStrengthMa),
-      server_name: fractal.server_name || "",
-      app_name: fractal.app_name || "",
-      node_env: fractal.node_env || "",
-      created_at: fractal.created_at.toISOString(),
-    }));
+      if (where?.ticker) {
+        params.push(where.ticker);
+        queryText += ` AND ticker = $${params.length}`;
+      }
+      if (where?.interval) {
+        params.push(where.interval);
+        queryText += ` AND interval = $${params.length}`;
+      }
 
-    output.rows = rows;
-    //@ts-ignore - this Error type is correct
+      queryText += " ORDER BY timenow DESC";
+
+      const result = await client.query(queryText, params);
+      const fractals = result.rows as FractalRowGet[];
+
+      const rows: FractalRowGet[] = [];
+      for (let index = 0; index < fractals.length; index++) {
+        const fr0 = fractals[index];
+        const fr1 = fractals[index + 1];
+        const fr2 = fractals[index + 2];
+        const fr3 = fractals[index + 3];
+        const fr4 = fractals[index + 4];
+        const fr5 = fractals[index + 5];
+        rows.push({
+          id: fr0.id,
+          ticker: fr0.ticker,
+          interval: fr0.interval,
+          time: new Date(fr0.time),
+          timenow: new Date(fr0.timenow),
+          volumeStrength: Number(fr0.volumeStrength),
+          priceStrength: Number(fr0.priceStrength),
+          priceVolumeStrength: Number(fr0.priceVolumeStrength),
+          volumeStrengthMa: avgFrNum("volumeStrength", fr0, fr1, fr2, fr3, fr4, fr5),
+          priceStrengthMa: avgFrNum("priceStrength", fr0, fr1, fr2, fr3, fr4, fr5),
+          priceVolumeStrengthMa: avgFrNum("priceVolumeStrength", fr0, fr1, fr2, fr3, fr4, fr5),
+          server_name: fr0.server_name || "",
+          app_name: fr0.app_name || "",
+          node_env: fr0.node_env || "",
+          created_at: new Date(fr0.created_at),
+        });
+        fractals.splice(index, 1);
+        fractals.splice(index, 1);
+        if (fr0.interval === "30s") {
+          fractals.splice(index, 1);
+          fractals.splice(index, 1);
+          fractals.splice(index, 1);
+        }
+      }
+
+      output.rows = rows.reverse();
+    } finally {
+      client.release();
+    }
   } catch (e: any) {
     try {
       const error = {

@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("PRISMA_DATABASE_URL")
 }
 
 model Account {
@@ -91,25 +91,4 @@ model Order {
   time        DateTime @default(now())
 
   @@map("orders_v1")
-}
-
-
-model Fractal {
-  id                      Int      @id @default(autoincrement())
-  ticker                  String
-  interval                String
-  time                    DateTime
-  timenow                 DateTime
-  volumeStrength          Decimal
-  priceStrength           Decimal
-  priceVolumeStrength     Decimal
-  volumeStrengthMa        Decimal
-  priceStrengthMa         Decimal
-  priceVolumeStrengthMa   Decimal
-  server_name             String?
-  app_name                String?
-  node_env                String?
-  created_at              DateTime @default(now())
-
-  @@map("fractal_v1")
 }

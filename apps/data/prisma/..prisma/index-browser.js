@@ -186,24 +186,6 @@ exports.Prisma.OrderScalarFieldEnum = {
   time: 'time'
 };
 
-exports.Prisma.FractalScalarFieldEnum = {
-  id: 'id',
-  ticker: 'ticker',
-  interval: 'interval',
-  time: 'time',
-  timenow: 'timenow',
-  volumeStrength: 'volumeStrength',
-  priceStrength: 'priceStrength',
-  priceVolumeStrength: 'priceVolumeStrength',
-  volumeStrengthMa: 'volumeStrengthMa',
-  priceStrengthMa: 'priceStrengthMa',
-  priceVolumeStrengthMa: 'priceVolumeStrengthMa',
-  server_name: 'server_name',
-  app_name: 'app_name',
-  node_env: 'node_env',
-  created_at: 'created_at'
-};
-
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -237,8 +219,7 @@ exports.Prisma.ModelName = {
   User: 'User',
   VerificationToken: 'VerificationToken',
   Log: 'Log',
-  Order: 'Order',
-  Fractal: 'Fractal'
+  Order: 'Order'
 };
 
 /**

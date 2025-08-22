@@ -2,8 +2,8 @@ export type FractalRowGet = {
   id: number;
   ticker: string;
   interval: string;
-  time: string; // DateTime as ISO string
-  timenow: string; // DateTime as ISO string
+  time: Date; // DateTime as ISO string
+  timenow: Date; // DateTime as ISO string
   volumeStrength: number;
   priceStrength: number;
   priceVolumeStrength: number;
@@ -13,7 +13,7 @@ export type FractalRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
-  created_at: string; // DateTime as ISO string
+  created_at: Date; // DateTime as ISO string
 };
 
 export type FractalRowAdd = {

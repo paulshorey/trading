@@ -1,6 +1,6 @@
 {
   "name": "@apps/data",
-  "version": "0.1.0",
+  "version": "1.0.2",
   "private": true,
   "scripts": {
     "postinstall": "npx prisma generate --no-engine && ./scripts/auth-secret.sh",

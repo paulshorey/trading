@@ -35,7 +35,15 @@ export async function orderMarket(this: DydxInterface, { clientId, ticker, side,
     })
 
     // place
-    compositeClient.placeOrder(this.subaccount, ticker, type, side === 'SHORT' ? OrderSide.SELL : OrderSide.BUY, executionPrice, coins, clientId, timeInForce, goodTilTimeInSeconds, execution, postOnly, reduceOnly)
+    try {
+      compositeClient.placeOrder(this.subaccount, ticker, type, side === 'SHORT' ? OrderSide.SELL : OrderSide.BUY, executionPrice, coins, clientId, timeInForce, goodTilTimeInSeconds, execution, postOnly, reduceOnly)
+    } catch (error: any) {
+      await sqlLogAdd({
+        name: 'error',
+        message: 'Error in orderMarket: ' + error.message,
+        stack: error.stack,
+      })
+    }
 
     // notify
     await sqlLogAdd({

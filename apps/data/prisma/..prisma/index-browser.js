@@ -158,42 +158,9 @@ exports.Prisma.VerificationTokenScalarFieldEnum = {
   expires: 'expires'
 };
 
-exports.Prisma.LogScalarFieldEnum = {
-  id: 'id',
-  name: 'name',
-  message: 'message',
-  stack: 'stack',
-  access_key: 'access_key',
-  server_name: 'server_name',
-  app_name: 'app_name',
-  node_env: 'node_env',
-  category: 'category',
-  tag: 'tag',
-  time: 'time'
-};
-
-exports.Prisma.OrderScalarFieldEnum = {
-  id: 'id',
-  client_id: 'client_id',
-  type: 'type',
-  ticker: 'ticker',
-  side: 'side',
-  amount: 'amount',
-  price: 'price',
-  server_name: 'server_name',
-  app_name: 'app_name',
-  node_env: 'node_env',
-  time: 'time'
-};
-
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
-};
-
-exports.Prisma.NullableJsonNullValueInput = {
-  DbNull: Prisma.DbNull,
-  JsonNull: Prisma.JsonNull
 };
 
 exports.Prisma.QueryMode = {
@@ -206,20 +173,12 @@ exports.Prisma.NullsOrder = {
   last: 'last'
 };
 
-exports.Prisma.JsonNullValueFilter = {
-  DbNull: Prisma.DbNull,
-  JsonNull: Prisma.JsonNull,
-  AnyNull: Prisma.AnyNull
-};
-
 
 exports.Prisma.ModelName = {
   Account: 'Account',
   Session: 'Session',
   User: 'User',
-  VerificationToken: 'VerificationToken',
-  Log: 'Log',
-  Order: 'Order'
+  VerificationToken: 'VerificationToken'
 };
 
 /**

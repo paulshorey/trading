@@ -29,6 +29,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
      * 1. Save fractal
      */
     const fractalData = parseFractalText(bodyText)
+    console.log('fractalData', fractalData)
     if (fractalData?.price_strength) {
       try {
         // Validate parsed data
@@ -76,7 +77,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
      * 2. Market order
      */
     const parsedOrders = parseOrdersText(bodyText)
-    if (parsedOrders[0]?.position) {
+    console.log('parsedOrders', parsedOrders)
+    if (parsedOrders[0]?.position !== undefined) {
       try {
         let access_key = request.nextUrl.searchParams.get('access_key')
         if (!access_key) throw new Error('!access_key')
@@ -122,6 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     /**
      * 3. Log message
      */
+    console.log('bodyText', bodyText)
     sendToMyselfSMS(bodyText)
     await sqlLogAdd({
       name: 'log',

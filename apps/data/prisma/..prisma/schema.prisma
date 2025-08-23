@@ -60,35 +60,3 @@ model VerificationToken {
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
-
-model Log {
-  id          Int      @id @default(autoincrement())
-  name        String
-  message     String
-  stack       Json?
-  access_key  String?
-  server_name String?
-  app_name    String?
-  node_env    String?
-  category    String?
-  tag         String?
-  time        DateTime @default(now())
-
-  @@map("logs_v1")
-}
-
-model Order {
-  id          Int      @id @default(autoincrement())
-  client_id   Int
-  type        String // "MARKET" | "LIMIT" | "STOP_MARKET"
-  ticker      String
-  side        String // "LONG" | "SHORT"
-  amount      Decimal
-  price       Decimal
-  server_name String?
-  app_name    String?
-  node_env    String?
-  time        DateTime @default(now())
-
-  @@map("orders_v1")
-}

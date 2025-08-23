@@ -64,6 +64,28 @@ describe('/api/v1/market', () => {
         reduceOnly: true,
       },
     },
+    {
+      description: 'closing an existing position',
+      bodyText: 'sui:0',
+      position: 0,
+      currentPositionSize: '-100',
+      expected: {
+        ticker: 'SUI-USD',
+        side: 'LONG',
+        reduceOnly: true,
+      },
+    },
+    {
+      description: 'a new long position',
+      bodyText: 'sui:-100',
+      position: -100,
+      currentPositionSize: '0',
+      expected: {
+        ticker: 'SUI-USD',
+        side: 'SHORT',
+        reduceOnly: false,
+      },
+    },
   ]
 
   it.each(testCases)('should handle $description for "$bodyText"', async ({ bodyText, position, currentPositionSize, expected }) => {

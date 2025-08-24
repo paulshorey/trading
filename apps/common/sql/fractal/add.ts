@@ -26,7 +26,7 @@ export const fractalAdd = async function (row: FractalRowAdd) {
   const client = await getDb().connect();
   try {
     const columns = ["ticker", "interval", "time", "timenow"];
-    const values: (string | number | Date)[] = [row.ticker, row.interval, row.time, row.timenow];
+    const values: (string | number | Date | null)[] = [row.ticker, row.interval, row.time, row.timenow];
 
     const numericColumns = [
       "close",

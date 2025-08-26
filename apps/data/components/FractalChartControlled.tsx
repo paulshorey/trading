@@ -264,6 +264,18 @@ export default function FractalChartControlled({
         visible: true,
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: Time) => {
+          // Convert the time (which is in seconds since epoch) to milliseconds
+          const date = new Date((time as number) * 1000)
+          // Format the date in the user's local time zone
+          return date.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false, // Use 24-hour format
+          })
+        },
       },
       crosshair: {
         mode: 0, // Normal mode: we'll set Y explicitly via setCrosshairPosition

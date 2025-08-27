@@ -40,6 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           message: `/v1/market invalid strengthData`,
           stack: {
             bodyText,
+            strengthData,
           },
         })
         return formatResponse(

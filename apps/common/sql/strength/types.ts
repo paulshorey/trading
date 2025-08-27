@@ -13,6 +13,8 @@ export type StrengthRowGet = {
   "6": number | null;
   "7": number | null;
   "9": number | null;
+  "11": number | null;
+  "13": number | null;
   "12": number | null;
   "24": number | null;
   "48": number | null;
@@ -38,6 +40,8 @@ export type StrengthRowAdd = {
   "6"?: number | null;
   "7"?: number | null;
   "9"?: number | null;
+  "11"?: number | null;
+  "13"?: number | null;
   "12"?: number | null;
   "24"?: number | null;
   "48"?: number | null;

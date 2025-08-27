@@ -24,6 +24,8 @@ import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 export const sqlLogAdd = async function (row: LogRowAdd) {
   "use server";
 
+  console.log("sqlLogAdd", JSON.stringify(row, null, 2));
+
   // SMS
   if (row.sms || row.name === "error" || row.name === "warn") {
     if (process.env.NODE_ENV !== "development") {

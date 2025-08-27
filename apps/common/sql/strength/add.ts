@@ -25,6 +25,8 @@ import { cc } from "../../cc";
 export const strengthAdd = async function (data: StrengthDataAdd) {
   "use server";
 
+  console.log("strengthAdd", JSON.stringify(data, null, 2));
+
   const client = await getDb().connect();
   try {
     // Validate and filter data

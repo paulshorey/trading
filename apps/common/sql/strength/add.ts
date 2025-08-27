@@ -65,12 +65,13 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
     const existingRow = await client.query(checkQuery, [data.ticker, normalizedTimenow]);
 
     let res: any;
+    let queryText = "";
     const values = [data.ticker, normalizedTimenow, data.strength, data.price ?? null, data.volume ?? null];
 
     if (existingRow.rows.length > 0) {
       // Row exists - UPDATE it
       // If a value already exists for this interval, average it with the new value
-      const queryText = `
+      queryText = `
         UPDATE strength_v1
         SET "${data.interval}" = CASE
               WHEN "${data.interval}" IS NULL THEN $3
@@ -84,7 +85,7 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
       res = await client.query(queryText, values);
     } else {
       // Row doesn't exist - INSERT new row
-      const queryText = `
+      queryText = `
         INSERT INTO strength_v1("ticker", "timenow", "${data.interval}", "price", "volume")
         VALUES(${values.map((_, i) => `$${i + 1}`).join(", ")})
         RETURNING *

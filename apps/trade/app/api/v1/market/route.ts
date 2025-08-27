@@ -58,9 +58,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // Log success
         await sqlLogAdd({
           name: 'log',
-          message: `/v1/market invalid strength bodyText`,
+          message: `/v1/market ✅ saved strengthData`,
           stack: {
             bodyText,
+            strengthData,
           },
         })
         // Return success

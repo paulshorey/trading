@@ -32,8 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
      */
     const strengthData = parseStrengthText(bodyText)
     // Check if we have both price and strength values, and one of the interval columns is set
-    const hasIntervalData = strengthData?.['30S'] !== null || strengthData?.['1'] !== null || strengthData?.['2'] !== null || strengthData?.['3'] !== null || strengthData?.['4'] !== null || strengthData?.['5'] !== null || strengthData?.['7'] !== null || strengthData?.['9'] !== null
-
+    const hasIntervalData = strengthData?.['30S'] || strengthData?.['1'] || strengthData?.['2'] || strengthData?.['3'] || strengthData?.['4'] || strengthData?.['5'] || strengthData?.['7'] || strengthData?.['9']
     if (strengthData?.price !== null && hasIntervalData) {
       try {
         // Validate parsed data

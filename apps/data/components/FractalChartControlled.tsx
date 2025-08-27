@@ -40,14 +40,10 @@ const CHART_CONFIGS: ChartConfig[] = [
     interval: '24',
     displayName: 'ETHUSD-24',
   },
-  // {
-  //   interval: 'AVG',
-  //   displayName: 'ETHUSD-AVG',
-  // },
-  // {
-  //   interval: '48',
-  //   displayName: 'ETHUSD-48',
-  // },
+  {
+    interval: '48',
+    displayName: 'ETHUSD-48',
+  },
   // {
   //   interval: '72',
   //   displayName: 'ETHUSD-72',
@@ -55,7 +51,7 @@ const CHART_CONFIGS: ChartConfig[] = [
 ]
 
 export default function FractalChartControlled({
-  width = 600,
+  width = 1920,
   height = 250,
 }: FractalChartControlledProps) {
   const chartRefs = useRef<(IChartApi | null)[]>([])
@@ -246,6 +242,14 @@ export default function FractalChartControlled({
     const chart = createChart(container, {
       width,
       height: height * 0.7, // Smaller height to leave room for controls
+      localization: {
+        timeFormatter: (time: Time) => {
+          // Convert the time (which is in seconds since epoch) to milliseconds
+          const date = new Date((time as number) * 1000)
+          // Format the date in the user's local time zone
+          return date.toLocaleTimeString()
+        },
+      },
       layout: {
         background: { color: '#ffffff' },
         textColor: '#333',
@@ -264,18 +268,6 @@ export default function FractalChartControlled({
         visible: true,
         timeVisible: true,
         secondsVisible: false,
-        tickMarkFormatter: (time: Time) => {
-          // Convert the time (which is in seconds since epoch) to milliseconds
-          const date = new Date((time as number) * 1000)
-          // Format the date in the user's local time zone
-          return date.toLocaleString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false, // Use 24-hour format
-          })
-        },
       },
       crosshair: {
         mode: 0, // Normal mode: we'll set Y explicitly via setCrosshairPosition
@@ -342,9 +334,6 @@ export default function FractalChartControlled({
       try {
         // Load all chart data in parallel for better performance
         const dataPromises = CHART_CONFIGS.map(async (config, index) => {
-          if (config.interval === 'AVG') {
-            return { index, data: null, error: null }
-          }
           try {
             const { rows, error } = await fractalGets({
               where: { ticker: 'ETHUSD', interval: config.interval },
@@ -520,7 +509,7 @@ export default function FractalChartControlled({
   }, [])
 
   return (
-    <div className="mx-auto w-full max-w-[500px]">
+    <div className="mx-auto w-full">
       {/* Master Controls */}
       <div className="controls-panel">
         <input
@@ -549,7 +538,7 @@ export default function FractalChartControlled({
             key={config.interval}
             id={`fractal-chart-${config.interval}`}
             className=" relative overflow-x-auto"
-            // style={{ marginBottom: '-12px', marginTop: '-12px' }}
+            style={{ marginTop: '-2px', marginBottom: '-30px' }}
             dir="rtl"
           >
             {/* Chart container */}

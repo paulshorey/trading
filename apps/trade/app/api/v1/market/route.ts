@@ -6,7 +6,9 @@ import { sqlLogAdd } from '@apps/common/sql/log/add'
 import { MarketOrderOutput } from '@/dydx/types'
 import { sendToMyselfSMS } from '@apps/common/twillio/sendToMyselfSMS'
 import { parseFractalText } from '@/dydx/lib/parseFractalText'
+import { parseStrengthText } from '@/dydx/lib/parseStrengthText'
 import { fractalAdd } from '@apps/common/sql/fractal'
+import { strengthAdd } from '@apps/common/sql/strength'
 
 export const maxDuration = 60
 
@@ -26,7 +28,67 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     /**
-     * 1. Save fractal
+     * 1. Save strength
+     */
+    const strengthData = parseStrengthText(bodyText)
+    // Check if we have both price and strength values, and one of the interval columns is set
+    const hasIntervalData = strengthData?.['30S'] !== null || strengthData?.['1'] !== null || strengthData?.['2'] !== null || strengthData?.['3'] !== null || strengthData?.['4'] !== null || strengthData?.['5'] !== null || strengthData?.['7'] !== null || strengthData?.['9'] !== null
+
+    if (strengthData?.price !== null && hasIntervalData) {
+      try {
+        // Validate parsed data
+        if (!strengthData.time || !strengthData.timenow || !strengthData.ticker || !strengthData.price || (!strengthData['30S'] && !strengthData['1'] && !strengthData['2'] && !strengthData['3'] && !strengthData['4'] && !strengthData['5'] && !strengthData['7'] && !strengthData['9'])) {
+          await sqlLogAdd({
+            name: 'log',
+            message: `/v1/market invalid strength bodyText`,
+            stack: {
+              bodyText,
+            },
+          })
+          return formatResponse(
+            {
+              ok: false,
+              error: `Invalid strength bodyText "${bodyText}"`,
+            },
+            400
+          )
+        }
+
+        // Save to database
+        const result = await strengthAdd(strengthData)
+
+        // Log success
+        return formatResponse({
+          ok: true,
+          message: 'Strength data saved successfully',
+          resultId: result?.id,
+          data: strengthData,
+        })
+      } catch (error: any) {
+        // Log error
+        await sqlLogAdd({
+          name: 'warn',
+          message: `Strength endpoint error: ${error.message}`,
+          stack: {
+            url: request.nextUrl.href,
+            bodyText: bodyText,
+            method: request.method,
+            stack: error.stack,
+          },
+        })
+        // Done
+        return formatResponse(
+          {
+            ok: false,
+            error: error.message,
+          },
+          400
+        )
+      }
+    }
+
+    /**
+     * 2. Save fractal
      */
     const fractalData = parseFractalText(bodyText)
     if (fractalData?.average_strength !== undefined) {
@@ -86,7 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     /*
-     * 2. Market order
+     * 3. Market order
      */
     const parsedOrders = parseOrdersText(bodyText)
     if (parsedOrders?.[0]?.ticker && parsedOrders?.[0]?.position !== undefined) {
@@ -133,7 +195,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     /**
-     * 3. Log message
+     * 4. Log message
      */
     sendToMyselfSMS(bodyText)
     await sqlLogAdd({
@@ -155,7 +217,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
 
     /**
-     * 4. Something went wrong
+     * 5. Something went wrong
      */
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err))

@@ -77,32 +77,26 @@ WHERE timenow >= $1
        */
       const rows: StrengthRowGet[] = [];
       for (let fr0 of strengths) {
-        rows.push({
+        const newRow = {
           id: fr0.id,
           ticker: fr0.ticker,
           timenow: new Date(fr0.timenow),
           price: fr0.price,
           volume: fr0.volume,
-          "30S": fr0["30S"],
-          "1": fr0["1"],
-          "2": fr0["2"],
-          "3": fr0["3"],
-          "4": fr0["4"],
-          "5": fr0["5"],
-          "6": fr0["6"],
-          "7": fr0["7"],
-          "9": fr0["9"],
-          "12": fr0["12"],
-          "24": fr0["24"],
-          "48": fr0["48"],
-          "60": fr0["60"],
-          "72": fr0["72"],
-          "90": fr0["90"],
           server_name: fr0.server_name || "",
           app_name: fr0.app_name || "",
           node_env: fr0.node_env || "",
           created_at: new Date(fr0.created_at),
-        });
+        } as StrengthRowGet;
+        for (let key in fr0) {
+          if (key === "30S" || !isNaN(Number(key))) {
+            const value = fr0[key];
+            if (value !== undefined) {
+              newRow[key] = value;
+            }
+          }
+        }
+        rows.push(newRow);
       }
 
       output.rows = rows.reverse();

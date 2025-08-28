@@ -24,7 +24,7 @@ import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 export const sqlLogAdd = async function (row: LogRowAdd) {
   "use server";
 
-  console.log("sqlLogAdd", JSON.stringify(row, null, 2));
+  console.log("common/sql/log/add.ts sqlLogAdd start", JSON.stringify(row, null, 2));
 
   // SMS
   if (row.sms || row.name === "error" || row.name === "warn") {
@@ -80,7 +80,8 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
       // Error sending
       console.error("Error in catch sqlLogAdd.ts", row, err);
     }
-    console.log({
+
+    console.log("common/sql/log/add.ts sqlLogAdd after sqlQuery", {
       name: "log",
       message: `sqlLogAdd after sqlQuery`,
       stack: {
@@ -90,6 +91,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
         row,
       },
     });
+
     return null;
   } finally {
     client.release();

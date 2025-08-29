@@ -24,7 +24,7 @@ import { cc } from "../../cc";
  * After pre-creating the rows, the function always performs an UPDATE:
  * - If the interval column is empty (NULL), it sets the new value
  * - If the interval column already has a value, it averages the existing value with the new value
- * - Price and volume are always updated to the latest values
+ * - Price and volume use COALESCE to preserve existing values when NULL is provided
  *
  * @param data - A `StrengthDataAdd` object containing the strength details.
  * @returns The result of the SQL query, which includes the newly inserted or updated row.
@@ -120,8 +120,8 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
             WHEN "${data.interval}" IS NULL THEN $3
             ELSE ("${data.interval}" + $3) / 2
           END,
-          price = $4,
-          volume = $5
+          price = COALESCE($4, price),
+          volume = COALESCE($5, volume)
       WHERE ticker = $1 AND timenow = $2
       RETURNING *
     `;

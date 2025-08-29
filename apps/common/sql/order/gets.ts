@@ -34,7 +34,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
 
   const client = await getDb().connect();
   try {
-    let queryText = "SELECT * FROM orders_v1";
+    let queryText = "SELECT * FROM order_v1";
     const params: any[] = [];
     const whereClauses: string[] = [];
 
@@ -88,7 +88,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
   } catch (e: Error) {
     try {
       const error = {
-        name: "Error lib/sql/ordersGet.ts catch",
+        name: "Error lib/sql/order/gets.ts catch",
         message: e.message,
         stack: e.stack,
       };

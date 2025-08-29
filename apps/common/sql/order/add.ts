@@ -5,7 +5,7 @@ import { getDb } from "../../lib/neon";
 import { cc } from "../../cc";
 
 /**
- * Inserts a new order into the `orders_v1` table.
+ * Inserts a new order into the `order_v1` table.
  *
  * This function takes an `OrderRow` object, which contains the details of the order,
  * and inserts it into the database. It uses the `sqlQuery` function to execute the
@@ -30,10 +30,10 @@ export const orderAdd = async function (row: OrderRowAdd) {
   const client = await getDb().connect();
   try {
     const queryText = `
-      INSERT INTO orders_v1(client_id, type, ticker, side, amount, price, server_name, app_name, node_env, time)
+      INSERT INTO order_v1(client_id, type, ticker, side, amount, price, server_name, app_name, node_env)
       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`;
-    const values = [row.client_id, row.type, row.ticker, row.side, row.amount, row.price, server_name, app_name, node_env, new Date().toISOString()];
+    const values = [row.client_id, row.type, row.ticker, row.side, row.amount, row.price, server_name, app_name, node_env];
     const res = await client.query(queryText, values);
     return res.rows[0];
   } catch (e: any) {

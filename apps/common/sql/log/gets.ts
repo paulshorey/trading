@@ -34,7 +34,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
 
   const client = await getDb().connect();
   try {
-    let queryText = "SELECT * FROM logs_v1";
+    let queryText = "SELECT * FROM log_v1";
     const params: any[] = [];
     const whereClauses: string[] = [];
 
@@ -66,7 +66,6 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
     const result = await client.query(queryText, params);
     const logs = result.rows;
 
-    // Convert Prisma results to LogRowGet format
     const rows = logs.map((log) => ({
       id: log.id,
       dev: log.node_env === "development",
@@ -79,7 +78,8 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
       server_name: log.server_name || "",
       app_name: log.app_name || "",
       node_env: log.node_env || "",
-      time: new Date(log.time).getTime(),
+      time: new Date(log.time),
+      created_at: new Date(log.time),
     })) as LogRowGet[];
 
     output.ip = ip;

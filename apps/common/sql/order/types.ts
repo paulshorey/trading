@@ -10,7 +10,7 @@ export type OrderRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
-  time: number;
+  created_at: Date; // DateTime as ISO string
 };
 export type OrderRowAdd = {
   client_id: number;
@@ -22,5 +22,5 @@ export type OrderRowAdd = {
   server_name?: string;
   app_name?: string;
   node_env?: string;
-  time?: number;
+  created_at?: Date; // DateTime as ISO string
 };

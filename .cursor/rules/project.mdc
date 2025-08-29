@@ -13,6 +13,7 @@ Before running any terminal command including pnpm, make sure to be in the corre
 - ./apps/common - common files imported by other apps, mostly helping with user and database management, but also containing useful utilities, functions, components, and server actions to accomplish various tasks and integrate with 3rd party services
 
 - ./apps/common/sql - functions, types, and interfaces for interacting with databases
+- ./apps/common/sql/\* - add, get, and manage types of each database table in Neon DB
 - ./apps/common/twillio - integration with Twillio to send logs and alerts via SMS message
 - ./apps/common/fe - client-side React components, hooks, and utility functions
 - ./apps/common/cc - saves console logs to the cloud after printing them in the terminal

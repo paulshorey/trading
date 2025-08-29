@@ -6,7 +6,7 @@ import { getCurrentIpAddress } from "../../lib/nextjs/getCurrentIpAddress";
 import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 
 /**
- * Inserts a log entry into the `logs_v1` table and sends an SMS for critical logs.
+ * Inserts a log entry into the `log_v1` table and sends an SMS for critical logs.
  *
  * This function is responsible for persisting log data. It takes a `LogRow` object
  * and inserts it into the database. It also includes logic to send an SMS notification
@@ -43,7 +43,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
   const client = await getDb().connect();
   try {
     const queryText = `
-      INSERT INTO logs_v1(name, message, stack, access_key, server_name, app_name, node_env, category, tag)
+      INSERT INTO log_v1(name, message, stack, access_key, server_name, app_name, node_env, category, tag)
       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *`;
     const values = [
@@ -67,7 +67,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
       };
       const message = "Error in try sqlLogAdd.ts";
       const queryText = `
-        INSERT INTO logs_v1(name, message, stack, access_key, server_name, app_name, node_env, category, tag)
+        INSERT INTO log_v1(name, message, stack, access_key, server_name, app_name, node_env, category, tag)
         VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`;
       const values = ["error", message, JSON.stringify(errorStack), access_key, server_name, app_name, node_env, row.category, row.tag];

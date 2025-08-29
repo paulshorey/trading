@@ -32,7 +32,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
     //     await sendToMyselfSMS(row.message);
     //   }
     // }
-    console.log("common/sql/log/add.ts sqlLogAdd before sqlQuery 1", JSON.stringify(row, null, 2));
+    console.log("common/sql/log/add.ts sqlLogAdd before db", JSON.stringify(row, null, 2));
 
     // DB
     const access_key = row.access_key ?? "";
@@ -44,15 +44,15 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
     let res = null;
     let values: any[] = [];
 
-    console.log("common/sql/log/add.ts sqlLogAdd before getDb 1", JSON.stringify(row, null, 2));
-
+    console.log("common/sql/log/add.ts sqlLogAdd before client", JSON.stringify(row, null, 2));
     const client = await getDb().connect();
     try {
-      console.log("common/sql/log/add.ts sqlLogAdd before sqlQuery 2", JSON.stringify(row, null, 2));
+      console.log("common/sql/log/add.ts sqlLogAdd before sqlQuery", JSON.stringify(row, null, 2));
       sqlQuery = `
       INSERT INTO logs_v1(name, message, stack, access_key, server_name, app_name, node_env, category, tag, time)
       VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`;
+      console.log("common/sql/log/add.ts sqlLogAdd before values", JSON.stringify(row, null, 2));
       values = [
         row.name.toLowerCase(),
         row.message,
@@ -65,10 +65,12 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
         row.tag,
         new Date().toISOString(),
       ];
+      console.log("common/sql/log/add.ts sqlLogAdd before res", JSON.stringify(row, null, 2));
       res = await client.query(sqlQuery, values);
+      console.log("common/sql/log/add.ts sqlLogAdd after res", JSON.stringify(row, null, 2));
     } catch (e: any) {
       try {
-        console.log("common/sql/log/add.ts sqlLogAdd error before sqlQuery 3", JSON.stringify(row, null, 2));
+        console.log("common/sql/log/add.ts sqlLogAdd sql error", JSON.stringify(row, null, 2));
         const errorStack = {
           name: "Error",
           message: e?.message,

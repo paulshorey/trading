@@ -91,17 +91,6 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
       `;
       res = await client.query(sqlQuery, values);
     }
-    await sqlLogAdd({
-      name: "log",
-      message: `strengthAdd after sqlQuery`,
-      stack: {
-        resRows0: res.rows[0],
-        sqlQuery,
-        values,
-        data,
-      },
-    });
-
     return res.rows[0];
   } catch (e: any) {
     const error = {

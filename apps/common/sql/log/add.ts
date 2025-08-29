@@ -24,7 +24,6 @@ import { sendToMyselfSMS } from "../../twillio/sendToMyselfSMS";
 export const sqlLogAdd = async function (row: LogRowAdd) {
   // Debug logging with timestamp
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] sqlLogAdd START`, { row });
   // DB
   const access_key = row.access_key ?? "";
   const node_env = process.env.NODE_ENV ?? "";
@@ -36,8 +35,6 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
   let values: any[] = [];
   let client = null;
 
-  console.log(`[${timestamp}] sqlLogAdd before main try block`);
-
   try {
     // SMS notification (uncomment when needed)
     // if (row.sms || row.name === "error" || row.name === "warn") {
@@ -46,9 +43,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
     //   }
     // }
 
-    console.log(`[${timestamp}] sqlLogAdd getting DB connection`);
     client = await getDb().connect();
-    console.log(`[${timestamp}] sqlLogAdd got DB connection`);
 
     // Build and execute query
     sqlQuery = `
@@ -68,18 +63,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
       row.tag || null,
       new Date().toISOString(),
     ];
-
-    console.log(`[${timestamp}] sqlLogAdd executing query`, {
-      query: sqlQuery.replace(/\s+/g, " ").trim(),
-      valueCount: values.length,
-    });
-
     res = await client.query(sqlQuery, values);
-
-    console.log(`[${timestamp}] sqlLogAdd query SUCCESS`, {
-      rowId: res?.rows[0]?.id,
-      rowCount: res?.rowCount,
-    });
 
     // Return the inserted row
     return res?.rows[0] || null;
@@ -96,7 +80,6 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
     // Try to log the error to the database
     if (client) {
       try {
-        console.log(`[${timestamp}] sqlLogAdd attempting to log error to DB`);
         const errorStack = {
           originalError: {
             message: error?.message,
@@ -124,10 +107,7 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
           new Date().toISOString(),
         ];
 
-        const errorRes = await client.query(errorQuery, errorValues);
-        console.log(`[${timestamp}] sqlLogAdd error logged to DB`, {
-          errorRowId: errorRes?.rows[0]?.id,
-        });
+        await client.query(errorQuery, errorValues);
       } catch (secondaryError: any) {
         console.error(`[${timestamp}] sqlLogAdd CRITICAL - Failed to log error to DB`, {
           primaryError: error?.message,
@@ -143,7 +123,6 @@ export const sqlLogAdd = async function (row: LogRowAdd) {
     if (client) {
       try {
         client.release();
-        console.log(`[${timestamp}] sqlLogAdd DB connection released`);
       } catch (releaseError: any) {
         console.error(`[${timestamp}] sqlLogAdd failed to release connection`, {
           error: releaseError?.message,

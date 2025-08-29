@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fractalGets } from '@apps/common/sql/fractal/gets'
+import { strengthGets } from '@apps/common/sql/strength/gets'
 import { orderGets } from '@apps/common/sql/order/gets'
 import { Json } from '@apps/common/fe/components/blocks/Json'
 import { AccordionItem } from '@/list/components/accordion/AccordionItem'
@@ -25,10 +25,10 @@ export function ListData({
   // Fetch data
   const [logs, setLogs] = useState<RowGet[]>([])
   useEffect(() => {
-    ;(table === 'logs'
+    ;(table === 'log'
       ? logGets
-      : table === 'fractal'
-        ? fractalGets
+      : table === 'strength'
+        ? strengthGets
         : orderGets)({ where }).then(({ rows }) => {
       setLogs(rows || [])
     })
@@ -40,11 +40,13 @@ export function ListData({
 
   const sections = logs.map((log: RowGet, i: number) => {
     let message =
-      table === 'logs'
+      table === 'log'
         ? log.message
         : table === 'order'
           ? `${log.side} ${log.amount} ${log.ticker} @ ${log.price}`
-          : `${log.ticker} ${log.interval}`
+          : table === 'strength'
+            ? `${log.ticker} @ ${log.price} | Vol: ${log.volume}`
+            : log.ticker || 'Unknown'
     let dataParsed
     try {
       dataParsed = log.stack ? JSON.parse(log.stack) : null
@@ -75,7 +77,7 @@ export function ListData({
         onToggle={() => setOpenIndex(openIndex === i ? null : i)}
         className="relative pl-3 pr-0 pt-3 pb-3 border-b border-gray-600 "
       >
-        <Json data={table === 'logs' ? dataParsed : log} />
+        <Json data={table === 'log' ? dataParsed : log} />
       </AccordionItem>
     )
   })

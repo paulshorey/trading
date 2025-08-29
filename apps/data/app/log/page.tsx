@@ -10,7 +10,7 @@ type PageProps = {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-  const table = 'logs'
+  const table = 'log'
   const filters = ['category', 'tag', 'name', 'app_name', 'server_name', 'time']
   const where: Record<string, string> = {}
   for (const [key, value] of Object.entries(searchParams)) {

@@ -25,7 +25,7 @@ export const Header = ({ where }: { where: Where }) => {
       </div>
       <nav className="flex gap-2">
         <Link
-          href="/"
+          href="/log"
           style={{
             color: colors.gray, //pathname === '/' ? colors.gray : colors.green,
             // textDecoration: pathname === '/' ? 'none' : 'underline',
@@ -34,7 +34,7 @@ export const Header = ({ where }: { where: Where }) => {
           Logs
         </Link>
         <Link
-          href="/orders"
+          href="/order"
           style={{
             color: colors.gray, //pathname === '/orders' ? colors.gray : colors.green,
             // textDecoration: pathname === '/orders' ? 'none' : 'underline',
@@ -43,13 +43,13 @@ export const Header = ({ where }: { where: Where }) => {
           Orders
         </Link>
         <Link
-          href="/fractal"
+          href="/strength"
           style={{
-            color: colors.gray, //pathname === '/fractal' ? colors.gray : colors.green,
-            // textDecoration: pathname === '/fractal' ? 'none' : 'underline',
+            color: colors.gray, //pathname === '/strength' ? colors.gray : colors.green,
+            // textDecoration: pathname === '/strength' ? 'none' : 'underline',
           }}
         >
-          Fractal
+          Strength
         </Link>
       </nav>
     </div>

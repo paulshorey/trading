@@ -10,14 +10,14 @@ import {
   MouseEventParams,
   ISeriesApi,
 } from 'lightweight-charts'
-import { FractalRowGet, fractalGets } from '@apps/common/sql/fractal'
+import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
 
 interface ChartConfig {
   interval: string
   displayName: string
 }
 
-interface FractalChartControlledProps {
+interface StrengthChartControlledProps {
   width?: number
   height?: number
 }
@@ -29,42 +29,35 @@ const CHART_CONFIGS: ChartConfig[] = [
     displayName: 'ETHUSD-3',
   },
   {
-    interval: '6',
-    displayName: 'ETHUSD-6',
+    interval: '4',
+    displayName: 'ETHUSD-4',
   },
   {
-    interval: '12',
-    displayName: 'ETHUSD-12',
+    interval: '5',
+    displayName: 'ETHUSD-5',
   },
   {
-    interval: '24',
-    displayName: 'ETHUSD-24',
+    interval: '9',
+    displayName: 'ETHUSD-9',
   },
   {
-    interval: '48',
-    displayName: 'ETHUSD-48',
+    interval: '11',
+    displayName: 'ETHUSD-11',
   },
-  // {
-  //   interval: '72',
-  //   displayName: 'ETHUSD-72',
-  // },
 ]
 
-export default function FractalChartControlled({
-  width = 1920,
+export default function StrengthChartControlled({
+  width = 1280,
   height = 250,
-}: FractalChartControlledProps) {
+}: StrengthChartControlledProps) {
   const chartRefs = useRef<(IChartApi | null)[]>([])
   const chartContainerRefs = useRef<(HTMLDivElement | null)[]>([])
-  const [loadingStates, setLoadingStates] = useState<boolean[]>(
-    new Array(CHART_CONFIGS.length).fill(true)
-  )
-  const [errors, setErrors] = useState<(string | null)[]>(
+  const [loadingState, setLoadingState] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+  const [allChartsData, setAllChartsData] = useState<(LineData[] | null)[]>(
     new Array(CHART_CONFIGS.length).fill(null)
   )
-  const [allChartsData, setAllChartsData] = useState<
-    (FractalRowGet[] | null)[]
-  >(new Array(CHART_CONFIGS.length).fill(null))
+  const [rawData, setRawData] = useState<StrengthRowGet[] | null>(null)
 
   // Master time controls
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
@@ -83,25 +76,34 @@ export default function FractalChartControlled({
     seriesRefs.current = new Array(CHART_CONFIGS.length).fill(null)
   }, [])
 
-  // Helper function to convert fractal data to chart data
+  // Helper function to convert strength data to chart data for a specific interval
   const convertToChartData = (
-    data: FractalRowGet[],
-    field: keyof Omit<FractalRowGet, 'time' | 'timenow' | 'created_at'>
+    data: StrengthRowGet[],
+    interval: string
   ): LineData[] => {
-    return data.map((item) => {
-      const value = item[field]
-      const numericValue = typeof value === 'string' ? parseFloat(value) : value
-      return {
-        time: (new Date(item.timenow).getTime() / 1000) as any,
-        value: numericValue,
-      }
-    })
+    return data
+      .map((item) => {
+        // Access the interval field directly (e.g., item["3"], item["5"], etc.)
+        const value = item[interval as keyof StrengthRowGet]
+        // Skip rows where this interval's value is null
+        if (value === null || value === undefined) return null
+        const numericValue =
+          typeof value === 'string' ? parseFloat(value) : Number(value)
+        // Skip invalid values
+        if (!Number.isFinite(numericValue)) return null
+
+        return {
+          time: (new Date(item.timenow).getTime() / 1000) as any,
+          value: numericValue,
+        }
+      })
+      .filter((item): item is LineData => item !== null) // Remove null values
   }
 
   // Helper function to calculate time range based on hours back from latest data
   // Always keeps the end of data on the right edge (optionally overridden)
   const calculateVisibleRange = (
-    data: FractalRowGet[],
+    data: StrengthRowGet[],
     overrideLastTimeSeconds?: number
   ) => {
     if (!data || data.length === 0) return null
@@ -124,19 +126,6 @@ export default function FractalChartControlled({
       from: Math.max(firstTime, startTime) as Time, // Don't go before data starts
       to: lastTime as Time,
     }
-  }
-
-  const getGlobalLatestTimeSeconds = (
-    datasets: (FractalRowGet[] | null)[]
-  ): number | null => {
-    let latest = 0
-    for (const ds of datasets) {
-      if (!ds || ds.length === 0) continue
-      const last = ds[ds.length - 1]!
-      const seconds = Math.floor(last.timenow.getTime() / 1000)
-      if (seconds > latest) latest = seconds
-    }
-    return latest || null
   }
 
   // Apply time range to all charts
@@ -165,18 +154,25 @@ export default function FractalChartControlled({
     isUpdatingCursor.current = true
 
     const getNearestSeriesValueAtTime = (
-      data: FractalRowGet[] | null | undefined,
-      t: Time
+      chartData: LineData[] | null | undefined,
+      t: Time,
+      interval: string
     ): number | null => {
-      if (!data || typeof t !== 'number' || data.length === 0) return null
+      if (
+        !rawData ||
+        !chartData ||
+        typeof t !== 'number' ||
+        rawData.length === 0
+      )
+        return null
       const target = t as number
 
-      // Binary search to find nearest index by timenow
+      // Binary search to find nearest index by timenow in raw data
       let left = 0
-      let right = data.length - 1
+      let right = rawData.length - 1
       while (left <= right) {
         const mid = (left + right) >> 1
-        const midTime = data[mid]!.timenow.getTime() / 1000
+        const midTime = rawData[mid]!.timenow.getTime() / 1000
         if (midTime === target) {
           left = mid
           right = mid - 1
@@ -188,11 +184,11 @@ export default function FractalChartControlled({
 
       // Candidates are at indices right and left
       let idx = right
-      if (left >= 0 && left < data.length) {
+      if (left >= 0 && left < rawData.length) {
         if (right < 0) idx = left
         else {
-          const leftTime = data[left]!.timenow.getTime() / 1000
-          const rightTime = data[right]!.timenow.getTime() / 1000
+          const leftTime = rawData[left]!.timenow.getTime() / 1000
+          const rightTime = rawData[right]!.timenow.getTime() / 1000
           idx =
             Math.abs(leftTime - target) < Math.abs(rightTime - target)
               ? left
@@ -200,13 +196,14 @@ export default function FractalChartControlled({
         }
       } else if (right < 0) {
         idx = 0
-      } else if (right >= data.length) {
-        idx = data.length - 1
+      } else if (right >= rawData.length) {
+        idx = rawData.length - 1
       }
 
-      idx = Math.max(0, Math.min(idx, data.length - 1))
-      const raw = data[idx]!.strength as unknown as number | string
-      const value = typeof raw === 'string' ? parseFloat(raw) : raw
+      idx = Math.max(0, Math.min(idx, rawData.length - 1))
+      const raw = rawData[idx]![interval as keyof StrengthRowGet]
+      if (raw === null || raw === undefined) return null
+      const value = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
       return Number.isFinite(value) ? value : null
     }
 
@@ -214,7 +211,13 @@ export default function FractalChartControlled({
       if (!chart || !seriesRefs.current[index]) return
       try {
         if (time !== null) {
-          const price = getNearestSeriesValueAtTime(allChartsData[index], time)
+          const interval = CHART_CONFIGS[index]?.interval
+          if (!interval) return
+          const price = getNearestSeriesValueAtTime(
+            allChartsData[index],
+            time,
+            interval
+          )
           if (price != null) {
             chart.setCrosshairPosition(price, time, seriesRefs.current[index]!)
           } else {
@@ -236,7 +239,7 @@ export default function FractalChartControlled({
   // Helper function to create a single chart
   const createSingleChart = (
     container: HTMLDivElement,
-    fractalData: FractalRowGet[],
+    chartData: LineData[],
     chartIndex: number
   ): IChartApi => {
     const chart = createChart(container, {
@@ -302,7 +305,7 @@ export default function FractalChartControlled({
       priceLineVisible: false, // Hide horizontal price line
       lastValueVisible: false, // Hide last value label
     })
-    strengthSeries.setData(convertToChartData(fractalData, 'strength'))
+    strengthSeries.setData(chartData)
 
     // Store the strengthSeries reference for crosshair synchronization
     seriesRefs.current[chartIndex] = strengthSeries
@@ -328,85 +331,50 @@ export default function FractalChartControlled({
     return chart
   }
 
-  // Load all CSV data in parallel
+  // Load data once and extract intervals
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        // Load all chart data in parallel for better performance
-        const dataPromises = CHART_CONFIGS.map(async (config, index) => {
-          try {
-            const { rows, error } = await fractalGets({
-              where: { ticker: 'ETHUSD', interval: config.interval },
-            })
-
-            if (error) {
-              throw new Error(error.message)
-            }
-
-            if (!rows || rows.length === 0) {
-              throw new Error(`No data found for interval ${config.interval}`)
-            }
-            return { index, data: rows, error: null }
-          } catch (err) {
-            return {
-              index,
-              data: null,
-              error: err instanceof Error ? err.message : 'Unknown error',
-            }
-          }
+        // Make a single database query for all intervals
+        const { rows, error } = await strengthGets({
+          where: { ticker: 'ETHUSD' },
         })
+        rows?.reverse()
 
-        const results = await Promise.all(dataPromises)
+        if (error) {
+          throw new Error(error.message)
+        }
 
-        // Update states based on results
-        const newData: (FractalRowGet[] | null)[] = new Array(
-          CHART_CONFIGS.length
-        ).fill(null)
-        const newErrors: (string | null)[] = new Array(
-          CHART_CONFIGS.length
-        ).fill(null)
-        const newLoadingStates: boolean[] = new Array(
-          CHART_CONFIGS.length
-        ).fill(false)
+        if (!rows || rows.length === 0) {
+          throw new Error('No data found for ETHUSD')
+        }
 
-        let globalLatestTimeSeconds = 0
+        // Store raw data for crosshair calculations
+        setRawData(rows)
 
-        results.forEach((result, index) => {
-          newData[index] = result.data
-          newErrors[index] = result.error
-          newLoadingStates[index] = false
-
-          // Scan each dataset to find the latest time
-          const ds = result.data
-          if (ds && ds.length) {
-            for (let i = 0; i < ds.length; i++) {
-              const seconds = Math.floor(ds[i]!.timenow.getTime() / 1000)
-              if (seconds > globalLatestTimeSeconds) {
-                globalLatestTimeSeconds = seconds
-              }
-            }
+        // Extract data for each interval from the single dataset
+        const extractedChartData: (LineData[] | null)[] = CHART_CONFIGS.map(
+          (config) => {
+            const chartData = convertToChartData(rows, config.interval)
+            // Return null if no valid data points for this interval
+            return chartData.length > 0 ? chartData : null
           }
-        })
+        )
 
-        setAllChartsData(newData)
-        setErrors(newErrors)
-        setLoadingStates(newLoadingStates)
+        setAllChartsData(extractedChartData)
+        setError(null)
+        setLoadingState(false)
 
-        // Set initial time range based on global latest time across all datasets
-        const firstDataset = newData.find((d) => d?.[0]?.interval === '3') as
-          | FractalRowGet[]
-          | undefined
-        if (firstDataset && globalLatestTimeSeconds) {
-          const initialRange = calculateVisibleRange(
-            firstDataset,
-            globalLatestTimeSeconds
-          )
+        // Set initial time range based on the data
+        if (rows.length > 0) {
+          const latestTime = rows[rows.length - 1]!.timenow.getTime() / 1000
+          const initialRange = calculateVisibleRange(rows, latestTime)
           setTimeRange(initialRange)
         }
       } catch (err) {
         console.error('Error loading chart data:', err)
-        setErrors(new Array(CHART_CONFIGS.length).fill('Failed to load data'))
-        setLoadingStates(new Array(CHART_CONFIGS.length).fill(false))
+        setError(err instanceof Error ? err.message : 'Failed to load data')
+        setLoadingState(false)
       }
     }
 
@@ -440,11 +408,9 @@ export default function FractalChartControlled({
             }
           } catch (err) {
             console.error(`Error creating chart ${index}:`, err)
-            setErrors((prev) => {
-              const newErrors = [...prev]
-              newErrors[index] = 'Failed to create chart'
-              return newErrors
-            })
+            setError(
+              `Failed to create chart for interval ${CHART_CONFIGS[index]?.interval}`
+            )
           }
         }
       })
@@ -464,16 +430,12 @@ export default function FractalChartControlled({
 
   // Update time range when hours back changes
   useEffect(() => {
-    const firstDataset = allChartsData.find((data) => data !== null)
-    if (firstDataset) {
-      const latest = getGlobalLatestTimeSeconds(allChartsData)
-      const newRange = calculateVisibleRange(
-        firstDataset as FractalRowGet[],
-        latest == null ? undefined : latest
-      )
+    if (rawData && rawData.length > 0) {
+      const latestTime = rawData[rawData.length - 1]!.timenow.getTime() / 1000
+      const newRange = calculateVisibleRange(rawData, latestTime)
       setTimeRange(newRange)
     }
-  }, [hoursBack, allChartsData])
+  }, [hoursBack, rawData])
 
   // Apply cursor position changes to all charts
   useEffect(() => {
@@ -527,59 +489,60 @@ export default function FractalChartControlled({
         </div> */}
       </div>
 
+      {/* Show loading or error state for all charts */}
+      {loadingState && (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Loading strength data...</div>
+        </div>
+      )}
+
+      {error && !loadingState && (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg text-red-500">Error: {error}</div>
+        </div>
+      )}
+
       {/* Render all charts stacked vertically */}
-      {CHART_CONFIGS.map((config, index) => {
-        const isLoading = loadingStates[index]
-        const error = errors[index]
-        const hasData = allChartsData[index] !== null
+      {!loadingState &&
+        !error &&
+        CHART_CONFIGS.map((config, index) => {
+          const hasData = allChartsData[index] !== null
 
-        return (
-          <div
-            key={config.interval}
-            id={`fractal-chart-${config.interval}`}
-            className=" relative overflow-x-auto"
-            style={{ marginTop: '-2px', marginBottom: '-30px' }}
-            dir="rtl"
-          >
-            {/* Chart container */}
+          return (
             <div
-              ref={(el) => {
-                chartContainerRefs.current[index] = el
-              }}
-              style={{ width, height: height * 0.7 }}
-              className="border border-gray-200 rounded relative z-10"
-            ></div>
-            {/* Title positioned above chart but overlapping */}
-            <div style={{ zIndex: 1000 }} className="absolute left-0 top-0">
-              <div className="fixed left-0 bg-[var(--mantine-color-body)] opacity-50 pl-2 pr-3 py-1 rounded-br-xl shadow-sm pointer-events-none font-bold">
-                <h3 className="text-sm font-semibold leading-tight">
-                  {config.displayName}
-                </h3>
+              key={config.interval}
+              id={`strength-chart-${config.interval}`}
+              className=" relative overflow-x-auto"
+              style={{ marginTop: '-2px', marginBottom: '-30px' }}
+              dir="rtl"
+            >
+              {/* Chart container */}
+              <div
+                ref={(el) => {
+                  chartContainerRefs.current[index] = el
+                }}
+                style={{ width, height: height * 0.7 }}
+                className="border border-gray-200 rounded relative z-10"
+              ></div>
+              {/* Title positioned above chart but overlapping */}
+              <div style={{ zIndex: 1000 }} className="absolute left-0 top-0">
+                <div className="fixed left-0 bg-[var(--mantine-color-body)] opacity-50 pl-2 pr-3 py-1 rounded-br-xl shadow-sm pointer-events-none font-bold">
+                  <h3 className="text-sm font-semibold leading-tight">
+                    {config.displayName}
+                  </h3>
 
-                {isLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
-                    <div className="text-lg">
-                      Loading {config.displayName}...
+                  {!hasData && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
+                      <div className="text-lg text-gray-500">
+                        No data for interval {config.interval}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {error && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
-                    <div className="text-lg text-red-500">Error: {error}</div>
-                  </div>
-                )}
-                {!isLoading && !error && !hasData && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
-                    <div className="text-lg text-gray-500">
-                      No data available
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
     </div>
   )
 }

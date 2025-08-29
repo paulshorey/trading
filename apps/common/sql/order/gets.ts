@@ -29,7 +29,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
   "use server";
 
   const output = {} as Output;
-  const headersList = await headers();
+  const headersList = headers();
   const ip = headersList.get("x-forwarded-for") || headersList.get("remote-addr") || "IP not available";
 
   const client = await getDb().connect();
@@ -79,7 +79,8 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
       server_name: order.server_name || "",
       app_name: order.app_name || "",
       node_env: order.node_env || "",
-      time: new Date(order.time).getTime(),
+      time: new Date(order.time),
+      created_at: new Date(order.time),
     })) as OrderRowGet[];
 
     output.ip = ip;

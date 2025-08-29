@@ -29,7 +29,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
 
   const output = {} as Output;
-  const headersList = await headers();
+  const headersList = headers();
   const ip = headersList.get("x-forwarded-for") || headersList.get("remote-addr") || "IP not available";
 
   const client = await getDb().connect();

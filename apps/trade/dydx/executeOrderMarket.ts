@@ -8,7 +8,7 @@ import { MarketOrderOutput, MarketOrderInput } from './types'
 import { validateInputsMarket } from '@/dydx/lib/validateInputsMarket'
 import { cc } from '@apps/common/cc'
 
-export const executeOrderMarket = async (input: MarketOrderInput): Promise<MarketOrderOutput> => {
+export const executeOrderMarket = async (input: MarketOrderInput, bodyText: string): Promise<MarketOrderOutput> => {
   'use server'
   const output = {} as unknown as MarketOrderOutput
   const timeStarted = Date.now()
@@ -336,7 +336,7 @@ ${input.ticker} $${input.position} ${input.sl ? '/' + input.sl : ''}`,
 
     timer()
   } catch (err: any) {
-    catchError(err, { file: 'executeOrderMarket' })
+    catchError(err, { file: 'executeOrderMarket', bodyText })
   }
   timer()
   return output

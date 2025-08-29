@@ -94,7 +94,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
         const datas = [] as MarketOrderOutput[]
         for (let order of parsedOrders) {
-          const data = await executeOrderMarket(order)
+          const data = await executeOrderMarket(order, bodyText)
           if (data?.error) {
             return formatResponse(
               {

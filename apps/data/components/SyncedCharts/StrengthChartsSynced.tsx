@@ -12,52 +12,34 @@ import {
 } from 'lightweight-charts'
 import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
 
-interface ChartConfig {
-  interval: string
-  displayName: string
-}
-
-interface StrengthChartControlledProps {
+interface StrengthChartsSyncedProps {
   width?: number
   height?: number
+  tickers?: string[]
+  control_interval?: string
 }
 
-// Configuration for all CSV files
-const CHART_CONFIGS: ChartConfig[] = [
-  {
-    interval: '3',
-    displayName: 'ETHUSD-3',
-  },
-  {
-    interval: '4',
-    displayName: 'ETHUSD-4',
-  },
-  {
-    interval: '5',
-    displayName: 'ETHUSD-5',
-  },
-  {
-    interval: '9',
-    displayName: 'ETHUSD-9',
-  },
-  {
-    interval: '11',
-    displayName: 'ETHUSD-11',
-  },
-]
-
-export default function StrengthChartControlled({
+/**
+ * This component fetches data for several trading tickers and displays their relative strength on charts.
+ * All charts are synchronized to the same time range and selected time.
+ * When a point on one chart is hovered, the crosshair is moved to this same time on all charts.
+ */
+export default function StrengthChartsSynced({
   width = 1280,
-  height = 250,
-}: StrengthChartControlledProps) {
+  height = 300,
+  tickers = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'LINKUSD'],
+  control_interval = '3',
+}: StrengthChartsSyncedProps) {
   const chartRefs = useRef<(IChartApi | null)[]>([])
   const chartContainerRefs = useRef<(HTMLDivElement | null)[]>([])
   const [loadingState, setLoadingState] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [allChartsData, setAllChartsData] = useState<(LineData[] | null)[]>(
-    new Array(CHART_CONFIGS.length).fill(null)
+    new Array(tickers.length).fill(null)
   )
-  const [rawData, setRawData] = useState<StrengthRowGet[] | null>(null)
+  const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>(
+    new Array(tickers.length).fill(null)
+  )
 
   // Master time controls
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
@@ -71,20 +53,18 @@ export default function StrengthChartControlled({
 
   // Initialize refs arrays
   useEffect(() => {
-    chartRefs.current = new Array(CHART_CONFIGS.length).fill(null)
-    chartContainerRefs.current = new Array(CHART_CONFIGS.length).fill(null)
-    seriesRefs.current = new Array(CHART_CONFIGS.length).fill(null)
+    chartRefs.current = new Array(tickers.length).fill(null)
+    chartContainerRefs.current = new Array(tickers.length).fill(null)
+    seriesRefs.current = new Array(tickers.length).fill(null)
   }, [])
 
-  // Helper function to convert strength data to chart data for a specific interval
-  const convertToChartData = (
-    data: StrengthRowGet[],
-    interval: string
-  ): LineData[] => {
+  // Helper function to convert strength data to chart data using the fixed interval
+  const convertToChartData = (data: StrengthRowGet[]): LineData[] => {
     return data
       .map((item) => {
-        // Access the interval field directly (e.g., item["3"], item["5"], etc.)
-        const value = item[interval as keyof StrengthRowGet]
+        // Access the fixed interval field (interval "3")
+        const value = item[control_interval as keyof StrengthRowGet]
+
         // Skip rows where this interval's value is null
         if (value === null || value === undefined) return null
         const numericValue =
@@ -98,34 +78,6 @@ export default function StrengthChartControlled({
         }
       })
       .filter((item): item is LineData => item !== null) // Remove null values
-  }
-
-  // Helper function to calculate time range based on hours back from latest data
-  // Always keeps the end of data on the right edge (optionally overridden)
-  const calculateVisibleRange = (
-    data: StrengthRowGet[],
-    overrideLastTimeSeconds?: number
-  ) => {
-    if (!data || data.length === 0) return null
-
-    const firstItem = data[0]
-    const lastItem = data[data.length - 1]
-    if (!firstItem || !lastItem) return null
-
-    const firstTime = firstItem.timenow.getTime() / 1000
-    const lastTime =
-      overrideLastTimeSeconds != null
-        ? overrideLastTimeSeconds
-        : lastItem.timenow.getTime() / 1000
-
-    // Calculate start time based on hours back from latest data
-    const hoursBackInSeconds = hoursBack * 60 * 60 // Convert hours to seconds
-    const startTime = lastTime - hoursBackInSeconds
-
-    return {
-      from: Math.max(firstTime, startTime) as Time, // Don't go before data starts
-      to: lastTime as Time,
-    }
   }
 
   // Apply time range to all charts
@@ -156,23 +108,24 @@ export default function StrengthChartControlled({
     const getNearestSeriesValueAtTime = (
       chartData: LineData[] | null | undefined,
       t: Time,
-      interval: string
+      chartIndex: number
     ): number | null => {
+      const tickerRawData = rawData[chartIndex]
       if (
-        !rawData ||
+        !tickerRawData ||
         !chartData ||
         typeof t !== 'number' ||
-        rawData.length === 0
+        tickerRawData.length === 0
       )
         return null
       const target = t as number
 
       // Binary search to find nearest index by timenow in raw data
       let left = 0
-      let right = rawData.length - 1
+      let right = tickerRawData.length - 1
       while (left <= right) {
         const mid = (left + right) >> 1
-        const midTime = rawData[mid]!.timenow.getTime() / 1000
+        const midTime = tickerRawData[mid]!.timenow.getTime() / 1000
         if (midTime === target) {
           left = mid
           right = mid - 1
@@ -184,11 +137,11 @@ export default function StrengthChartControlled({
 
       // Candidates are at indices right and left
       let idx = right
-      if (left >= 0 && left < rawData.length) {
+      if (left >= 0 && left < tickerRawData.length) {
         if (right < 0) idx = left
         else {
-          const leftTime = rawData[left]!.timenow.getTime() / 1000
-          const rightTime = rawData[right]!.timenow.getTime() / 1000
+          const leftTime = tickerRawData[left]!.timenow.getTime() / 1000
+          const rightTime = tickerRawData[right]!.timenow.getTime() / 1000
           idx =
             Math.abs(leftTime - target) < Math.abs(rightTime - target)
               ? left
@@ -196,12 +149,13 @@ export default function StrengthChartControlled({
         }
       } else if (right < 0) {
         idx = 0
-      } else if (right >= rawData.length) {
-        idx = rawData.length - 1
+      } else if (right >= tickerRawData.length) {
+        idx = tickerRawData.length - 1
       }
 
-      idx = Math.max(0, Math.min(idx, rawData.length - 1))
-      const raw = rawData[idx]![interval as keyof StrengthRowGet]
+      idx = Math.max(0, Math.min(idx, tickerRawData.length - 1))
+      const raw = tickerRawData[idx]![control_interval as keyof StrengthRowGet]
+
       if (raw === null || raw === undefined) return null
       const value = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
       return Number.isFinite(value) ? value : null
@@ -211,12 +165,10 @@ export default function StrengthChartControlled({
       if (!chart || !seriesRefs.current[index]) return
       try {
         if (time !== null) {
-          const interval = CHART_CONFIGS[index]?.interval
-          if (!interval) return
           const price = getNearestSeriesValueAtTime(
             allChartsData[index],
             time,
-            interval
+            index
           )
           if (price != null) {
             chart.setCrosshairPosition(price, time, seriesRefs.current[index]!)
@@ -331,45 +283,72 @@ export default function StrengthChartControlled({
     return chart
   }
 
-  // Load data once and extract intervals
+  // Load data for each ticker
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        // Make a single database query for all intervals
-        const { rows, error } = await strengthGets({
-          where: { ticker: 'ETHUSD' },
-        })
-        rows?.reverse()
+        // Fetch data for each ticker separately
+        const allTickerData: (StrengthRowGet[] | null)[] = []
+        const allChartData: (LineData[] | null)[] = []
+        let latestOverallTime = 0
+        let earliestOverallTime = Infinity
 
-        if (error) {
-          throw new Error(error.message)
-        }
+        for (let i = 0; i < tickers.length; i++) {
+          const ticker = tickers[i]!
+          const { rows, error } = await strengthGets({
+            where: { ticker },
+          })
 
-        if (!rows || rows.length === 0) {
-          throw new Error('No data found for ETHUSD')
-        }
-
-        // Store raw data for crosshair calculations
-        setRawData(rows)
-
-        // Extract data for each interval from the single dataset
-        const extractedChartData: (LineData[] | null)[] = CHART_CONFIGS.map(
-          (config) => {
-            const chartData = convertToChartData(rows, config.interval)
-            // Return null if no valid data points for this interval
-            return chartData.length > 0 ? chartData : null
+          if (error) {
+            console.error(`Error loading data for ${ticker}:`, error)
+            allTickerData.push(null)
+            allChartData.push(null)
+            continue
           }
-        )
 
-        setAllChartsData(extractedChartData)
+          if (!rows || rows.length === 0) {
+            console.warn(`No data found for ${ticker}`)
+            allTickerData.push(null)
+            allChartData.push(null)
+            continue
+          }
+
+          // Reverse to get chronological order
+          rows.reverse()
+
+          // Store raw data for this ticker
+          allTickerData.push(rows)
+
+          // Convert to chart data
+          const chartData = convertToChartData(rows)
+          allChartData.push(chartData.length > 0 ? chartData : null)
+
+          // Track overall time range across all tickers
+          if (rows.length > 0) {
+            const firstTime = rows[0]!.timenow.getTime() / 1000
+            const lastTime = rows[rows.length - 1]!.timenow.getTime() / 1000
+            earliestOverallTime = Math.min(earliestOverallTime, firstTime)
+            latestOverallTime = Math.max(latestOverallTime, lastTime)
+          }
+        }
+
+        // Store all data
+        setRawData(allTickerData)
+        setAllChartsData(allChartData)
         setError(null)
         setLoadingState(false)
 
-        // Set initial time range based on the data
-        if (rows.length > 0) {
-          const latestTime = rows[rows.length - 1]!.timenow.getTime() / 1000
-          const initialRange = calculateVisibleRange(rows, latestTime)
-          setTimeRange(initialRange)
+        // Set initial time range based on the overall data range
+        if (latestOverallTime > 0 && earliestOverallTime < Infinity) {
+          const hoursBackInSeconds = hoursBack * 60 * 60
+          const startTime = Math.max(
+            earliestOverallTime,
+            latestOverallTime - hoursBackInSeconds
+          )
+          setTimeRange({
+            from: startTime as Time,
+            to: latestOverallTime as Time,
+          })
         }
       } catch (err) {
         console.error('Error loading chart data:', err)
@@ -408,9 +387,7 @@ export default function StrengthChartControlled({
             }
           } catch (err) {
             console.error(`Error creating chart ${index}:`, err)
-            setError(
-              `Failed to create chart for interval ${CHART_CONFIGS[index]?.interval}`
-            )
+            setError(`Failed to create chart for ${tickers[index]}`)
           }
         }
       })
@@ -430,10 +407,32 @@ export default function StrengthChartControlled({
 
   // Update time range when hours back changes
   useEffect(() => {
-    if (rawData && rawData.length > 0) {
-      const latestTime = rawData[rawData.length - 1]!.timenow.getTime() / 1000
-      const newRange = calculateVisibleRange(rawData, latestTime)
-      setTimeRange(newRange)
+    if (rawData && rawData.some((data) => data && data.length > 0)) {
+      let latestOverallTime = 0
+      let earliestOverallTime = Infinity
+
+      // Find the overall time range across all tickers
+      rawData.forEach((tickerData) => {
+        if (tickerData && tickerData.length > 0) {
+          const firstTime = tickerData[0]!.timenow.getTime() / 1000
+          const lastTime =
+            tickerData[tickerData.length - 1]!.timenow.getTime() / 1000
+          earliestOverallTime = Math.min(earliestOverallTime, firstTime)
+          latestOverallTime = Math.max(latestOverallTime, lastTime)
+        }
+      })
+
+      if (latestOverallTime > 0 && earliestOverallTime < Infinity) {
+        const hoursBackInSeconds = hoursBack * 60 * 60
+        const startTime = Math.max(
+          earliestOverallTime,
+          latestOverallTime - hoursBackInSeconds
+        )
+        setTimeRange({
+          from: startTime as Time,
+          to: latestOverallTime as Time,
+        })
+      }
     }
   }, [hoursBack, rawData])
 
@@ -505,13 +504,13 @@ export default function StrengthChartControlled({
       {/* Render all charts stacked vertically */}
       {!loadingState &&
         !error &&
-        CHART_CONFIGS.map((config, index) => {
+        tickers.map((ticker, index) => {
           const hasData = allChartsData[index] !== null
 
           return (
             <div
-              key={config.interval}
-              id={`strength-chart-${config.interval}`}
+              key={ticker}
+              id={`strength-chart-${ticker}`}
               className=" relative overflow-x-auto"
               style={{ marginTop: '-2px', marginBottom: '-30px' }}
               dir="rtl"
@@ -528,13 +527,13 @@ export default function StrengthChartControlled({
               <div style={{ zIndex: 1000 }} className="absolute left-0 top-0">
                 <div className="fixed left-0 bg-[var(--mantine-color-body)] opacity-50 pl-2 pr-3 py-1 rounded-br-xl shadow-sm pointer-events-none font-bold">
                   <h3 className="text-sm font-semibold leading-tight">
-                    {config.displayName}
+                    {ticker}
                   </h3>
 
                   {!hasData && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
                       <div className="text-lg text-gray-500">
-                        No data for interval {config.interval}
+                        No data for {ticker}
                       </div>
                     </div>
                   )}

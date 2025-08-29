@@ -60,7 +60,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
     }
 
     queryText += " ORDER BY timenow DESC";
-    params.push(where?.limit || 5000);
+    params.push(where?.limit || 10000);
     queryText += ` LIMIT $${params.length}`;
 
     const result = await client.query(queryText, params);

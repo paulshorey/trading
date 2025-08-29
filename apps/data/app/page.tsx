@@ -1,4 +1,4 @@
-import FractalChartControlled from '../components/FractalChartControlled'
+import FractalChartControlled from '../components/SyncedCharts/StrengthChartsSynced'
 
 export default async function Page() {
   return (

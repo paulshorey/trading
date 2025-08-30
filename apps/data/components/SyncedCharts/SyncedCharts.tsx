@@ -7,24 +7,22 @@ import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
 import { convertToChartData, calculateTimeRange } from './lib/chartUtils'
 import { applyCursorToAllCharts } from './lib/chartSync'
 
-import ChartControls from './components/ChartControls'
+import ChartControls, {
+  intervalsOptions,
+  tickersOptions,
+} from './components/ChartControls'
 import SingleChart, { SingleChartRef } from './components/SingleChart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 
 export interface SyncedChartsProps {
   width: number
   height: number
-  tickers?: string[]
 }
 
 /**
  * Inner component that renders charts with specific dimensions
  */
-export function SyncedCharts({
-  width,
-  height,
-  tickers = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'LINKUSD'],
-}: SyncedChartsProps) {
+export function SyncedCharts({ width, height }: SyncedChartsProps) {
   // Chart refs
   const chartComponentRefs = useRef<(SingleChartRef | null)[]>([])
   const isUpdatingCursor = useRef(false)
@@ -32,25 +30,40 @@ export function SyncedCharts({
   // State
   const [loadingState, setLoadingState] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
-  const [allChartsData, setAllChartsData] = useState<(LineData[] | null)[]>(
-    new Array(tickers.length).fill(null)
-  )
-  const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>(
-    new Array(tickers.length).fill(null)
-  )
 
   // Time controls
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
   const [hoursBack, setHoursBack] = useState<number>(60) // Default to 60 hours
-  const [controlInterval, setControlInterval] = useState<string>('11')
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
 
+  // Control Interval list
+  const [controlInterval, setControlInterval] = useState<string[]>(
+    intervalsOptions[intervalsOptions.length - 1]!.value
+  )
+  const handleControlIntervalChange = useCallback((intervals: string[]) => {
+    setControlInterval(intervals)
+  }, [])
+
+  // Control Ticker list
+  const [controlTickers, setControlTickers] = useState<string[]>(
+    tickersOptions[tickersOptions.length - 1]!.value
+  )
+  const handleControlTickersChange = useCallback((tickers: string[]) => {
+    setControlTickers(tickers)
+  }, [])
+
   // Initialize refs arrays
+  const [allChartsData, setAllChartsData] = useState<(LineData[] | null)[]>(
+    new Array(controlTickers.length).fill(null)
+  )
+  const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>(
+    new Array(controlTickers.length).fill(null)
+  )
   useEffect(() => {
-    chartComponentRefs.current = new Array(tickers.length).fill(null)
-  }, [tickers.length])
+    chartComponentRefs.current = new Array(controlTickers.length).fill(null)
+  }, [controlTickers.length])
 
   // Load data for each ticker (only on mount or when tickers/interval changes)
   useEffect(() => {
@@ -62,8 +75,8 @@ export function SyncedCharts({
         let latestOverallTime = 0
         let earliestOverallTime = Infinity
 
-        for (let i = 0; i < tickers.length; i++) {
-          const ticker = tickers[i]!
+        for (let i = 0; i < controlTickers.length; i++) {
+          const ticker = controlTickers[i]!
 
           // Always fetch 60 hours of data (max range we support)
           const maxDataHours = 60
@@ -100,10 +113,10 @@ export function SyncedCharts({
           allTickerData.push(rows)
 
           // Convert to chart data
-          const chartData = convertToChartData(rows, controlInterval)
+          const chartData = convertToChartData(rows, controlInterval) // Use default single interval for initial load
           allChartData.push(chartData.length > 0 ? chartData : null)
 
-          // Track overall time range across all tickers
+          // Track overall time range across all charts
           if (rows.length > 0) {
             const firstTime = rows[0]!.timenow.getTime() / 1000
             const lastTime = rows[rows.length - 1]!.timenow.getTime() / 1000
@@ -128,14 +141,14 @@ export function SyncedCharts({
     }
 
     loadAllData()
-  }, []) // Only run once on mount
+  }, [controlTickers]) // Run once on mount, then when controlTickers changes
 
   // Recalculate chart data when controlInterval changes
   useEffect(() => {
     if (rawData.some((data) => data !== null)) {
       const newChartData = rawData.map((tickerData) => {
         if (!tickerData) return null
-        const chartData = convertToChartData(tickerData, controlInterval)
+        const chartData = convertToChartData(tickerData, controlInterval) // Now correctly using the array
         return chartData.length > 0 ? chartData : null
       })
       setAllChartsData(newChartData)
@@ -149,9 +162,6 @@ export function SyncedCharts({
       setTimeRange(newRange)
     }
   }, [hoursBack, rawData])
-
-  // No longer need this effect - time range is now passed as a prop to SingleChart
-  // and handled internally by each chart
 
   // Apply cursor position changes to all charts
   useEffect(() => {
@@ -169,7 +179,7 @@ export function SyncedCharts({
       seriesRefs,
       allChartsData,
       rawData,
-      controlInterval,
+      controlInterval, // Now passing the array
       isUpdatingCursor
     )
   }, [cursorTime, allChartsData, rawData, controlInterval])
@@ -181,17 +191,12 @@ export function SyncedCharts({
     if (!isUpdatingCursor.current) {
       setCursorTime(time)
     }
-  }, []) // No dependencies needed as isUpdatingCursor is a ref
+  }, [])
 
   // Hours back change handler - memoized to prevent ChartControls re-renders
   const handleHoursBackChange = useCallback((hours: number) => {
     setHoursBack(hours)
-  }, []) // No dependencies needed as setHoursBack is stable
-
-  // Control interval change handler - memoized to prevent ChartControls re-renders
-  const handleControlIntervalChange = useCallback((interval: string) => {
-    setControlInterval(interval)
-  }, []) // No dependencies needed as setControlInterval is stable
+  }, [])
 
   return (
     <div className="pr-[10px] w-full">
@@ -201,6 +206,8 @@ export function SyncedCharts({
         onHoursBackChange={handleHoursBackChange}
         controlInterval={controlInterval}
         onControlIntervalChange={handleControlIntervalChange}
+        controlTickers={controlTickers}
+        onControlTickersChange={handleControlTickersChange}
       />
 
       {/* Show loading or error state for all charts */}
@@ -210,7 +217,7 @@ export function SyncedCharts({
       {/* Render all charts stacked vertically */}
       {!loadingState &&
         !error &&
-        tickers.map((ticker, index) => (
+        controlTickers.map((ticker, index) => (
           <SingleChart
             key={ticker}
             ref={(el) => {

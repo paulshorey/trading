@@ -58,7 +58,7 @@ export default function SyncedChartsWrapper({
       clearTimeout(resizeTimeout)
       window.removeEventListener('resize', handleResize)
     }
-  }, [tickers.length])
+  }, [tickers.length, typeof window])
 
   // Only render charts once we have dimensions
   if (!dimensions) {

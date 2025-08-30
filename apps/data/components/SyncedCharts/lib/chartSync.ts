@@ -11,7 +11,7 @@ export const applyCursorToAllCharts = (
   seriesRefs: (ISeriesApi<'Line'> | null)[],
   allChartsData: (LineData[] | null)[],
   rawData: (StrengthRowGet[] | null)[],
-  control_interval: string,
+  control_intervals: string[],
   isUpdatingCursor: { current: boolean }
 ) => {
   if (isUpdatingCursor.current) return
@@ -26,7 +26,7 @@ export const applyCursorToAllCharts = (
           time,
           index,
           rawData,
-          control_interval
+          control_intervals
         )
         if (price != null) {
           chart.setCrosshairPosition(price, time, seriesRefs[index]!)

@@ -2,27 +2,43 @@ import { LineData, Time } from 'lightweight-charts'
 import { StrengthRowGet } from '@apps/common/sql/strength'
 
 /**
- * Convert strength data to chart data using the fixed interval
+ * Convert strength data to chart data using the specified intervals
+ * If multiple intervals are provided, average their values
  */
 export const convertToChartData = (
   data: StrengthRowGet[],
-  control_interval: string
+  control_intervals: string[]
 ): LineData[] => {
   return data
     .map((item) => {
-      // Access the fixed interval field
-      const value = item[control_interval as keyof StrengthRowGet]
+      // Calculate average value across all specified intervals
+      let sum = 0
+      let count = 0
 
-      // Skip rows where this interval's value is null
-      if (value === null || value === undefined) return null
-      const numericValue =
-        typeof value === 'string' ? parseFloat(value) : Number(value)
-      // Skip invalid values
-      if (!Number.isFinite(numericValue)) return null
+      for (const interval of control_intervals) {
+        const value = item[interval as keyof StrengthRowGet]
+
+        // Only include non-null values in the average
+        if (value !== null && value !== undefined) {
+          const numericValue =
+            typeof value === 'string' ? parseFloat(value) : Number(value)
+
+          if (Number.isFinite(numericValue)) {
+            sum += numericValue
+            count++
+          }
+        }
+      }
+
+      // Skip this data point if no valid values were found
+      if (count === 0) return null
+
+      // Calculate average
+      const averageValue = sum / count
 
       return {
         time: (new Date(item.timenow).getTime() / 1000) as any,
-        value: numericValue,
+        value: averageValue,
       }
     })
     .filter((item): item is LineData => item !== null) // Remove null values
@@ -66,13 +82,14 @@ export const calculateTimeRange = (
 
 /**
  * Get nearest series value at a specific time using binary search
+ * If multiple intervals are provided, average their values
  */
 export const getNearestSeriesValueAtTime = (
   chartData: LineData[] | null | undefined,
   t: Time,
   chartIndex: number,
   rawData: (StrengthRowGet[] | null)[],
-  control_interval: string
+  control_intervals: string[]
 ): number | null => {
   const tickerRawData = rawData[chartIndex]
   if (
@@ -118,9 +135,23 @@ export const getNearestSeriesValueAtTime = (
   }
 
   idx = Math.max(0, Math.min(idx, tickerRawData.length - 1))
-  const raw = tickerRawData[idx]![control_interval as keyof StrengthRowGet]
 
-  if (raw === null || raw === undefined) return null
-  const value = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
-  return Number.isFinite(value) ? value : null
+  // Calculate average value across all specified intervals
+  let sum = 0
+  let count = 0
+
+  for (const interval of control_intervals) {
+    const raw = tickerRawData[idx]![interval as keyof StrengthRowGet]
+
+    if (raw !== null && raw !== undefined) {
+      const value = typeof raw === 'string' ? parseFloat(raw) : Number(raw)
+      if (Number.isFinite(value)) {
+        sum += value
+        count++
+      }
+    }
+  }
+
+  // Return null if no valid values found, otherwise return average
+  return count > 0 ? sum / count : null
 }

@@ -15,8 +15,8 @@ export default function ChartControls({
     <div className="controls-panel">
       <input
         type="range"
-        min="4"
-        max="168"
+        min="12"
+        max="60"
         step="1"
         value={hoursBack}
         onChange={(e) => onHoursBackChange(parseInt(e.target.value))}

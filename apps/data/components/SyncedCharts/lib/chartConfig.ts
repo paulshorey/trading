@@ -14,7 +14,7 @@ export const getChartConfig = (
   height: number
 ): DeepPartial<ChartOptions> => ({
   width,
-  height: height * 0.7, // Smaller height to leave room for controls
+  height: height, // Use full height passed from parent
   localization: {
     timeFormatter: (time: Time) => {
       // Convert the time (which is in seconds since epoch) to milliseconds

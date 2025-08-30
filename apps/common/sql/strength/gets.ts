@@ -22,13 +22,20 @@ type Props = {
     app_name?: string;
     node_env?: string;
     limit?: number;
+    timenow_gt?: Date | string; // Greater than or equal to (on or after)
   };
 };
 
+/**
+ * This utility function fetches data from the strength_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
+ *
+ * Supports date range filtering on timenow column:
+ * - timenow_gt: Get records on or after this date
+ *
+ * Date parameters accept Date objects or ISO string timestamps.
+ */
 export const strengthGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
-
-  console.log("strengthGets", where);
 
   const output = {} as Output;
   const headersList = headers();
@@ -57,6 +64,12 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       whereClauses.push(`node_env = $${params.length}`);
     }
 
+    // Starting time
+    if (where?.timenow_gt) {
+      params.push(where.timenow_gt);
+      whereClauses.push(`timenow >= $${params.length}`);
+    }
+
     if (whereClauses.length > 0) {
       queryText += ` WHERE ${whereClauses.join(" AND ")}`;
     }
@@ -80,7 +93,6 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       app_name: strength.app_name || "",
       node_env: strength.node_env || "",
       created_at: new Date(strength.created_at),
-      time: new Date(strength.created_at).getTime(), // Add time field for UI consistency
       "30S": strength["30S"] !== null ? Number(strength["30S"]) : null,
       "3": strength["3"] !== null ? Number(strength["3"]) : null,
       "4": strength["4"] !== null ? Number(strength["4"]) : null,

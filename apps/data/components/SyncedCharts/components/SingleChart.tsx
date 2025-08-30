@@ -94,7 +94,7 @@ const SingleChart = forwardRef<SingleChartRef, SingleChartProps>(
         {/* Chart container */}
         <div
           ref={containerRef}
-          style={{ width, height: height * 0.7 }}
+          style={{ width, height: height }}
           className="border border-gray-200 rounded relative z-10"
         />
 

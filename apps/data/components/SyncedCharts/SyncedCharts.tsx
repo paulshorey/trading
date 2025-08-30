@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { IChartApi, LineData, Time, ISeriesApi } from 'lightweight-charts'
 import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
 
-// Local lib imports
 import { convertToChartData, calculateTimeRange } from './lib/chartUtils'
 import {
   applyTimeRangeToAllCharts,
@@ -12,29 +11,26 @@ import {
   handleWindowResize,
 } from './lib/chartSync'
 
-// Local component imports
 import ChartControls from './components/ChartControls'
 import SingleChart, { SingleChartRef } from './components/SingleChart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 
-interface StrengthChartsSyncedProps {
-  width?: number
-  height?: number
+export interface SyncedChartsProps {
+  width: number
+  height: number
   tickers?: string[]
   control_interval?: string
 }
 
 /**
- * This component fetches data for several trading tickers and displays their relative strength on charts.
- * All charts are synchronized to the same time range and selected time.
- * When a point on one chart is hovered, the crosshair is moved to this same time on all charts.
+ * Inner component that renders charts with specific dimensions
  */
-export default function StrengthChartsSynced({
-  width = 1280,
-  height = 300,
+export function SyncedCharts({
+  width,
+  height,
   tickers = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'LINKUSD'],
   control_interval = '3',
-}: StrengthChartsSyncedProps) {
+}: SyncedChartsProps) {
   // Chart refs
   const chartComponentRefs = useRef<(SingleChartRef | null)[]>([])
   const isUpdatingCursor = useRef(false)
@@ -53,7 +49,7 @@ export default function StrengthChartsSynced({
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
-  const [hoursBack, setHoursBack] = useState<number>(48)
+  const [hoursBack, setHoursBack] = useState<number>(60)
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
 
   // Initialize refs arrays
@@ -73,8 +69,18 @@ export default function StrengthChartsSynced({
 
         for (let i = 0; i < tickers.length; i++) {
           const ticker = tickers[i]!
+
+          // Calculate the date 60 hours back (using special timenow format)
+          const date = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
+          date.setSeconds(0, 0) // Sets seconds and milliseconds to 0
+          const minutes = date.getMinutes()
+          if (minutes % 2 !== 0) {
+            date.setMinutes(minutes - 1) // Round down to previous even minute
+          }
+
+          const timenow_gt = date
           const { rows, error } = await strengthGets({
-            where: { ticker },
+            where: { ticker, timenow_gt },
           })
 
           if (error) {
@@ -176,23 +182,21 @@ export default function StrengthChartsSynced({
     )
   }, [cursorTime, allChartsData, rawData, control_interval])
 
-  // Handle window resize
+  // React to dimension changes from props
   useEffect(() => {
-    const handleResize = () => {
-      const chartRefs = chartComponentRefs.current
-        .map((ref) => ref?.chart)
-        .filter(Boolean) as IChartApi[]
+    const chartRefs = chartComponentRefs.current
+      .map((ref) => ref?.chart)
+      .filter(Boolean) as IChartApi[]
 
-      const containerRefs = chartComponentRefs.current
-        .map((ref) => ref?.container)
-        .filter(Boolean) as HTMLDivElement[]
+    const containerRefs = chartComponentRefs.current
+      .map((ref) => ref?.container)
+      .filter(Boolean) as HTMLDivElement[]
 
+    // Update chart dimensions when width/height props change
+    if (chartRefs.length > 0 && containerRefs.length > 0) {
       handleWindowResize(chartRefs, containerRefs)
     }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [width, height])
 
   // Crosshair move handler - memoized to prevent SingleChart re-renders
   const handleCrosshairMove = useCallback((time: Time | null) => {

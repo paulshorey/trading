@@ -25,6 +25,9 @@ type Props = {
   };
 };
 
+/**
+ * This utility function fetches data from the order_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
+ */
 export const orderGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
 

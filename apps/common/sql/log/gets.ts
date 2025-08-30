@@ -25,6 +25,9 @@ type Props = {
   };
 };
 
+/**
+ * This utility function fetches data from the log_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
+ */
 export const logGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
 

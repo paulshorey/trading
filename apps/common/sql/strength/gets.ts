@@ -28,6 +28,8 @@ type Props = {
 export const strengthGets = async function ({ where }: Props = {}): Promise<Output> {
   "use server";
 
+  console.log("strengthGets", where);
+
   const output = {} as Output;
   const headersList = headers();
   const ip = headersList.get("x-forwarded-for") || headersList.get("remote-addr") || "IP not available";

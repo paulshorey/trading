@@ -6,7 +6,6 @@ import { SyncedCharts } from './SyncedCharts'
 
 interface SyncedChartsWrapperProps {
   tickers?: string[]
-  control_interval?: string
 }
 
 /**
@@ -15,7 +14,6 @@ interface SyncedChartsWrapperProps {
  */
 export default function SyncedChartsWrapper({
   tickers = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'LINKUSD'],
-  control_interval = '3',
 }: SyncedChartsWrapperProps) {
   const [dimensions, setDimensions] = useState<{
     chartDimensionsWidth: number
@@ -33,14 +31,8 @@ export default function SyncedChartsWrapper({
         const chartWidth = windowWidth - 0 // 0 padding left/right
 
         // Height = browser height divided by number of charts
-        const availableHeight = windowHeight - 0 // 0 padding top/bottom
+        const availableHeight = windowHeight + 100 // make charts a bit taller to account for negative margin
         const chartHeight = Math.floor(availableHeight / tickers.length)
-
-        console.log({
-          chartHeight,
-          availableHeight,
-          windowHeight,
-        })
 
         setDimensions({
           chartDimensionsWidth: Math.max(chartWidth, 320), // Minimum width of 320px
@@ -82,7 +74,6 @@ export default function SyncedChartsWrapper({
       width={dimensions.chartDimensionsWidth}
       height={dimensions.chartDimensionsHeight}
       tickers={tickers}
-      control_interval={control_interval}
     />
   )
 }

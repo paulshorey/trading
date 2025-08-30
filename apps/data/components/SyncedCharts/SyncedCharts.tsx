@@ -19,7 +19,6 @@ export interface SyncedChartsProps {
   width: number
   height: number
   tickers?: string[]
-  control_interval?: string
 }
 
 /**
@@ -29,7 +28,6 @@ export function SyncedCharts({
   width,
   height,
   tickers = ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'LINKUSD'],
-  control_interval = '3',
 }: SyncedChartsProps) {
   // Chart refs
   const chartComponentRefs = useRef<(SingleChartRef | null)[]>([])
@@ -49,7 +47,8 @@ export function SyncedCharts({
   const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
     null
   )
-  const [hoursBack, setHoursBack] = useState<number>(60)
+  const [hoursBack, setHoursBack] = useState<number>(60) // Default to 60 hours
+  const [controlInterval, setControlInterval] = useState<string>('3')
   const [cursorTime, setCursorTime] = useState<Time | null>(null)
 
   // Initialize refs arrays
@@ -70,8 +69,9 @@ export function SyncedCharts({
         for (let i = 0; i < tickers.length; i++) {
           const ticker = tickers[i]!
 
-          // Calculate the date 60 hours back (using special timenow format)
-          const date = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
+          // Always fetch 60 hours of data (max range we support)
+          const maxDataHours = 60
+          const date = new Date(Date.now() - maxDataHours * 60 * 60 * 1000)
           date.setSeconds(0, 0) // Sets seconds and milliseconds to 0
           const minutes = date.getMinutes()
           if (minutes % 2 !== 0) {
@@ -104,7 +104,7 @@ export function SyncedCharts({
           allTickerData.push(rows)
 
           // Convert to chart data
-          const chartData = convertToChartData(rows, control_interval)
+          const chartData = convertToChartData(rows, controlInterval)
           allChartData.push(chartData.length > 0 ? chartData : null)
 
           // Track overall time range across all tickers
@@ -122,18 +122,8 @@ export function SyncedCharts({
         setError(null)
         setLoadingState(false)
 
-        // Set initial time range based on the overall data range
-        if (latestOverallTime > 0 && earliestOverallTime < Infinity) {
-          const hoursBackInSeconds = hoursBack * 60 * 60
-          const startTime = Math.max(
-            earliestOverallTime,
-            latestOverallTime - hoursBackInSeconds
-          )
-          setTimeRange({
-            from: startTime as Time,
-            to: latestOverallTime as Time,
-          })
-        }
+        // Don't set time range here - let the dedicated useEffect handle it
+        // based on hoursBack and rawData
       } catch (err) {
         console.error('Error loading chart data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load data')
@@ -142,7 +132,19 @@ export function SyncedCharts({
     }
 
     loadAllData()
-  }, []) // Only run once on mount - removed hoursBack, tickers, and control_interval
+  }, []) // Only run once on mount
+
+  // Recalculate chart data when controlInterval changes
+  useEffect(() => {
+    if (rawData.some((data) => data !== null)) {
+      const newChartData = rawData.map((tickerData) => {
+        if (!tickerData) return null
+        const chartData = convertToChartData(tickerData, controlInterval)
+        return chartData.length > 0 ? chartData : null
+      })
+      setAllChartsData(newChartData)
+    }
+  }, [controlInterval, rawData])
 
   // Update time range when hours back changes
   useEffect(() => {
@@ -154,12 +156,17 @@ export function SyncedCharts({
 
   // Apply time range changes to all charts
   useEffect(() => {
-    const chartRefs = chartComponentRefs.current
-      .map((ref) => ref?.chart)
-      .filter(Boolean) as IChartApi[]
+    // Small delay to ensure charts are fully initialized after data change
+    const timeoutId = setTimeout(() => {
+      const chartRefs = chartComponentRefs.current
+        .map((ref) => ref?.chart)
+        .filter(Boolean) as IChartApi[]
 
-    applyTimeRangeToAllCharts(chartRefs, timeRange)
-  }, [timeRange])
+      applyTimeRangeToAllCharts(chartRefs, timeRange)
+    }, 50)
+
+    return () => clearTimeout(timeoutId)
+  }, [timeRange, allChartsData]) // Also apply when chart data changes (charts get recreated)
 
   // Apply cursor position changes to all charts
   useEffect(() => {
@@ -177,10 +184,10 @@ export function SyncedCharts({
       seriesRefs,
       allChartsData,
       rawData,
-      control_interval,
+      controlInterval,
       isUpdatingCursor
     )
-  }, [cursorTime, allChartsData, rawData, control_interval])
+  }, [cursorTime, allChartsData, rawData, controlInterval])
 
   // React to dimension changes from props
   useEffect(() => {
@@ -210,12 +217,19 @@ export function SyncedCharts({
     setHoursBack(hours)
   }, []) // No dependencies needed as setHoursBack is stable
 
+  // Control interval change handler - memoized to prevent ChartControls re-renders
+  const handleControlIntervalChange = useCallback((interval: string) => {
+    setControlInterval(interval)
+  }, []) // No dependencies needed as setControlInterval is stable
+
   return (
     <div className="mx-auto w-full">
       {/* Master Controls */}
       <ChartControls
         hoursBack={hoursBack}
         onHoursBackChange={handleHoursBackChange}
+        controlInterval={controlInterval}
+        onControlIntervalChange={handleControlIntervalChange}
       />
 
       {/* Show loading or error state for all charts */}

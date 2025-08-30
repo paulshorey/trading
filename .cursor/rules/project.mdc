@@ -33,7 +33,7 @@ DO NOT optimize any existing import paths, unless the files have been moved and 
 
 Note: "fe" means "front end", and "be" means "back end". Several apps have this naming convention to separate client-side from server-side files.
 
-### DATABASE SAFETY RULES (CRITICAL):
+### Database safety rules:
 
 Neon database project "data" has two branches:
 
@@ -48,3 +48,7 @@ Note: Neon API requires IDs, not names.
 2. NEVER modify production without user confirming to apply to production
 3. After dev changes, ask: "Applied to development. Apply to production?"
 4. Always label results clearly: "Development Database" or "Production Database"
+
+### Most important:
+
+If I present you with a contradictory or confusing question, comment, or evidence, and you do not understand what I mean, or you're not sure if I am mistaken in my assumption or if I am correct, then please ask me to clarify. Please let me know your evidence and thoughts, and what is confusing you. Ask me. But if you understand the problem and confident in the solution, then just go ahead with your reasoning. I trust you.

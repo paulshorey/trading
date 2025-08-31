@@ -28,14 +28,10 @@ export function ErrorState({ error }: ErrorStateProps) {
   )
 }
 
-interface NoDataStateProps {
-  ticker: string
-}
-
-export function NoDataState({ ticker }: NoDataStateProps) {
+export function NoDataState() {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-white rounded">
-      <div className="text-lg text-gray-500">No data for {ticker}</div>
+      <div className="text-lg text-gray-500">No data</div>
     </div>
   )
 }

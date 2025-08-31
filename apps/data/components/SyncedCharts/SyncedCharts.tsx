@@ -1,23 +1,22 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { LineData, Time, ISeriesApi } from 'lightweight-charts'
+import { useEffect, useRef, useMemo } from 'react'
+import { Time, ISeriesApi } from 'lightweight-charts'
 import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
 
 import {
-  convertToChartData,
   calculateTimeRange,
   aggregateStrengthData,
   getSingleTickerPriceData,
 } from './lib/chartUtils'
 import { applyCursorToAllCharts } from './lib/chartSync'
 
-import ChartControls, {
-  intervalsOptions,
-  tickersOptions,
-} from './components/ChartControls'
+import Header from './controls/Header'
 import SingleChart, { SingleChartRef } from './components/SingleChart'
 import { LoadingState, ErrorState } from './components/ChartStates'
+import { useChartControlsStore } from './state/useChartControlsStore'
+import StrengthControl from './controls/StrengthControl'
+import PriceControl from './controls/PriceControl'
 
 export interface SyncedChartsProps {
   availableWidth: number
@@ -35,48 +34,30 @@ export function SyncedCharts({
   const chartComponentRefs = useRef<(SingleChartRef | null)[]>([])
   const isUpdatingCursor = useRef(false)
 
-  // State
-  const [loadingState, setLoadingState] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // Time controls
-  const [timeRange, setTimeRange] = useState<{ from: Time; to: Time } | null>(
-    null
-  )
-  const [hoursBack, setHoursBack] = useState<number>(60) // Default to 60 hours
-  const [cursorTime, setCursorTime] = useState<Time | null>(null)
-
-  // Control Interval list
-  const [controlInterval, setControlInterval] = useState<string[]>(
-    intervalsOptions[intervalsOptions.length - 1]!.value
-  )
-  const handleControlIntervalChange = useCallback((intervals: string[]) => {
-    setControlInterval(intervals)
-  }, [])
-
-  // Control Ticker list
-  const [controlTickers, setControlTickers] = useState<string[]>(
-    tickersOptions[0]!.value
-  )
-
-  // Price ticker selection (default to first ticker)
-  const [priceTicker, setPriceTicker] = useState<string>(
-    tickersOptions[0]!.value[0]!
-  )
-  const handlePriceTickerChange = useCallback((ticker: string) => {
-    setPriceTicker(ticker)
-  }, [])
-
-  const handleControlTickersChange = useCallback(
-    (tickers: string[]) => {
-      setControlTickers(tickers)
-      // If current price ticker is not in new tickers list, set to first ticker
-      if (!tickers.includes(priceTicker)) {
-        setPriceTicker(tickers[0] || '')
-      }
-    },
-    [priceTicker]
-  )
+  // Get state and actions from Zustand store
+  const {
+    // State
+    loadingState,
+    error,
+    hoursBack,
+    controlInterval,
+    controlTickers,
+    priceTicker,
+    timeRange,
+    cursorTime,
+    rawData,
+    aggregatedStrengthData,
+    aggregatedPriceData,
+    // Actions
+    setLoadingState,
+    setError,
+    setTimeRange,
+    setCursorTime,
+    setRawData,
+    setAggregatedStrengthData,
+    setAggregatedPriceData,
+    setChartDimensions,
+  } = useChartControlsStore()
 
   // Calculate chart dimensions based on available space for 2 charts
   const chartDimensions = useMemo(() => {
@@ -87,20 +68,18 @@ export function SyncedCharts({
     const adjustedHeight = availableHeight // make charts a bit taller to account for negative margin
     const chartHeight = Math.floor(adjustedHeight / 2) // Always 2 charts
 
-    return {
+    const dimensions = {
       width: Math.max(chartWidth, 320), // Minimum width of 320px
       height: Math.max(chartHeight, 200), // Minimum height of 200px per chart
     }
+
+    return dimensions
   }, [availableWidth, availableHeight])
 
-  // Initialize refs for 2 charts (strength average and price average)
-  const [aggregatedStrengthData, setAggregatedStrengthData] = useState<
-    LineData[] | null
-  >(null)
-  const [aggregatedPriceData, setAggregatedPriceData] = useState<
-    LineData[] | null
-  >(null)
-  const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>([])
+  // Update dimensions in store when they change
+  useEffect(() => {
+    setChartDimensions(chartDimensions)
+  }, [chartDimensions, setChartDimensions])
 
   // Always have exactly 2 chart refs (one for strength, one for price)
   useEffect(() => {
@@ -230,31 +209,17 @@ export function SyncedCharts({
 
   // Dimension changes are now handled directly in SingleChart via props
 
-  // Crosshair move handler - memoized to prevent SingleChart re-renders
-  const handleCrosshairMove = useCallback((time: Time | null) => {
+  // Crosshair move handler
+  const handleCrosshairMove = (time: Time | null) => {
     if (!isUpdatingCursor.current) {
       setCursorTime(time)
     }
-  }, [])
-
-  // Hours back change handler - memoized to prevent ChartControls re-renders
-  const handleHoursBackChange = useCallback((hours: number) => {
-    setHoursBack(hours)
-  }, [])
+  }
 
   return (
     <div className="pr-[10px] w-full">
       {/* Master Controls */}
-      <ChartControls
-        hoursBack={hoursBack}
-        onHoursBackChange={handleHoursBackChange}
-        controlInterval={controlInterval}
-        onControlIntervalChange={handleControlIntervalChange}
-        controlTickers={controlTickers}
-        onControlTickersChange={handleControlTickersChange}
-        priceTicker={priceTicker}
-        onPriceTickerChange={handlePriceTickerChange}
-      />
+      <Header />
 
       {/* Show loading or error state for all charts */}
       {loadingState && <LoadingState />}
@@ -269,7 +234,8 @@ export function SyncedCharts({
             ref={(el) => {
               chartComponentRefs.current[0] = el
             }}
-            ticker={`Avg Strength (${controlTickers.join(', ')})`}
+            name={`Strength`}
+            heading={<StrengthControl />}
             chartData={aggregatedStrengthData}
             width={chartDimensions.width}
             height={chartDimensions.height}
@@ -284,7 +250,8 @@ export function SyncedCharts({
             ref={(el) => {
               chartComponentRefs.current[1] = el
             }}
-            ticker={`${priceTicker} Price`}
+            name={`Price`}
+            heading={<PriceControl />}
             chartData={aggregatedPriceData}
             width={chartDimensions.width}
             height={chartDimensions.height}

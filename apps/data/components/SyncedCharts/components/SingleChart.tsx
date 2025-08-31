@@ -20,7 +20,8 @@ import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 
 interface SingleChartProps {
-  ticker: string
+  heading: string | React.ReactNode
+  name: string
   chartData: LineData[] | null
   width: number
   height: number
@@ -37,15 +38,7 @@ export interface SingleChartRef {
 
 const SingleChart = forwardRef<SingleChartRef, SingleChartProps>(
   (
-    {
-      ticker,
-      chartData,
-      width,
-      height,
-      onCrosshairMove,
-      chartIndex,
-      timeRange,
-    },
+    { heading, name, chartData, width, height, onCrosshairMove, timeRange },
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement>(null)
@@ -171,22 +164,22 @@ const SingleChart = forwardRef<SingleChartRef, SingleChartProps>(
 
     return (
       <div
-        key={ticker}
-        id={`strength-chart-${ticker}`}
+        key={name}
+        id={`chart-${name}`}
         className="relative overflow-x-auto"
         style={{ marginBottom: '-30px' }}
-        dir="rtl"
       >
         {/* Chart container */}
         <div
+          dir="rtl"
           ref={containerRef}
           style={{ width, height: height }}
           className="border border-gray-200 rounded relative z-10"
         />
 
         {/* Title positioned above chart but overlapping */}
-        <ChartTitle ticker={ticker} hasData={hasData}>
-          <NoDataState ticker={ticker} />
+        <ChartTitle name={name} heading={heading} hasData={hasData}>
+          <NoDataState />
         </ChartTitle>
       </div>
     )

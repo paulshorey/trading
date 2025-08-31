@@ -38,7 +38,8 @@
     "react-json-view-lite": "^1.5.0",
     "sass": "^1.89.2",
     "stytch": "^10.20.0",
-    "swr": "^2.2.5"
+    "swr": "^2.2.5",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^14.2.5",

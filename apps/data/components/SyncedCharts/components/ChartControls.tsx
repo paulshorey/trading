@@ -66,7 +66,7 @@ export default function ChartControls({
   }
 
   return (
-    <div className="flex flex-row pb-1">
+    <div className="flex flex-row pb-1 justify-between">
       {/* Ticker selector */}
       <select
         className="ml-2"
@@ -97,19 +97,19 @@ export default function ChartControls({
         ))}
       </select>
 
-      {/* Time range slider */}
-      <div className="flex flex-1">
-        <label className="mx-2">{hoursBack}hrs</label>
-        <input
-          className="flex-1 mx-1"
-          type="range"
-          min="12"
-          max="60"
-          step="1"
-          value={hoursBack}
-          onChange={(e) => onHoursBackChange(parseInt(e.target.value))}
-        />
-      </div>
+      {/* Time range selector */}
+      <select
+        className="ml-2"
+        value={hoursBack}
+        onChange={(e) => onHoursBackChange(parseInt(e.target.value))}
+        title="Select time range"
+      >
+        <option value={12}>12 hrs</option>
+        <option value={24}>24 hrs</option>
+        <option value={36}>36 hrs</option>
+        <option value={48}>48 hrs</option>
+        <option value={60}>60 hrs</option>
+      </select>
 
       {/* Interval selector */}
       <div className="text-right">

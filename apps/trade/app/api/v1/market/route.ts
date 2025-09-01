@@ -50,8 +50,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       try {
-        // Save to database
-        const result = await strengthAdd(strengthData)
+        // Save to database with WebSocket emission
+        const result = await strengthAdd(strengthData, true)
+
         return formatResponse({
           ok: true,
           message: 'Strength data saved successfully',

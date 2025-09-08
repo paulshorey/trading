@@ -3,18 +3,28 @@
 import { useEffect, useState } from 'react'
 
 import { SyncedCharts } from './SyncedCharts'
+import { useChartControlsStore } from './state/useChartControlsStore'
 
 interface SyncedChartsWrapperProps {}
 
 /**
- * Responsive wrapper component that calculates window dimensions
- * and renders charts only when document is ready
+ * Responsive wrapper component that:
+ * 1. Waits for window dimensions to be available
+ * 2. Waits for Zustand store to hydrate from URL query parameters
+ * 3. Renders charts only when both are ready
+ *
+ * This ensures that charts initialize with the correct size and
+ * with any URL parameters properly loaded into the store.
  */
 export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
   const [dimensions, setDimensions] = useState<{
     availableWidth: number
     availableHeight: number
   } | null>(null)
+
+  // Get hydration state from the store
+  // The store will set this to true after loading URL parameters
+  const isHydrated = useChartControlsStore((state) => state.isHydrated)
 
   useEffect(() => {
     // Function to calculate and set dimensions
@@ -49,8 +59,8 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
     }
   }, [])
 
-  // Only render charts once we have dimensions
-  if (!dimensions) {
+  // Only render charts once we have dimensions and store is hydrated
+  if (!dimensions || !isHydrated) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-lg">Initializing charts...</div>

@@ -22,12 +22,9 @@ export default function StrengthControl({ showLabel = true }: Props) {
     onDropdownClose: () => combobox.resetSelectedOption(),
   })
 
-  // Convert array to string for value comparison
-  const currentTickers = JSON.stringify(controlTickers)
-
   // Find the selected option label
   const selectedOption = tickersOptions.find(
-    (item) => JSON.stringify(item.value) === currentTickers
+    (item) => JSON.stringify(item.value) === JSON.stringify(controlTickers)
   )
 
   return (
@@ -49,7 +46,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         <InputBase
           styles={{
             input: {
-              minWidth: '100px',
+              minWidth: '150px',
               border: 'solid 1px rgba(0, 0, 0, 0.2)',
               boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
               borderRadius: '5px',

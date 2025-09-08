@@ -37,7 +37,6 @@ export function SyncedCharts({
   // Get state and actions from Zustand store
   const {
     // State
-    loadingState,
     error,
     hoursBack,
     controlInterval,
@@ -49,7 +48,6 @@ export function SyncedCharts({
     aggregatedStrengthData,
     aggregatedPriceData,
     // Actions
-    setLoadingState,
     setError,
     setTimeRange,
     setCursorTime,
@@ -86,12 +84,19 @@ export function SyncedCharts({
     chartComponentRefs.current = new Array(2).fill(null)
   }, [])
 
-  // Load data for each ticker when tickers change
+  /**
+   * Data Loading Effect
+   *
+   * This effect runs whenever the selected tickers change (controlTickers).
+   * It fetches the last 60 hours of strength data for each selected ticker.
+   *
+   * Note: We always fetch 60 hours regardless of the hoursBack setting.
+   * The hoursBack parameter only controls the visible time range, not the data fetched.
+   * This allows users to quickly zoom in/out without re-fetching data.
+   */
   useEffect(() => {
     const loadAllData = async () => {
       try {
-        setLoadingState(true)
-
         // Fetch data for each ticker separately
         const allTickerData: (StrengthRowGet[] | null)[] = []
         let latestOverallTime = 0
@@ -100,7 +105,7 @@ export function SyncedCharts({
         for (let i = 0; i < controlTickers.length; i++) {
           const ticker = controlTickers[i]!
 
-          // Always fetch 60 hours of data (max range we support)
+          // This provides data for all possible hoursBack values without re-fetching
           const maxDataHours = 60
           const date = new Date(Date.now() - maxDataHours * 60 * 60 * 1000)
           date.setSeconds(0, 0) // Sets seconds and milliseconds to 0
@@ -108,10 +113,18 @@ export function SyncedCharts({
           if (minutes % 2 !== 0) {
             date.setMinutes(minutes - 1) // Round down to previous even minute
           }
+          const where = { ticker, timenow_gt: date }
 
-          const timenow_gt = date
+          console.log({
+            _: 'before strengthGets',
+            where,
+          })
           const { rows, error } = await strengthGets({
-            where: { ticker, timenow_gt },
+            where,
+          })
+          console.log({
+            _: 'after strengthGets',
+            where,
           })
 
           if (error) {
@@ -141,21 +154,34 @@ export function SyncedCharts({
           }
         }
 
-        // Store raw data
+        // Store raw data in the store
         setRawData(allTickerData)
         setError(null)
-        setLoadingState(false)
       } catch (err) {
         console.error('Error loading chart data:', err)
         setError(err instanceof Error ? err.message : 'Failed to load data')
-        setLoadingState(false)
       }
     }
 
-    loadAllData()
-  }, [controlTickers]) // Only run when tickers change
+    // Only load data if we have tickers selected
+    if (controlTickers.length > 0) {
+      loadAllData()
+    }
+  }, [controlTickers])
 
-  // Recalculate aggregated data when rawData, controlInterval or priceTicker changes
+  /**
+   * Data Aggregation Effect
+   *
+   * This effect recalculates the aggregated chart data whenever:
+   * - rawData changes (new data fetched)
+   * - controlInterval changes (different intervals selected for averaging)
+   * - priceTicker changes (different ticker selected for price chart)
+   * - controlTickers changes (needed to find the right price data)
+   *
+   * The aggregation creates two data series:
+   * 1. Strength data: Average of selected intervals across all selected tickers
+   * 2. Price data: Price values for the selected price ticker only
+   */
   useEffect(() => {
     if (rawData.length > 0 && rawData.some((data) => data !== null)) {
       const strengthData = aggregateStrengthData(rawData, controlInterval)
@@ -169,7 +195,16 @@ export function SyncedCharts({
     }
   }, [controlInterval, priceTicker, rawData, controlTickers])
 
-  // Update time range when hours back changes
+  /**
+   * Time Range Effect
+   *
+   * Updates the visible time range when:
+   * - hoursBack changes (user selects different time range)
+   * - rawData changes (new data with different time bounds)
+   *
+   * This only affects the visible portion of the charts, not the data itself.
+   * All 60 hours of data remain loaded for quick zooming.
+   */
   useEffect(() => {
     const newRange = calculateTimeRange(rawData, hoursBack)
     if (newRange) {
@@ -177,7 +212,14 @@ export function SyncedCharts({
     }
   }, [hoursBack, rawData])
 
-  // Apply cursor position changes to both charts
+  /**
+   * Cursor Synchronization Effect
+   *
+   * Synchronizes the crosshair cursor position across both charts.
+   * When the user hovers over one chart, the cursor position is
+   * mirrored on the other chart for easy comparison of values
+   * at the same time point.
+   */
   useEffect(() => {
     const chartRefs = chartComponentRefs.current
       .map((ref) => ref?.chart)
@@ -215,6 +257,8 @@ export function SyncedCharts({
       setCursorTime(time)
     }
   }
+
+  const loadingState = aggregatedStrengthData?.length === 0
 
   return (
     <div className="pr-[10px] w-full">

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useMemo } from 'react'
 import { Time, ISeriesApi } from 'lightweight-charts'
-import { StrengthRowGet, strengthGets } from '@apps/common/sql/strength'
+import { StrengthRowGet } from '@apps/common/sql/strength'
 
 import {
   calculateTimeRange,
@@ -115,17 +115,30 @@ export function SyncedCharts({
           }
           const where = { ticker, timenow_gt: date }
 
-          console.log({
-            _: 'before strengthGets',
-            where,
+          // Build query parameters for GET request
+          const params = new URLSearchParams()
+          if (where.ticker) params.append('ticker', where.ticker)
+          if (where.timenow_gt)
+            params.append('timenow_gt', where.timenow_gt.toISOString())
+
+          const apiUrl = `/api/v1/strength?${params.toString()}`
+
+          const response = await fetch(apiUrl, {
+            method: 'GET',
           })
-          const { rows, error } = await strengthGets({
-            where,
-          })
-          console.log({
-            _: 'after strengthGets',
-            where,
-          })
+          const data = await response.json()
+
+          let rows = data.rows
+          const error = data.error ? { message: data.error } : null
+
+          // Convert date strings back to Date objects
+          if (rows && rows.length > 0) {
+            rows = rows.map((row: any) => ({
+              ...row,
+              timenow: new Date(row.timenow),
+              created_at: new Date(row.created_at),
+            }))
+          }
 
           if (error) {
             console.error(`Error loading data for ${ticker}:`, error)

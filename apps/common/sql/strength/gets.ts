@@ -1,6 +1,3 @@
-"use server";
-
-import { headers } from "next/headers";
 import { getDb } from "../../lib/db/neon";
 import { cc } from "../../cc";
 import { StrengthRowGet } from "./types";
@@ -35,11 +32,7 @@ type Props = {
  * Date parameters accept Date objects or ISO string timestamps.
  */
 export const strengthGets = async function ({ where }: Props = {}): Promise<Output> {
-  "use server";
-
   const output = {} as Output;
-  const headersList = headers();
-  const ip = headersList.get("x-forwarded-for") || headersList.get("remote-addr") || "IP not available";
 
   const client = await getDb().connect();
   try {
@@ -93,16 +86,14 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       app_name: strength.app_name || "",
       node_env: strength.node_env || "",
       created_at: new Date(strength.created_at),
-      "30S": strength["30S"] !== null ? Number(strength["30S"]) : null,
+      "15S": strength["15S"] !== null ? Number(strength["15S"]) : null,
       "3": strength["3"] !== null ? Number(strength["3"]) : null,
-      "4": strength["4"] !== null ? Number(strength["4"]) : null,
-      "5": strength["5"] !== null ? Number(strength["5"]) : null,
-      "9": strength["9"] !== null ? Number(strength["9"]) : null,
-      "11": strength["11"] !== null ? Number(strength["11"]) : null,
-      "30": strength["30"] !== null ? Number(strength["30"]) : null,
+      "7": strength["7"] !== null ? Number(strength["7"]) : null,
+      "44": strength["44"] !== null ? Number(strength["44"]) : null,
+      "59": strength["59"] !== null ? Number(strength["59"]) : null,
+      "180": strength["180"] !== null ? Number(strength["180"]) : null,
     })) as StrengthRowGet[];
 
-    output.ip = ip;
     output.rows = rows;
     //@ts-ignore - this Error type is correct
   } catch (e: any) {

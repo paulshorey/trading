@@ -17,6 +17,7 @@ import { LoadingState, ErrorState } from './components/ChartStates'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import StrengthControl from './controls/StrengthControl'
 import PriceControl from './controls/PriceControl'
+import IntervalControl from './controls/IntervalControl'
 
 export interface SyncedChartsProps {
   availableWidth: number
@@ -106,14 +107,14 @@ export function SyncedCharts({
           const ticker = controlTickers[i]!
 
           // This provides data for all possible hoursBack values without re-fetching
-          const maxDataHours = 60
-          const date = new Date(Date.now() - maxDataHours * 60 * 60 * 1000)
-          date.setSeconds(0, 0) // Sets seconds and milliseconds to 0
-          const minutes = date.getMinutes()
+          const maxDataHours = 240
+          const date_gt = new Date(Date.now() - maxDataHours * 60 * 60 * 1000)
+          date_gt.setSeconds(0, 0) // Sets seconds and milliseconds to 0
+          const minutes = date_gt.getMinutes()
           if (minutes % 2 !== 0) {
-            date.setMinutes(minutes - 1) // Round down to previous even minute
+            date_gt.setMinutes(minutes - 1) // Round down to previous even minute
           }
-          const where = { ticker, timenow_gt: date }
+          const where = { ticker, timenow_gt: date_gt }
 
           // Build query parameters for GET request
           const params = new URLSearchParams()
@@ -214,9 +215,7 @@ export function SyncedCharts({
    * Updates the visible time range when:
    * - hoursBack changes (user selects different time range)
    * - rawData changes (new data with different time bounds)
-   *
    * This only affects the visible portion of the charts, not the data itself.
-   * All 60 hours of data remain loaded for quick zooming.
    */
   useEffect(() => {
     const newRange = calculateTimeRange(rawData, hoursBack)
@@ -285,7 +284,7 @@ export function SyncedCharts({
       {/* Render 2 aggregated charts */}
       {!loadingState && !error && (
         <>
-          {/* Chart 1: Aggregated Strength (average of all interval averages) */}
+          {/* Chart: Aggregated Strength (average of all interval averages) */}
           <SingleChart
             key="aggregated-strength"
             ref={(el) => {
@@ -294,7 +293,14 @@ export function SyncedCharts({
             name={`Strength`}
             heading={
               <span className="ml-2 flex">
-                <StrengthControl showLabel={false} />
+                {/* <span className="pt-[1.5px] mr-1 text-gray-700">🦾</span> */}
+                <span className="flex flex-row gap-2">
+                  <StrengthControl showLabel={false} />{' '}
+                  <span className="flex flex-row">
+                    {/* <span className="inline-block pt-[1.5px] pr-[2px]">⏱️</span> */}
+                    <IntervalControl showLabel={false} />
+                  </span>
+                </span>
               </span>
             }
             chartData={aggregatedStrengthData}
@@ -305,7 +311,7 @@ export function SyncedCharts({
             timeRange={timeRange}
           />
 
-          {/* Chart 2: Single Ticker Price */}
+          {/* Chart: Single Ticker Price */}
           <SingleChart
             key={`price-${priceTicker}`}
             ref={(el) => {
@@ -314,7 +320,9 @@ export function SyncedCharts({
             name={`Price`}
             heading={
               <span className="ml-2 flex">
-                <span className="mr-1 text-gray-700">$</span>
+                <span className="pt-[1px] mr-1 text-gray-400 font-semibold">
+                  $
+                </span>
                 <PriceControl showLabel={false} />
               </span>
             }

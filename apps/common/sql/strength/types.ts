@@ -9,6 +9,7 @@ export type StrengthRowGet = {
   node_env: string;
   time: number; // Added for UI consistency with other modules
   "15S": number | null;
+  "2": number | null;
   "3": number | null;
   "7": number | null;
   "44": number | null;

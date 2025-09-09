@@ -6,25 +6,20 @@ import { createURLStorage, getQueryParams } from '../lib/urlSync'
 
 // Available intervals configuration
 export const intervalsOptions = [
-  { value: ['15S'], label: '15 sec' },
-  { value: ['3'], label: '3 min' },
-  { value: ['7'], label: '7 min' },
-  { value: ['44'], label: '44 min' },
-  { value: ['59'], label: '59 min' },
-  { value: ['180'], label: '180 min' },
-  { value: ['15S', '3', '7'], label: 'short' },
+  { value: ['15S'], label: '15sec' },
+  { value: ['2'], label: '2min' },
+  { value: ['3'], label: '3min' },
+  { value: ['7'], label: '7min' },
+  { value: ['44'], label: '44min' },
+  { value: ['59'], label: '59min' },
+  { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['44', '59', '180'], label: 'long' },
-  { value: ['3', '7', '44', '59'], label: 'mid' },
-  { value: ['15S', '3', '7', '44', '59', '180'], label: 'all' },
-  { value: ['3', '7', '44', '59', '180'], label: 'minutes' },
+  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all' },
+  { value: ['2', '3', '7', '44', '59'], label: 'minutes' },
 ]
 
 // Available tickers configuration
 export const tickersOptions = [
-  {
-    label: 'GC1!',
-    value: ['GC1!'],
-  },
   {
     label: 'ES1!, YM1!',
     value: ['ES1!', 'YM1!'],
@@ -40,6 +35,22 @@ export const tickersOptions = [
   {
     label: 'TN1!',
     value: ['TN1!'],
+  },
+  {
+    label: 'GC1!, SI1!, PL1!',
+    value: ['GC1!', 'SI1!', 'PL1!'],
+  },
+  {
+    label: 'GC1!',
+    value: ['GC1!'],
+  },
+  {
+    label: 'SI1!',
+    value: ['SI1!'],
+  },
+  {
+    label: 'PL1!',
+    value: ['PL1!'],
   },
   {
     label: 'BTC, ETH, SOL, XRP, SUI, BNB',
@@ -136,7 +147,7 @@ const getInitialState = (): State => {
   // Start with defaults
   const defaultState: State = {
     // Control defaults
-    hoursBack: 60,
+    hoursBack: 240,
     controlInterval: intervalsOptions[intervalsOptions.length - 1]!.value,
     controlTickers: tickersOptions[0]!.value,
     priceTicker: tickersOptions[0]!.value[0]!,

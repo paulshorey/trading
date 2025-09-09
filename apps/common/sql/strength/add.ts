@@ -111,15 +111,12 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
     let res: any;
     const values = [data.ticker, normalizedTimenow, data.strength, data.price ?? null, data.volume ?? null];
 
-    // Now the row always exists after pre-creation, so we always UPDATE
-    // If the interval column has data, average it with the new value
-    // If the interval column is NULL, set it to the new value
+    // UPDATE row values
+    // Use COALESCE to replace the value if new value is provided,
+    // otherwise keep the existing value (don't overwrite with null)
     const sqlQuery = `
       UPDATE strength_v1
-      SET "${data.interval}" = CASE
-            WHEN "${data.interval}" IS NULL THEN $3
-            ELSE ("${data.interval}" + $3) / 2
-          END,
+      SET "${data.interval}" = COALESCE($3, "${data.interval}"),
           price = COALESCE($4, price),
           volume = COALESCE($5, volume)
       WHERE ticker = $1 AND timenow = $2

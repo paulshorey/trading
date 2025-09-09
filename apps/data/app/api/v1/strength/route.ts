@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     if (server_name) where.server_name = server_name
     if (app_name) where.app_name = app_name
     if (node_env) where.node_env = node_env
-    if (limit) where.limit = parseInt(limit, 10)
+    if (limit) where.limit = parseInt(limit, 10000)
 
     // Call the strengthGets function
     const { rows, error } = await strengthGets({ where })
@@ -45,9 +45,15 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Delete every other row if rows exist
+    let filteredRows = rows
+    // if (rows?.length) {
+    //   filteredRows = rows.filter((_, index) => index % 2 === 0)
+    // }
+
     return formatResponse({
       ok: true,
-      rows: rows || [],
+      rows: filteredRows || [],
     })
   } catch (error: any) {
     cc.error(`API strengthGet [${callId}] CATCH ERROR:`, error)

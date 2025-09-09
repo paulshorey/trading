@@ -1,30 +1,29 @@
-'use client'
-
-import React from 'react'
 import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
 import {
   useChartControlsStore,
-  tickersOptions,
+  intervalsOptions,
 } from '../state/useChartControlsStore'
-import { IconChevronDown } from '@tabler/icons-react'
+import React from 'react'
 
 interface Props {
   showLabel?: boolean
 }
 
-export default function StrengthControl({ showLabel = true }: Props) {
+export default function IntervalControl({ showLabel = true }: Props) {
   // Get state and actions from Zustand store
-  const { controlTickers, updateControlTickersAndPrice } =
-    useChartControlsStore()
+  const { controlInterval, setControlInterval } = useChartControlsStore()
 
-  // ComboBox for ticker selector
+  // ComboBox for interval selector
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   })
 
+  // Convert array to string for value comparison
+  const currentInterval = JSON.stringify(controlInterval)
+
   // Find the selected option label
-  const selectedOption = tickersOptions.find(
-    (item) => JSON.stringify(item.value) === JSON.stringify(controlTickers)
+  const selectedOption = intervalsOptions.find(
+    (item) => JSON.stringify(item.value) === currentInterval
   )
 
   return (
@@ -33,7 +32,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
       store={combobox}
       withinPortal={false}
       onOptionSubmit={(val) => {
-        updateControlTickersAndPrice(JSON.parse(val) as string[])
+        setControlInterval(JSON.parse(val) as string[])
         combobox.closeDropdown()
       }}
       styles={{
@@ -46,7 +45,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         <InputBase
           styles={{
             input: {
-              minWidth: '150px',
+              minWidth: '75px',
               border: 'solid 1px rgba(0, 0, 0, 0.2)',
               boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
               borderRadius: '5px',
@@ -55,22 +54,22 @@ export default function StrengthControl({ showLabel = true }: Props) {
           component="button"
           type="button"
           pointer
-          rightSection={<IconChevronDown size={14} />}
+          rightSection={<Combobox.Chevron />}
           onClick={() => combobox.toggleDropdown()}
           rightSectionPointerEvents="none"
-          label={showLabel ? 'Average Strength:' : null}
+          label={showLabel ? 'Interval' : null}
         >
           {selectedOption ? (
             selectedOption.label
           ) : (
-            <Input.Placeholder>Pick ticker</Input.Placeholder>
+            <Input.Placeholder>Pick interval</Input.Placeholder>
           )}
         </InputBase>
       </Combobox.Target>
 
-      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '150px' }}>
+      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '75px' }}>
         <Combobox.Options>
-          {tickersOptions.map((option) => (
+          {intervalsOptions.map((option) => (
             <Combobox.Option
               value={JSON.stringify(option.value)}
               key={JSON.stringify(option.value)}

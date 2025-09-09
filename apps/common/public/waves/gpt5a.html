@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fractal Waves Background</title>
+    <style>
+      /* Fullscreen background container */
+      #fractal-bg {
+        position: fixed;
+        inset: 0;
+        z-index: -1; /* sits behind your site */
+        pointer-events: none; /* never block clicks */
+        background: transparent;
+      }
+      /* Optional: fade the whole background in on load */
+      #fractal-bg canvas {
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+      #fractal-bg canvas.ready {
+        opacity: 1;
+      }
+
+      /* Tweakable theme colors via CSS variables */
+      :root {
+        --wave1: #4fc3f7; /* big (broad timeframe) */
+        --wave2: #a78bfa; /* medium timeframe */
+        --wave3: #f472b6; /* fine timeframe */
+        --bg: transparent; /* keep transparent to sit on top of your site background */
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Put this anywhere in your HTML (ideally near the end of <body>) -->
+    <div id="fractal-bg"></div>
+
+    <script type="module">
+      import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+      // Public API for controlling the background
+      const API = {
+        start,
+        stop,
+        pause: () => (paused = true),
+        resume: () => {
+          paused = false;
+          lastT = performance.now();
+          requestFrame();
+        },
+      };
+      window.FractalWaves = API; // expose controls if you need them
+
+      const container = document.getElementById("fractal-bg");
+
+      // Core Three.js setup
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setClearColor(0x000000, 0); // transparent
+      container.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+
+      // Orthographic camera in pixel space (0..width, 0..height)
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      const camera = new THREE.OrthographicCamera(0, width, height, 0, -10, 10);
+      camera.position.z = 1;
+
+      // Geometry buffers
+      const SEGMENTS = 1600; // samples across the screen
+
+      // Materials — all visible immediately (no staged fades)
+      const mat1 = new THREE.LineBasicMaterial({
+        color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--wave1").trim()),
+        transparent: true,
+        opacity: 1,
+      });
+      const mat2 = new THREE.LineBasicMaterial({
+        color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--wave2").trim()),
+        transparent: true,
+        opacity: 1,
+      });
+      const mat3 = new THREE.LineBasicMaterial({
+        color: new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue("--wave3").trim()),
+        transparent: true,
+        opacity: 1,
+      });
+
+      // Create three line meshes
+      const g1 = new THREE.BufferGeometry();
+      const g2 = new THREE.BufferGeometry();
+      const g3 = new THREE.BufferGeometry();
+
+      const pos1 = new Float32Array(SEGMENTS * 3);
+      const pos2 = new Float32Array(SEGMENTS * 3);
+      const pos3 = new Float32Array(SEGMENTS * 3);
+
+      g1.setAttribute("position", new THREE.BufferAttribute(pos1, 3));
+      g2.setAttribute("position", new THREE.BufferAttribute(pos2, 3));
+      g3.setAttribute("position", new THREE.BufferAttribute(pos3, 3));
+
+      const line1 = new THREE.Line(g1, mat1);
+      const line2 = new THREE.Line(g2, mat2);
+      const line3 = new THREE.Line(g3, mat3);
+
+      scene.add(line1);
+      scene.add(line2);
+      scene.add(line3);
+
+      // Wave parameters (computed on resize to GUARANTEE full-height fit)
+      let A1, A2, A3; // amplitudes
+
+      // Relative nesting ratios — tweak these to taste
+      // A2 oscillates ±(mediumRatio) of A1 around the big wave curve
+      // A3 oscillates ±(fineRatio) of A2 around the medium wave curve
+      const mediumRatio = 0.35; // bigger than before (was 0.25)
+      const fineRatio = 0.6; // much bigger than before (was 0.12)
+
+      // Frequencies (cycles across the screen width)
+      const f1 = 1.1; // broad timeframe
+      const f2 = 4.0; // medium timeframe
+      const f3 = 12.0; // fine timeframe
+
+      // Phase speeds (movement to the right)
+      const speed1 = 0.5;
+      const speed2 = 0.8;
+      const speed3 = 1.3;
+
+      let paused = false;
+      let raf = null;
+      let lastT = performance.now();
+
+      resize();
+      start();
+
+      function start() {
+        requestFrame();
+        requestAnimationFrame(() => renderer.domElement.classList.add("ready"));
+      }
+
+      function stop() {
+        if (raf) cancelAnimationFrame(raf);
+        raf = null;
+        renderer.dispose();
+        g1.dispose();
+        g2.dispose();
+        g3.dispose();
+        mat1.dispose();
+        mat2.dispose();
+        mat3.dispose();
+        if (renderer.domElement && renderer.domElement.parentNode) {
+          renderer.domElement.parentNode.removeChild(renderer.domElement);
+        }
+        window.removeEventListener("resize", resize);
+      }
+
+      function requestFrame() {
+        raf = requestAnimationFrame(tick);
+      }
+
+      function tick(now) {
+        if (paused) {
+          requestFrame();
+          return;
+        }
+
+        const t = now * 0.001; // seconds
+
+        // Global phasing (motion to the right)
+        const phase1 = speed1 * t * Math.PI * 2;
+        const phase2 = speed2 * t * Math.PI * 2;
+        const phase3 = speed3 * t * Math.PI * 2;
+
+        const halfH = height * 0.5;
+        for (let i = 0; i < SEGMENTS; i++) {
+          const x = (i / (SEGMENTS - 1)) * width;
+          const nx = x / width; // 0..1
+
+          const y1 = halfH + A1 * Math.sin(nx * f1 * Math.PI * 2 + phase1);
+          const y2 = y1 + A2 * Math.sin(nx * f2 * Math.PI * 2 + phase2);
+          const y3 = y2 + A3 * Math.sin(nx * f3 * Math.PI * 2 + phase3);
+
+          const j = i * 3;
+          pos1[j] = x;
+          pos1[j + 1] = y1;
+          pos1[j + 2] = 0;
+          pos2[j] = x;
+          pos2[j + 1] = y2;
+          pos2[j + 2] = 0;
+          pos3[j] = x;
+          pos3[j + 1] = y3;
+          pos3[j + 2] = 0;
+        }
+
+        g1.attributes.position.needsUpdate = true;
+        g2.attributes.position.needsUpdate = true;
+        g3.attributes.position.needsUpdate = true;
+
+        renderer.render(scene, camera);
+        requestFrame();
+      }
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(width, height, false);
+
+        // Reset camera bounds to the new pixel space
+        camera.left = 0;
+        camera.right = width;
+        camera.top = height;
+        camera.bottom = 0;
+        camera.updateProjectionMatrix();
+
+        // === Amplitude normalization ===
+        // Guarantee the ENTIRE nested wave (y3) fits exactly within the viewport height.
+        // Max theoretical excursion is A1 + A2 + A3; set that equal to height/2.
+        const sumWeights = 1 + mediumRatio + mediumRatio * fineRatio;
+        const k = (height * 0.5) / sumWeights; // base amplitude
+        A1 = k; // big wave
+        A2 = k * mediumRatio; // medium around big
+        A3 = k * mediumRatio * fineRatio; // fine around medium
+
+        lastT = performance.now();
+      }
+
+      window.addEventListener("resize", resize);
+    </script>
+  </body>
+</html>

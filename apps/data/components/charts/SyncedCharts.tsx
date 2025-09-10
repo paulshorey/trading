@@ -354,7 +354,7 @@ export function SyncedCharts({
                 </span>
                 <span className="flex flex-row">
                   <span
-                    className="pt-[2px] pl-[6px] pr-[2px] opacity-50"
+                    className="pt-[2px] pl-[6px] pr-[3px] opacity-50"
                     style={{
                       filter: 'saturate(0.1)',
                     }}

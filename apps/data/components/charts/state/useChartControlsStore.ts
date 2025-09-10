@@ -148,7 +148,7 @@ const getInitialState = (): State => {
   const defaultTickers = tickersOptions[8]!.value
   const defaultState: State = {
     // Control defaults
-    hoursBack: 240,
+    hoursBack: '240h',
     controlInterval: intervalsOptions[intervalsOptions.length - 1]!.value,
     controlTickers: defaultTickers,
     // Default to "average" if multiple tickers, otherwise first ticker
@@ -226,7 +226,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       ...getInitialState(),
 
       // Control setters
-      setHoursBack: (hours: number) => {
+      setHoursBack: (hours: string) => {
         set({ hoursBack: hours })
       },
 

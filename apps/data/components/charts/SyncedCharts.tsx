@@ -315,14 +315,54 @@ export function SyncedCharts({
             chartData={aggregatedPriceData}
             heading={
               <span className="ml-2 flex">
-                <span className="flex flex-row gap-1">
-                  <StrengthControl showLabel={false} />{' '}
-                  <span className="flex flex-row">
-                    <IntervalControl showLabel={false} />
-                  </span>
+                <span className="flex flex-row">
+                  {/* <span
+                    className="pt-[1.5px] opacity-60"
+                    style={{
+                      scale: '0.9 1',
+                      transformOrigin: 'left',
+                      filter: 'brightness(1.3) contrast(1.2)',
+                    }}
+                  >
+                    🦾
+                  </span> */}
+                  <StrengthControl showLabel={false} />
                 </span>
-                <PriceControl showLabel={false} />
-                <TimeControl showLabel={false} />
+                <span className="flex flex-row">
+                  <span
+                    className="pt-[1.5px] pl-[3px] opacity-50"
+                    style={{
+                      filter: 'brightness(1.5) contrast(1.2)',
+                      scale: '0.9 1',
+                      transformOrigin: 'right',
+                    }}
+                  >
+                    💲
+                  </span>
+                  <PriceControl showLabel={false} />
+                </span>
+                <span className="flex flex-row">
+                  <span
+                    className="pt-[2px] pl-[5px] pr-[3px] opacity-80"
+                    style={{
+                      filter: 'contrast(0.6) brightness(1.3)',
+                    }}
+                  >
+                    🕓
+                  </span>
+                  <IntervalControl showLabel={false} />
+                </span>
+                <span className="flex flex-row">
+                  <span
+                    className="pt-[2px] pl-[6px] pr-[2px] opacity-70"
+                    style={{
+                      filter: 'saturate(0.1) contrast(1.1)',
+                    }}
+                  >
+                    🗓️
+                  </span>
+                  <TimeControl showLabel={false} />
+                </span>
               </span>
             }
             width={chartDimensions.width}

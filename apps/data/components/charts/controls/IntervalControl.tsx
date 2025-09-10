@@ -35,20 +35,12 @@ export default function IntervalControl({ showLabel = true }: Props) {
         setControlInterval(JSON.parse(val) as string[])
         combobox.closeDropdown()
       }}
-      styles={{
-        dropdown: {
-          boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
-        },
-      }}
     >
       <Combobox.Target>
         <InputBase
           styles={{
             input: {
               minWidth: '75px',
-              border: 'solid 1px rgba(0, 0, 0, 0.2)',
-              boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
-              borderRadius: '5px',
             },
           }}
           component="button"

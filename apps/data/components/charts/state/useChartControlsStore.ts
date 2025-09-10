@@ -6,6 +6,7 @@ import { createURLStorage, getQueryParams } from '../lib/urlSync'
 
 // Available intervals configuration
 export const intervalsOptions = [
+  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all' },
   { value: ['15S'], label: '15sec' },
   { value: ['2'], label: '2min' },
   { value: ['3'], label: '3min' },
@@ -14,7 +15,6 @@ export const intervalsOptions = [
   { value: ['59'], label: '59min' },
   { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['44', '59', '180'], label: 'long' },
-  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all' },
   { value: ['2', '3', '7', '44', '59'], label: 'minutes' },
 ]
 
@@ -84,7 +84,7 @@ export const tickersOptions = [
 
 type State = {
   // Control states
-  hoursBack: number
+  hoursBack: string
   controlInterval: string[]
   controlTickers: string[]
   priceTicker: string
@@ -108,7 +108,7 @@ type State = {
 
 type Actions = {
   // Control setters
-  setHoursBack: (hours: number) => void
+  setHoursBack: (hours: string) => void
   setControlInterval: (intervals: string[]) => void
   setControlTickers: (tickers: string[]) => void
   setPriceTicker: (ticker: string) => void
@@ -145,7 +145,7 @@ const URL_SYNC_KEYS = [
 // Get initial values from URL if available
 const getInitialState = (): State => {
   // Start with defaults
-  const defaultTickers = tickersOptions[0]!.value
+  const defaultTickers = tickersOptions[8]!.value
   const defaultState: State = {
     // Control defaults
     hoursBack: 240,

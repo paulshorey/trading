@@ -222,7 +222,7 @@ export function SyncedCharts({
    * This only affects the visible portion of the charts, not the data itself.
    */
   useEffect(() => {
-    const newRange = calculateTimeRange(rawData, hoursBack)
+    const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
     if (newRange) {
       setTimeRange(newRange)
     }
@@ -330,7 +330,7 @@ export function SyncedCharts({
                 </span>
                 <span className="flex flex-row">
                   <span
-                    className="pt-[1.5px] pl-[3px] opacity-50"
+                    className="pt-[2px] pl-[3px] opacity-50"
                     style={{
                       filter: 'brightness(1.6) contrast(1.2)',
                       scale: '0.9 1',
@@ -354,9 +354,9 @@ export function SyncedCharts({
                 </span>
                 <span className="flex flex-row">
                   <span
-                    className="pt-[2px] pl-[6px] pr-[2px] opacity-70"
+                    className="pt-[2px] pl-[6px] pr-[2px] opacity-50"
                     style={{
-                      filter: 'saturate(0.1) contrast(1.1)',
+                      filter: 'saturate(0.1)',
                     }}
                   >
                     🗓️

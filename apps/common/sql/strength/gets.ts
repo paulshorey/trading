@@ -94,6 +94,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       node_env: strength.node_env || "",
       created_at: new Date(strength.created_at),
       "15S": strength["15S"] !== null ? Number(strength["15S"]) : null,
+      "2": strength["2"] !== null ? Number(strength["2"]) : null,
       "3": strength["3"] !== null ? Number(strength["3"]) : null,
       "7": strength["7"] !== null ? Number(strength["7"]) : null,
       "44": strength["44"] !== null ? Number(strength["44"]) : null,

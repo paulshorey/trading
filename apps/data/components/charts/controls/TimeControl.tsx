@@ -16,8 +16,8 @@ export default function TimeControl({ showLabel = true }: Props) {
       style={{ width: '80px', zIndex: 10000000 }}
       label={showLabel ? 'Range' : null}
       value={hoursBack.toString()}
-      data={['12', '24', '36', '48', '60', '120', '240']}
-      onChange={(value) => (value ? setHoursBack(parseInt(value)) : undefined)}
+      data={['240h', '120h', '60h', '48h', '36h', '24h', '12h']}
+      onChange={(value) => (value ? setHoursBack(value) : undefined)}
     />
   )
 }

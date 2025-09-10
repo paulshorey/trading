@@ -20,7 +20,7 @@ import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 
-interface SingleChartProps {
+interface ChartProps {
   heading: string | React.ReactNode
   name: string
   chartData: LineData[] | null
@@ -32,13 +32,13 @@ interface SingleChartProps {
   showZeroLine?: boolean
 }
 
-export interface SingleChartRef {
+export interface ChartRef {
   chart: IChartApi | null
   series: ISeriesApi<'Line'> | null
   container: HTMLDivElement | null
 }
 
-const SingleChart = forwardRef<SingleChartRef, SingleChartProps>(
+export const Chart = forwardRef<ChartRef, ChartProps>(
   (
     {
       heading,
@@ -223,6 +223,4 @@ const SingleChart = forwardRef<SingleChartRef, SingleChartProps>(
   }
 )
 
-SingleChart.displayName = 'SingleChart'
-
-export default SingleChart
+Chart.displayName = 'Chart'

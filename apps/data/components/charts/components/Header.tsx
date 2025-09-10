@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { ControlsDropdown } from './ControlsDropdown'
+import { ControlsDropdown } from '../controls/ControlsDropdown'
 
 export default function Header() {
   return (

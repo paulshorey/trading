@@ -7,13 +7,13 @@ import { createURLStorage, getQueryParams } from '../lib/urlSync'
 // Available intervals configuration
 export const intervalsOptions = [
   { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all' },
+  { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['15S'], label: '15sec' },
   { value: ['2'], label: '2min' },
   { value: ['3'], label: '3min' },
   { value: ['7'], label: '7min' },
   { value: ['44'], label: '44min' },
   { value: ['59'], label: '59min' },
-  { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['44', '59', '180'], label: 'long' },
   { value: ['2', '3', '7', '44', '59'], label: 'minutes' },
 ]

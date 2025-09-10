@@ -12,14 +12,11 @@ import {
 } from './lib/chartUtils'
 import { applyCursorToAllCharts } from './lib/chartSync'
 
-import Header from './controls/Header'
-import SingleChart, { SingleChartRef } from './components/SingleChart'
+import Header from './components/Header'
+import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { useChartControlsStore } from './state/useChartControlsStore'
-import StrengthControl from './controls/StrengthControl'
-import PriceControl from './controls/PriceControl'
-import IntervalControl from './controls/IntervalControl'
-import TimeControl from './controls/TimeControl'
+import InlineControls from './controls/InlineControls'
 
 export interface SyncedChartsProps {
   availableWidth: number
@@ -34,7 +31,7 @@ export function SyncedCharts({
   availableHeight,
 }: SyncedChartsProps) {
   // Chart refs
-  const chartComponentRefs = useRef<(SingleChartRef | null)[]>([])
+  const chartComponentRefs = useRef<(ChartRef | null)[]>([])
   const isUpdatingCursor = useRef(false)
 
   // Get state and actions from Zustand store
@@ -289,7 +286,7 @@ export function SyncedCharts({
       {!loadingState && !error && (
         <>
           {/* Chart: Aggregated Strength (average of all interval averages) */}
-          <SingleChart
+          <Chart
             key="aggregated-strength"
             ref={(el) => {
               chartComponentRefs.current[0] = el
@@ -306,65 +303,14 @@ export function SyncedCharts({
           />
 
           {/* Chart: Single Ticker Price */}
-          <SingleChart
+          <Chart
             key={`price-${priceTicker}`}
             ref={(el) => {
               chartComponentRefs.current[1] = el
             }}
             name={`Price`}
             chartData={aggregatedPriceData}
-            heading={
-              <span className="ml-2 flex">
-                <span className="flex flex-row">
-                  {/* <span
-                    className="pt-[1.5px] opacity-60"
-                    style={{
-                      scale: '0.9 1',
-                      transformOrigin: 'left',
-                      filter: 'brightness(1.3) contrast(1.2)',
-                    }}
-                  >
-                    🦾
-                  </span> */}
-                  <StrengthControl showLabel={false} />
-                </span>
-                <span className="flex flex-row">
-                  <span
-                    className="pt-[2px] pl-[3px] opacity-50"
-                    style={{
-                      filter: 'brightness(1.6) contrast(1.2)',
-                      scale: '0.9 1',
-                      transformOrigin: 'right',
-                    }}
-                  >
-                    💲
-                  </span>
-                  <PriceControl showLabel={false} />
-                </span>
-                <span className="flex flex-row">
-                  <span
-                    className="pt-[2px] pl-[5px] pr-[3px] opacity-80"
-                    style={{
-                      filter: 'contrast(0.6) brightness(1.3)',
-                    }}
-                  >
-                    🕓
-                  </span>
-                  <IntervalControl showLabel={false} />
-                </span>
-                <span className="flex flex-row">
-                  <span
-                    className="pt-[2px] pl-[6px] pr-[3px] opacity-50"
-                    style={{
-                      filter: 'saturate(0.1)',
-                    }}
-                  >
-                    🗓️
-                  </span>
-                  <TimeControl showLabel={false} />
-                </span>
-              </span>
-            }
+            heading={<InlineControls />}
             width={chartDimensions.width}
             height={chartDimensions.height}
             onCrosshairMove={handleCrosshairMove}

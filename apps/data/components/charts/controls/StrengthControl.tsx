@@ -46,7 +46,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         <InputBase
           styles={{
             input: {
-              minWidth: '150px',
+              minWidth: '130px',
               border: 'solid 1px rgba(0, 0, 0, 0.2)',
               boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
               borderRadius: '5px',
@@ -68,7 +68,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         </InputBase>
       </Combobox.Target>
 
-      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '150px' }}>
+      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '130px' }}>
         <Combobox.Options>
           {tickersOptions.map((option) => (
             <Combobox.Option

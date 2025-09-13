@@ -32,6 +32,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
       offset={2}
       store={combobox}
       withinPortal={true}
+      position="bottom-start"
       onOptionSubmit={(val) => {
         updateControlTickersAndPrice(JSON.parse(val) as string[])
         combobox.closeDropdown()
@@ -48,7 +49,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         <InputBase
           styles={{
             input: {
-              minWidth: '130px',
+              minWidth: '95px',
               // border: 'solid 1px rgba(0, 0, 0, 0.2)',
               // boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
               // borderRadius: '5px',
@@ -70,7 +71,7 @@ export default function StrengthControl({ showLabel = true }: Props) {
         </InputBase>
       </Combobox.Target>
 
-      <Combobox.Dropdown style={{ zIndex: 1000000000, minWidth: '130px' }}>
+      <Combobox.Dropdown style={{ zIndex: 1000000000, minWidth: '125px' }}>
         <Combobox.Options>
           {tickersOptions.map((option) => (
             <Combobox.Option

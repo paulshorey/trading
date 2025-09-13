@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
 import { StrengthRowGet } from '@apps/common/sql/strength'
 import { createURLStorage, getQueryParams } from '../lib/urlSync'
+import { AVERAGE_LABEL } from '../constants'
 
 // Available intervals configuration
 export const intervalsOptions = [
@@ -32,7 +33,7 @@ export const hoursBackOptions = [
 // Available tickers configuration
 export const tickersOptions = [
   {
-    label: 'BTC, ETH, SOL, XRP, SUI, BNB',
+    label: 'Crypto',
     value: ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'SUIUSD', 'BNBUSD'],
   },
   {
@@ -157,7 +158,7 @@ const getInitialState = (): State => {
     controlInterval: intervalsOptions[1]!.value,
     controlTickers: defaultTickers,
     // Default to "average" if multiple tickers, otherwise first ticker
-    priceTicker: defaultTickers.length > 1 ? 'average' : defaultTickers[0]!,
+    priceTicker: defaultTickers.length > 1 ? AVERAGE_LABEL : defaultTickers[0]!,
 
     // Time and cursor defaults
     timeRange: null,
@@ -189,13 +190,13 @@ const getInitialState = (): State => {
       defaultState.controlTickers = urlParams.controlTickers
       // Update priceTicker if it's not valid for the new tickers list
       if (
-        defaultState.priceTicker !== 'average' &&
+        defaultState.priceTicker !== AVERAGE_LABEL &&
         !urlParams.controlTickers.includes(defaultState.priceTicker)
       ) {
         // Default to "average" if multiple tickers, otherwise first ticker
         defaultState.priceTicker =
           urlParams.controlTickers.length > 1
-            ? 'average'
+            ? AVERAGE_LABEL
             : urlParams.controlTickers[0] || ''
       }
     }
@@ -203,12 +204,12 @@ const getInitialState = (): State => {
     if (urlParams.priceTicker !== undefined) {
       // Validate that the priceTicker is either "average" or in controlTickers
       const isValidTicker =
-        urlParams.priceTicker === 'average' ||
+        urlParams.priceTicker === AVERAGE_LABEL ||
         defaultState.controlTickers.includes(urlParams.priceTicker)
       if (isValidTicker) {
         // Also check that "average" is only used when there are multiple tickers
         if (
-          urlParams.priceTicker === 'average' &&
+          urlParams.priceTicker === AVERAGE_LABEL &&
           defaultState.controlTickers.length <= 1
         ) {
           defaultState.priceTicker = defaultState.controlTickers[0] || ''
@@ -242,7 +243,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ controlTickers: [...tickers] })
         // Reset priceTicker to "average" if multiple tickers
         if (tickers.length > 1) {
-          set({ priceTicker: 'average' })
+          set({ priceTicker: AVERAGE_LABEL })
         }
       },
 
@@ -298,13 +299,13 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         let newPriceTicker = currentPriceTicker
 
         // If current is "average", keep it if we still have multiple tickers
-        if (currentPriceTicker === 'average') {
-          newPriceTicker = tickers.length > 1 ? 'average' : tickers[0] || ''
+        if (currentPriceTicker === AVERAGE_LABEL) {
+          newPriceTicker = tickers.length > 1 ? AVERAGE_LABEL : tickers[0] || ''
         }
         // If current ticker is not in new tickers list, set appropriately
         else if (!tickers.includes(currentPriceTicker)) {
           // Default to "average" if multiple tickers, otherwise first ticker
-          newPriceTicker = tickers.length > 1 ? 'average' : tickers[0] || ''
+          newPriceTicker = tickers.length > 1 ? AVERAGE_LABEL : tickers[0] || ''
         }
 
         // Ensure we create a new array reference for proper React effect triggering

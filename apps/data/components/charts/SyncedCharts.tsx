@@ -15,7 +15,7 @@ import { applyCursorToAllCharts } from './lib/chartSync'
 import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { useChartControlsStore } from './state/useChartControlsStore'
-import { CHART_WIDTH } from './constants'
+import { AVERAGE_LABEL, CHART_WIDTH } from './constants'
 import PriceControl from './controls/PriceControl'
 import StrengthControl from './controls/StrengthControl'
 
@@ -179,7 +179,7 @@ export function SyncedCharts({
 
       // Choose between individual ticker price or average of all prices
       const priceData =
-        priceTicker === 'average'
+        priceTicker === AVERAGE_LABEL
           ? aggregatePriceData(rawData)
           : getSingleTickerPriceData(rawData, controlTickers, priceTicker)
 
@@ -271,7 +271,7 @@ export function SyncedCharts({
             }}
             name={`Strength`}
             heading={
-              <span className="flex flex-row pl-[10px]">
+              <span className="flex flex-row pl-[9px]">
                 {/* <span className="pt-1 pr-1 opacity-50 text-sm">
                   Strength of
                 </span> */}

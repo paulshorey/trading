@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react'
 import { useChartControlsStore } from '../state/useChartControlsStore'
 import { Select } from '@mantine/core'
+import { AVERAGE_LABEL } from '../constants'
 
 interface Props {
   showLabel?: boolean
@@ -19,7 +20,7 @@ export default function PriceControl({ showLabel = true }: Props) {
 
     // Add "average" option only when there are multiple tickers
     if (controlTickers.length > 1) {
-      options.unshift('average')
+      options.unshift(AVERAGE_LABEL)
     }
 
     return options

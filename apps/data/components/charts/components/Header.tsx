@@ -11,7 +11,7 @@ export default function Header() {
       {/* Top bar */}
       <div className="relative flex flex-row justify-between z-[10000]">
         {/* Left */}
-        <div className="flex-1 pl-2 py-1 mt-[2.5px] font-semibold text-gray-900">
+        <div className="flex-1 pl-2 py-1 mt-[2px] font-semibold text-gray-900">
           <span
             style={{
               scale: '1.05 1',

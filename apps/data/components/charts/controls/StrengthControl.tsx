@@ -37,13 +37,12 @@ export default function StrengthControl({ showLabel = true }: Props) {
         updateControlTickersAndPrice(JSON.parse(val) as string[])
         combobox.closeDropdown()
       }}
-      styles={
-        {
-          // dropdown: {
-          //   boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
-          // },
-        }
-      }
+      styles={{
+        dropdown: {
+          boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
+          marginTop: '-22.5vh',
+        },
+      }}
     >
       <Combobox.Target>
         <InputBase
@@ -53,6 +52,8 @@ export default function StrengthControl({ showLabel = true }: Props) {
               // border: 'solid 1px rgba(0, 0, 0, 0.2)',
               // boxShadow: '1px 1px 2px 0 rgba(0, 0, 0, 0.1)',
               // borderRadius: '5px',
+              pointerEvents: 'all',
+              userSelect: 'all',
             },
           }}
           component="button"

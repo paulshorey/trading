@@ -19,6 +19,7 @@ import {
 import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
+import classes from '../classes.module.scss'
 
 interface ChartProps {
   heading: string | React.ReactNode
@@ -200,20 +201,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const hasData = chartData !== null
 
     return (
-      <div
-        key={name}
-        id={`chart-${name}`}
-        className="relative overflow-x-auto overflow-y-hidden"
-        style={{ marginBottom: '-30px' }}
-      >
+      <div key={name} id={`chart-${name}`} className={classes.Chart}>
         {/* Chart container */}
         <div
-          dir="rtl"
           ref={containerRef}
-          className="border border-gray-200 rounded relative z-10"
+          className={`border border-gray-200 rounded z-10 pr-[10px]`}
+          style={{ marginBottom: '-3px' }}
         />
 
-        {/* Title positioned above chart but overlapping */}
+        {/* Title floating at top left of chart */}
         <ChartTitle heading={heading} hasData={hasData}>
           <NoDataState />
         </ChartTitle>

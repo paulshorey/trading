@@ -31,7 +31,12 @@ export default function PriceControl({ showLabel = true }: Props) {
       label={showLabel ? 'Price:' : null}
       value={priceTicker}
       data={selectOptions}
-      onChange={(value) => (value ? setPriceTicker(value) : undefined)}
+      onChange={(value) => {
+        console.log('PriceControl onChange', value)
+        if (value) {
+          setPriceTicker(value)
+        }
+      }}
     />
   )
 }

@@ -16,6 +16,9 @@ import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import InlineControls from './controls/InlineControls'
+import { CHART_WIDTH } from './constants'
+import PriceControl from './controls/PriceControl'
+import StrengthControl from './controls/StrengthControl'
 
 export interface SyncedChartsProps {
   availableWidth: number
@@ -273,7 +276,7 @@ export function SyncedCharts({
   const loadingState = aggregatedStrengthData?.length === 0
 
   return (
-    <div className="pr-[10px] w-full">
+    <div className={`w-[${CHART_WIDTH}px] overflow-hidden`}>
       {/* Show loading or error state for all charts */}
       {loadingState && <LoadingState />}
       {error && !loadingState && <ErrorState error={error} />}
@@ -288,9 +291,24 @@ export function SyncedCharts({
               chartComponentRefs.current[0] = el
             }}
             name={`Strength`}
-            heading={null}
+            heading={
+              <span className="flex flex-row pl-[3px]">
+                {/* <span className="pt-1 pr-1 opacity-50 text-sm">
+                  Strength of
+                </span> */}
+                <StrengthControl showLabel={false} />
+                <span
+                  className="pt-1 pr-1 pl-1 opacity-60 text-sm"
+                  style={{
+                    textShadow: '0 0 1px rgba(0, 0, 0, 0.05)',
+                  }}
+                >
+                  Strength
+                </span>
+              </span>
+            }
             chartData={aggregatedStrengthData}
-            width={chartDimensions.width}
+            width={CHART_WIDTH}
             height={chartDimensions.height}
             onCrosshairMove={handleCrosshairMove}
             chartIndex={0}
@@ -306,8 +324,14 @@ export function SyncedCharts({
             }}
             name={`Price`}
             chartData={aggregatedPriceData}
-            heading={<InlineControls />}
-            width={chartDimensions.width}
+            heading={
+              <span className="flex flex-row pl-[4px]">
+                {/* <span className="pt-1 pr-1 opacity-50 text-sm">Price of</span> */}
+                <PriceControl showLabel={false} />
+                <span className="pt-1 pr-1 pl-1 opacity-60 text-sm">Price</span>
+              </span>
+            }
+            width={CHART_WIDTH}
             height={chartDimensions.height}
             onCrosshairMove={handleCrosshairMove}
             chartIndex={1}

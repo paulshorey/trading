@@ -1,0 +1,59 @@
+.Wrapper {
+  select,
+  input,
+  button {
+    text-align: left;
+  }
+}
+
+.Chart {
+  position: relative;
+  z-index: 1;
+  &:nth-child(1) {
+    // margin-top: 0;
+    .ChartTitleWrapperAbsolute {
+      top: auto;
+    }
+  }
+  &:nth-child(2) {
+    // margin-top: -30px;
+    .ChartTitleWrapperAbsolute {
+      top: 5px;
+    }
+  }
+  table {
+    tr {
+      &:nth-child(2) {
+        position: relative;
+        z-index: 10;
+      }
+    }
+  }
+}
+
+.Header {
+  text-align: left;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+}
+
+.ChartTitleWrapperAbsolute {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 60px;
+  width: 100vw;
+  z-index: 1000;
+  pointer-events: none;
+  user-select: none;
+}
+.ChartTitleInnerFixed {
+  z-index: 1000;
+  position: fixed;
+  left: 0;
+  width: 100vw;
+  pointer-events: all;
+  user-select: all;
+}

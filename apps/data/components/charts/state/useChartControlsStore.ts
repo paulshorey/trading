@@ -6,7 +6,8 @@ import { createURLStorage, getQueryParams } from '../lib/urlSync'
 
 // Available intervals configuration
 export const intervalsOptions = [
-  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all' },
+  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all times' },
+  { value: ['44', '59', '180'], label: 'long' },
   { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['15S'], label: '15sec' },
   { value: ['2'], label: '2min' },
@@ -14,8 +15,7 @@ export const intervalsOptions = [
   { value: ['7'], label: '7min' },
   { value: ['44'], label: '44min' },
   { value: ['59'], label: '59min' },
-  { value: ['44', '59', '180'], label: 'long' },
-  { value: ['2', '3', '7', '44', '59'], label: 'minutes' },
+  { value: ['2', '3', '7', '44', '59'], label: 'min' },
 ]
 
 // Available tickers configuration
@@ -238,6 +238,10 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       setControlTickers: (tickers: string[]) => {
         // Ensure we create a new array reference for proper React effect triggering
         set({ controlTickers: [...tickers] })
+        // Reset priceTicker to "average" if multiple tickers
+        if (tickers.length > 1) {
+          set({ priceTicker: 'average' })
+        }
       },
 
       setPriceTicker: (ticker: string) => {

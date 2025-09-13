@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import classes from '../classes.module.scss'
 
 interface ChartTitleProps {
   heading: string | React.ReactNode
@@ -14,9 +15,11 @@ export default function ChartTitle({
   children,
 }: ChartTitleProps) {
   return (
-    <div style={{ zIndex: 10000 }} className="absolute left-0 top-0">
-      {heading}
-      {!hasData && children}
+    <div dir="ltr" className={classes.ChartTitleWrapperAbsolute}>
+      <div className={classes.ChartTitleInnerFixed}>
+        {heading}
+        {!hasData && children}
+      </div>
     </div>
   )
 }

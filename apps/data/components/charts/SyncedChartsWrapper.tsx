@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { SyncedCharts } from './SyncedCharts'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import Header from './components/Header'
+import classes from './classes.module.scss'
 
 interface SyncedChartsWrapperProps {}
 
@@ -36,7 +37,7 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
 
         setDimensions({
           availableWidth: windowWidth,
-          availableHeight: windowHeight,
+          availableHeight: Math.ceil(windowHeight * 1.05 + 30),
         })
       }
     }
@@ -70,12 +71,12 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
   }
 
   return (
-    <div>
+    <div className={`overflow-auto w-full ${classes.Wrapper}`} dir="rtl">
+      <Header />
       <SyncedCharts
         availableWidth={dimensions.availableWidth}
-        availableHeight={dimensions.availableHeight + 30}
+        availableHeight={dimensions.availableHeight}
       />
-      <Header />
     </div>
   )
 }

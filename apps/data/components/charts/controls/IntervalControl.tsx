@@ -40,7 +40,7 @@ export default function IntervalControl({ showLabel = true }: Props) {
         <InputBase
           styles={{
             input: {
-              minWidth: '75px',
+              minWidth: '70px',
             },
           }}
           component="button"
@@ -59,7 +59,7 @@ export default function IntervalControl({ showLabel = true }: Props) {
         </InputBase>
       </Combobox.Target>
 
-      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '75px' }}>
+      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '70px' }}>
         <Combobox.Options>
           {intervalsOptions.map((option) => (
             <Combobox.Option

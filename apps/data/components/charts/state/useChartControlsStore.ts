@@ -6,8 +6,8 @@ import { createURLStorage, getQueryParams } from '../lib/urlSync'
 
 // Available intervals configuration
 export const intervalsOptions = [
-  { value: ['15S', '2', '3', '7', '44', '59', '180'], label: 'all times' },
-  { value: ['44', '59', '180'], label: 'long' },
+  { value: ['15S', '2', '3', '7', '44', '59'], label: 'all times' },
+  { value: ['7', '44', '59'], label: 'long' },
   { value: ['15S', '2', '3', '7'], label: 'short' },
   { value: ['15S'], label: '15sec' },
   { value: ['2'], label: '2min' },
@@ -16,6 +16,17 @@ export const intervalsOptions = [
   { value: ['44'], label: '44min' },
   { value: ['59'], label: '59min' },
   { value: ['2', '3', '7', '44', '59'], label: 'min' },
+]
+
+// Available hours back configuration
+export const hoursBackOptions = [
+  '240h',
+  '120h',
+  '60h',
+  '48h',
+  '36h',
+  '24h',
+  '12h',
 ]
 
 // Available tickers configuration
@@ -142,8 +153,8 @@ const getInitialState = (): State => {
   const defaultTickers = tickersOptions[8]!.value
   const defaultState: State = {
     // Control defaults
-    hoursBack: '240h',
-    controlInterval: intervalsOptions[0]!.value,
+    hoursBack: hoursBackOptions[0]!,
+    controlInterval: intervalsOptions[1]!.value,
     controlTickers: defaultTickers,
     // Default to "average" if multiple tickers, otherwise first ticker
     priceTicker: defaultTickers.length > 1 ? 'average' : defaultTickers[0]!,

@@ -271,7 +271,7 @@ export function SyncedCharts({
             }}
             name={`Strength`}
             heading={
-              <span className="flex flex-row pl-[3px]">
+              <span className="flex flex-row pl-[10px]">
                 {/* <span className="pt-1 pr-1 opacity-50 text-sm">
                   Strength of
                 </span> */}
@@ -304,7 +304,7 @@ export function SyncedCharts({
             name={`Price`}
             chartData={aggregatedPriceData}
             heading={
-              <span className="flex flex-row pl-[4px]">
+              <span className="flex flex-row pl-[5px]">
                 {/* <span className="pt-1 pr-1 opacity-50 text-sm">Price of</span> */}
                 <PriceControl showLabel={false} />
                 <span className="pt-1 pr-1 pl-1 opacity-60 text-sm">Price</span>

@@ -64,6 +64,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const isUpdatingCursor = useRef(false)
     const hasInitialized = useRef(false)
+    const lastDataRef = useRef<LineData[] | null>(null)
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
@@ -104,7 +105,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
 
       // Apply initial time range if provided
-      if (timeRange) {
+      if (timeRange && timeRange.from < timeRange.to) {
         try {
           chart.timeScale().setVisibleRange(timeRange)
         } catch (error) {
@@ -122,18 +123,70 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, []) // Only run once on mount - removed all dependencies
 
-    // Update data when it changes (without recreating chart)
+    // Update data when it changes with incremental updates
     useEffect(() => {
       if (!seriesRef.current || !chartData || !hasInitialized.current) return
 
       try {
-        seriesRef.current.setData(chartData)
+        const prevData = lastDataRef.current
+        const currentData = chartData
+
+        if (!prevData || prevData.length === 0) {
+          // Initial data load - use setData
+          seriesRef.current.setData(currentData)
+        } else {
+          // Check if we need a full reset or can do incremental update
+          const needsFullReset =
+            currentData.length < prevData.length ||
+            (currentData.length > 0 &&
+              prevData.length > 0 &&
+              currentData[0].time !== prevData[0].time)
+
+          if (needsFullReset) {
+            // Data structure changed significantly, do full reset
+            seriesRef.current.setData(currentData)
+          } else {
+            // Incremental update - find new data points
+            const lastPrevTime = prevData[prevData.length - 1]?.time
+            if (lastPrevTime) {
+              // Find new data points after the last previous time
+              const newDataPoints = currentData.filter(
+                (point) => (point.time as number) > (lastPrevTime as number)
+              )
+
+              // Update each new data point
+              newDataPoints.forEach((point) => {
+                seriesRef.current!.update(point)
+              })
+
+              // Also update any modified existing points (same time, different value)
+              const modifiedPoints = currentData.filter((point) => {
+                const prevPoint = prevData.find((p) => p.time === point.time)
+                return prevPoint && prevPoint.value !== point.value
+              })
+
+              modifiedPoints.forEach((point) => {
+                seriesRef.current!.update(point)
+              })
+            } else {
+              // Fallback to full data set
+              seriesRef.current.setData(currentData)
+            }
+          }
+        }
+
+        // Store current data for next comparison
+        lastDataRef.current = [...currentData]
 
         // Reapply time range after data update
-        if (timeRange && chartRef.current) {
+        if (timeRange && chartRef.current && timeRange.from < timeRange.to) {
           // Small delay to ensure data is rendered
           setTimeout(() => {
-            if (chartRef.current && timeRange) {
+            if (
+              chartRef.current &&
+              timeRange &&
+              timeRange.from < timeRange.to
+            ) {
               try {
                 chartRef.current.timeScale().setVisibleRange(timeRange)
               } catch (error) {
@@ -163,6 +216,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     // Update time range when it changes
     useEffect(() => {
       if (!chartRef.current || !timeRange || !hasInitialized.current) return
+
+      // Validate time range before setting
+      if (timeRange.from >= timeRange.to) {
+        console.warn('Invalid time range: from >= to', timeRange)
+        return
+      }
 
       try {
         chartRef.current.timeScale().setVisibleRange(timeRange)

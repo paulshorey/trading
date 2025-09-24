@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Time, ISeriesApi } from 'lightweight-charts'
-import { StrengthRowGet } from '@apps/common/sql/strength'
+import { Time, ISeriesApi, LineData } from 'lightweight-charts'
+import { useRealtimeStrengthData } from '../../lib/useRealtimeStrengthData'
 
 import {
   calculateTimeRange,
@@ -14,6 +14,7 @@ import { applyCursorToAllCharts } from './lib/chartSync'
 
 import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
+import { RealtimeIndicator } from './components/RealtimeIndicator'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { AVERAGE_OPTION, CHART_WIDTH } from './constants'
 import PriceControl from './controls/PriceControl'
@@ -38,21 +39,17 @@ export function SyncedCharts({
   // Get state and actions from Zustand store
   const {
     // State
-    error,
     hoursBack,
     controlInterval,
     controlTickers,
     priceTicker,
     timeRange,
     cursorTime,
-    rawData,
     aggregatedStrengthData,
     aggregatedPriceData,
     // Actions
-    setError,
     setTimeRange,
     setCursorTime,
-    setRawData,
     setAggregatedStrengthData,
     setAggregatedPriceData,
   } = useChartControlsStore()
@@ -63,111 +60,30 @@ export function SyncedCharts({
   }, [])
 
   /**
-   * Data Loading Effect
-   *
-   * This effect runs whenever the selected tickers change (controlTickers).
-   * It fetches the last 60 hours of strength data for each selected ticker.
-   *
-   * Note: We always fetch 60 hours regardless of the hoursBack setting.
-   * The hoursBack parameter only controls the visible time range, not the data fetched.
-   * This allows users to quickly zoom in/out without re-fetching data.
+   * Use the real-time data hook to manage data fetching and updates
+   * This replaces the old data loading effect with automatic real-time updates
    */
-  useEffect(() => {
-    const loadAllData = async () => {
-      try {
-        // Fetch data for each ticker separately
-        const allTickerData: (StrengthRowGet[] | null)[] = []
-        let latestOverallTime = 0
-        let earliestOverallTime = Infinity
+  const { rawData, isLoading, error, lastUpdateTime, isRealtime } =
+    useRealtimeStrengthData({
+      tickers: controlTickers,
+      enabled: controlTickers.length > 0,
+      maxDataHours: 240,
+      updateIntervalMs: 60000, // Update every minute
+    })
 
-        for (let i = 0; i < controlTickers.length; i++) {
-          const ticker = controlTickers[i]!
-
-          // This provides data for all possible hoursBack values without re-fetching
-          const maxDataHours = 240
-          const date_gt = new Date(Date.now() - maxDataHours * 60 * 60 * 1000)
-          date_gt.setSeconds(0, 0) // Sets seconds and milliseconds to 0
-          const minutes = date_gt.getMinutes()
-          if (minutes % 2 !== 0) {
-            date_gt.setMinutes(minutes - 1) // Round down to previous even minute
-          }
-          const where = { ticker, timenow_gt: date_gt }
-
-          // Build query parameters for GET request
-          const params = new URLSearchParams()
-          if (where.ticker) params.append('ticker', where.ticker)
-          if (where.timenow_gt)
-            params.append('timenow_gt', where.timenow_gt.toISOString())
-
-          const apiUrl = `/api/v1/strength?${params.toString()}`
-
-          const response = await fetch(apiUrl, {
-            method: 'GET',
-          })
-          const data = await response.json()
-
-          let rows = data.rows
-          const error = data.error ? { message: data.error } : null
-
-          // Convert date strings back to Date objects
-          if (rows && rows.length > 0) {
-            rows = rows.map((row: any) => ({
-              ...row,
-              timenow: new Date(row.timenow),
-              created_at: new Date(row.created_at),
-            }))
-          }
-
-          if (error) {
-            console.error(`Error loading data for ${ticker}:`, error)
-            allTickerData.push(null)
-            continue
-          }
-
-          if (!rows || rows.length === 0) {
-            console.warn(`No data found for ${ticker}`)
-            allTickerData.push(null)
-            continue
-          }
-
-          // Reverse to get chronological order
-          rows.reverse()
-
-          // Store raw data for this ticker
-          allTickerData.push(rows)
-
-          // Track overall time range across all charts
-          if (rows.length > 0) {
-            const firstTime = rows[0]!.timenow.getTime() / 1000
-            const lastTime = rows[rows.length - 1]!.timenow.getTime() / 1000
-            earliestOverallTime = Math.min(earliestOverallTime, firstTime)
-            latestOverallTime = Math.max(latestOverallTime, lastTime)
-          }
-        }
-
-        // Store raw data in the store
-        setRawData(allTickerData)
-        setError(null)
-      } catch (err) {
-        console.error('Error loading chart data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load data')
-      }
-    }
-
-    // Only load data if we have tickers selected
-    if (controlTickers.length > 0) {
-      loadAllData()
-    }
-  }, [controlTickers])
+  // Track previous aggregated data for incremental updates
+  const prevAggregatedStrengthRef = useRef<LineData[] | null>(null)
+  const prevAggregatedPriceRef = useRef<LineData[] | null>(null)
 
   /**
-   * Data Aggregation Effect
+   * Data Aggregation Effect with Real-time Updates
    *
    * This effect recalculates the aggregated chart data whenever:
-   * - rawData changes (new data fetched)
+   * - rawData changes (new data fetched or real-time updates)
    * - controlInterval changes (different intervals selected for averaging)
    * - priceTicker changes (different ticker selected for price chart)
    * - controlTickers changes (needed to find the right price data)
+   * - lastUpdateTime changes (indicates new real-time data)
    *
    * The aggregation creates two data series:
    * 1. Strength data: average of selected intervals across all selected tickers
@@ -183,10 +99,14 @@ export function SyncedCharts({
           ? aggregatePriceData(rawData)
           : getSingleTickerPriceData(rawData, controlTickers, priceTicker)
 
+      // Store previous data for comparison
+      prevAggregatedStrengthRef.current = aggregatedStrengthData
+      prevAggregatedPriceRef.current = aggregatedPriceData
+
       setAggregatedStrengthData(strengthData.length > 0 ? strengthData : null)
       setAggregatedPriceData(priceData.length > 0 ? priceData : null)
     }
-  }, [controlInterval, priceTicker, rawData, controlTickers])
+  }, [controlInterval, priceTicker, rawData, controlTickers, lastUpdateTime])
 
   /**
    * Time Range Effect
@@ -198,8 +118,15 @@ export function SyncedCharts({
    */
   useEffect(() => {
     const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
-    if (newRange) {
+    if (newRange && newRange.from < newRange.to) {
       setTimeRange(newRange)
+    } else if (!newRange && rawData.length > 0) {
+      // If we can't calculate a range, log a warning
+      console.warn('Unable to calculate valid time range from data', {
+        rawDataLength: rawData.length,
+        hoursBack,
+        hasData: rawData.some((d) => d && d.length > 0),
+      })
     }
   }, [hoursBack, rawData])
 
@@ -247,21 +174,22 @@ export function SyncedCharts({
     }
   }
 
-  const loadingState = aggregatedStrengthData?.length === 0
-
   const chart1Height =
     Math.ceil((availableHeight * 1) / 2) + availableHeightCrop
   const chart2Height =
     Math.ceil((availableHeight * 1) / 2) - availableHeightCrop
 
   return (
-    <div className={`overflow-hidden`} style={{ width: CHART_WIDTH + 'px' }}>
+    <div
+      className={`overflow-hidden relative`}
+      style={{ width: CHART_WIDTH + 'px' }}
+    >
       {/* Show loading or error state for all charts */}
-      {loadingState && <LoadingState />}
-      {error && !loadingState && <ErrorState error={error} />}
+      {isLoading && <LoadingState />}
+      {error && !isLoading && <ErrorState error={error} />}
 
       {/* Render 2 aggregated charts */}
-      {!loadingState && !error && (
+      {!isLoading && !error && (
         <>
           {/* Chart: Aggregated Strength (average of all interval averages) */}
           <Chart
@@ -320,6 +248,12 @@ export function SyncedCharts({
           />
         </>
       )}
+
+      {/* Last updated time */}
+      <RealtimeIndicator
+        isRealtime={isRealtime}
+        lastUpdateTime={lastUpdateTime}
+      />
     </div>
   )
 }

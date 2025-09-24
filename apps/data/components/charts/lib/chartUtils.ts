@@ -71,6 +71,18 @@ export const calculateTimeRange = (
       earliestOverallTime,
       latestOverallTime - hoursBackInSeconds
     )
+
+    // Ensure start time is always before end time
+    // Add a small buffer if they're equal or too close
+    if (startTime >= latestOverallTime) {
+      // If we don't have enough data, show at least 1 hour
+      const oneHourInSeconds = 60 * 60
+      return {
+        from: (latestOverallTime - oneHourInSeconds) as Time,
+        to: latestOverallTime as Time,
+      }
+    }
+
     return {
       from: startTime as Time,
       to: latestOverallTime as Time,

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
-import { StrengthRowGet } from '@apps/common/sql/strength'
 import { createURLStorage, getQueryParams } from '../lib/urlSync'
 import { AVERAGE_OPTION } from '../constants'
 
@@ -130,9 +129,7 @@ type State = {
   timeRange: { from: Time; to: Time } | null
   cursorTime: Time | null
 
-  // Data states
-  error: string | null
-  rawData: (StrengthRowGet[] | null)[]
+  // Data states - only aggregated data, raw data managed by hook
   aggregatedStrengthData: LineData[] | null
   aggregatedPriceData: LineData[] | null
 
@@ -151,9 +148,7 @@ type Actions = {
   setTimeRange: (range: { from: Time; to: Time } | null) => void
   setCursorTime: (time: Time | null) => void
 
-  // Data setters
-  setError: (error: string | null) => void
-  setRawData: (data: (StrengthRowGet[] | null)[]) => void
+  // Data setters - removed raw data and error (managed by hook)
   setAggregatedStrengthData: (data: LineData[] | null) => void
   setAggregatedPriceData: (data: LineData[] | null) => void
 
@@ -190,9 +185,7 @@ const getInitialState = (): State => {
     timeRange: null,
     cursorTime: null,
 
-    // Data defaults
-    error: null,
-    rawData: [],
+    // Data defaults - removed raw data and error
     aggregatedStrengthData: null,
     aggregatedPriceData: null,
 
@@ -286,15 +279,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ cursorTime: time })
       },
 
-      // Data setters
-      setError: (error: string | null) => {
-        set({ error: error })
-      },
-
-      setRawData: (data: (StrengthRowGet[] | null)[]) => {
-        set({ rawData: data })
-      },
-
+      // Data setters - removed raw data and error setters
       setAggregatedStrengthData: (data: LineData[] | null) => {
         set({ aggregatedStrengthData: data })
       },

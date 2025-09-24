@@ -7,42 +7,51 @@ import { AVERAGE_OPTION } from '../constants'
 
 // Available intervals configuration
 export const intervalsOptions = [
-  { value: ['15S', '2', '3', '7', '44', '59'], label: 'all times' },
-  { value: ['7', '44', '59'], label: 'long' },
-  { value: ['15S', '2', '3', '7'], label: 'short' },
-  { value: ['15S'], label: '15sec' },
-  { value: ['2'], label: '2min' },
-  { value: ['3'], label: '3min' },
-  { value: ['7'], label: '7min' },
-  { value: ['44'], label: '44min' },
-  { value: ['59'], label: '59min' },
-  { value: ['2', '3', '7', '44', '59'], label: 'min' },
+  {
+    value: ['1', '4', '12', '60', '240'],
+    label: 'all',
+  },
+  { value: ['12', '60', '240'], label: 'long' },
+  { value: ['1', '4', '12'], label: 'short' },
+  { value: ['1'], label: '1m' },
+  { value: ['4'], label: '5m' },
+  { value: ['12'], label: '15m' },
+  { value: ['60'], label: '1h' },
+  { value: ['240'], label: '4h' },
 ]
 
 // Available hours back configuration
-export const hoursBackOptions = [
-  '240h',
-  '120h',
-  '60h',
-  '48h',
-  '36h',
-  '24h',
-  '12h',
-]
+export const hoursBackOptions = ['240h', '120h', '60h', '48h', '36h', '24h']
 
 // Available tickers configuration
 export const tickersOptions = [
   {
     label: 'Crypto',
-    value: ['BTCUSD', 'ETHUSD', 'SOLUSD', 'XRPUSD', 'SUIUSD', 'BNBUSD'],
+    value: [
+      'CX',
+      'BTCUSD',
+      'ETHUSD',
+      'SOLUSD',
+      'XRPUSD',
+      'SUIUSD',
+      'BNBUSD',
+      'DOGEUSD',
+      'AVAXUSD',
+      'NEARUSD',
+      'XLMUSD',
+    ],
   },
   {
-    label: 'ETH',
-    value: ['ETHUSD'],
+    label: 'CX',
+    value: ['CX'],
   },
   {
     label: 'BTC',
     value: ['BTCUSD'],
+  },
+  {
+    label: 'ETH',
+    value: ['ETHUSD'],
   },
   {
     label: 'SOL',
@@ -53,12 +62,28 @@ export const tickersOptions = [
     value: ['XRPUSD'],
   },
   {
+    label: 'XLM',
+    value: ['XLMUSD'],
+  },
+  {
     label: 'SUI',
     value: ['SUIUSD'],
   },
   {
+    label: 'AVAX',
+    value: ['AVAXUSD'],
+  },
+  {
     label: 'BNB',
     value: ['BNBUSD'],
+  },
+  {
+    label: 'NEAR',
+    value: ['NEARUSD'],
+  },
+  {
+    label: 'DOGE',
+    value: ['DOGEUSD'],
   },
   {
     label: 'ES1!, YM1!',
@@ -155,7 +180,7 @@ const getInitialState = (): State => {
   const defaultState: State = {
     // Control defaults
     hoursBack: hoursBackOptions[0]!,
-    controlInterval: intervalsOptions[1]!.value,
+    controlInterval: intervalsOptions[0]!.value,
     controlTickers: defaultTickers,
     // Default to "average" if multiple tickers, otherwise first ticker
     priceTicker:

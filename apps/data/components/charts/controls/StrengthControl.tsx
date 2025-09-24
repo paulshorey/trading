@@ -41,6 +41,8 @@ export default function StrengthControl({ showLabel = true }: Props) {
         dropdown: {
           boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
           marginTop: '-22.5vh',
+          maxHeight: '45vh',
+          overflowY: 'auto',
         },
       }}
     >

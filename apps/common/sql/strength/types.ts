@@ -8,13 +8,11 @@ export type StrengthRowGet = {
   app_name: string;
   node_env: string;
   time: number; // Added for UI consistency with other modules
-  "15S": number | null;
-  "2": number | null;
-  "3": number | null;
-  "7": number | null;
-  "44": number | null;
-  "59": number | null;
-  "180": number | null;
+  "1": number | null;
+  "4": number | null;
+  "12": number | null;
+  "60": number | null;
+  "240": number | null;
   created_at: Date; // DateTime as ISO string
 };
 

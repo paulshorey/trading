@@ -1,7 +1,3 @@
----
-alwaysApply: true
----
-
 This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo to build, test, and deploy.
 
 ### Folder structure:
@@ -51,7 +47,3 @@ Neon database project "data" has two branches:
 ### Questions:
 
 If I present you with a contradictory or confusing question, comment, or evidence, and you do not understand what I mean, please ask me to clarify.
-
-### Do not run build
-
-Do NOT run `pnpm run build` or `npm run build` or `npm run` or anything like that. I will check for build errors myself.

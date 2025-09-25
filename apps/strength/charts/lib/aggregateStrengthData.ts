@@ -65,12 +65,14 @@ export const aggregateStrengthData = (
 
   // Log aggregation result for debugging
   if (lineData.length > 0) {
+    const lastPoint = lineData[lineData.length - 1]
     console.log('[aggregateStrengthData] Aggregated strength data:', {
       inputTickers: allRawData.length,
       intervals: control_intervals,
       outputPoints: lineData.length,
       firstTime: new Date((lineData[0]?.time as number) * 1000).toISOString(),
-      lastTime: new Date((lineData[lineData.length - 1]?.time as number) * 1000).toISOString(),
+      lastTime: new Date((lastPoint?.time as number) * 1000).toISOString(),
+      lastValue: lastPoint?.value,
     })
   }
 

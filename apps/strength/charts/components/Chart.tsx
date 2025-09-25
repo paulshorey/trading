@@ -203,10 +203,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
               if (onlyLastChanged && lastCurrent && lastPrev &&
                   Math.abs(lastCurrent.value - lastPrev.value) > 0.0001) {
-                console.log(`[Chart] Updating only last point value for ${name}`)
+                console.log(`[Chart] Updating only last point value for ${name}`, {
+                  time: new Date((lastCurrent.time as number) * 1000).toISOString(),
+                  oldValue: lastPrev.value,
+                  newValue: lastCurrent.value
+                })
                 try {
                   seriesRef.current.update(lastCurrent)
                 } catch (err) {
+                  console.error(`[Chart] Failed to update last point for ${name}`, err)
                   seriesRef.current.setData(currentData)
                 }
               } else {

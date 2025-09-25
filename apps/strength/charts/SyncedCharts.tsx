@@ -90,6 +90,13 @@ export function SyncedCharts({
    * 2. Price data: normalized average of selected price tickers
    */
   useEffect(() => {
+    console.log('[SyncedCharts] Aggregation effect triggered', {
+      hasRawData: rawData.length > 0,
+      lastUpdateTime: lastUpdateTime?.toISOString(),
+      controlTickers,
+      priceTickers,
+    })
+
     if (rawData.length > 0 && rawData.some((data) => data !== null)) {
       // Filter raw data based on selected tickers
       // rawData is ordered the same as marketTickers
@@ -163,15 +170,16 @@ export function SyncedCharts({
         }
       }
 
-      // Store previous data for comparison
-      prevAggregatedStrengthRef.current = aggregatedStrengthData
-      prevAggregatedPriceRef.current = aggregatedPriceData
-
       // Always create new array references to ensure React detects changes
-      setAggregatedStrengthData(
-        strengthData.length > 0 ? [...strengthData] : null
-      )
-      setAggregatedPriceData(priceData.length > 0 ? [...priceData] : null)
+      const newStrengthData = strengthData.length > 0 ? [...strengthData] : null
+      const newPriceData = priceData.length > 0 ? [...priceData] : null
+
+      setAggregatedStrengthData(newStrengthData)
+      setAggregatedPriceData(newPriceData)
+
+      // Store current data for next comparison (after setting state)
+      prevAggregatedStrengthRef.current = newStrengthData
+      prevAggregatedPriceRef.current = newPriceData
     }
   }, [
     controlInterval,
@@ -267,7 +275,7 @@ export function SyncedCharts({
         <>
           {/* Chart: Aggregated Strength (average of all interval averages) */}
           <Chart
-            key={`strength-chart-${controlTickers.join('-')}`}
+            key="strength-chart"
             ref={(el) => {
               chartComponentRefs.current[0] = el
             }}
@@ -293,7 +301,7 @@ export function SyncedCharts({
 
           {/* Chart: Price Tickers */}
           <Chart
-            key={`price-chart-${priceTickers.join('-')}`}
+            key="price-chart"
             ref={(el) => {
               chartComponentRefs.current[1] = el
             }}

@@ -45,11 +45,30 @@ export class StrengthDataService {
       // Convert date strings back to Date objects
       let rows = data.rows
       if (rows && rows.length > 0) {
-        rows = rows.map((row: any) => ({
-          ...row,
-          timenow: new Date(row.timenow),
-          created_at: new Date(row.created_at),
-        }))
+        rows = rows.map((row: any) => {
+          const timenow = new Date(row.timenow)
+
+          // Validate that timenow is at even minutes with no seconds
+          const minutes = timenow.getMinutes()
+          const seconds = timenow.getSeconds()
+          const milliseconds = timenow.getMilliseconds()
+
+          if (minutes % 2 !== 0 || seconds !== 0 || milliseconds !== 0) {
+            console.warn('[fetchTickerData] Invalid timestamp detected:', {
+              ticker: params.ticker,
+              timenow: timenow.toISOString(),
+              minutes,
+              seconds,
+              milliseconds
+            })
+          }
+
+          return {
+            ...row,
+            timenow,
+            created_at: new Date(row.created_at),
+          }
+        })
 
         // Ensure data is sorted in ascending order by timenow
         rows.sort(
@@ -107,6 +126,7 @@ export class StrengthDataService {
 
   /**
    * Merge new data with existing data, handling duplicates
+   * IMPORTANT: Uses timenow as the exact timestamp (should be even minutes, no seconds)
    */
   static mergeData(
     existingData: StrengthRowGet[],
@@ -129,10 +149,31 @@ export class StrengthDataService {
       dataMap.set(timestamp, item)
     })
 
+    // Log what we're merging
+    console.log('[mergeData] Merging data:', {
+      existingCount: existingData.length,
+      newCount: newData.length,
+      existingLast: existingData[existingData.length - 1]?.timenow,
+      newFirst: newData[0]?.timenow,
+      newLast: newData[newData.length - 1]?.timenow
+    })
+
     // Add or update with new data
+    let updatedCount = 0
+    let addedCount = 0
     newData.forEach((item) => {
       const timestamp = item.timenow.getTime()
+      if (dataMap.has(timestamp)) {
+        updatedCount++
+      } else {
+        addedCount++
+      }
       dataMap.set(timestamp, item)
+    })
+
+    console.log('[mergeData] Merge result:', {
+      updatedPoints: updatedCount,
+      newPoints: addedCount
     })
 
     // Convert back to array and sort by time (ascending order)

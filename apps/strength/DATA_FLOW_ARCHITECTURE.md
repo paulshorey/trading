@@ -4,6 +4,29 @@
 
 The Strength app displays two synchronized financial charts (Strength and Price) with real-time data updates. Data flows from API → Raw Storage → Aggregation → Chart Display.
 
+## Data Structure
+
+### Database Row (StrengthRowGet)
+```typescript
+{
+  timenow: Date      // CRITICAL: Even minutes only (0, 2, 4...), no seconds
+  ticker: string     // Market ticker symbol
+  price: number      // Current price
+  volume: number     // Trading volume
+  "1": number        // 1-minute interval strength
+  "4": number        // 4-minute interval strength
+  "12": number       // 12-minute interval strength
+  "60": number       // 60-minute (1hr) interval strength
+  "240": number      // 240-minute (4hr) interval strength
+}
+```
+
+### Timestamp Requirements
+- **Even Minutes Only**: All timestamps MUST be at even minutes (0, 2, 4, 6...)
+- **No Seconds/Milliseconds**: Seconds and milliseconds must be 0
+- **2-Minute Intervals**: Data points are spaced exactly 2 minutes apart
+- **Consistent X-Axis**: The `timenow` field is used directly as chart x-axis
+
 ## Core Architecture Principles
 
 1. **Cache at the Raw Data Level**: Always cache individual ticker data, not aggregated results
@@ -87,20 +110,29 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 1. **Fetch** (every 60 seconds):
    - `fetchRealtimeUpdate()` gets new data since `lastDataTimestampRef`
    - Only fetches data newer than the last known timestamp
+   - New data points should be at even minutes (e.g., 14:02, 14:04, 14:06)
 
 2. **Merge** (at raw data level):
    - `StrengthDataService.mergeData()` combines with existing data
+   - Uses `timenow.getTime()` as unique key for deduplication
+   - Updates existing points if timestamps match exactly
+   - Adds new points if timestamps are new
    - Updates `lastDataTimestampRef` with newest timestamp
    - Triggers `setRawData()` which updates the state
 
 3. **Re-aggregate** (triggered by state change):
    - `useEffect` in `SyncedCharts` detects `lastUpdateTime` change
    - Re-runs aggregation functions with updated raw data
+   - Preserves exact timestamps from `timenow` field
    - Produces new aggregated arrays with updated values
 
 4. **Update Chart** (efficient rendering):
-   - `Chart` component detects only last value changed
-   - Uses `update()` method for efficient incremental update
+   - Chart uses Unix timestamps (seconds since epoch) for x-axis
+   - Conversion: `new Date(item.timenow).getTime() / 1000`
+   - `Chart` component detects update type:
+     - New points: Uses `update()` to append
+     - Value change at same time: Uses `update()` to modify
+     - Multiple changes: Uses `setData()` for full refresh
    - Preserves zoom, pan, and cursor position
 
 ## Ticker Selection Change Flow
@@ -172,6 +204,21 @@ if (onlyLastChanged) {
 ### Issue: Different data shown for Average vs Individual
 **Cause**: Using different timestamp sets for aggregation
 **Solution**: Always use full market data timestamps
+
+### Issue: Chart data becomes corrupted after real-time updates
+**Cause**: Timestamps not properly aligned to 2-minute intervals
+**Solution**:
+- Ensure all timestamps are at even minutes with 0 seconds
+- Use `timenow` directly without modification
+- Validate timestamps when fetching data
+- Log warnings for misaligned timestamps
+
+### Issue: Duplicate or missing data points
+**Cause**: Incorrect timestamp conversion or merging logic
+**Solution**:
+- Use `timenow.getTime()` as unique key for merging
+- Convert to chart format: `timenow.getTime() / 1000`
+- Never modify the original timestamp
 
 ## Testing Checklist
 

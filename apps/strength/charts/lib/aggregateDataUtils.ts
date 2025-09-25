@@ -67,20 +67,38 @@ export function forwardFillData<T extends { timestamp: number; value?: number }>
 
 /**
  * Extract all unique timestamps from multiple data arrays
+ * IMPORTANT: Timestamps should be at even minutes with no seconds
  */
 export function extractGlobalTimestamps<T extends { timenow: Date }>(
   allData: (T[] | null)[]
 ): number[] {
   const globalTimestamps = new Set<number>()
+  const invalidTimestamps: string[] = []
 
   allData.forEach((data) => {
     if (data && data.length > 0) {
       data.forEach((item) => {
-        const timestamp = new Date(item.timenow).getTime() / 1000
+        const date = new Date(item.timenow)
+        const timestamp = date.getTime() / 1000
+
+        // Validate timestamp is at even minute with no seconds
+        const minutes = date.getMinutes()
+        const seconds = date.getSeconds()
+        if (minutes % 2 !== 0 || seconds !== 0) {
+          invalidTimestamps.push(date.toISOString())
+        }
+
         globalTimestamps.add(timestamp)
       })
     }
   })
+
+  if (invalidTimestamps.length > 0) {
+    console.warn('[extractGlobalTimestamps] Found invalid timestamps:', {
+      count: invalidTimestamps.length,
+      samples: invalidTimestamps.slice(0, 5)
+    })
+  }
 
   return Array.from(globalTimestamps).sort((a, b) => a - b)
 }

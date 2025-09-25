@@ -178,7 +178,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             if (newDataPoints.length > 0) {
               // We have new points to add
               console.log(
-                `[Chart] Adding ${newDataPoints.length} new points to ${name}`
+                `[Chart] Adding ${newDataPoints.length} new points to ${name}`,
+                {
+                  newPoints: newDataPoints.map(p => ({
+                    time: new Date((p.time as number) * 1000).toISOString(),
+                    value: p.value
+                  }))
+                }
               )
               let updateFailed = false
 
@@ -187,7 +193,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
                   seriesRef.current.update(point)
                 } catch (err) {
                   console.warn(
-                    `[Chart] Incremental update failed for ${name}, using setData`
+                    `[Chart] Incremental update failed for ${name}, using setData`,
+                    {
+                      pointTime: new Date((point.time as number) * 1000).toISOString(),
+                      error: err
+                    }
                   )
                   updateFailed = true
                   break
@@ -220,24 +230,40 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
                 lastPrev &&
                 Math.abs(lastCurrent.value - lastPrev.value) > 0.0001
               ) {
+                const currentDate = new Date((lastCurrent.time as number) * 1000)
+                const prevDate = new Date((lastPrev.time as number) * 1000)
+
                 console.log(
                   `[Chart] Updating only last point value for ${name}`,
                   {
-                    time: new Date(
-                      (lastCurrent.time as number) * 1000
-                    ).toISOString(),
+                    currentTime: currentDate.toISOString(),
+                    prevTime: prevDate.toISOString(),
+                    timesMatch: lastCurrent.time === lastPrev.time,
                     oldValue: lastPrev.value,
                     newValue: lastCurrent.value,
+                    currentMinutes: currentDate.getMinutes(),
+                    currentSeconds: currentDate.getSeconds(),
                   }
                 )
-                try {
-                  seriesRef.current.update(lastCurrent)
-                } catch (err) {
-                  console.error(
-                    `[Chart] Failed to update last point for ${name}`,
-                    err
-                  )
+
+                // Validate timestamp alignment
+                if (lastCurrent.time !== lastPrev.time) {
+                  console.error(`[Chart] TIMESTAMP MISMATCH in real-time update for ${name}!`, {
+                    prevTime: prevDate.toISOString(),
+                    currentTime: currentDate.toISOString()
+                  })
+                  // Force full reset if timestamps don't match
                   seriesRef.current.setData(currentData)
+                } else {
+                  try {
+                    seriesRef.current.update(lastCurrent)
+                  } catch (err) {
+                    console.error(
+                      `[Chart] Failed to update last point for ${name}`,
+                      err
+                    )
+                    seriesRef.current.setData(currentData)
+                  }
                 }
               } else {
                 // Multiple values changed - need full reset

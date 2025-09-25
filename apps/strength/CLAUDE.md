@@ -49,6 +49,9 @@ Chart 2: price. The user controls which data to show in each chart.
 ## Important Notes
 
 - See `DATA_FLOW_ARCHITECTURE.md` for detailed explanation of the recent data flow optimization
+- SQL types and database functions are in `./sql/strength/` folder
+- All timestamps MUST be at even minutes (0, 2, 4...) with no seconds
+- The `timenow` field from database is used directly as chart x-axis timestamp
 
 ## Keeping notes and documenting changes
 

@@ -1,3 +1,15 @@
+# Files
+
+charts/lib/aggregatePriceData.ts - filter and format line data from multiple tickers for Price chart
+charts/lib/aggregateStrengthData.ts - filter and format line data from multiple tickers for Strength chart
+charts/lib/aggregateDataUtils.ts - utilities for aggregatePriceData and aggregateStrengthData
+charts/lib/chartConfig.ts - set up the chart options, axis, and inputs
+charts/lib/chartSync.ts - works with SyncedCharts.tsx component to synchronize the x-axis and time range
+charts/lib/chartUtils.ts - utilities for x-axis, converting, and formatting chart data
+charts/lib/strengthDataService.ts - fetch strength/price data
+charts/lib/urlSync.ts -
+charts/lib/useRealtimeStrengthData.ts - polls for new data every minute
+
 # Real-time Data Updates
 
 ## Overview
@@ -35,31 +47,29 @@ The charts now support real-time data updates that automatically fetch and displ
 
 ### Key Components
 
-#### `strengthDataService.ts`
-
-- Centralized service for all API calls
-- Handles date preparation (even minutes, no seconds)
-- Provides data merging utilities
-
-#### `useRealtimeStrengthData.ts`
-
-- Custom React hook managing real-time data
-- Handles initial load and periodic updates
-- Manages update intervals and cleanup
-
 #### `SyncedCharts.tsx`
 
 - Uses the real-time hook for data management
 - Aggregates data for display
 - Manages chart synchronization
 
-#### `Chart.tsx`
+#### `lib/strengthDataService.ts`
+
+- Centralized service for all API calls
+- Handles date preparation (even minutes, no seconds)
+- Provides data merging utilities
+
+#### `lib/useRealtimeStrengthData.ts`
+
+- Custom React hook managing real-time data
+- Handles initial load and periodic updates
+- Manages update intervals and cleanup
+
+#### `components/Chart.tsx`
 
 - Enhanced to handle incremental updates
 - Intelligently determines when to use `setData()` vs `update()`
 - Preserves chart state during updates
-
-## Configuration
 
 ### Update Interval
 
@@ -76,53 +86,3 @@ const { rawData, isLoading, error, lastUpdateTime, isRealtime } =
     updateIntervalMs: 60000, // Change this value (milliseconds)
   })
 ```
-
-### Data History
-
-Default: 240 hours (10 days)
-
-To modify, change the `maxDataHours` parameter.
-
-## API Requirements
-
-The API endpoint `/api/v1/strength` must support:
-
-- `ticker`: Ticker symbol to fetch
-- `timenow_gt`: Start date/time (exclusive)
-- `timenow_lt`: End date/time (exclusive) - optional
-
-## Performance Considerations
-
-1. **Incremental Updates**: Only new data points are fetched and processed
-2. **Efficient Merging**: Uses Map-based deduplication for O(n) performance
-3. **Smart Chart Updates**: Only updates changed data points
-4. **Resource Cleanup**: Properly cleans up intervals on unmount
-
-## Troubleshooting
-
-### Data Not Updating
-
-- Check browser console for API errors
-- Verify API endpoint is responding
-- Ensure ticker symbols are valid
-
-### Chart Performance Issues
-
-- Consider reducing update frequency if needed
-- Check if data aggregation is taking too long
-- Monitor browser memory usage
-
-### Visual Glitches
-
-- Ensure chart width/height are properly set
-- Check for CSS conflicts
-- Verify time range calculations
-
-## Future Enhancements
-
-Potential improvements:
-
-- WebSocket support for instant updates
-- Configurable update intervals per user
-- Data caching and offline support
-- Alert notifications for significant changes

@@ -4,11 +4,7 @@ import { useEffect, useRef } from 'react'
 import { Time, ISeriesApi, LineData } from 'lightweight-charts'
 import { useRealtimeStrengthData } from './lib/useRealtimeStrengthData'
 
-import {
-  calculateTimeRange,
-  aggregateStrengthData,
-  aggregatePriceData,
-} from './lib/chartUtils'
+import { calculateTimeRange } from './lib/chartUtils'
 import { applyCursorToAllCharts } from './lib/chartSync'
 
 import { Chart, ChartRef } from './components/Chart'
@@ -19,6 +15,8 @@ import { CHART_WIDTH } from './constants'
 import PriceControl from './controls/PriceControl'
 import StrengthControl from './controls/StrengthControl'
 import MarketControl from './controls/MarketControl'
+import { aggregatePriceData } from './lib/aggregatePriceData'
+import { aggregateStrengthData } from './lib/aggregateStrengthData'
 
 export interface SyncedChartsProps {
   availableHeight: number

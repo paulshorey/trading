@@ -1,8 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
-import { createURLStorage, getQueryParams } from '../lib/urlSync'
-import { AVERAGE_OPTION } from '../constants'
+import { createURLStorage, getQueryParams } from './lib/urlSync'
 
 // Available intervals configuration
 export const intervalsOptions = [
@@ -60,7 +59,7 @@ export const buildStrengthOptions = (marketTickers: string[]) => [
     label: 'Average',
     value: marketTickers,
   },
-  ...marketTickers.map(ticker => ({
+  ...marketTickers.map((ticker) => ({
     label: ticker,
     value: [ticker],
   })),
@@ -72,7 +71,7 @@ export const buildPriceOptions = (marketTickers: string[]) => [
     label: 'Average',
     value: marketTickers,
   },
-  ...marketTickers.map(ticker => ({
+  ...marketTickers.map((ticker) => ({
     label: ticker,
     value: [ticker],
   })),
@@ -173,22 +172,24 @@ const getInitialState = (): State => {
 
     if (urlParams.controlTickers !== undefined) {
       // Ensure controlTickers are subset of marketTickers
-      const validControlTickers = urlParams.controlTickers.filter((ticker: string) =>
-        defaultState.marketTickers.includes(ticker)
+      const validControlTickers = urlParams.controlTickers.filter(
+        (ticker: string) => defaultState.marketTickers.includes(ticker)
       )
-      defaultState.controlTickers = validControlTickers.length > 0
-        ? validControlTickers
-        : defaultState.marketTickers
+      defaultState.controlTickers =
+        validControlTickers.length > 0
+          ? validControlTickers
+          : defaultState.marketTickers
     }
 
     if (urlParams.priceTickers !== undefined) {
       // Ensure priceTickers are subset of marketTickers
-      const validPriceTickers = urlParams.priceTickers.filter((ticker: string) =>
-        defaultState.marketTickers.includes(ticker)
+      const validPriceTickers = urlParams.priceTickers.filter(
+        (ticker: string) => defaultState.marketTickers.includes(ticker)
       )
-      defaultState.priceTickers = validPriceTickers.length > 0
-        ? validPriceTickers
-        : defaultState.marketTickers
+      defaultState.priceTickers =
+        validPriceTickers.length > 0
+          ? validPriceTickers
+          : defaultState.marketTickers
     }
   }
 
@@ -212,7 +213,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       setMarketTickers: (tickers: string[]) => {
         const newMarketTickers = [...tickers]
-        set(state => {
+        set((state) => {
           // When market changes, reset strength and price to use all market tickers
           return {
             marketTickers: newMarketTickers,

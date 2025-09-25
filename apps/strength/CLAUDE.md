@@ -14,7 +14,7 @@ Chart 2: price. The user controls which data to show in each chart.
 - ./charts/components - general UI
 - ./charts/controls - dropdowns and selectors
 - ./charts/lib - utilities to configure the charts or filter data
-- ./charts/state - Zustand store, synced with the URL query params
+- ./charts/state - Zustand store, options for select fields, synced with the URL query params
 
 - ./sql/strength - get and add strength data in the database
 - ./sql/strength/types.ts - refer to this to know what object properties and database row columns the app logic uses
@@ -29,9 +29,21 @@ Chart 2: price. The user controls which data to show in each chart.
 
 ### Behavior
 
-- When user changes selected **Market tickers**, the Strength and Price selectors reset to their default "Average" (average of all available tickers), and new data is fetched for ALL market tickers
-- When user selects new **Strength tickers**, it filters existing cached data and updates only the Strength chart. Price chart remains unchanged.
-- When user selects new **Price tickers**, it filters existing cached data and updates only the Price chart. Strength chart remains unchanged.
+- When user changes selected **Market tickers**, both Strength and Price selectors reset to "Average" (all market tickers), and new data is fetched for ALL market tickers
+- When user selects new **Strength tickers**, it:
+  1. Updates the Strength chart with filtered cached data
+  2. Also updates Price tickers to match (Strength acts as master selector)
+  3. Both charts update to show the same ticker selection
+- When user selects new **Price tickers**, it:
+  1. Updates only the Price chart with filtered cached data
+  2. Does NOT affect Strength selection (Price can be changed independently)
+  3. Only the Price chart updates
+
+### Selector Hierarchy
+
+1. **Market** → Resets both Strength and Price to Average
+2. **Strength** → Sets both Strength and Price to the same selection
+3. **Price** → Changes only Price (independent selection)
 
 ### Technical Implementation
 

@@ -137,9 +137,30 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 
 ## Ticker Selection Change Flow
 
+### Selector Hierarchy
+
+1. **Market Selector** (Top Level):
+   - Changes available ticker options
+   - Resets both Strength and Price to "Average" (all tickers)
+   - Triggers new data fetch for all market tickers
+
+2. **Strength Selector** (Master):
+   - Updates `controlTickers` in store
+   - ALSO updates `priceTickers` to match
+   - Both charts update to show same selection
+   - Does NOT trigger new data fetch (uses cached data)
+
+3. **Price Selector** (Independent):
+   - Updates only `priceTickers` in store
+   - Does NOT affect `controlTickers`
+   - Only Price chart updates
+   - Does NOT trigger new data fetch (uses cached data)
+
+### Implementation Details
+
 1. **User Changes Selection**:
-   - Updates `controlTickers` or `priceTickers` in store
-   - Does NOT trigger new data fetch
+   - Updates appropriate tickers in store
+   - Does NOT trigger new data fetch (except Market)
 
 2. **Filter Raw Data**:
    - Maps selected tickers to indices in `marketTickers`

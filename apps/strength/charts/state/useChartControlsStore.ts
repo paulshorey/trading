@@ -220,22 +220,36 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       setMarketTickers: (tickers: string[]) => {
         const newMarketTickers = [...tickers]
+        console.log('[Store] Market changed, resetting both Strength and Price to Average:', {
+          newMarketTickers
+        })
         set((state) => {
-          // When market changes, reset strength and price to use all market tickers
+          // When market changes, reset both strength and price to use all market tickers (Average)
           return {
             marketTickers: newMarketTickers,
-            controlTickers: newMarketTickers,
-            priceTickers: newMarketTickers,
+            controlTickers: newMarketTickers,  // Reset to Average
+            priceTickers: newMarketTickers,    // Reset to Average
           }
         })
       },
 
       setControlTickers: (tickers: string[]) => {
-        // Ensure we create a new array reference for proper React effect triggering
-        set({ controlTickers: [...tickers] })
+        // When Strength (control) tickers change, also update Price tickers to match
+        // This makes Strength act as the master selector that sets the default for Price
+        console.log('[Store] Strength selector changed, updating both Strength and Price:', {
+          newTickers: tickers
+        })
+        set({
+          controlTickers: [...tickers],
+          priceTickers: [...tickers]  // Price follows Strength
+        })
       },
 
       setPriceTickers: (tickers: string[]) => {
+        // Price can be changed independently without affecting Strength
+        console.log('[Store] Price selector changed independently:', {
+          newPriceTickers: tickers
+        })
         // Ensure we create a new array reference for proper React effect triggering
         set({ priceTickers: [...tickers] })
       },

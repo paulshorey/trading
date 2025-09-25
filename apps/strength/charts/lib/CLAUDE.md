@@ -40,7 +40,7 @@ The charts now support real-time data updates that automatically fetch and displ
 
 ### Data Flow
 
-1. **Initial Load**: Fetches up to 240 hours of historical data
+1. **Initial Load**: Fetches up to MAX_DATA_HOURS hours of historical data
 2. **Real-time Updates**: Every minute, fetches only new data points
 3. **Data Merging**: Intelligently merges new data with existing data, handling duplicates
 4. **Chart Updates**: Incrementally updates chart series with new points
@@ -82,7 +82,7 @@ const { rawData, isLoading, error, lastUpdateTime, isRealtime } =
   useRealtimeStrengthData({
     tickers: controlTickers,
     enabled: controlTickers.length > 0,
-    maxDataHours: 240,
+    maxDataHours: MAX_DATA_HOURS,
     updateIntervalMs: 60000, // Change this value (milliseconds)
   })
 ```

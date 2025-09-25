@@ -131,98 +131,98 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const prevData = lastDataRef.current
         const currentData = chartData
 
+        // Check if data actually changed - compare values, not just structure
+        const dataChanged = !prevData ||
+          prevData.length !== currentData.length ||
+          prevData.some((item, index) => {
+            const currentItem = currentData[index]
+            return !currentItem ||
+              item.time !== currentItem.time ||
+              Math.abs(item.value - currentItem.value) > 0.0001 // Use small epsilon for float comparison
+          })
+
+        if (!dataChanged) {
+          // Data hasn't changed, no update needed
+          console.log(`[Chart] No data change detected for ${name}, skipping update`)
+          return
+        }
+
         if (!prevData || prevData.length === 0) {
           // Initial data load - use setData
+          console.log(`[Chart] Initial data load for ${name}`, {
+            dataPoints: currentData.length
+          })
           seriesRef.current.setData(currentData)
         } else {
-          // For real-time updates, we need to be careful with update()
-          // It can only update the last bar or add new ones after it
-
+          // For updates, determine the best approach
           const lastPrevTime = prevData[prevData.length - 1]?.time as number
           const lastCurrentTime = currentData[currentData.length - 1]
             ?.time as number
           const firstPrevTime = prevData[0]?.time as number
           const firstCurrentTime = currentData[0]?.time as number
 
-          // Check if data structure changed significantly
+          // Check if this is a real-time update (new data at the end)
           if (
-            currentData.length < prevData.length ||
-            firstCurrentTime !== firstPrevTime
+            firstCurrentTime === firstPrevTime &&
+            lastCurrentTime >= lastPrevTime &&
+            currentData.length >= prevData.length
           ) {
-            // Data was truncated or shifted - need full reset
-            seriesRef.current.setData(currentData)
-          } else if (lastCurrentTime > lastPrevTime) {
-            // We have new data points after the existing ones
-            // This is the ideal case for incremental updates
+            // This looks like a real-time update - try incremental
+            const newDataPoints = currentData.slice(prevData.length)
 
-            // Find all new points
-            const newDataPoints = currentData.filter(
-              (point) => (point.time as number) > lastPrevTime
-            )
+            if (newDataPoints.length > 0) {
+              // We have new points to add
+              console.log(`[Chart] Adding ${newDataPoints.length} new points to ${name}`)
+              let updateFailed = false
 
-            // Sort them to ensure chronological order
-            newDataPoints.sort(
-              (a, b) => (a.time as number) - (b.time as number)
-            )
-
-            // Add each new point
-            let updateFailed = false
-            for (const point of newDataPoints) {
-              try {
-                seriesRef.current.update(point)
-              } catch (err) {
-                console.warn(
-                  'Incremental update failed, falling back to setData',
-                  {
-                    error: err,
-                    pointTime: new Date(
-                      (point.time as number) * 1000
-                    ).toISOString(),
-                    pointValue: point.value,
-                  }
-                )
-                updateFailed = true
-                break
+              for (const point of newDataPoints) {
+                try {
+                  seriesRef.current.update(point)
+                } catch (err) {
+                  console.warn(`[Chart] Incremental update failed for ${name}, using setData`)
+                  updateFailed = true
+                  break
+                }
               }
-            }
 
-            // If any update failed, do a full reset
-            if (updateFailed) {
-              seriesRef.current.setData(currentData)
-            }
-          } else if (lastCurrentTime === lastPrevTime) {
-            // Same time range, check if last value changed
-            const lastCurrent = currentData[currentData.length - 1]
-            const lastPrev = prevData[prevData.length - 1]
-
-            if (
-              lastCurrent &&
-              lastPrev &&
-              lastCurrent.value !== lastPrev.value
-            ) {
-              // Last point value changed - update it
-              try {
-                seriesRef.current.update(lastCurrent)
-              } catch (err) {
-                console.warn('Failed to update last point, using setData', {
-                  error: err,
-                  time: new Date(
-                    (lastCurrent.time as number) * 1000
-                  ).toISOString(),
-                  oldValue: lastPrev.value,
-                  newValue: lastCurrent.value,
-                })
+              if (updateFailed) {
                 seriesRef.current.setData(currentData)
               }
-            } else if (
-              JSON.stringify(currentData) !== JSON.stringify(prevData)
-            ) {
-              // Some other data changed in the middle - need full reset
-              seriesRef.current.setData(currentData)
+            } else if (currentData.length === prevData.length) {
+              // Check if only the last value changed (real-time update of last bar)
+              const lastCurrent = currentData[currentData.length - 1]
+              const lastPrev = prevData[prevData.length - 1]
+
+              // Check if all other values are the same
+              const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
+                const prevItem = prevData[index]
+                return prevItem &&
+                  item.time === prevItem.time &&
+                  Math.abs(item.value - prevItem.value) < 0.0001
+              })
+
+              if (onlyLastChanged && lastCurrent && lastPrev &&
+                  Math.abs(lastCurrent.value - lastPrev.value) > 0.0001) {
+                console.log(`[Chart] Updating only last point value for ${name}`)
+                try {
+                  seriesRef.current.update(lastCurrent)
+                } catch (err) {
+                  seriesRef.current.setData(currentData)
+                }
+              } else {
+                // Multiple values changed - need full reset
+                console.log(`[Chart] Multiple values changed for ${name}, full reset`)
+                seriesRef.current.setData(currentData)
+              }
             }
-            // If data is identical, do nothing
           } else {
-            // Fallback - use setData for any other case
+            // This is a ticker change or data structure change - full reset
+            console.log(`[Chart] Ticker or data structure change for ${name}, full reset`, {
+              prevLength: prevData.length,
+              currentLength: currentData.length,
+              firstTimeChanged: firstCurrentTime !== firstPrevTime,
+              lastTimeChanged: lastCurrentTime !== lastPrevTime
+            })
             seriesRef.current.setData(currentData)
           }
         }
@@ -253,7 +253,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       } catch (error) {
         console.warn('Failed to update chart data:', error)
       }
-    }, [chartData, timeRange])
+    }, [chartData, timeRange, name])
 
     // Update chart dimensions when they change
     useEffect(() => {

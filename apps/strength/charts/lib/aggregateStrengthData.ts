@@ -12,10 +12,13 @@ import {
  */
 export const aggregateStrengthData = (
   allRawData: (StrengthRowGet[] | null)[],
-  control_intervals: string[]
+  control_intervals: string[],
+  allMarketData?: (StrengthRowGet[] | null)[] // Optional: all market data for consistent timestamps
 ): LineData[] => {
-  // Extract all unique timestamps
-  const sortedTimestamps = extractGlobalTimestamps(allRawData)
+  // Extract all unique timestamps from ALL market data to ensure consistency
+  // This prevents issues when switching between Average and individual tickers
+  const dataForTimestamps = allMarketData || allRawData
+  const sortedTimestamps = extractGlobalTimestamps(dataForTimestamps)
 
   if (sortedTimestamps.length === 0) {
     return []
@@ -54,9 +57,22 @@ export const aggregateStrengthData = (
     control_intervals
   )
 
-  // Convert to LineData format
-  return result.map((point) => ({
+  // Convert to LineData format - ensure we create new objects
+  const lineData = result.map((point) => ({
     time: point.time as Time,
     value: point.value,
   }))
+
+  // Log aggregation result for debugging
+  if (lineData.length > 0) {
+    console.log('[aggregateStrengthData] Aggregated strength data:', {
+      inputTickers: allRawData.length,
+      intervals: control_intervals,
+      outputPoints: lineData.length,
+      firstTime: new Date((lineData[0]?.time as number) * 1000).toISOString(),
+      lastTime: new Date((lineData[lineData.length - 1]?.time as number) * 1000).toISOString(),
+    })
+  }
+
+  return lineData
 }

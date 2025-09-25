@@ -13,10 +13,13 @@ import {
  * Uses the new utility functions for interpolation and normalization
  */
 export const aggregatePriceData = (
-  allRawData: (StrengthRowGet[] | null)[]
+  allRawData: (StrengthRowGet[] | null)[],
+  allMarketData?: (StrengthRowGet[] | null)[] // Optional: all market data for consistent timestamps
 ): LineData[] => {
-  // Step 1: Extract all timestamps across all tickers
-  const sortedTimestamps = extractGlobalTimestamps(allRawData)
+  // Step 1: Extract all timestamps from ALL market data to ensure consistency
+  // This prevents issues when switching between Average and individual tickers
+  const dataForTimestamps = allMarketData || allRawData
+  const sortedTimestamps = extractGlobalTimestamps(dataForTimestamps)
 
   if (sortedTimestamps.length === 0) {
     return []
@@ -29,7 +32,10 @@ export const aggregatePriceData = (
     hasAnyData: boolean
   }[] = []
 
-  allRawData.forEach((tickerData) => {
+  let tickersWithData = 0
+  let totalDataPoints = 0
+
+  allRawData.forEach((tickerData, tickerIndex) => {
     const filledPrices = new Map<number, number>()
     let hasAnyValidData = false
     let lastKnownPrice = 0
@@ -40,6 +46,7 @@ export const aggregatePriceData = (
         lastValidPrice: 0,
         hasAnyData: false,
       })
+      console.log(`[aggregatePrice] Ticker ${tickerIndex}: No data`)
       return
     }
 
@@ -63,9 +70,13 @@ export const aggregatePriceData = (
     if (tickerPrices.length > 0) {
       hasAnyValidData = true
       lastKnownPrice = tickerPrices[tickerPrices.length - 1]!.value
+      tickersWithData++
+      totalDataPoints += tickerPrices.length
 
       // Apply forward-fill interpolation using the utility function
       const interpolatedPrices = forwardFillData(tickerPrices, sortedTimestamps)
+
+      console.log(`[aggregatePrice] Ticker ${tickerIndex}: ${tickerPrices.length} values -> ${interpolatedPrices.size} filled`)
 
       // Get the last filled price for normalization
       const lastFilledPrice = interpolatedPrices.get(
@@ -92,9 +103,23 @@ export const aggregatePriceData = (
     sortedTimestamps
   )
 
-  // Convert to LineData format
-  return normalizedResult.map((point) => ({
+  // Convert to LineData format - ensure we create new objects
+  const lineData = normalizedResult.map((point) => ({
     time: point.time as Time,
     value: point.value,
   }))
+
+  // Log aggregation result for debugging
+  if (lineData.length > 0) {
+    console.log('[aggregatePriceData] Final result:', {
+      inputTickers: allRawData.length,
+      tickersWithData,
+      totalDataPoints,
+      outputPoints: lineData.length,
+      firstTime: new Date((lineData[0]?.time as number) * 1000).toISOString(),
+      lastTime: new Date((lineData[lineData.length - 1]?.time as number) * 1000).toISOString(),
+    })
+  }
+
+  return lineData
 }

@@ -170,13 +170,17 @@ export function aggregateStrengthDataWithInterpolation<T extends { timenow: Date
 
   // Track interpolated data for each ticker
   const tickerInterpolatedData: Map<number, number>[] = []
+  let tickersWithData = 0
+  let totalDataPoints = 0
 
   // Process each ticker's data
   allRawData.forEach((tickerData, tickerIndex) => {
-    if (!tickerData) {
+    if (!tickerData || tickerData.length === 0) {
       tickerInterpolatedData[tickerIndex] = new Map()
+      console.log(`[aggregateStrength] Ticker ${tickerIndex}: No data`)
       return
     }
+    tickersWithData++
 
     // Convert ticker data to timestamp/value pairs for interpolation
     const tickerValues = tickerData.map(item => ({
@@ -187,6 +191,9 @@ export function aggregateStrengthDataWithInterpolation<T extends { timenow: Date
     // Apply forward-fill interpolation
     const filledData = forwardFillData(tickerValues, sortedTimestamps)
     tickerInterpolatedData[tickerIndex] = filledData
+
+    console.log(`[aggregateStrength] Ticker ${tickerIndex}: ${tickerValues.length} values -> ${filledData.size} filled`)
+    totalDataPoints += tickerValues.length
 
     // Add interpolated values to aggregated map
     filledData.forEach((value, timestamp) => {
@@ -212,5 +219,9 @@ export function aggregateStrengthDataWithInterpolation<T extends { timenow: Date
   })
 
   // Sort by time
-  return result.sort((a, b) => a.time - b.time)
+  const sorted = result.sort((a, b) => a.time - b.time)
+
+  console.log(`[aggregateStrength] Final result: ${tickersWithData} tickers with ${totalDataPoints} total points -> ${sorted.length} aggregated points`)
+
+  return sorted
 }

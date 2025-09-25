@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { StrengthRowGet } from '@apps/common/sql/strength'
 import { StrengthDataService } from './strengthDataService'
+import { MAX_DATA_HOURS } from '../constants'
 
 export interface UseRealtimeStrengthDataOptions {
   tickers: string[]
@@ -24,7 +25,7 @@ export interface UseRealtimeStrengthDataResult {
 export function useRealtimeStrengthData({
   tickers,
   enabled = true,
-  maxDataHours = 240,
+  maxDataHours = MAX_DATA_HOURS,
   updateIntervalMs = 60000, // 1 minute default
 }: UseRealtimeStrengthDataOptions): UseRealtimeStrengthDataResult {
   const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>([])
@@ -72,6 +73,12 @@ export function useRealtimeStrengthData({
         const logData = {
           tickers,
           dataLengths: allTickerData.map((d) => d?.length || 0),
+          tickerDataMapping: tickers.map((ticker, idx) => ({
+            ticker,
+            hasData:
+              allTickerData[idx] !== null && allTickerData[idx]!.length > 0,
+            dataPoints: allTickerData[idx]?.length || 0,
+          })),
           latestDataTime: null as string | null,
         }
 

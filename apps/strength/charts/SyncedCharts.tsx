@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { Time, ISeriesApi, LineData } from 'lightweight-charts'
-import { useRealtimeStrengthData } from '../lib/useRealtimeStrengthData'
+import { useRealtimeStrengthData } from './lib/useRealtimeStrengthData'
 
 import {
   calculateTimeRange,

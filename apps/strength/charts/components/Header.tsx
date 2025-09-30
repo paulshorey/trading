@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react'
 import { ControlsDropdown } from '../controls/ControlsDropdown'
 import InlineControls from '../controls/InlineControls'
 import classes from '../classes.module.scss'
-import { PopupTickerSelector } from '../controls/PopupTickerSelector'
 
 export default function Header() {
   const [triggerOpen, setTriggerOpen] = useState(false)
@@ -38,9 +37,6 @@ export default function Header() {
           <ControlsDropdown />
         </div>
       </div>
-
-      {/* Ticker selector */}
-      <PopupTickerSelector triggerOpen={triggerOpen} />
     </div>
   )
 }

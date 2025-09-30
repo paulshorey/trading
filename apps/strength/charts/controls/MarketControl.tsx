@@ -4,7 +4,7 @@ import React from 'react'
 import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
 import {
   useChartControlsStore,
-  marketOptions,
+  tickersByMarket,
 } from '../state/useChartControlsStore'
 import { IconChevronDown } from '@tabler/icons-react'
 
@@ -14,17 +14,39 @@ interface Props {
 
 export default function MarketControl({ showLabel = true }: Props) {
   // Get state and actions from Zustand store
-  const { marketTickers, setMarketTickers } = useChartControlsStore()
+  const {
+    marketTickers,
+    setMarketTickers,
+    setControlTickers,
+    setPriceTickers,
+  } = useChartControlsStore()
 
-  // ComboBox for market selector
+  // ComboBox for ticker selector
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   })
 
-  // Find the selected option label
-  const selectedOption = marketOptions.find(
-    (item) => JSON.stringify(item.value) === JSON.stringify(marketTickers)
-  )
+  // Find the selected option label by searching through all markets
+  let selectedOption: { label: string; value: string[] } | undefined
+  for (const market of tickersByMarket) {
+    const found = market.tickers.find(
+      (ticker) => JSON.stringify(ticker.value) === JSON.stringify(marketTickers)
+    )
+    if (found) {
+      selectedOption = found
+      break
+    }
+  }
+
+  // Handler that calls all three setter functions
+  const handleTickerSelect = (val: string) => {
+    const tickers = JSON.parse(val) as string[]
+    // Call all three setters to update market, strength, and price
+    setMarketTickers(tickers)
+    setControlTickers(tickers)
+    setPriceTickers(tickers)
+    combobox.closeDropdown()
+  }
 
   return (
     <Combobox
@@ -32,15 +54,13 @@ export default function MarketControl({ showLabel = true }: Props) {
       store={combobox}
       withinPortal={true}
       position="top-start"
-      onOptionSubmit={(val) => {
-        setMarketTickers(JSON.parse(val) as string[])
-        combobox.closeDropdown()
-      }}
+      onOptionSubmit={handleTickerSelect}
       styles={{
         dropdown: {
           boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
-          // maxHeight: '45vh',
+          maxHeight: '60vh',
           overflowY: 'auto',
+          whiteSpace: 'nowrap',
         },
       }}
     >
@@ -59,25 +79,29 @@ export default function MarketControl({ showLabel = true }: Props) {
           rightSection={<IconChevronDown size={14} />}
           onClick={() => combobox.toggleDropdown()}
           rightSectionPointerEvents="none"
-          label={showLabel ? 'Market:' : null}
+          label={showLabel ? 'Ticker:' : null}
         >
           {selectedOption ? (
             selectedOption.label
           ) : (
-            <Input.Placeholder>Pick market</Input.Placeholder>
+            <Input.Placeholder>Pick ticker</Input.Placeholder>
           )}
         </InputBase>
       </Combobox.Target>
 
       <Combobox.Dropdown style={{ zIndex: 1000000000, minWidth: '125px' }}>
         <Combobox.Options>
-          {marketOptions.map((option) => (
-            <Combobox.Option
-              value={JSON.stringify(option.value)}
-              key={JSON.stringify(option.value)}
-            >
-              {option.label}
-            </Combobox.Option>
+          {tickersByMarket.map((market) => (
+            <Combobox.Group key={market.market} label={market.market}>
+              {market.tickers.map((ticker) => (
+                <Combobox.Option
+                  value={JSON.stringify(ticker.value)}
+                  key={JSON.stringify(ticker.value)}
+                >
+                  {ticker.label}
+                </Combobox.Option>
+              ))}
+            </Combobox.Group>
           ))}
         </Combobox.Options>
       </Combobox.Dropdown>

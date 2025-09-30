@@ -26,69 +26,140 @@ export const intervalsOptions = [
 // Available hours back configuration
 export const hoursBackOptions = ['240h', '120h', '60h', '48h', '36h', '24h']
 
-// Master selector - determines options for strength selector
-export const marketOptions = [
+// New: One and only selector for both strength and price charts
+export const tickersByMarket = [
   {
-    label: 'Crypto',
-    value: [
-      'CX',
-      'BTCUSD',
-      'ETHUSD',
-      'SOLUSD',
-      'XRPUSD',
-      'SUIUSD',
-      'BNBUSD',
-      'DOGEUSD',
-      'AVAXUSD',
-      'NEARUSD',
-      'XLMUSD',
+    market: '',
+    tickers: [
+      {
+        label: 'TN1! Ten Year',
+        value: ['TN1!'],
+      },
     ],
   },
   {
-    label: 'Equities',
-    value: ['ES1!', 'YM1!'],
+    market: '',
+    tickers: [
+      {
+        label: 'US Equities',
+        value: ['ES1!', 'YM1!'],
+      },
+      {
+        label: 'ES1!',
+        value: ['ES1!'],
+      },
+      {
+        label: 'YM1!',
+        value: ['YM1!'],
+      },
+    ],
   },
   {
-    label: 'Gold',
-    value: ['GC1!'],
+    market: '',
+    tickers: [
+      {
+        label: 'Metals',
+        value: ['HG1!', 'GC1!', 'SI1!', 'PL1!'],
+      },
+      {
+        label: 'Precious Metals',
+        value: ['GC1!', 'SI1!', 'PL1!'],
+      },
+      {
+        label: 'GC1!',
+        value: ['GC1!'],
+      },
+      {
+        label: 'SI1!',
+        value: ['SI1!'],
+      },
+      {
+        label: 'PL1!',
+        value: ['PL1!'],
+      },
+      {
+        label: 'HG1!',
+        value: ['HG1!'],
+      },
+    ],
   },
   {
-    label: 'Copper',
-    value: ['HG1!'],
-  },
-  {
-    label: 'Precious Metals',
-    value: ['GC1!', 'SI1!', 'PL1!'],
-  },
-  {
-    label: 'Treasuries',
-    value: ['TN1!'],
+    market: '',
+    tickers: [
+      {
+        label: 'Crypto Average',
+        value: [
+          'CX',
+          'BTCUSD',
+          'ETHUSD',
+          'SOLUSD',
+          'XRPUSD',
+          'SUIUSD',
+          'BNBUSD',
+          'DOGEUSD',
+          'AVAXUSD',
+          'NEARUSD',
+          'XLMUSD',
+        ],
+      },
+      {
+        label: 'CX',
+        value: ['CX'],
+      },
+      {
+        label: 'BTCUSD',
+        value: ['BTCUSD'],
+      },
+      {
+        label: 'ETHUSD',
+        value: ['ETHUSD'],
+      },
+      {
+        label: 'SOLUSD',
+        value: ['SOLUSD'],
+      },
+      {
+        label: 'XRPUSD',
+        value: ['XRPUSD'],
+      },
+      {
+        label: 'SUIUSD',
+        value: ['SUIUSD'],
+      },
+      {
+        label: 'BNBUSD',
+        value: ['BNBUSD'],
+      },
+      {
+        label: 'DOGEUSD',
+        value: ['DOGEUSD'],
+      },
+      {
+        label: 'AVAXUSD',
+        value: ['AVAXUSD'],
+      },
+      {
+        label: 'NEARUSD',
+        value: ['NEARUSD'],
+      },
+      {
+        label: 'XLMUSD',
+        value: ['XLMUSD'],
+      },
+    ],
   },
 ]
 
-// Function to build strength options dynamically based on selected market
-export const buildStrengthOptions = (marketTickers: string[]) => [
-  {
-    label: 'Average',
-    value: marketTickers,
-  },
-  ...marketTickers.map((ticker) => ({
-    label: ticker,
-    value: [ticker],
-  })),
-]
-
-// Function to build price options dynamically based on selected market
-export const buildPriceOptions = (marketTickers: string[]) => [
-  {
-    label: 'Average',
-    value: marketTickers,
-  },
-  ...marketTickers.map((ticker) => ({
-    label: ticker,
-    value: [ticker],
-  })),
-]
+// Helper function to get all unique tickers from the structure
+export const getAllTickers = (): string[] => {
+  const allTickers = new Set<string>()
+  tickersByMarket.forEach((market) => {
+    market.tickers.forEach((ticker) => {
+      ticker.value.forEach((t) => allTickers.add(t))
+    })
+  })
+  return Array.from(allTickers)
+}
 
 type State = {
   // Control states
@@ -146,16 +217,16 @@ const URL_SYNC_KEYS = [
 
 // Get initial values from URL if available
 const getInitialState = (): State => {
-  // Start with defaults - use first market option (Crypto)
-  const defaultMarketTickers = marketOptions[0]!.value
+  // Start with defaults - use first ticker option from first market (Crypto Average)
+  const defaultTickers = tickersByMarket[0]!.tickers[0]!.value
   const defaultState: State = {
     // Control defaults
     maxChartWidth: CHART_WIDTH_INITIAL,
     hoursBack: hoursBackOptions[0]!,
     controlInterval: intervalsOptions[0]!.value,
-    marketTickers: defaultMarketTickers,
-    controlTickers: defaultMarketTickers, // Start with all market tickers for strength
-    priceTickers: defaultMarketTickers, // Start with all market tickers for price
+    marketTickers: defaultTickers,
+    controlTickers: defaultTickers,
+    priceTickers: defaultTickers,
 
     // Time and cursor defaults
     timeRange: null,
@@ -227,44 +298,31 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       },
 
       setMarketTickers: (tickers: string[]) => {
-        const newMarketTickers = [...tickers]
-        console.log(
-          '[Store] Market changed, resetting both Strength and Price to Average:',
-          {
-            newMarketTickers,
-          }
-        )
-        set((state) => {
-          // When market changes, reset both strength and price to use all market tickers (Average)
-          return {
-            marketTickers: newMarketTickers,
-            controlTickers: newMarketTickers, // Reset to Average
-            priceTickers: newMarketTickers, // Reset to Average
-          }
+        // Update market tickers (used for data fetching)
+        const newTickers = [...tickers]
+        console.log('[Store] Market tickers changed:', {
+          newTickers,
+        })
+        set({
+          marketTickers: newTickers,
         })
       },
 
       setControlTickers: (tickers: string[]) => {
-        // When Strength (control) tickers change, also update Price tickers to match
-        // This makes Strength act as the master selector that sets the default for Price
-        console.log(
-          '[Store] Strength selector changed, updating both Strength and Price:',
-          {
-            newTickers: tickers,
-          }
-        )
+        // Update control tickers (used for strength chart)
+        console.log('[Store] Strength tickers changed:', {
+          newTickers: tickers,
+        })
         set({
           controlTickers: [...tickers],
-          priceTickers: [...tickers], // Price follows Strength
         })
       },
 
       setPriceTickers: (tickers: string[]) => {
-        // Price can be changed independently without affecting Strength
-        console.log('[Store] Price selector changed independently:', {
+        // Update price tickers (used for price chart)
+        console.log('[Store] Price tickers changed:', {
           newPriceTickers: tickers,
         })
-        // Ensure we create a new array reference for proper React effect triggering
         set({ priceTickers: [...tickers] })
       },
 

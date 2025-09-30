@@ -12,8 +12,6 @@ import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { CHART_WIDTH_INITIAL, HOURS_BACK_INITIAL } from './constants'
-import PriceControl from './controls/PriceControl'
-import StrengthControl from './controls/StrengthControl'
 import { aggregatePriceData } from './lib/aggregatePriceData'
 import { aggregateStrengthData } from './lib/aggregateStrengthData'
 import MarketControl from './controls/MarketControl'
@@ -281,7 +279,6 @@ export function SyncedCharts({
             name={`Strength`}
             heading={
               <span className="flex flex-row pl-[5px]">
-                <StrengthControl showLabel={false} />
                 <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
                   Strength
                 </span>
@@ -306,8 +303,6 @@ export function SyncedCharts({
             chartData={aggregatedPriceData}
             heading={
               <span className="flex flex-row pl-[5px]">
-                {/* <span className="pt-1 pr-1 opacity-50 text-sm">Price of</span> */}
-                <PriceControl showLabel={false} />
                 <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">Price</span>
               </span>
             }
@@ -325,14 +320,13 @@ export function SyncedCharts({
       {/* Last updated time */}
       <UpdatedTime isRealtime={isRealtime} lastUpdateTime={lastUpdateTime} />
 
-      {/* Market control */}
+      {/* Ticker control */}
       <div
         className="fixed top-[33px] left-[9px] font-normal z-[10000]"
         dir="ltr"
       >
         <div className="flex flex-row relative">
           <MarketControl showLabel={false} />
-          <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">Market</span>
         </div>
       </div>
     </div>

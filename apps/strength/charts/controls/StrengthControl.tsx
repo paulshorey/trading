@@ -43,8 +43,8 @@ export default function StrengthControl({ showLabel = true }: Props) {
       styles={{
         dropdown: {
           boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
-          marginTop: '-20vh',
-          maxHeight: '50vh',
+          // marginTop: '-20vh',
+          // maxHeight: '40vh',
           overflowY: 'auto',
         },
       }}

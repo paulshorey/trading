@@ -201,10 +201,27 @@ export function aggregateStrengthDataWithInterpolation<T extends { timenow: Date
     tickersWithData++
 
     // Convert ticker data to timestamp/value pairs for interpolation
-    const tickerValues = tickerData.map(item => ({
-      timestamp: new Date(item.timenow).getTime() / 1000,
-      value: getStrengthValue(item, controlIntervals)
-    })).filter(item => item.value !== null) as Array<{ timestamp: number; value: number }>
+    // Skip entries where ALL interval values are null (empty pre-created rows)
+    const tickerValues = tickerData
+      .map(item => {
+        const value = getStrengthValue(item, controlIntervals)
+        // Only include if we have actual data (not empty pre-created rows)
+        if (value === null || value === 0) {
+          // Check if this is an empty row (all strength values are null)
+          const hasAnyData = controlIntervals.some(interval =>
+            item[interval as keyof typeof item] !== null &&
+            item[interval as keyof typeof item] !== undefined
+          )
+          if (!hasAnyData) {
+            return null // Skip empty pre-created rows
+          }
+        }
+        return {
+          timestamp: new Date(item.timenow).getTime() / 1000,
+          value
+        }
+      })
+      .filter(item => item !== null && item.value !== null) as Array<{ timestamp: number; value: number }>
 
     // Apply forward-fill interpolation
     const filledData = forwardFillData(tickerValues, sortedTimestamps)

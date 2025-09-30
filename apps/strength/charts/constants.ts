@@ -1,2 +1,2 @@
-export const CHART_WIDTH_INITIAL = 3600
+export const CHART_WIDTH_INITIAL = 2400
 export const HOURS_BACK_INITIAL = 240

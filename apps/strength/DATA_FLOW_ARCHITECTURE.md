@@ -107,10 +107,21 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 
 ## Real-time Update Flow
 
+### Important: 2-Minute Interval Behavior
+- Database saves data every minute but to 2-minute intervals (even minutes only)
+- Database pre-creates empty rows with just timestamps (no data)
+- The same timestamp (e.g., 14:02) might be updated multiple times as data arrives
+- Must handle both new data points AND updates to existing points
+
 1. **Fetch** (every 60 seconds):
-   - `fetchRealtimeUpdate()` gets new data since `lastDataTimestampRef`
-   - Only fetches data newer than the last known timestamp
-   - New data points should be at even minutes (e.g., 14:02, 14:04, 14:06)
+   - `fetchRealtimeUpdate()` fetches the LAST TWO 2-minute intervals
+   - Current interval: Might be empty (pre-created) or partially filled
+   - Previous interval: Might still be receiving updates
+   - Example: At 14:03, fetches both 14:02 (previous) and 14:04 (current)
+   - This ensures we capture:
+     - Updates to the previous interval (14:02)
+     - New data for the current interval (14:04)
+   - Empty pre-created rows are filtered out during aggregation
 
 2. **Merge** (at raw data level):
    - `StrengthDataService.mergeData()` combines with existing data

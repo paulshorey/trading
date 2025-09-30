@@ -1,12 +1,20 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { ControlsDropdown } from '../controls/ControlsDropdown'
 import InlineControls from '../controls/InlineControls'
 import classes from '../classes.module.scss'
-import MarketControl from '../controls/MarketControl'
+import { PopupTickerSelector } from '../controls/PopupTickerSelector'
 
 export default function Header() {
+  const [triggerOpen, setTriggerOpen] = useState(false)
+  useEffect(() => {
+    setTimeout(() => setTriggerOpen(true), 500)
+    return () => {
+      setTriggerOpen(false)
+    }
+  }, [])
+
   return (
     <div dir="ltr" className={classes.Header}>
       {/* Top bar */}
@@ -30,6 +38,9 @@ export default function Header() {
           <ControlsDropdown />
         </div>
       </div>
+
+      {/* Ticker selector */}
+      <PopupTickerSelector triggerOpen={triggerOpen} />
     </div>
   )
 }

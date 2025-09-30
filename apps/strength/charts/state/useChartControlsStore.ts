@@ -7,6 +7,10 @@ import { CHART_WIDTH_INITIAL } from '../constants'
 // Available intervals configuration
 export const intervalsOptions = [
   {
+    value: ['4', '12', '60', '240'],
+    label: 'multi',
+  },
+  {
     value: ['1', '4', '12', '60', '240'],
     label: 'all',
   },
@@ -41,16 +45,20 @@ export const marketOptions = [
     ],
   },
   {
-    label: 'Futures',
-    value: ['GC1!', 'SI1!', 'PL1!', 'ES1!', 'YM1!', 'TN1!'],
-  },
-  {
-    label: 'Metals',
-    value: ['GC1!', 'SI1!', 'PL1!'],
-  },
-  {
     label: 'Equities',
     value: ['ES1!', 'YM1!'],
+  },
+  {
+    label: 'Gold',
+    value: ['GC1!'],
+  },
+  {
+    label: 'Copper',
+    value: ['HG1!'],
+  },
+  {
+    label: 'Precious Metals',
+    value: ['GC1!', 'SI1!', 'PL1!'],
   },
   {
     label: 'Treasuries',
@@ -220,15 +228,18 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       setMarketTickers: (tickers: string[]) => {
         const newMarketTickers = [...tickers]
-        console.log('[Store] Market changed, resetting both Strength and Price to Average:', {
-          newMarketTickers
-        })
+        console.log(
+          '[Store] Market changed, resetting both Strength and Price to Average:',
+          {
+            newMarketTickers,
+          }
+        )
         set((state) => {
           // When market changes, reset both strength and price to use all market tickers (Average)
           return {
             marketTickers: newMarketTickers,
-            controlTickers: newMarketTickers,  // Reset to Average
-            priceTickers: newMarketTickers,    // Reset to Average
+            controlTickers: newMarketTickers, // Reset to Average
+            priceTickers: newMarketTickers, // Reset to Average
           }
         })
       },
@@ -236,19 +247,22 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       setControlTickers: (tickers: string[]) => {
         // When Strength (control) tickers change, also update Price tickers to match
         // This makes Strength act as the master selector that sets the default for Price
-        console.log('[Store] Strength selector changed, updating both Strength and Price:', {
-          newTickers: tickers
-        })
+        console.log(
+          '[Store] Strength selector changed, updating both Strength and Price:',
+          {
+            newTickers: tickers,
+          }
+        )
         set({
           controlTickers: [...tickers],
-          priceTickers: [...tickers]  // Price follows Strength
+          priceTickers: [...tickers], // Price follows Strength
         })
       },
 
       setPriceTickers: (tickers: string[]) => {
         // Price can be changed independently without affecting Strength
         console.log('[Store] Price selector changed independently:', {
-          newPriceTickers: tickers
+          newPriceTickers: tickers,
         })
         // Ensure we create a new array reference for proper React effect triggering
         set({ priceTickers: [...tickers] })

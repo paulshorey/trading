@@ -150,20 +150,53 @@ export class StrengthDataService {
     })
 
     // Log what we're merging
+    const existingLast = existingData[existingData.length - 1]
+    const existingSecondLast = existingData[existingData.length - 2]
+
     console.log('[mergeData] Merging data:', {
       existingCount: existingData.length,
       newCount: newData.length,
-      existingLast: existingData[existingData.length - 1]?.timenow,
-      newFirst: newData[0]?.timenow,
-      newLast: newData[newData.length - 1]?.timenow
+      lastTwoExisting: [
+        existingSecondLast ? {
+          time: existingSecondLast.timenow.toISOString(),
+          price: existingSecondLast.price,
+          strength1: existingSecondLast['1']
+        } : null,
+        existingLast ? {
+          time: existingLast.timenow.toISOString(),
+          price: existingLast.price,
+          strength1: existingLast['1']
+        } : null
+      ].filter(Boolean),
+      newData: newData.map(d => ({
+        time: d.timenow.toISOString(),
+        price: d.price,
+        strength1: d['1']
+      }))
     })
 
     // Add or update with new data
     let updatedCount = 0
     let addedCount = 0
+    const updates: string[] = []
+
     newData.forEach((item) => {
       const timestamp = item.timenow.getTime()
-      if (dataMap.has(timestamp)) {
+      const existingItem = dataMap.get(timestamp)
+
+      if (existingItem) {
+        // Check if values actually changed
+        const strengthChanged =
+          existingItem['1'] !== item['1'] ||
+          existingItem['4'] !== item['4'] ||
+          existingItem['12'] !== item['12'] ||
+          existingItem['60'] !== item['60'] ||
+          existingItem['240'] !== item['240']
+        const priceChanged = existingItem.price !== item.price
+
+        if (strengthChanged || priceChanged) {
+          updates.push(`${item.timenow.toISOString()}: strength=${strengthChanged}, price=${priceChanged}`)
+        }
         updatedCount++
       } else {
         addedCount++
@@ -173,7 +206,8 @@ export class StrengthDataService {
 
     console.log('[mergeData] Merge result:', {
       updatedPoints: updatedCount,
-      newPoints: addedCount
+      newPoints: addedCount,
+      sampleUpdates: updates.slice(0, 3)
     })
 
     // Convert back to array and sort by time (ascending order)

@@ -39,7 +39,7 @@ export default function MarketControl({ showLabel = true }: Props) {
       styles={{
         dropdown: {
           boxShadow: '1px 1px 4px 0 rgba(0, 0, 0, 0.1)',
-          maxHeight: '45vh',
+          // maxHeight: '45vh',
           overflowY: 'auto',
         },
       }}

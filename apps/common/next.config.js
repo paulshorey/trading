@@ -1,13 +1,9 @@
+const baseConfig = require("@repo/config/next/common");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  webpack: (config) => {
-    config.resolve.extensionAlias = {
-      ".js": [".js", ".ts"],
-      ".jsx": [".jsx", ".tsx"],
-    };
-    return config;
-  },
+  ...baseConfig,
+  // Add any app-specific overrides here if needed
 };
 
 module.exports = nextConfig;

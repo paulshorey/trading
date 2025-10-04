@@ -3,16 +3,17 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
 import { createURLStorage, getQueryParams } from './lib/urlSync'
 
-// Available intervals configuration
+// ============================================================================
+// CONFIGURATION CONSTANTS
+// ============================================================================
+
+/**
+ * Available interval configurations for strength data aggregation
+ * Each option represents a set of intervals to average together
+ */
 export const intervalsOptions = [
-  {
-    value: ['4', '12', '60', '240'],
-    label: 'multi',
-  },
-  {
-    value: ['1', '4', '12', '60', '240'],
-    label: 'all',
-  },
+  { value: ['4', '12', '60', '240'], label: 'multi' },
+  { value: ['1', '4', '12', '60', '240'], label: 'all' },
   { value: ['12', '60', '240'], label: 'long' },
   { value: ['1', '4', '12'], label: 'short' },
   { value: ['1'], label: '1m' },
@@ -22,64 +23,37 @@ export const intervalsOptions = [
   { value: ['240'], label: '4h' },
 ]
 
-// Available hours back configuration
+/**
+ * Available time range options for historical data
+ */
 export const hoursBackOptions = ['240h', '120h', '60h', '48h', '36h', '24h']
 
-// New: One and only selector for both strength and price charts
+/**
+ * Market categories and their ticker options
+ * This defines what tickers are available for selection
+ */
 export const tickersByMarket = [
   {
     market: '',
+    tickers: [{ label: 'TN1! Ten Year', value: ['TN1!'] }],
+  },
+  {
+    market: '----------',
     tickers: [
-      {
-        label: 'TN1! Ten Year',
-        value: ['TN1!'],
-      },
+      { label: 'US Equities', value: ['ES1!', 'YM1!'] },
+      { label: 'ES1!', value: ['ES1!'] },
+      { label: 'YM1!', value: ['YM1!'] },
     ],
   },
   {
     market: '----------',
     tickers: [
-      {
-        label: 'US Equities',
-        value: ['ES1!', 'YM1!'],
-      },
-      {
-        label: 'ES1!',
-        value: ['ES1!'],
-      },
-      {
-        label: 'YM1!',
-        value: ['YM1!'],
-      },
-    ],
-  },
-  {
-    market: '----------',
-    tickers: [
-      {
-        label: 'Metals',
-        value: ['HG1!', 'GC1!', 'SI1!', 'PL1!'],
-      },
-      {
-        label: 'Precious Metals',
-        value: ['GC1!', 'SI1!', 'PL1!'],
-      },
-      {
-        label: 'GC1!',
-        value: ['GC1!'],
-      },
-      {
-        label: 'SI1!',
-        value: ['SI1!'],
-      },
-      {
-        label: 'PL1!',
-        value: ['PL1!'],
-      },
-      {
-        label: 'HG1!',
-        value: ['HG1!'],
-      },
+      { label: 'Metals', value: ['HG1!', 'GC1!', 'SI1!', 'PL1!'] },
+      { label: 'Precious Metals', value: ['GC1!', 'SI1!', 'PL1!'] },
+      { label: 'GC1!', value: ['GC1!'] },
+      { label: 'SI1!', value: ['SI1!'] },
+      { label: 'PL1!', value: ['PL1!'] },
+      { label: 'HG1!', value: ['HG1!'] },
     ],
   },
   {
@@ -101,78 +75,45 @@ export const tickersByMarket = [
           'XLMUSD',
         ],
       },
-      {
-        label: 'CX',
-        value: ['CX'],
-      },
-      {
-        label: 'BTCUSD',
-        value: ['BTCUSD'],
-      },
-      {
-        label: 'ETHUSD',
-        value: ['ETHUSD'],
-      },
-      {
-        label: 'SOLUSD',
-        value: ['SOLUSD'],
-      },
-      {
-        label: 'XRPUSD',
-        value: ['XRPUSD'],
-      },
-      {
-        label: 'SUIUSD',
-        value: ['SUIUSD'],
-      },
-      {
-        label: 'BNBUSD',
-        value: ['BNBUSD'],
-      },
-      {
-        label: 'DOGEUSD',
-        value: ['DOGEUSD'],
-      },
-      {
-        label: 'AVAXUSD',
-        value: ['AVAXUSD'],
-      },
-      {
-        label: 'NEARUSD',
-        value: ['NEARUSD'],
-      },
-      {
-        label: 'XLMUSD',
-        value: ['XLMUSD'],
-      },
+      { label: 'CX', value: ['CX'] },
+      { label: 'BTCUSD', value: ['BTCUSD'] },
+      { label: 'ETHUSD', value: ['ETHUSD'] },
+      { label: 'SOLUSD', value: ['SOLUSD'] },
+      { label: 'XRPUSD', value: ['XRPUSD'] },
+      { label: 'SUIUSD', value: ['SUIUSD'] },
+      { label: 'BNBUSD', value: ['BNBUSD'] },
+      { label: 'DOGEUSD', value: ['DOGEUSD'] },
+      { label: 'AVAXUSD', value: ['AVAXUSD'] },
+      { label: 'NEARUSD', value: ['NEARUSD'] },
+      { label: 'XLMUSD', value: ['XLMUSD'] },
     ],
   },
 ]
 
-// Helper function to get all unique tickers from the structure
-export const getAllTickers = (): string[] => {
-  const allTickers = new Set<string>()
-  tickersByMarket.forEach((market) => {
-    market.tickers.forEach((ticker) => {
-      ticker.value.forEach((t) => allTickers.add(t))
-    })
-  })
-  return Array.from(allTickers)
-}
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
 
+/**
+ * Store state for chart controls and data management
+ */
 type State = {
-  // Control states
+  // Time range configuration
   hoursBack: string
+
+  // Interval selection for strength data aggregation
   controlInterval: string[]
-  marketTickers: string[] // Selected market tickers (from marketOptions)
-  controlTickers: string[] // Selected strength tickers (subset of marketTickers)
-  priceTickers: string[] // Selected price tickers (subset of marketTickers)
+
+  // Ticker selections
+  dataPoolTickers: string[] // Tickers for which data is fetched (formerly marketTickers)
+  strengthTickers: string[] // Tickers displayed in strength chart (formerly controlTickers)
+  priceTickers: string[] // Tickers displayed in price chart
 
   // Time and cursor states
   timeRange: { from: Time; to: Time } | null
   cursorTime: Time | null
 
-  // Data states - only aggregated data, raw data managed by hook
+  // Aggregated data for charts
   aggregatedStrengthData: LineData[] | null
   aggregatedPriceData: LineData[] | null
 
@@ -180,60 +121,74 @@ type State = {
   isHydrated: boolean
 }
 
+/**
+ * Store actions for updating state
+ */
 type Actions = {
-  // Control setters
+  // Configuration setters
   setHoursBack: (hours: string) => void
   setControlInterval: (intervals: string[]) => void
-  setMarketTickers: (tickers: string[]) => void
-  setControlTickers: (tickers: string[]) => void
+
+  // Ticker selection setters
+  setDataPoolTickers: (tickers: string[]) => void
+  setStrengthTickers: (tickers: string[]) => void
   setPriceTickers: (tickers: string[]) => void
+
+  // Convenience method to update all ticker selections at once
+  setAllTickers: (tickers: string[]) => void
 
   // Time and cursor setters
   setTimeRange: (range: { from: Time; to: Time } | null) => void
   setCursorTime: (time: Time | null) => void
 
-  // Data setters - removed raw data and error (managed by hook)
+  // Data setters
   setAggregatedStrengthData: (data: LineData[] | null) => void
   setAggregatedPriceData: (data: LineData[] | null) => void
 
   // Utility actions
   resetToDefaults: () => void
-  updateControlTickersAndPrice: (tickers: string[]) => void
   setIsHydrated: (hydrated: boolean) => void
 }
 
 export type ChartControlsStore = State & Actions
 
-// Keys to sync with URL
+// ============================================================================
+// URL SYNC CONFIGURATION
+// ============================================================================
+
+/**
+ * Keys to sync with URL query parameters
+ * Note: Using legacy names for backward compatibility
+ */
 const URL_SYNC_KEYS = [
   'hoursBack',
   'controlInterval',
-  'marketTickers',
-  'controlTickers',
+  'marketTickers', // Maps to dataPoolTickers
+  'controlTickers', // Maps to strengthTickers
   'priceTickers',
 ]
 
-// Get initial values from URL if available
+// ============================================================================
+// INITIALIZATION LOGIC
+// ============================================================================
+
+/**
+ * Get initial state from URL parameters or defaults
+ */
 const getInitialState = (): State => {
-  // Start with defaults - use first ticker option from first market (Crypto Average)
+  // Default to CX (Crypto Index) ticker
   const defaultTickers = tickersByMarket[3]!.tickers[1]!.value
+
   const defaultState: State = {
-    // Control defaults
     hoursBack: hoursBackOptions[0]!,
     controlInterval: intervalsOptions[0]!.value,
-    marketTickers: defaultTickers,
-    controlTickers: defaultTickers,
+    dataPoolTickers: defaultTickers,
+    strengthTickers: defaultTickers,
     priceTickers: defaultTickers,
-
-    // Time and cursor defaults
     timeRange: null,
     cursorTime: null,
-
-    // Data defaults - removed raw data and error
     aggregatedStrengthData: null,
     aggregatedPriceData: null,
-
-    // Hydration state - will be set to true after persist middleware loads
     isHydrated: false,
   }
 
@@ -249,69 +204,73 @@ const getInitialState = (): State => {
       defaultState.controlInterval = urlParams.controlInterval
     }
 
+    // Map legacy URL param names to new state names
     if (urlParams.marketTickers !== undefined) {
-      defaultState.marketTickers = urlParams.marketTickers
+      defaultState.dataPoolTickers = urlParams.marketTickers
     }
 
     if (urlParams.controlTickers !== undefined) {
-      // Ensure controlTickers are subset of marketTickers
-      const validControlTickers = urlParams.controlTickers.filter(
-        (ticker: string) => defaultState.marketTickers.includes(ticker)
+      // Ensure strengthTickers are subset of dataPoolTickers
+      const validTickers = urlParams.controlTickers.filter((ticker: string) =>
+        defaultState.dataPoolTickers.includes(ticker)
       )
-      defaultState.controlTickers =
-        validControlTickers.length > 0
-          ? validControlTickers
-          : defaultState.marketTickers
+      defaultState.strengthTickers =
+        validTickers.length > 0 ? validTickers : defaultState.dataPoolTickers
     }
 
     if (urlParams.priceTickers !== undefined) {
-      // Ensure priceTickers are subset of marketTickers
-      const validPriceTickers = urlParams.priceTickers.filter(
-        (ticker: string) => defaultState.marketTickers.includes(ticker)
+      // Ensure priceTickers are subset of dataPoolTickers
+      const validTickers = urlParams.priceTickers.filter((ticker: string) =>
+        defaultState.dataPoolTickers.includes(ticker)
       )
       defaultState.priceTickers =
-        validPriceTickers.length > 0
-          ? validPriceTickers
-          : defaultState.marketTickers
+        validTickers.length > 0 ? validTickers : defaultState.dataPoolTickers
     }
   }
 
   return defaultState
 }
 
+// ============================================================================
+// STORE CREATION
+// ============================================================================
+
 export const useChartControlsStore = create<ChartControlsStore>()(
   persist(
-    (set, _get) => ({
+    (set) => ({
       ...getInitialState(),
 
-      // Control setters
+      // Configuration setters
       setHoursBack: (hours: string) => {
         set({ hoursBack: hours })
       },
 
       setControlInterval: (intervals: string[]) => {
-        // Ensure we create a new array reference for proper React effect triggering
+        // Ensure new array reference for React effect triggering
         set({ controlInterval: [...intervals] })
       },
 
-      setMarketTickers: (tickers: string[]) => {
-        // Update market tickers (used for data fetching)
-        const newTickers = [...tickers]
-        set({
-          marketTickers: newTickers,
-        })
+      // Ticker selection setters
+      setDataPoolTickers: (tickers: string[]) => {
+        set({ dataPoolTickers: [...tickers] })
       },
 
-      setControlTickers: (tickers: string[]) => {
-        // Update control tickers (used for strength chart)
-        set({
-          controlTickers: [...tickers],
-        })
+      setStrengthTickers: (tickers: string[]) => {
+        set({ strengthTickers: [...tickers] })
       },
 
       setPriceTickers: (tickers: string[]) => {
-        // Update price tickers (used for price chart)
         set({ priceTickers: [...tickers] })
+      },
+
+      setAllTickers: (tickers: string[]) => {
+        // Convenience method to update all ticker selections at once
+        // Used when changing markets
+        set({
+          dataPoolTickers: [...tickers],
+          strengthTickers: [...tickers],
+          priceTickers: [...tickers],
+        })
       },
 
       // Time and cursor setters
@@ -323,7 +282,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ cursorTime: time })
       },
 
-      // Data setters - removed raw data and error setters
+      // Data setters
       setAggregatedStrengthData: (data: LineData[] | null) => {
         set({ aggregatedStrengthData: data })
       },
@@ -334,13 +293,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       // Utility actions
       resetToDefaults: () => {
-        const freshDefaults = getInitialState()
-        set(freshDefaults)
-      },
-
-      updateControlTickersAndPrice: (tickers: string[]) => {
-        // Legacy method for backward compatibility - just update controlTickers
-        set({ controlTickers: [...tickers] })
+        set(getInitialState())
       },
 
       setIsHydrated: (hydrated: boolean) => {
@@ -351,20 +304,36 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       name: 'chart-controls',
       storage: createJSONStorage(() => createURLStorage(URL_SYNC_KEYS)),
       partialize: (state) => {
-        // Only persist the URL sync keys
-        const partialState: any = {}
-        URL_SYNC_KEYS.forEach((key) => {
-          partialState[key] = (state as any)[key]
-        })
-        return partialState
+        // Map internal names to legacy URL param names for backward compatibility
+        return {
+          hoursBack: state.hoursBack,
+          controlInterval: state.controlInterval,
+          marketTickers: state.dataPoolTickers, // Map to legacy name
+          controlTickers: state.strengthTickers, // Map to legacy name
+          priceTickers: state.priceTickers,
+        }
       },
-      // Handle hydration completion
       onRehydrateStorage: () => (state) => {
-        // This callback is called after hydration completes
         state?.setIsHydrated(true)
       },
-      // Skip hydration after initial load to prevent overwriting user changes
       skipHydration: false,
     }
   )
 )
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get all unique tickers from the ticker market structure
+ */
+export const getAllTickers = (): string[] => {
+  const allTickers = new Set<string>()
+  tickersByMarket.forEach((market) => {
+    market.tickers.forEach((ticker) => {
+      ticker.value.forEach((t) => allTickers.add(t))
+    })
+  })
+  return Array.from(allTickers)
+}

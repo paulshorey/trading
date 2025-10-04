@@ -181,13 +181,13 @@ export function useRealtimeStrengthData({
         // Index 0: Latest row (unreliable placeholder, ignore)
         // Index 1: Current real-time update (may have missing values)
         // Index 2: Historical data (usually complete)
-        if (sortedData.length >= 3) {
+        if (sortedData.length >= 3 && sortedData[1] && sortedData[2]) {
           // Forward-fill index 1 from index 2
           const filledRow = forwardFillStrengthData(sortedData[1], sortedData[2])
 
           // Return only the filled row for merging (ignore the unreliable latest)
           return [filledRow]
-        } else if (sortedData.length === 2) {
+        } else if (sortedData.length === 2 && sortedData[1]) {
           // If we only have 2 rows, use the older one (index 1)
           return [sortedData[1]]
         } else {

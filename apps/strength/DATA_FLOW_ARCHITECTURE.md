@@ -4,6 +4,16 @@
 
 The Strength app displays two synchronized financial charts (Strength and Price) with real-time data updates. Data flows from API → Raw Storage → Aggregation → Chart Display.
 
+## Terminology
+
+### Ticker Variables (Refactored for Clarity)
+
+- **`dataPoolTickers`** (formerly `marketTickers`): The pool of tickers for which data is fetched from the database. This determines what data is available in memory.
+
+- **`strengthTickers`** (formerly `controlTickers`): The subset of dataPoolTickers displayed in the strength chart. These are filtered from the cached data pool.
+
+- **`priceTickers`**: The subset of dataPoolTickers displayed in the price chart. Can be selected independently from strengthTickers.
+
 ## Data Structure
 
 ### Database Row (StrengthRowGet)
@@ -40,19 +50,20 @@ The Strength app displays two synchronized financial charts (Strength and Price)
 
 ### 1. Data Fetching Layer (`useRealtimeStrengthData` hook)
 
-**Purpose**: Manages raw data fetching and real-time updates for all market tickers
+**Purpose**: Manages raw data fetching and real-time updates for all data pool tickers
 
 **Key Behaviors**:
 
-- Fetches data for ALL `marketTickers` (not just selected tickers)
+- Fetches data for ALL `dataPoolTickers` (not just selected tickers)
 - Initial load: Fetches up to `MAX_DATA_HOURS` of historical data
 - Real-time updates: Every 60 seconds, fetches only new data points
 - Merges new data with existing data, handling duplicates
+- Forward-fills missing strength values in real-time updates
 
 **Data Structure**:
 
 ```typescript
-rawData: (StrengthRowGet[] | null)[]  // Array indexed by marketTickers
+rawData: (StrengthRowGet[] | null)[]  // Array indexed by dataPoolTickers
 ```
 
 ### 2. Data Selection Layer (`SyncedCharts` component)
@@ -62,9 +73,9 @@ rawData: (StrengthRowGet[] | null)[]  // Array indexed by marketTickers
 **Process**:
 
 ```typescript
-// Map selected tickers to their indices in marketTickers
-const strengthIndices = controlTickers
-  .map((ticker) => marketTickers.indexOf(ticker))
+// Map selected tickers to their indices in dataPoolTickers
+const strengthIndices = strengthTickers
+  .map((ticker) => dataPoolTickers.indexOf(ticker))
   .filter((i) => i >= 0)
 
 // Extract only the data for selected tickers
@@ -167,20 +178,21 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 
 1. **Market Selector** (Top Level):
 
-   - Changes available ticker options
-   - Resets both Strength and Price to "Average" (all tickers)
-   - Triggers new data fetch for all market tickers
+   - Changes available ticker options and data pool
+   - Updates `dataPoolTickers` (what data to fetch)
+   - Resets both `strengthTickers` and `priceTickers` to match
+   - Triggers new data fetch for all selected tickers
 
 2. **Strength Selector** (Master):
 
-   - Updates `controlTickers` in store
+   - Updates `strengthTickers` in store
    - ALSO updates `priceTickers` to match
    - Both charts update to show same selection
    - Does NOT trigger new data fetch (uses cached data)
 
 3. **Price Selector** (Independent):
    - Updates only `priceTickers` in store
-   - Does NOT affect `controlTickers`
+   - Does NOT affect `strengthTickers`
    - Only Price chart updates
    - Does NOT trigger new data fetch (uses cached data)
 
@@ -193,7 +205,7 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 
 2. **Filter Raw Data**:
 
-   - Maps selected tickers to indices in `marketTickers`
+   - Maps selected tickers to indices in `dataPoolTickers`
    - Extracts subset of `rawData` for aggregation
 
 3. **Re-aggregate**:

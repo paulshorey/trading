@@ -32,8 +32,8 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     // State
     hoursBack,
     controlInterval,
-    marketTickers,
-    controlTickers,
+    dataPoolTickers,   // Renamed from marketTickers for clarity
+    strengthTickers,   // Renamed from controlTickers for clarity
     priceTickers,
     timeRange,
     aggregatedStrengthData,
@@ -46,13 +46,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
   /**
    * Use the real-time data hook to manage data fetching and updates
-   * Always fetch data for ALL market tickers to prevent refetching
-   * Data will be filtered based on controlTickers and priceTickers during aggregation
+   * Always fetch data for ALL dataPoolTickers to prevent refetching when switching views
+   * Data will be filtered based on strengthTickers and priceTickers during aggregation
    */
   const { rawData, isLoading, error, lastUpdateTime, isRealtime } =
     useRealtimeStrengthData({
-      tickers: marketTickers, // Always use marketTickers to avoid refetching
-      enabled: marketTickers.length > 0,
+      tickers: dataPoolTickers, // Always use dataPoolTickers to avoid refetching
+      enabled: dataPoolTickers.length > 0,
       maxDataHours: HOURS_BACK_INITIAL,
       updateIntervalMs: 60000, // Update every minute
     })
@@ -78,12 +78,12 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   useEffect(() => {
     if (rawData.length > 0 && rawData.some((data) => data !== null)) {
       // Filter raw data based on selected tickers
-      // rawData is ordered the same as marketTickers
-      const strengthIndices = controlTickers
-        .map((ticker) => marketTickers.indexOf(ticker))
+      // rawData is ordered the same as dataPoolTickers
+      const strengthIndices = strengthTickers
+        .map((ticker) => dataPoolTickers.indexOf(ticker))
         .filter((i) => i >= 0)
       const priceIndices = priceTickers
-        .map((ticker) => marketTickers.indexOf(ticker))
+        .map((ticker) => dataPoolTickers.indexOf(ticker))
         .filter((i) => i >= 0)
 
       const strengthRawData = strengthIndices.map((i) => rawData[i] || null)
@@ -115,7 +115,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
             newPricePoints,
             totalStrengthPoints: strengthData.length,
             totalPricePoints: priceData.length,
-            controlTickers,
+            strengthTickers,
             priceTickers,
           })
         }
@@ -136,8 +136,8 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     controlInterval,
     priceTickers,
     rawData,
-    controlTickers,
-    marketTickers,
+    strengthTickers,
+    dataPoolTickers,
     lastUpdateTime,
   ])
 

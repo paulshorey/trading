@@ -24,13 +24,13 @@ This project is the "strength" app. It renders a single chart with dual y-axes t
 
 ### Selection Hierarchy
 
-1. **Market tickers** - User selects the market type (Crypto, Equities, Metals, Treasuries) from a selector. Each option value is an array of tickers. This determines which data to fetch.
-2. **Strength tickers** - From those selected market tickers, user selects which tickers to display in the Strength chart. This filters the cached data.
-3. **Price tickers** - Also from those selected market tickers, user selects which tickers to display in the Price chart. This filters the cached data.
+1. **Data Pool** - User selects the market type (Crypto, Equities, Metals, Treasuries) from a selector. Each option value is an array of tickers. This determines which data to fetch (`dataPoolTickers`).
+2. **Strength tickers** - From the data pool, user selects which tickers to display in the Strength chart (`strengthTickers`). This filters the cached data.
+3. **Price tickers** - Also from the data pool, user selects which tickers to display in the Price chart (`priceTickers`). This filters the cached data.
 
 ### Behavior
 
-- When user changes selected **Market tickers**, both Strength and Price selectors reset to "Average" (all market tickers), and new data is fetched for ALL market tickers
+- When user changes the **Data Pool** (market selection), both Strength and Price reset to show all tickers from the new pool, and new data is fetched
 - When user selects new **Strength tickers**, it:
   1. Updates the Strength chart with filtered cached data
   2. Also updates Price tickers to match (Strength acts as master selector)
@@ -42,16 +42,17 @@ This project is the "strength" app. It renders a single chart with dual y-axes t
 
 ### Selector Hierarchy
 
-1. **Market** → Resets both Strength and Price to Average
+1. **Market** → Resets both Strength and Price, fetches new data pool
 2. **Strength** → Sets both Strength and Price to the same selection
 3. **Price** → Changes only Price (independent selection)
 
 ### Technical Implementation
 
-- **Data fetching**: `useRealtimeStrengthData` hook always fetches data for `marketTickers` (not `controlTickers`)
-- **Data filtering**: In `SyncedCharts.tsx`, raw data is filtered based on ticker selections before aggregation
+- **Data fetching**: `useRealtimeStrengthData` hook always fetches data for `dataPoolTickers`
+- **Data filtering**: In `SyncedCharts.tsx`, raw data is filtered based on `strengthTickers` and `priceTickers` before aggregation
 - **Chart updates**: Each chart receives filtered aggregated data and updates independently
 - **No refetching** occurs when changing Strength or Price selections - only filtering of cached data
+- **Forward-fill logic** handles missing values at both real-time and aggregation layers
 
 ### Performance
 
@@ -61,10 +62,18 @@ This project is the "strength" app. It renders a single chart with dual y-axes t
 
 ## Important Notes
 
-- See `DATA_FLOW_ARCHITECTURE.md` for detailed explanation of the recent data flow optimization
+- See `DATA_FLOW_ARCHITECTURE.md` for detailed explanation of the data flow architecture
+- See `FORWARD_FILL_LOGIC.md` for comprehensive documentation of forward-fill implementation
 - SQL types and database functions are in `./sql/strength/` folder
 - All timestamps MUST be at even minutes (0, 2, 4...) with no seconds
 - The `timenow` field from database is used as chart x-axis timestamp
+
+## Recent Refactoring (October 2025)
+
+- **Variable Naming**: Renamed `marketTickers` → `dataPoolTickers`, `controlTickers` → `strengthTickers` for clarity
+- **Store Cleanup**: Simplified Zustand store with better organization and documentation
+- **Forward-Fill Enhancement**: Added real-time forward-fill logic to handle missing strength intervals
+- **Documentation**: Created comprehensive forward-fill documentation and updated all AGENTS.md files
 
 ## Keeping notes and documenting changes
 

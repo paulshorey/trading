@@ -259,9 +259,5 @@ export function aggregateStrengthDataWithInterpolation<
   // Sort by time
   const sorted = result.sort((a, b) => a.time - b.time)
 
-  console.log(
-    `[aggregateStrengthDataWithInterpolation] tickersWithData:${tickersWithData} totalDataPoints:${totalDataPoints} sorted.length:${sorted.length}`
-  )
-
   return sorted
 }

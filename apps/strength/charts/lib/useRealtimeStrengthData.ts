@@ -102,6 +102,34 @@ export function useRealtimeStrengthData({
   }, [tickers, enabled, maxDataHours])
 
   /**
+   * Forward-fill missing strength values from historical data
+   * @param currentRow The row to forward-fill (should be index 1)
+   * @param historicalRow The row to use for filling (should be index 2)
+   * @returns The forward-filled row
+   */
+  const forwardFillStrengthData = (
+    currentRow: StrengthRowGet,
+    historicalRow: StrengthRowGet
+  ): StrengthRowGet => {
+    const filled = { ...currentRow }
+
+    // Forward-fill each strength interval if null
+    const strengthIntervals = ['1', '4', '12', '60', '240'] as const
+    strengthIntervals.forEach(interval => {
+      if (filled[interval] === null && historicalRow[interval] !== null) {
+        filled[interval] = historicalRow[interval]
+      }
+    })
+
+    // Forward-fill price if needed (though it usually has its own algorithm)
+    if (filled.price === 0 || filled.price === null) {
+      filled.price = historicalRow.price || 0
+    }
+
+    return filled
+  }
+
+  /**
    * Fetch incremental updates for real-time data
    */
   const fetchRealtimeUpdate = useCallback(async () => {
@@ -135,7 +163,40 @@ export function useRealtimeStrengthData({
         fromDate,
         toDate
       )
-      console.log('[newTickerData]', newTickerData)
+      console.log('[newTickerData before forward-fill]', newTickerData)
+
+      // Process each ticker's data to forward-fill missing values
+      const processedTickerData = newTickerData.map((tickerData) => {
+        if (!tickerData || tickerData.length < 2) {
+          // Not enough data to process
+          return tickerData
+        }
+
+        // Sort by timenow descending (newest first)
+        const sortedData = [...tickerData].sort(
+          (a, b) => b.timenow.getTime() - a.timenow.getTime()
+        )
+
+        // We need at least 2 rows to forward-fill
+        // Index 0: Latest row (unreliable placeholder, ignore)
+        // Index 1: Current real-time update (may have missing values)
+        // Index 2: Historical data (usually complete)
+        if (sortedData.length >= 3) {
+          // Forward-fill index 1 from index 2
+          const filledRow = forwardFillStrengthData(sortedData[1], sortedData[2])
+
+          // Return only the filled row for merging (ignore the unreliable latest)
+          return [filledRow]
+        } else if (sortedData.length === 2) {
+          // If we only have 2 rows, use the older one (index 1)
+          return [sortedData[1]]
+        } else {
+          // Only one row, use it as is
+          return sortedData
+        }
+      })
+
+      console.log('[newTickerData after forward-fill]', processedTickerData)
 
       if (isMountedRef.current) {
         setRawData((prevData) => {
@@ -144,7 +205,7 @@ export function useRealtimeStrengthData({
 
           // Merge new data with existing data for each ticker
           const mergedData = prevData.map((existingData, index) => {
-            const newData = newTickerData[index]
+            const newData = processedTickerData[index]
             if (!newData || newData.length === 0) return existingData
             if (!existingData) return newData
 

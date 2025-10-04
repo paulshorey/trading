@@ -135,6 +135,7 @@ export function useRealtimeStrengthData({
         fromDate,
         toDate
       )
+      console.log('[newTickerData]', newTickerData)
 
       if (isMountedRef.current) {
         setRawData((prevData) => {

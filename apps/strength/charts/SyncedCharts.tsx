@@ -1,17 +1,16 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Time, ISeriesApi, LineData } from 'lightweight-charts'
+import { Time, LineData } from 'lightweight-charts'
 import { useRealtimeStrengthData } from './lib/useRealtimeStrengthData'
 
 import { calculateTimeRange } from './lib/chartUtils'
-import { applyCursorToAllCharts } from './lib/chartSync'
 
 import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
-import { CHART_WIDTH_INITIAL, HOURS_BACK_INITIAL } from './constants'
+import { HOURS_BACK_INITIAL } from './constants'
 import { aggregatePriceData } from './lib/aggregatePriceData'
 import { aggregateStrengthData } from './lib/aggregateStrengthData'
 import MarketControl from './controls/MarketControl'
@@ -22,15 +21,13 @@ export interface SyncedChartsProps {
 }
 
 /**
- * Inner component that renders charts with specific dimensions
+ * Component that renders a single chart with dual y-axes for strength and price
  */
 export function SyncedCharts({
   availableHeight,
-  availableHeightCrop,
 }: SyncedChartsProps) {
-  // Chart refs
-  const chartComponentRefs = useRef<(ChartRef | null)[]>([])
-  const isUpdatingCursor = useRef(false)
+  // Chart ref for single chart
+  const chartRef = useRef<ChartRef | null>(null)
 
   // Get state and actions from Zustand store
   const {
@@ -41,20 +38,13 @@ export function SyncedCharts({
     controlTickers,
     priceTickers,
     timeRange,
-    cursorTime,
     aggregatedStrengthData,
     aggregatedPriceData,
     // Actions
     setTimeRange,
-    setCursorTime,
     setAggregatedStrengthData,
     setAggregatedPriceData,
   } = useChartControlsStore()
-
-  // Always have exactly 2 chart refs (one for strength, one for price)
-  useEffect(() => {
-    chartComponentRefs.current = new Array(2).fill(null)
-  }, [])
 
   /**
    * Use the real-time data hook to manage data fetching and updates
@@ -209,112 +199,40 @@ export function SyncedCharts({
     }
   }, [hoursBack, rawData])
 
-  /**
-   * Cursor Synchronization Effect
-   *
-   * Synchronizes the crosshair cursor position across both charts.
-   * When the user hovers over one chart, the cursor position is
-   * mirrored on the other chart for easy comparison of values
-   * at the same time point.
-   */
-  useEffect(() => {
-    const chartRefs = chartComponentRefs.current
-      .map((ref) => ref?.chart)
-      .filter(Boolean)
-
-    const seriesRefs = chartComponentRefs.current
-      .map((ref) => ref?.series)
-      .filter(Boolean) as ISeriesApi<'Line'>[]
-
-    // Create array of chart data for the 2 charts
-    const chartsData = [aggregatedStrengthData, aggregatedPriceData]
-
-    applyCursorToAllCharts(
-      cursorTime,
-      chartRefs,
-      seriesRefs,
-      chartsData,
-      rawData,
-      controlInterval,
-      isUpdatingCursor
-    )
-  }, [
-    cursorTime,
-    aggregatedStrengthData,
-    aggregatedPriceData,
-    rawData,
-    controlInterval,
-  ])
-
-  // Crosshair move handler
+  // Simple crosshair handler (no sync needed - single chart)
   const handleCrosshairMove = (time: Time | null) => {
-    if (!isUpdatingCursor.current) {
-      setCursorTime(time)
-    }
+    // Currently no action needed - could be used for future features
   }
 
-  const chart1Height =
-    Math.ceil((availableHeight * 1) / 2) + availableHeightCrop
-  const chart2Height =
-    Math.ceil((availableHeight * 1) / 2) - availableHeightCrop
-
   return (
-    <div
-      className={`overflow-hidden relative`}
-      style={{ width: CHART_WIDTH_INITIAL + 'px' }}
-    >
-      {/* Show loading or error state for all charts */}
+    <div className="relative w-full">
+      {/* Show loading or error state */}
       {isLoading && <LoadingState />}
       {error && !isLoading && <ErrorState error={error} />}
 
-      {/* Render 2 aggregated charts */}
+      {/* Render single chart with dual y-axes */}
       {!isLoading && !error && (
-        <>
-          {/* Chart: Aggregated Strength (average of all interval averages) */}
-          <Chart
-            key="strength-chart"
-            ref={(el) => {
-              chartComponentRefs.current[0] = el
-            }}
-            name={`Strength`}
-            heading={
-              <span className="flex flex-row pl-[5px]">
-                <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
-                  Strength
-                </span>
+        <Chart
+          key="combined-chart"
+          ref={(el) => {
+            chartRef.current = el
+          }}
+          name="Strength & Price"
+          heading={
+            <span className="flex flex-row pl-[5px]">
+              <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
+                Strength (left) & Price (right)
               </span>
-            }
-            chartData={aggregatedStrengthData}
-            width={CHART_WIDTH_INITIAL}
-            height={chart1Height}
-            onCrosshairMove={handleCrosshairMove}
-            chartIndex={0}
-            timeRange={timeRange}
-            showZeroLine={true}
-          />
-
-          {/* Chart: Price Tickers */}
-          <Chart
-            key="price-chart"
-            ref={(el) => {
-              chartComponentRefs.current[1] = el
-            }}
-            name={`Price`}
-            chartData={aggregatedPriceData}
-            heading={
-              <span className="flex flex-row pl-[5px]">
-                <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">Price</span>
-              </span>
-            }
-            width={CHART_WIDTH_INITIAL}
-            height={chart2Height}
-            heightCropTop={Math.ceil((chart1Height - chart2Height) * 0.5)}
-            heightCropBottom={Math.ceil((chart1Height - chart2Height) * 0.5)}
-            onCrosshairMove={handleCrosshairMove}
-            chartIndex={1}
-            timeRange={timeRange}
-          />
-        </>
+            </span>
+          }
+          chartData={aggregatedStrengthData}
+          secondSeriesData={aggregatedPriceData}
+          width={typeof window !== 'undefined' ? window.innerWidth : 1200}
+          height={availableHeight}
+          onCrosshairMove={handleCrosshairMove}
+          timeRange={timeRange}
+          showZeroLine={true}
+        />
       )}
 
       {/* Last updated time */}

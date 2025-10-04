@@ -20,25 +20,23 @@ import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
-import { CHART_WIDTH_INITIAL } from '../constants'
 
 interface ChartProps {
   heading: string | React.ReactNode
   name: string
   chartData: LineData[] | null
+  secondSeriesData?: LineData[] | null
   width: number
   height: number
   onCrosshairMove: (time: Time | null) => void
-  chartIndex: number
   timeRange?: { from: Time; to: Time } | null
   showZeroLine?: boolean
-  heightCropTop?: number
-  heightCropBottom?: number
 }
 
 export interface ChartRef {
   chart: IChartApi | null
   series: ISeriesApi<'Line'> | null
+  secondSeries?: ISeriesApi<'Line'> | null
   container: HTMLDivElement | null
 }
 
@@ -48,27 +46,29 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       heading,
       name,
       chartData,
+      secondSeriesData,
       width,
       height,
       onCrosshairMove,
       timeRange,
       showZeroLine,
-      heightCropTop = 0,
-      heightCropBottom = 0,
     },
     ref
   ) => {
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
     const seriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+    const secondSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const isUpdatingCursor = useRef(false)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
+    const lastSecondDataRef = useRef<LineData[] | null>(null)
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
       series: seriesRef.current,
+      secondSeries: secondSeriesRef.current,
       container: containerRef.current,
     }))
 
@@ -77,16 +77,24 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       if (!containerRef.current || hasInitialized.current) return
 
       // Create chart
-      const chart = createChart(
-        containerRef.current,
-        getChartConfig(height + heightCropTop + heightCropBottom)
-      )
+      const chart = createChart(containerRef.current, getChartConfig(height))
       chartRef.current = chart
       hasInitialized.current = true
 
-      // Add line series
-      const strengthSeries = chart.addSeries(LineSeries, getLineSeriesConfig())
+      // Add first series (strength) - uses LEFT price scale
+      const strengthSeries = chart.addSeries(LineSeries, {
+        ...getLineSeriesConfig(),
+        priceScaleId: 'left',
+      })
       seriesRef.current = strengthSeries
+
+      // Add second series (price) - uses RIGHT price scale (default)
+      // Always create the series, even if data doesn't exist yet
+      const priceSeries = chart.addSeries(LineSeries, {
+        ...getLineSeriesConfig(),
+        color: '#0076d0',
+      })
+      secondSeriesRef.current = priceSeries
 
       // Add crosshair event handlers for cursor synchronization
       chart.subscribeCrosshairMove((param: MouseEventParams) => {
@@ -103,6 +111,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       if (chartData) {
         strengthSeries.setData(chartData)
       }
+      if (secondSeriesData && secondSeriesRef.current) {
+        secondSeriesRef.current.setData(secondSeriesData)
+      }
 
       // Apply initial time range if provided
       if (timeRange && timeRange.from < timeRange.to) {
@@ -118,12 +129,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         chart.remove()
         chartRef.current = null
         seriesRef.current = null
+        secondSeriesRef.current = null
         zeroLineRef.current = null
         hasInitialized.current = false
       }
     }, []) // Only run once on mount - removed all dependencies
 
-    // Update data when it changes with incremental updates
+    // Update first series (strength) data
     useEffect(() => {
       if (!seriesRef.current || !chartData || !hasInitialized.current) return
 
@@ -131,7 +143,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const prevData = lastDataRef.current
         const currentData = chartData
 
-        // Check if data actually changed - compare values, not just structure
+        // Check if data actually changed
         const dataChanged =
           !prevData ||
           prevData.length !== currentData.length ||
@@ -141,159 +153,25 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               !currentItem ||
               item.time !== currentItem.time ||
               Math.abs(item.value - currentItem.value) > 0.0001
-            ) // Use small epsilon for float comparison
+            )
           })
 
         if (!dataChanged) {
-          // Data hasn't changed, no update needed
           console.log(
-            `[Chart] No data change detected for ${name}, skipping update`
+            `[Chart] No data change detected for ${name} (strength), skipping update`
           )
           return
         }
 
-        if (!prevData || prevData.length === 0) {
-          // Initial data load - use setData
-          console.log(`[Chart] Initial data load for ${name}`, {
-            dataPoints: currentData.length,
-          })
-          seriesRef.current.setData(currentData)
-        } else {
-          // For updates, determine the best approach
-          const lastPrevTime = prevData[prevData.length - 1]?.time as number
-          const lastCurrentTime = currentData[currentData.length - 1]
-            ?.time as number
-          const firstPrevTime = prevData[0]?.time as number
-          const firstCurrentTime = currentData[0]?.time as number
-
-          // Check if this is a real-time update (new data at the end)
-          if (
-            firstCurrentTime === firstPrevTime &&
-            lastCurrentTime >= lastPrevTime &&
-            currentData.length >= prevData.length
-          ) {
-            // This looks like a real-time update - try incremental
-            const newDataPoints = currentData.slice(prevData.length)
-
-            if (newDataPoints.length > 0) {
-              // We have new points to add
-              console.log(
-                `[Chart] Adding ${newDataPoints.length} new points to ${name}`,
-                {
-                  newPoints: newDataPoints.map(p => ({
-                    time: new Date((p.time as number) * 1000).toISOString(),
-                    value: p.value
-                  }))
-                }
-              )
-              let updateFailed = false
-
-              for (const point of newDataPoints) {
-                try {
-                  seriesRef.current.update(point)
-                } catch (err) {
-                  console.warn(
-                    `[Chart] Incremental update failed for ${name}, using setData`,
-                    {
-                      pointTime: new Date((point.time as number) * 1000).toISOString(),
-                      error: err
-                    }
-                  )
-                  updateFailed = true
-                  break
-                }
-              }
-
-              if (updateFailed) {
-                seriesRef.current.setData(currentData)
-              }
-            } else if (currentData.length === prevData.length) {
-              // Check if only the last value changed (real-time update of last bar)
-              const lastCurrent = currentData[currentData.length - 1]
-              const lastPrev = prevData[prevData.length - 1]
-
-              // Check if all other values are the same
-              const onlyLastChanged = currentData
-                .slice(0, -1)
-                .every((item, index) => {
-                  const prevItem = prevData[index]
-                  return (
-                    prevItem &&
-                    item.time === prevItem.time &&
-                    Math.abs(item.value - prevItem.value) < 0.0001
-                  )
-                })
-
-              if (
-                onlyLastChanged &&
-                lastCurrent &&
-                lastPrev &&
-                Math.abs(lastCurrent.value - lastPrev.value) > 0.0001
-              ) {
-                const currentDate = new Date((lastCurrent.time as number) * 1000)
-                const prevDate = new Date((lastPrev.time as number) * 1000)
-
-                console.log(
-                  `[Chart] Updating only last point value for ${name}`,
-                  {
-                    currentTime: currentDate.toISOString(),
-                    prevTime: prevDate.toISOString(),
-                    timesMatch: lastCurrent.time === lastPrev.time,
-                    oldValue: lastPrev.value,
-                    newValue: lastCurrent.value,
-                    currentMinutes: currentDate.getMinutes(),
-                    currentSeconds: currentDate.getSeconds(),
-                  }
-                )
-
-                // Validate timestamp alignment
-                if (lastCurrent.time !== lastPrev.time) {
-                  console.error(`[Chart] TIMESTAMP MISMATCH in real-time update for ${name}!`, {
-                    prevTime: prevDate.toISOString(),
-                    currentTime: currentDate.toISOString()
-                  })
-                  // Force full reset if timestamps don't match
-                  seriesRef.current.setData(currentData)
-                } else {
-                  try {
-                    seriesRef.current.update(lastCurrent)
-                  } catch (err) {
-                    console.error(
-                      `[Chart] Failed to update last point for ${name}`,
-                      err
-                    )
-                    seriesRef.current.setData(currentData)
-                  }
-                }
-              } else {
-                // Multiple values changed - need full reset
-                console.log(
-                  `[Chart] Multiple values changed for ${name}, full reset`
-                )
-                seriesRef.current.setData(currentData)
-              }
-            }
-          } else {
-            // This is a ticker change or data structure change - full reset
-            console.log(
-              `[Chart] Ticker or data structure change for ${name}, full reset`,
-              {
-                prevLength: prevData.length,
-                currentLength: currentData.length,
-                firstTimeChanged: firstCurrentTime !== firstPrevTime,
-                lastTimeChanged: lastCurrentTime !== lastPrevTime,
-              }
-            )
-            seriesRef.current.setData(currentData)
-          }
-        }
-
-        // Store current data for next comparison
+        // Simply use setData for all updates
+        console.log(`[Chart] Updating strength data for ${name}`, {
+          dataPoints: currentData.length,
+        })
+        seriesRef.current.setData(currentData)
         lastDataRef.current = [...currentData]
 
         // Reapply time range after data update
         if (timeRange && chartRef.current && timeRange.from < timeRange.to) {
-          // Small delay to ensure data is rendered
           setTimeout(() => {
             if (
               chartRef.current &&
@@ -312,9 +190,53 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           }, 100)
         }
       } catch (error) {
-        console.warn('Failed to update chart data:', error)
+        console.warn('Failed to update strength data:', error)
       }
     }, [chartData, timeRange, name])
+
+    // Update second series (price) data
+    useEffect(() => {
+      if (
+        !secondSeriesRef.current ||
+        !secondSeriesData ||
+        !hasInitialized.current
+      )
+        return
+
+      try {
+        const prevData = lastSecondDataRef.current
+        const currentData = secondSeriesData
+
+        // Check if data actually changed
+        const dataChanged =
+          !prevData ||
+          prevData.length !== currentData.length ||
+          prevData.some((item, index) => {
+            const currentItem = currentData[index]
+            return (
+              !currentItem ||
+              item.time !== currentItem.time ||
+              Math.abs(item.value - currentItem.value) > 0.0001
+            )
+          })
+
+        if (!dataChanged) {
+          console.log(
+            `[Chart] No data change detected for ${name} (price), skipping update`
+          )
+          return
+        }
+
+        // Simply use setData for all updates
+        console.log(`[Chart] Updating price data for ${name}`, {
+          dataPoints: currentData.length,
+        })
+        secondSeriesRef.current.setData(currentData)
+        lastSecondDataRef.current = [...currentData]
+      } catch (error) {
+        console.warn('Failed to update price data:', error)
+      }
+    }, [secondSeriesData, name])
 
     // Update chart dimensions when they change
     useEffect(() => {
@@ -322,7 +244,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       chartRef.current.applyOptions({
         width,
-        height: height + heightCropTop + heightCropBottom,
+        height,
       })
     }, [width, height])
 
@@ -383,17 +305,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         id={`chart-${name}`}
         className={classes.Chart}
         style={{
-          width: CHART_WIDTH_INITIAL + 'px',
-          overflow: 'hidden',
+          width: width + 'px',
         }}
       >
         {/* Chart container */}
         <div
           ref={containerRef}
           className={`border border-gray-200 rounded z-10 pr-[10px]`}
-          style={{
-            marginTop: -heightCropTop + 'px',
-          }}
         />
 
         {/* Title floating at top left of chart */}

@@ -1,63 +1,10 @@
-import { ISeriesApi, Time, LineData } from 'lightweight-charts'
-import { StrengthRowGet } from '@/sql/strength'
-import { getNearestSeriesValueAtTime } from './chartUtils'
-
 /**
- * Apply cursor position to all charts
+ * This file is no longer needed.
+ *
+ * Previously used to synchronize cursor position and resize behavior
+ * across multiple separate charts. Now that we use a single chart with
+ * dual y-axes, this synchronization is handled automatically by
+ * lightweight-charts.
+ *
+ * Keeping this file for reference but all functions are deprecated.
  */
-export const applyCursorToAllCharts = (
-  time: Time | null,
-  chartRefs: any[], // Using any to avoid IChartApi import issues
-  seriesRefs: (ISeriesApi<'Line'> | null)[],
-  allChartsData: (LineData[] | null)[],
-  rawData: (StrengthRowGet[] | null)[],
-  control_intervals: string[],
-  isUpdatingCursor: { current: boolean }
-) => {
-  if (isUpdatingCursor.current) return
-  isUpdatingCursor.current = true
-
-  chartRefs.forEach((chart, index) => {
-    if (!chart || !seriesRefs[index]) return
-    try {
-      if (time !== null) {
-        const price = getNearestSeriesValueAtTime(
-          allChartsData[index],
-          time,
-          index,
-          rawData,
-          control_intervals
-        )
-        if (price != null) {
-          chart.setCrosshairPosition(price, time, seriesRefs[index]!)
-        } else {
-          chart.clearCrosshairPosition()
-        }
-      } else {
-        chart.clearCrosshairPosition()
-      }
-    } catch (error) {
-      console.warn('Failed to set crosshair position:', error)
-    }
-  })
-
-  setTimeout(() => {
-    isUpdatingCursor.current = false
-  }, 0)
-}
-
-/**
- * Handle window resize for all charts
- */
-export const handleWindowResize = (
-  chartRefs: any[], // Using any to avoid IChartApi import issues
-  chartContainerRefs: (HTMLDivElement | null)[]
-) => {
-  chartRefs.forEach((chart, index) => {
-    if (chart && chartContainerRefs[index]) {
-      chart.applyOptions({
-        width: chartContainerRefs[index]!.clientWidth,
-      })
-    }
-  })
-}

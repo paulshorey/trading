@@ -1,15 +1,16 @@
 # Strength app codebase
 
-This project is the "strength" app. It renders 2 charts side by side, to compare price and strength.
+This project is the "strength" app. It renders a single chart with dual y-axes to compare price and strength on the same chart.
 
-Chart 1: strength. Similar to the RSI number, but from -100 to 100 instead of 0 to 100.
-Chart 2: price. The user controls which data to show in each chart.
+- Left y-axis: strength data (similar to RSI, ranges from -100 to 100)
+- Right y-axis: price data
+- The user controls which tickers to display for each data series.
 
 ## Filesystem:
 
 - ./charts/SyncedChartsWrapper.tsx waits until the window and document are ready. Then it loads the components and passes to them the available screen height.
 
-- ./charts/SyncedCharts.tsx is a full-screen app that renders 2 financial data charts to compare side by side. The x-axis (time) is synced, so scrolling or interacting with the time in one does the same in the other.
+- ./charts/SyncedCharts.tsx is a full-screen app that renders a single financial chart with dual y-axes (left for strength, right for price). Both data series share the same x-axis (time).
 
 - ./charts/components - general UI
 - ./charts/controls - dropdowns and selectors

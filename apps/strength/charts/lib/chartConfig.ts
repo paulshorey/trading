@@ -5,7 +5,6 @@ import {
   LineStyleOptions,
   SeriesOptionsCommon,
 } from 'lightweight-charts'
-import { CHART_WIDTH_INITIAL } from '../constants'
 
 function timeFormatter(time: Time) {
   // Convert the time (which is in seconds since epoch) to milliseconds
@@ -23,7 +22,6 @@ function timeFormatter(time: Time) {
  * Get base chart configuration
  */
 export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
-  width: CHART_WIDTH_INITIAL,
   height: height, // Use full height passed from parent
   localization: {
     timeFormatter,
@@ -37,11 +35,14 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
     vertLines: { visible: false }, // Hide vertical grid lines to reduce clutter
     horzLines: { color: '#f0f0f0' },
   },
-  // Y-Axis
+  // Y-Axis - Enable both left and right scales for dual series
   rightPriceScale: {
-    visible: false, //window.innerWidth > 1200 ? true : false,
+    visible: true,
     minimumWidth: 80,
-    // invertScale: true,
+  },
+  leftPriceScale: {
+    visible: true,
+    minimumWidth: 80,
   },
   // X-Axis
   timeScale: {

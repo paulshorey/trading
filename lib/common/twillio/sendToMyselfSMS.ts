@@ -78,6 +78,7 @@ export const sendToMyselfSMS = async (message: string) => {
   const results = [];
   for (let i = 0; i < Math.min(10, chunks.length); i++) {
     let messageBody = chunks[i];
+    if (!messageBody) continue;
     // Show page numbers if multiple chunks
     if (chunks.length > 1) {
       messageBody += `\n[Page: ${i + 1} of ${chunks.length}]`;

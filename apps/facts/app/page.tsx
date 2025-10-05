@@ -86,12 +86,13 @@ export default function Home() {
           }}
         >
           <div className="text-center mb-6">
-            <span className="inline-block text-xl font-semibold mt-2 mb-4 bg-gradient-to-br from-violet-500 to-sky-500 bg-clip-text text-transparent">
+            {/* <span className="inline-block text-xl font-semibold mt-2 mb-4 bg-gradient-to-br from-violet-500 to-sky-500 bg-clip-text text-transparent">
               Unfortunately,
-            </span>
+            </span> */}
             <p className="text-sm text-center mb-6 text-gray-500">
-              I don't have enough time or money to work on this right now. If you can contribute ideas, writing, video editing, or investment, please reach out.
-              Together we can make the world a more intelligent and understanding place by sharing fun sized educational content.
+              I'm Paul Shorey. Software engineer and artist from USA. Let's collaborate. <br />
+              If you can contribute ideas, writing, video editing, or investment, please reach out. Together we can make the world a more intelligent and
+              understanding place by sharing important educational content.
             </p>
           </div>
 
@@ -141,7 +142,6 @@ export default function Home() {
               onChange={(e) => setFormData({ ...formData, message: e.target.value })}
               disabled={status === "loading"}
             />
-            <p className="text-sm text-center mb-6 text-gray-500">I'm Paul Shorey. Software engineer and artist from USA. More about me coming soon.</p>
 
             <div className="flex justify-center mt-8">
               <button

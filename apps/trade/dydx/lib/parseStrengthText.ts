@@ -1,4 +1,4 @@
-import { StrengthDataAdd } from '@apps/common/sql/strength/types'
+import { StrengthDataAdd } from '@lib/common/sql/strength/types'
 
 /**
  * Parses strength data from text format: key=value key=value

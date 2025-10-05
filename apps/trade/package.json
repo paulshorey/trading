@@ -21,7 +21,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@apps/common": "workspace:*",
+    "@lib/common": "workspace:*",
     "@dydxprotocol/v4-client-js": "1.21.1",
     "@mantine/code-highlight": "^7.17.8",
     "@mantine/core": "7.17.8",
@@ -49,7 +49,7 @@
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^14.2.5",
-    "@repo/config": "workspace:*",
+    "@lib/config": "workspace:*",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.5.2",

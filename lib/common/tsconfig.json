@@ -1,0 +1,12 @@
+{
+  "extends": "@lib/config/typescript/react-library.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./",
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["node_modules", "dist", ".next"]
+}

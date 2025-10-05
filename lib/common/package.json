@@ -1,0 +1,26 @@
+{
+  "name": "@lib/common",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./*"
+  },
+  "dependencies": {
+    "@mantine/core": "7.17.8",
+    "@mantine/hooks": "7.17.8",
+    "@mantine/notifications": "^7.17.8",
+    "@tabler/icons-react": "^2.47.0",
+    "next": "^14.2.5",
+    "pg": "^8.16.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-json-view-lite": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.11.10",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "typescript": "^5"
+  }
+}

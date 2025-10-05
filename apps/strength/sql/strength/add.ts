@@ -1,8 +1,8 @@
 'use server'
 
 import { StrengthDataAdd } from './types'
-import { getDb } from '@apps/common/lib/db/neon'
-import { cc } from '@apps/common/cc'
+import { getDb } from '@lib/common/lib/db/neon'
+import { cc } from '@lib/common/cc'
 
 /**
  * Adds strength record to `strength_v1` table.

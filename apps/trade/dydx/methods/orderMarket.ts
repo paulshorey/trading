@@ -1,6 +1,6 @@
 import { OrderExecution, OrderType, OrderTimeInForce, OrderSide } from '@dydxprotocol/v4-client-js'
-import { sqlLogAdd } from '@apps/common/sql/log/add'
-import { orderAdd } from '@apps/common/sql/order/add'
+import { sqlLogAdd } from '@lib/common/sql/log/add'
+import { orderAdd } from '@lib/common/sql/order/add'
 import { DydxInterface } from '@/dydx'
 import { catchError } from '@/dydx/lib/catchError'
 

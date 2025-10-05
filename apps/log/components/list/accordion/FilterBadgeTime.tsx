@@ -1,9 +1,9 @@
 'use client'
 
-import { Badge } from '@apps/common/fe/components/inline/Badge'
+import { Badge } from '@lib/common/fe/components/inline/Badge'
 import Link from 'next/link'
-import { getDayRange } from '@apps/common/fe/lib/time'
-import { LocalShortTime } from '@apps/common/fe/components/inline/LocalShortTime'
+import { getDayRange } from '@lib/common/fe/lib/time'
+import { LocalShortTime } from '@lib/common/fe/components/inline/LocalShortTime'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { colors } from '@/constants/ui'
 

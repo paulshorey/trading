@@ -1,10 +1,9 @@
 {
-  "extends": "@repo/config/typescript/nextjs.json",
+  "extends": "@lib/config/typescript/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@apps/common/*": ["../common/*"]
+      "@/*": ["./*"]
     },
     "skipLibCheck": true
   },

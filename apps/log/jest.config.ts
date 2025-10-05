@@ -18,7 +18,7 @@ const config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
-    '^@apps/common/(.*)$': '<rootDir>/../common/$1',
+    '^@lib/common/(.*)$': '<rootDir>/../common/$1',
   },
   testEnvironmentOptions: {
     customExportConditions: [''],

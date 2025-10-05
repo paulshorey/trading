@@ -1,19 +1,13 @@
 {
-  "extends": "@repo/config/typescript/nextjs.json",
+  "extends": "@lib/config/typescript/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@apps/common/*": ["../common/*"]
+      "@lib/common/*": ["../common/*"]
     },
     "skipLibCheck": true
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "next-env.d.ts",
-    "next.config.js",
-    ".next/types/**/*.ts"
-  ],
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
   "exclude": ["node_modules", ".next"]
 }

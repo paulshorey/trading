@@ -1,5 +1,5 @@
 import { LineData, Time } from 'lightweight-charts'
-import { StrengthRowGet } from '@apps/common/sql/strength'
+import { StrengthRowGet } from '@lib/common/sql/strength'
 
 /**
  * Convert strength data to chart data using the specified intervals

@@ -1,29 +1,34 @@
-# @repo/config - Shared Configuration Library
+# @lib/config - Shared Configuration Library
 
 This package provides shared configuration files for all apps in the monorepo, eliminating duplicate configuration code.
 
 ## Available Configurations
 
 ### TypeScript (`/typescript`)
+
 - `nextjs.json` - Base TypeScript config for Next.js apps
 - `base.json` - Base TypeScript configuration
 - `react-library.json` - TypeScript config for React libraries
 
 ### Next.js (`/next`)
+
 - `base.config.js` - Standard Next.js config for most apps
   - Includes: transpilePackages, reactStrictMode, eslint settings, Mantine optimizations, image remotePatterns
 - `common.config.js` - Special config for the @apps/common package
   - Includes: webpack extensionAlias configuration
 
 ### PostCSS (`/postcss`)
+
 - `postcss.config.cjs` - Shared PostCSS configuration
   - Includes: Mantine presets, Tailwind CSS, autoprefixer, CSS variables
 
 ### Tailwind CSS (`/tailwind`)
+
 - `base.config.js` - Base Tailwind configuration with common theme extensions
   - Apps extend this and add their own content paths
 
 ### ESLint (`/eslint`)
+
 - `base.js` - Base ESLint configuration
 - `next.js` - ESLint config for Next.js apps
 - `react-internal.js` - ESLint config for internal React packages
@@ -31,10 +36,11 @@ This package provides shared configuration files for all apps in the monorepo, e
 ## Usage Examples
 
 ### TypeScript Configuration
+
 ```json
 // apps/yourapp/tsconfig.json
 {
-  "extends": "@repo/config/typescript/nextjs.json",
+  "extends": "@lib/config/typescript/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
@@ -47,34 +53,37 @@ This package provides shared configuration files for all apps in the monorepo, e
 ```
 
 ### Next.js Configuration
+
 ```javascript
 // apps/yourapp/next.config.js
-const baseConfig = require('@repo/config/next/base')
+const baseConfig = require("@lib/config/next/base");
 
 module.exports = {
   ...baseConfig,
   // Add app-specific overrides here
-}
+};
 ```
 
 ### PostCSS Configuration
+
 ```javascript
 // apps/yourapp/postcss.config.cjs
-module.exports = require('@repo/config/postcss')
+module.exports = require("@lib/config/postcss");
 ```
 
 ### Tailwind Configuration
+
 ```javascript
 // apps/yourapp/tailwind.config.js
-const baseConfig = require('@repo/config/tailwind/base')
+const baseConfig = require("@lib/config/tailwind/base");
 
 module.exports = {
   ...baseConfig,
   content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
     // Add your app-specific content paths
   ],
-}
+};
 ```
 
 ## Benefits
@@ -87,6 +96,7 @@ module.exports = {
 ## Adding New Apps
 
 When adding new apps to the monorepo:
-1. Extend the appropriate configs from `@repo/config`
+
+1. Extend the appropriate configs from `@lib/config`
 2. Only add app-specific overrides in the app's config files
 3. Keep the shared configs generic and reusable

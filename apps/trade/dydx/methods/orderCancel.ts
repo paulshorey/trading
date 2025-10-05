@@ -1,6 +1,6 @@
 import { DydxInterface } from '@/dydx'
 import { numberOrZero } from '@/lib/numbers'
-import { sqlLogAdd } from '@apps/common/sql/log/add'
+import { sqlLogAdd } from '@lib/common/sql/log/add'
 
 type Props = {
   short?: boolean

@@ -1,8 +1,8 @@
 'use server'
 
 import { headers } from 'next/headers'
-import { getDb } from '@apps/common/lib/db/neon'
-import { cc } from '@apps/common/cc'
+import { getDb } from '@lib/common/lib/db/neon'
+import { cc } from '@lib/common/cc'
 import { StrengthRowGet } from './types'
 
 type Output = {

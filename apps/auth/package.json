@@ -1,5 +1,5 @@
 {
-  "name": "@apps/common",
+  "name": "@apps/auth",
   "version": "1.0.2",
   "private": true,
   "scripts": {
@@ -39,7 +39,8 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "@repo/config": "workspace:*",
+    "@lib/common": "workspace:*",
+    "@lib/config": "workspace:*",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

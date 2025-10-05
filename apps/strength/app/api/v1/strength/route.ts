@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
-import { formatResponse } from '@apps/common/lib/nextjs/formatResponse'
+import { formatResponse } from '@lib/common/lib/nextjs/formatResponse'
 import { strengthGets } from '@/sql/strength/gets'
-import { cc } from '@apps/common/cc'
+import { cc } from '@lib/common/cc'
 
 export const maxDuration = 60
 

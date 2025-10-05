@@ -34,6 +34,7 @@ The app runs on `http://localhost:3334` in development mode.
 Submit a contact form message.
 
 **Request Body:**
+
 ```json
 {
   "name": "John Doe",
@@ -43,6 +44,7 @@ Submit a contact form message.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -64,4 +66,4 @@ Submit a contact form message.
 - TypeScript
 - Mantine UI
 - Tailwind CSS
-- Shared configs from `@repo/config`
+- Shared configs from `@lib/config`

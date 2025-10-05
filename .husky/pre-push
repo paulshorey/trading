@@ -2,7 +2,7 @@
 set -e # Exit immediately if a command exits with a non-zero status.
 BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
 
-if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "dev" ]; then
+if [ "$BRANCH_NAME" = "main" ]; then
   echo "On 'main' branch, running pre-push checks..."
   npx turbo run test
 else

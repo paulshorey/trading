@@ -26,7 +26,7 @@ importers:
         specifier: 5.8.3
         version: 5.8.3
 
-  apps/common:
+  apps/auth:
     dependencies:
       '@auth/prisma-adapter':
         specifier: ^2.10.0
@@ -80,9 +80,12 @@ importers:
         specifier: ^4.8.1
         version: 4.8.1
     devDependencies:
-      '@repo/config':
+      '@lib/common':
         specifier: workspace:*
-        version: link:../../repo/config
+        version: link:../../lib/common
+      '@lib/config':
+        specifier: workspace:*
+        version: link:../../lib/config
       '@types/node':
         specifier: ^20
         version: 20.19.13
@@ -119,9 +122,9 @@ importers:
 
   apps/facts:
     dependencies:
-      '@apps/common':
+      '@lib/common':
         specifier: workspace:*
-        version: link:../common
+        version: link:../../lib/common
       '@mantine/core':
         specifier: 8.2.5
         version: 8.2.5(@mantine/hooks@8.2.5(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -141,9 +144,9 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
-      '@repo/config':
+      '@lib/config':
         specifier: workspace:*
-        version: link:../../repo/config
+        version: link:../../lib/config
       '@types/node':
         specifier: ^22.15.30
         version: 22.18.1
@@ -177,9 +180,9 @@ importers:
 
   apps/log:
     dependencies:
-      '@apps/common':
+      '@lib/common':
         specifier: workspace:*
-        version: link:../common
+        version: link:../../lib/common
       '@mantine/core':
         specifier: 8.2.5
         version: 8.2.5(@mantine/hooks@8.2.5(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -247,12 +250,12 @@ importers:
         specifier: ^5.0.8
         version: 5.0.8(@types/react@18.3.24)(react@18.3.1)(use-sync-external-store@1.5.0(react@18.3.1))
     devDependencies:
+      '@lib/config':
+        specifier: workspace:*
+        version: link:../../lib/config
       '@next/eslint-plugin-next':
         specifier: ^14.2.5
         version: 14.2.32
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../../repo/config
       '@testing-library/jest-dom':
         specifier: ^6.6.4
         version: 6.8.0
@@ -346,9 +349,9 @@ importers:
 
   apps/strength:
     dependencies:
-      '@apps/common':
+      '@lib/common':
         specifier: workspace:*
-        version: link:../common
+        version: link:../../lib/common
       '@mantine/core':
         specifier: 8.2.5
         version: 8.2.5(@mantine/hooks@8.2.5(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -416,12 +419,12 @@ importers:
         specifier: ^5.0.8
         version: 5.0.8(@types/react@18.3.24)(react@18.3.1)(use-sync-external-store@1.5.0(react@18.3.1))
     devDependencies:
+      '@lib/config':
+        specifier: workspace:*
+        version: link:../../lib/config
       '@next/eslint-plugin-next':
         specifier: ^14.2.5
         version: 14.2.32
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../../repo/config
       '@testing-library/jest-dom':
         specifier: ^6.6.4
         version: 6.8.0
@@ -515,12 +518,12 @@ importers:
 
   apps/trade:
     dependencies:
-      '@apps/common':
-        specifier: workspace:*
-        version: link:../common
       '@dydxprotocol/v4-client-js':
         specifier: 1.21.1
         version: 1.21.1
+      '@lib/common':
+        specifier: workspace:*
+        version: link:../../lib/common
       '@mantine/code-highlight':
         specifier: ^7.17.8
         version: 7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@7.17.8(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -591,12 +594,12 @@ importers:
         specifier: ^2.2.5
         version: 2.3.6(react@18.3.1)
     devDependencies:
+      '@lib/config':
+        specifier: workspace:*
+        version: link:../../lib/config
       '@next/eslint-plugin-next':
         specifier: ^14.2.5
         version: 14.2.32
-      '@repo/config':
-        specifier: workspace:*
-        version: link:../../repo/config
       '@testing-library/jest-dom':
         specifier: ^6.5.0
         version: 6.8.0
@@ -688,7 +691,53 @@ importers:
         specifier: 5.8.2
         version: 5.8.2
 
-  repo/config:
+  lib/common:
+    dependencies:
+      '@mantine/core':
+        specifier: 7.17.8
+        version: 7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@mantine/hooks':
+        specifier: 7.17.8
+        version: 7.17.8(react@18.3.1)
+      '@mantine/notifications':
+        specifier: ^7.17.8
+        version: 7.17.8(@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.24)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mantine/hooks@7.17.8(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@tabler/icons-react':
+        specifier: ^2.47.0
+        version: 2.47.0(react@18.3.1)
+      next:
+        specifier: ^14.2.5
+        version: 14.2.32(@babel/core@7.28.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.92.1)
+      pg:
+        specifier: ^8.16.3
+        version: 8.16.3
+      react:
+        specifier: ^18
+        version: 18.3.1
+      react-dom:
+        specifier: ^18
+        version: 18.3.1(react@18.3.1)
+      react-json-view-lite:
+        specifier: ^1.5.0
+        version: 1.5.0(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.13
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.15.5
+      '@types/react':
+        specifier: ^18.3.11
+        version: 18.3.24
+      '@types/react-dom':
+        specifier: ^18.3.1
+        version: 18.3.7(@types/react@18.3.24)
+      typescript:
+        specifier: ^5
+        version: 5.8.3
+
+  lib/config:
     devDependencies:
       '@eslint/js':
         specifier: ^9.31.0

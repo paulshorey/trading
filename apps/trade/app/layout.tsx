@@ -1,9 +1,9 @@
-import { ErrorBoundary } from '@apps/common/fe/components/wrappers/ErrorBoundary'
-import { Providers } from '@apps/common/fe/components/wrappers/Providers'
+import { ErrorBoundary } from '@lib/common/fe/components/wrappers/ErrorBoundary'
+import { Providers } from '@lib/common/fe/components/wrappers/Providers'
 // import dynamic from 'next/dynamic'
 // const Providers = dynamic(
 //   () =>
-//     import('@apps/common/fe/components/wrappers/Providers').then(
+//     import('@lib/common/fe/components/wrappers/Providers').then(
 //       (mod) => mod.Providers
 //     ),
 //   {

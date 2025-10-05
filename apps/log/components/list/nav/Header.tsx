@@ -1,6 +1,6 @@
 'use client'
 
-import { Where } from '@apps/common/sql/types'
+import { Where } from '@lib/common/sql/types'
 import { colors } from '@/constants/ui'
 import Link from 'next/link'
 import React from 'react'

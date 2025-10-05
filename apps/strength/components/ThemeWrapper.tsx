@@ -2,14 +2,14 @@
 
 import { useEffect } from 'react'
 import { MantineProvider } from '@mantine/core'
-import { theme } from '@apps/common/fe/styles/theme'
-import { ErrorBoundary } from '@apps/common/fe/components/wrappers/ErrorBoundary'
+import { theme } from '@lib/common/fe/styles/theme'
+import { ErrorBoundary } from '@lib/common/fe/components/wrappers/ErrorBoundary'
 
 // Import all the styles that were in Providers
-import '@apps/common/fe/styles/tailwind.css'
-import '@apps/common/fe/styles/global.scss'
+import '@lib/common/fe/styles/tailwind.css'
+import '@lib/common/fe/styles/global.scss'
 import '@mantine/core/styles.css'
-import '@apps/common/fe/styles/mantine.scss'
+import '@lib/common/fe/styles/mantine.scss'
 
 export function ThemeWrapper({
   children,

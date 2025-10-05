@@ -1,5 +1,5 @@
 {
-  "extends": "@repo/config/typescript/nextjs.json",
+  "extends": "@lib/config/typescript/nextjs.json",
   "compilerOptions": {
     "declaration": false,
     "declarationMap": false,

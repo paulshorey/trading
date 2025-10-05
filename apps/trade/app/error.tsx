@@ -1,6 +1,6 @@
 'use client'
 
-import { ErrorTemplate } from '@apps/common/fe/components/mains/ErrorTemplate'
+import { ErrorTemplate } from '@lib/common/fe/components/mains/ErrorTemplate'
 
 type Props = Readonly<{
   error: Error

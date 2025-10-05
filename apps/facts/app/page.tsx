@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { TextInput, Textarea, Alert } from "@mantine/core";
+import { TextInput, Textarea, Alert, Loader } from "@mantine/core";
 import { IconMail, IconUser, IconAlertCircle, IconCheck } from "@tabler/icons-react";
 
 export default function Home() {
@@ -91,7 +91,7 @@ export default function Home() {
             </span>
             <p className="text-sm text-center mb-6 text-gray-500">
               I don't have enough time or money to work on this right now. If you can contribute ideas, writing, video editing, or investment, please reach out.
-              Together we can make the world a more intelligent and understanding place by sharing consumable educational content.
+              Together we can make the world a more intelligent and understanding place by sharing fun sized educational content.
             </p>
           </div>
 
@@ -147,8 +147,9 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={status === "loading"}
-                className="bg-gradient-to-br from-violet-500 to-sky-500 text-white px-4 py-2 rounded-md font-bold"
+                className="bg-gradient-to-br from-violet-500 to-sky-500 text-white px-4 py-2 rounded-md font-bold flex items-center gap-2"
               >
+                {status === "loading" && <Loader size="sm" color="white" />}
                 Send Inquiry
               </button>
             </div>

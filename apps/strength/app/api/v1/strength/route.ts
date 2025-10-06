@@ -3,6 +3,7 @@ import { formatResponse } from '@lib/common/lib/nextjs/formatResponse'
 import { strengthGets } from '@/sql/strength/gets'
 import { cc } from '@lib/common/cc'
 
+export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Parse query parameters
-    const { searchParams } = new URL(request.url)
+    const searchParams = request.nextUrl.searchParams
     const ticker = searchParams.get('ticker')
     const timenow_gt = searchParams.get('timenow_gt')
     const server_name = searchParams.get('server_name')

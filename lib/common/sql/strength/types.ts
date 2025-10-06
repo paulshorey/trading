@@ -7,7 +7,6 @@ export type StrengthRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
-  time: number; // Added for UI consistency with other modules
   "1": number | null;
   "4": number | null;
   "12": number | null;
@@ -33,5 +32,4 @@ export type StrengthDataAdd = {
   strength: number | null;
   price?: number | null;
   volume?: number | null;
-  time?: Date | null;
 };

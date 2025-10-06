@@ -19,12 +19,7 @@ export function parseStrengthText(bodyText: string) {
       } else if (key === 'interval') {
         data.interval = value !== '{{interval}}' ? value : null
       } else if (key === 'time') {
-        if (value) {
-          const parsed = new Date(value)
-          data.time = isNaN(parsed.getTime()) ? null : parsed
-        } else {
-          data.time = null
-        }
+        // Time is parsed but not used in StrengthDataAdd type - skipping
       } else if (key === 'price') {
         const num = parseFloat(value)
         data.price = !isNaN(num) ? num : null

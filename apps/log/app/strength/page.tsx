@@ -9,7 +9,13 @@ type PageProps = {
 
 export default async function Page({ searchParams }: PageProps) {
   const table = 'strength'
-  const filters = ['ticker', 'app_name', 'server_name', 'node_env', 'time']
+  const filters = [
+    'ticker',
+    'app_name',
+    'server_name',
+    'node_env',
+    'created_at',
+  ]
   const where: Record<string, string> = {}
   for (const [key, value] of Object.entries(searchParams)) {
     if (filters.includes(key)) {

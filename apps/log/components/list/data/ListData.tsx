@@ -61,7 +61,7 @@ export function ListData({
         key={log.id}
         title={message}
         buttonsRight={filters.map((key) => {
-          if (key === 'time') {
+          if (key === 'created_at') {
             return <FilterBadgeTime key={key} time={log[key]} />
           } else {
             return (

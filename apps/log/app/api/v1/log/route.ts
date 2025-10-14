@@ -50,7 +50,6 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       headers,
       bodyData,
       bodyText,
-      timestamp: new Date().toISOString(),
     }
 
     // Log to database
@@ -65,7 +64,7 @@ async function handleRequest(request: NextRequest): Promise<NextResponse> {
       message: 'Logged successfully',
       data: {
         method: request.method,
-        timestamp: logData.timestamp,
+        time: new Date().toISOString(),
       },
     })
     // @ts-ignore

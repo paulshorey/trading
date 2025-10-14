@@ -1,3 +1,5 @@
+'use client'
+
 import { CopyButton, ActionIcon, rem } from '@mantine/core'
 import { IconCopy } from '@tabler/icons-react'
 

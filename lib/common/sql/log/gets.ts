@@ -62,7 +62,7 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
       queryText += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
-    queryText += " ORDER BY time DESC";
+    queryText += " ORDER BY created_at DESC";
     params.push(where?.limit || 100);
     queryText += ` LIMIT $${params.length}`;
 
@@ -81,8 +81,8 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
       server_name: log.server_name || "",
       app_name: log.app_name || "",
       node_env: log.node_env || "",
-      time: new Date(log.time),
-      created_at: new Date(log.time),
+      created_at: new Date(log.created_at),
+      created_at: new Date(log.created_at),
     })) as LogRowGet[];
 
     output.ip = ip;

@@ -82,7 +82,6 @@ export const logGets = async function ({ where }: Props = {}): Promise<Output> {
       app_name: log.app_name || "",
       node_env: log.node_env || "",
       created_at: new Date(log.created_at),
-      created_at: new Date(log.created_at),
     })) as LogRowGet[];
 
     output.ip = ip;

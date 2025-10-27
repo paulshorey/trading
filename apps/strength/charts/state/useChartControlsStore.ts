@@ -25,7 +25,7 @@ export const intervalsOptions = [
 /**
  * Available time range options for historical data
  */
-export const hoursBackOptions = ['120h', '96h', '72h', '48h', '24h']
+export const hoursBackOptions = ['240h', '120h', '96h', '72h', '48h', '24h']
 
 /**
  * Market categories and their ticker options
@@ -34,14 +34,18 @@ export const hoursBackOptions = ['120h', '96h', '72h', '48h', '24h']
 export const tickersByMarket = [
   {
     market: '',
-    tickers: [{ label: 'TN1! Ten Year', value: ['TN1!'] }],
+    tickers: [
+      { label: 'USD (TN1!)', value: ['TN1!'] },
+      { label: 'Other Currencies', value: ['Forex'] },
+    ],
   },
   {
     market: '----------',
     tickers: [
-      { label: 'US Equities', value: ['RTY1!', 'ES1!', 'YM1!'] },
-      { label: 'RTY1!', value: ['RTY1!'] },
+      { label: 'US Equities', value: ['NQ1!', 'ES1!', 'RTY1!', 'YM1!'] },
+      { label: 'NQ1!', value: ['NQ1!'] },
       { label: 'ES1!', value: ['ES1!'] },
+      { label: 'RTY1!', value: ['RTY1!'] },
       { label: 'YM1!', value: ['YM1!'] },
     ],
   },
@@ -58,6 +62,7 @@ export const tickersByMarket = [
     market: '----------',
     tickers: [
       { label: 'HG1!', value: ['HG1!'] },
+      { label: 'CL1!', value: ['CL1!'] },
       { label: 'XC1!', value: ['XC1!'] },
       { label: 'XW1!', value: ['XW1!'] },
       { label: 'SB1!', value: ['SB1!'] },
@@ -67,17 +72,16 @@ export const tickersByMarket = [
   {
     market: '----------',
     tickers: [
-      { label: 'Forex', value: ['Forex'] },
       { label: 'Crypto', value: ['CX'] },
       { label: 'BTCUSD', value: ['BTCUSD'] },
       { label: 'ETHUSD', value: ['ETHUSD'] },
       { label: 'SOLUSD', value: ['SOLUSD'] },
       { label: 'XRPUSD', value: ['XRPUSD'] },
-      { label: 'SUIUSD', value: ['SUIUSD'] },
       { label: 'BNBUSD', value: ['BNBUSD'] },
-      { label: 'DOGEUSD', value: ['DOGEUSD'] },
-      { label: 'AVAXUSD', value: ['AVAXUSD'] },
-      { label: 'XLMUSD', value: ['XLMUSD'] },
+      { label: 'SUIUSD', value: ['SUIUSD'] },
+      // { label: 'DOGEUSD', value: ['DOGEUSD'] },
+      // { label: 'AVAXUSD', value: ['AVAXUSD'] },
+      // { label: 'XLMUSD', value: ['XLMUSD'] },
     ],
   },
 ]
@@ -161,7 +165,7 @@ const getInitialState = (): State => {
   const defaultTickers = tickersByMarket[1]!.tickers[2]!.value
 
   const defaultState: State = {
-    hoursBack: hoursBackOptions[hoursBackOptions.length - 1]!,
+    hoursBack: hoursBackOptions[hoursBackOptions.length - 2]!,
     interval: intervalsOptions[0]!.value,
     chartTickers: defaultTickers,
     timeRange: null,

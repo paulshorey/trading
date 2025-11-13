@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
       )
       const fetchUrl = `https://api.rasterwise.com/v1/get-screenshot?apikey=${apiKey}&url=${encodeURIComponent(
         url.toString()
-      )}&width=${height}&height=${height}&devicefactor=3&element=%23screenshot-target`
+      )}&width=${height}&height=${height}&devicefactor=3`
+      // &element=%23screenshot-target
       const response = await fetch(fetchUrl, { next: { revalidate: 10 } })
       const screenshotData = await response.json()
       const image = screenshotData.screenshotImage

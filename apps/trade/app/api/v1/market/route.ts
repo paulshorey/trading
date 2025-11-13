@@ -126,7 +126,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             stack: error.stack,
           },
         })
-        return formatResponse({ error: error.message }, 500)
+        return formatResponse({ ok: false, error: error.message }, 500)
       }
     }
 
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         bodyData,
       },
     })
-    return formatResponse({ error: error.message }, 500)
+    return formatResponse({ ok: false, error: error.message }, 500)
   }
 }
 

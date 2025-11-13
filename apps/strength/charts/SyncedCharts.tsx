@@ -193,7 +193,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       {/* Target box for screen capture */}
       <div
         id="screenshot-target"
-        className="fixed top-[34px] left-0 right-[8px] bottom-[34px] pointer-events-none"
+        className="absolute top-[34px] left-0 right-[8px] bottom-[34px] pointer-events-none"
       />
     </div>
   )

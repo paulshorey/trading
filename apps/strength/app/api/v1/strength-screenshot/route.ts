@@ -10,8 +10,8 @@ export const maxDuration = 600
 export async function GET(request: NextRequest) {
   try {
     const tickers = ['GC1', 'ZL1', 'CL1', 'HG1', 'ES1', 'GC1']
-    const width = 420 // 754
-    const height = 360 // 354
+    const width = 754 // 754
+    const height = 354 // 354
     const apiKey = 's9M14e7kMH16bOaHA5H06Wk9VQv0kpwai6ayhxdb'
 
     for (const ticker of tickers) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       )
       const fetchUrl = `https://api.rasterwise.com/v1/get-screenshot?apikey=${apiKey}&url=${encodeURIComponent(
         url.toString()
-      )}&width=${height}&height=${height}&devicefactor=3&element=#screenshot-target`
+      )}&width=${height}&height=${height}&devicefactor=3&element=%23screenshot-target`
       const response = await fetch(fetchUrl, { next: { revalidate: 10 } })
       const screenshotData = await response.json()
       const image = screenshotData.screenshotImage

@@ -4,27 +4,33 @@ import { cc } from '@lib/common/cc'
 import { sendToMyselfMMS } from '../../../../../../lib/common/twillio/sendToMyselfMMS'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 600
 
 // Docs: https://docs.rasterwise.com/docs/getscreenshot/api-reference-0/
 export async function GET(request: NextRequest) {
   try {
-    const url = new URL(
-      'https://strength.finance/?hoursBack=240h&interval=%5B%224%22%2C%2212%22%2C%2230%22%2C%2260%22%5D&tickers=%5B%22GC1%21%22%5D'
-    )
+    const tickers = ['GC1', 'ZL1', 'CL1', 'HG1', 'ES1', 'GC1']
+    const width = 420 // 754
+    const height = 360 // 354
     const apiKey = 's9M14e7kMH16bOaHA5H06Wk9VQv0kpwai6ayhxdb'
-    const fetchUrl = `https://api.rasterwise.com/v1/get-screenshot?apikey=${apiKey}&url=${encodeURIComponent(
-      url.toString()
-    )}&width=754&height=354&devicefactor=3`
-    const response = await fetch(fetchUrl, { next: { revalidate: 10 } })
-    const screenshotData = await response.json()
-    const image = screenshotData.screenshotImage
 
-    sendToMyselfMMS(image)
+    for (const ticker of tickers) {
+      // Fetch
+      const url = new URL(
+        `https://strength.finance/?hoursBack=120h&interval=%5B%224%22%2C%2212%22%2C%2230%22%2C%2260%22%5D&tickers=%5B%22${ticker}%21%22%5D`
+      )
+      const fetchUrl = `https://api.rasterwise.com/v1/get-screenshot?apikey=${apiKey}&url=${encodeURIComponent(
+        url.toString()
+      )}&width=${height}&height=${height}&devicefactor=3`
+      const response = await fetch(fetchUrl, { next: { revalidate: 10 } })
+      const screenshotData = await response.json()
+      const image = screenshotData.screenshotImage
+      // Send SMS
+      sendToMyselfMMS(image)
+    }
 
     return formatResponse({
       ok: true,
-      screenshotData,
     })
   } catch (error: any) {
     cc.error(

@@ -5,6 +5,7 @@ import {
   forwardFillData,
   normalizeMultipleTickerData,
   generateFutureTimestamps,
+  downsampleTo3Minutes,
 } from './aggregateDataUtils'
 
 /**
@@ -101,8 +102,16 @@ export const aggregatePriceData = (
     sortedTimestamps
   )
 
+  // Downsample from 2-minute to 3-minute intervals
+  const resultMap = new Map<number, number>()
+  normalizedResult.forEach((point) => {
+    resultMap.set(point.time, point.value)
+  })
+
+  const downsampled = downsampleTo3Minutes(resultMap, sortedTimestamps)
+
   // Convert to LineData format - ensure we create new objects
-  const lineData = normalizedResult.map((point) => ({
+  const lineData = downsampled.map((point) => ({
     time: point.time as Time,
     value: point.value,
   }))
@@ -113,16 +122,16 @@ export const aggregatePriceData = (
     const lastTimestamp = lastDataPoint.time as number
     const lastValue = lastDataPoint.value
 
-    // Generate future timestamps (12 hours at 2-minute intervals)
-    const futureTimestamps = generateFutureTimestamps(lastTimestamp, 12)
+    // Generate future timestamps (12 hours at 3-minute intervals)
+    const intervalSeconds = 3 * 60 // 3 minutes in seconds
+    const totalIntervals = (12 * 60) / 3 // Total number of 3-minute intervals in 12 hours
 
-    // Add future data points with the last known value
-    futureTimestamps.forEach((timestamp) => {
+    for (let i = 1; i <= totalIntervals; i++) {
       lineData.push({
-        time: timestamp as Time,
+        time: (lastTimestamp + i * intervalSeconds) as Time,
         value: lastValue,
       })
-    })
+    }
   }
 
   return lineData

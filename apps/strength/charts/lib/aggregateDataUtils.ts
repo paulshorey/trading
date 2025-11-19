@@ -3,6 +3,46 @@
  */
 
 /**
+ * Find the 2 most similar values from a group of 3 data points
+ * Returns the average of the 2 most similar values, discarding the outlier
+ *
+ * Algorithm:
+ * - Calculate distances between all pairs: |a-b|, |a-c|, |b-c|
+ * - The pair with the smallest distance are the most similar
+ * - Discard the third value (outlier) and return the average of the pair
+ *
+ * @param values - Array of exactly 3 numeric values
+ * @returns Average of the 2 most similar values
+ */
+export function findTwoMostSimilar(values: number[]): number {
+  if (values.length !== 3) {
+    throw new Error('findTwoMostSimilar requires exactly 3 values')
+  }
+
+  const [a, b, c] = values as [number, number, number]
+
+  // Calculate distances between all pairs
+  const distAB = Math.abs(a - b)
+  const distAC = Math.abs(a - c)
+  const distBC = Math.abs(b - c)
+
+  // Find the pair with minimum distance (most similar)
+  let avg: number
+  if (distAB <= distAC && distAB <= distBC) {
+    // A and B are most similar, discard C
+    avg = (a + b) / 2
+  } else if (distAC <= distAB && distAC <= distBC) {
+    // A and C are most similar, discard B
+    avg = (a + c) / 2
+  } else {
+    // B and C are most similar, discard A
+    avg = (b + c) / 2
+  }
+
+  return avg
+}
+
+/**
  * Generate future timestamps at 2-minute intervals
  * @param lastTimestamp - The last timestamp from the real data (in seconds)
  * @param hours - Number of hours to extend into the future
@@ -186,6 +226,117 @@ export function normalizeMultipleTickerData(
       result.push({
         time: timestamp,
         value: scaledValue,
+      })
+    }
+  })
+
+  return result
+}
+
+/**
+ * Downsample data from 2-minute to 3-minute intervals
+ * Uses sliding window approach with outlier removal
+ *
+ * For each 3-minute output timestamp:
+ * 1. Find the 3 nearest input data points
+ * 2. Discard the outlier (value most different from the other two)
+ * 3. Average the remaining 2 values
+ *
+ * @param inputData - Map of 2-minute timestamp -> value
+ * @param sortedInputTimestamps - Sorted array of 2-minute timestamps (in seconds)
+ * @returns Array of downsampled data points at 3-minute intervals
+ */
+export function downsampleTo3Minutes(
+  inputData: Map<number, number>,
+  sortedInputTimestamps: number[]
+): { time: number; value: number }[] {
+  if (sortedInputTimestamps.length === 0) {
+    return []
+  }
+
+  // Generate 3-minute interval timestamps
+  const firstTimestamp = sortedInputTimestamps[0]!
+  const lastTimestamp = sortedInputTimestamps[sortedInputTimestamps.length - 1]!
+
+  // Round first timestamp down to nearest 3-minute mark
+  const firstDate = new Date(firstTimestamp * 1000)
+  const firstMinutes = firstDate.getMinutes()
+  const roundedFirstMinutes = Math.floor(firstMinutes / 3) * 3
+  firstDate.setMinutes(roundedFirstMinutes, 0, 0)
+  const startTimestamp = firstDate.getTime() / 1000
+
+  const output3MinTimestamps: number[] = []
+  const intervalSeconds = 3 * 60 // 3 minutes
+
+  for (
+    let ts = startTimestamp;
+    ts <= lastTimestamp;
+    ts += intervalSeconds
+  ) {
+    output3MinTimestamps.push(ts)
+  }
+
+  // For each 3-minute timestamp, find 3 nearest input points and average the 2 most similar
+  const result: { time: number; value: number }[] = []
+
+  output3MinTimestamps.forEach((outputTimestamp) => {
+    // Find 3 nearest input timestamps
+    const nearestInputs: Array<{ timestamp: number; value: number }> = []
+
+    // Find closest timestamp and its neighbors
+    let closestIndex = 0
+    let minDist = Infinity
+
+    for (let i = 0; i < sortedInputTimestamps.length; i++) {
+      const dist = Math.abs(sortedInputTimestamps[i]! - outputTimestamp)
+      if (dist < minDist) {
+        minDist = dist
+        closestIndex = i
+      }
+    }
+
+    // Get up to 3 points: closest and its neighbors
+    const indices: number[] = []
+    if (closestIndex > 0) indices.push(closestIndex - 1)
+    indices.push(closestIndex)
+    if (closestIndex < sortedInputTimestamps.length - 1)
+      indices.push(closestIndex + 1)
+
+    // If we're at the edge and only have 2 points, add another neighbor
+    if (indices.length === 2) {
+      if (closestIndex === 0 && sortedInputTimestamps.length > 2) {
+        indices.push(closestIndex + 2)
+      } else if (
+        closestIndex === sortedInputTimestamps.length - 1 &&
+        sortedInputTimestamps.length > 2
+      ) {
+        indices.unshift(closestIndex - 2)
+      }
+    }
+
+    // Collect values for these timestamps
+    const values: number[] = []
+    indices.forEach((idx) => {
+      const ts = sortedInputTimestamps[idx]!
+      const value = inputData.get(ts)
+      if (value !== undefined && Number.isFinite(value)) {
+        values.push(value)
+      }
+    })
+
+    // Average the 2 most similar values if we have at least 3 points
+    if (values.length >= 3) {
+      const avgValue = findTwoMostSimilar(values.slice(0, 3))
+      result.push({
+        time: outputTimestamp,
+        value: avgValue,
+      })
+    } else if (values.length > 0) {
+      // If we have fewer than 3 points, just average what we have
+      const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length
+      result.push({
+        time: outputTimestamp,
+        value: avgValue,
       })
     }
   })

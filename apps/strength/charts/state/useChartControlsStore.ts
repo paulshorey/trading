@@ -36,7 +36,11 @@ export const tickersByMarket = [
   {
     market: '',
     tickers: [
-      { label: 'USD (TN1!)', value: ['TN1!'] },
+      { label: 'Bullish', value: ['NQ1!', 'RTY1!', 'HG1!', 'CX'] },
+      { label: 'Bearish', value: ['VX1!', 'UVIX', 'ZN1!', 'CL1!', 'Forex'] },
+      { label: 'VX1!', value: ['VX1!'] },
+      { label: 'UVIX', value: ['UVIX'] },
+      { label: 'ZN1!', value: ['ZN1!'] },
       { label: 'Other Currencies', value: ['Forex'] },
     ],
   },

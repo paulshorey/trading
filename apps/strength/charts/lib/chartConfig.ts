@@ -61,7 +61,10 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
       style: 0, // Solid line
     },
     horzLine: {
-      visible: false, // Hide horizontal price line
+      visible: true,
+      color: '#758391',
+      width: 1,
+      style: 0, // Solid line
     },
   },
   // Disable zoom/scroll but allow crosshair interactions

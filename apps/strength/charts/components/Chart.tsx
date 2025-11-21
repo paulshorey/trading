@@ -77,6 +77,66 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       chartRef.current = chart
       hasInitialized.current = true
 
+      // --- Fix for zoom: 0.5 ---
+      // Intercept mouse events to correct coordinates for the 2x width
+      // Since the body is scaled by 0.5 and chart width is 2x, we need to double the mouse coordinates
+      // so the chart (which thinks it's 2x wide) gets the correct relative position.
+      const container = containerRef.current
+      const events = [
+        'mousemove',
+        'mouseenter',
+        'mouseleave',
+        'mousedown',
+        'mouseup',
+        'click',
+        'dblclick',
+      ]
+
+      const eventHandler = (e: MouseEvent) => {
+        if ((e as any)._patched) return
+
+        e.stopPropagation()
+        // e.preventDefault() // Optional, might interfere with other things
+
+        const rect = container.getBoundingClientRect()
+        const scale = 2 // Inverse of zoom: 0.5
+
+        // Calculate corrected coordinates relative to the container
+        const relativeX = e.clientX - rect.left
+        const relativeY = e.clientY - rect.top
+
+        const newClientX = rect.left + relativeX * scale
+        const newClientY = rect.top + relativeY * scale
+
+        const newEvent = new MouseEvent(e.type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          detail: e.detail,
+          screenX: e.screenX,
+          screenY: e.screenY,
+          clientX: newClientX,
+          clientY: newClientY,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          metaKey: e.metaKey,
+          button: e.button,
+          buttons: e.buttons,
+          relatedTarget: e.relatedTarget,
+        })
+
+        Object.defineProperty(newEvent, '_patched', { value: true })
+        e.target?.dispatchEvent(newEvent)
+      }
+
+      events.forEach((eventName) => {
+        container.addEventListener(eventName, eventHandler as any, {
+          capture: true,
+        })
+      })
+      // -------------------------
+
       // Add first series (strength) - uses LEFT price scale
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
@@ -115,6 +175,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Cleanup
       return () => {
+        events.forEach((eventName) => {
+          container.removeEventListener(eventName, eventHandler as any, {
+            capture: true,
+          })
+        })
+
         chart.remove()
         chartRef.current = null
         strengthSeriesRef.current = null

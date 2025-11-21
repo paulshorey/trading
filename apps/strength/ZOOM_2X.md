@@ -26,7 +26,11 @@ An un-intended side-effect however is added complexity around all UI elements, a
 
 ```
 // apps/strength/charts/controls/MarketControl.tsx
-className="scale2x"
+      // @ts-ignore
+      className="scale2x"
+      classNames={{
+        dropdown: 'scale2x',
+      }}
 ```
 
 ```

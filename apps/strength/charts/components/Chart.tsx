@@ -330,7 +330,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const zeroLine = strengthSeriesRef.current.createPriceLine({
           price: 0,
           color: '#ff9d00d7',
-          lineWidth: 1,
+          lineWidth: 2,
           lineStyle: 2, // Dashed line
           axisLabelVisible: false,
           title: '',

@@ -4,6 +4,10 @@ body {
   width: 200%;
   height: 200%;
 }
+.scale2x {
+  transform: scale(2);
+  transform-origin: top left;
+}
 
 .mantine-Combobox-dropdown [role='group'],
 .mantine-Combobox-dropdown [role='group'] [role='group'] {

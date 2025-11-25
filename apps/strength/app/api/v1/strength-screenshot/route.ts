@@ -8,6 +8,10 @@ export const maxDuration = 600
 
 // Docs: https://docs.rasterwise.com/docs/getscreenshot/api-reference-0/
 export async function GET(request: NextRequest) {
+  return formatResponse({
+    ok: true,
+    note: 'Disabled for now',
+  })
   try {
     const tickers = ['GC1', 'ZL1', 'CL1', 'HG1', 'ES1', 'GC1']
     const width = 754 // 754

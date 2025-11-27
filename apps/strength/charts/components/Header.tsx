@@ -5,8 +5,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { ControlsDropdown } from './controls/ControlsDropdown'
 import InlineControls from './controls/InlineControls'
 import classes from '../classes.module.scss'
-import { DrawerCalendar } from '@/charts/components/DrawerCalendar'
-import { DrawerNews } from './DrawerNews'
+import { DrawerCalendar, DrawerNews } from './drawers'
 
 export default function Header() {
   const [drawerNewsOpened, { open: drawerNewsOpen, close: drawerNewsClose }] =

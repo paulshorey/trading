@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { StrengthRowGet } from '@lib/common/sql/strength'
-import { FetchStrengthData } from './FetchStrengthData'
+import { StrengthApi } from './strengthApi'
 import { HOURS_BACK_INITIAL } from '../constants'
-import { strengthIntervals } from '../state/useChartControlsStore'
+import { strengthIntervals } from '../state/config'
 
 export interface UseRealtimeStrengthDataOptions {
   tickers: string[]
@@ -50,8 +50,8 @@ export function useRealtimeStrengthData({
     setError(null)
 
     try {
-      const initialDate = FetchStrengthData.getInitialDataDate(maxDataHours)
-      const allTickerData = await FetchStrengthData.fetchMultipleTickersData(
+      const initialDate = StrengthApi.getInitialDataDate(maxDataHours)
+      const allTickerData = await StrengthApi.fetchMultipleTickersData(
         tickers,
         initialDate
       )
@@ -158,7 +158,7 @@ export function useRealtimeStrengthData({
       const fromDate = new Date(previousInterval.getTime() - 30 * 1000) // 30 seconds before previous interval
       const toDate = new Date() // Current time
 
-      const newTickerData = await FetchStrengthData.fetchMultipleTickersData(
+      const newTickerData = await StrengthApi.fetchMultipleTickersData(
         tickers,
         fromDate,
         toDate
@@ -213,7 +213,7 @@ export function useRealtimeStrengthData({
             if (!existingData) return newData
 
             // Merge and deduplicate data
-            const merged = FetchStrengthData.mergeData(existingData, newData)
+            const merged = StrengthApi.mergeData(existingData, newData)
 
             // Update latest timestamp
             if (merged.length > 0) {

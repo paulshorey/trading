@@ -4,7 +4,7 @@ import {
   aggregateStrengthDataWithInterpolation,
   extractGlobalTimestamps,
   generateFutureTimestamps,
-} from './aggregateDataUtils'
+} from './interpolation'
 
 /**
  * Aggregate strength data from all tickers with interpolation

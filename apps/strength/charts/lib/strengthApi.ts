@@ -1,5 +1,16 @@
+/**
+ * Strength API Service
+ *
+ * Handles all API communication for fetching strength/price data.
+ * Includes data validation, date normalization, and merge logic.
+ */
+
 import { StrengthRowGet } from '@lib/common/sql/strength'
 import { HOURS_BACK_INITIAL } from '../constants'
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 export interface FetchStrengthDataParams {
   ticker: string
@@ -12,14 +23,26 @@ export interface FetchStrengthDataResult {
   error: string | null
 }
 
+// ============================================================================
+// API SERVICE
+// ============================================================================
+
 /**
- * Service for fetching strength data from the API
+ * Service class for fetching strength data from the API
+ *
+ * Provides methods for:
+ * - Fetching single or multiple ticker data
+ * - Date preparation and validation
+ * - Merging incremental updates with existing data
  */
-export class FetchStrengthData {
+export class StrengthApi {
   private static baseUrl = '/api/v1/strength'
 
   /**
    * Fetch strength data for a single ticker
+   *
+   * @param params - Ticker and time range parameters
+   * @returns Rows of strength data or error
    */
   static async fetchTickerData(
     params: FetchStrengthDataParams
@@ -55,7 +78,7 @@ export class FetchStrengthData {
           const milliseconds = timenow.getMilliseconds()
 
           if (minutes % 2 !== 0 || seconds !== 0 || milliseconds !== 0) {
-            console.warn('[fetchTickerData] Invalid timestamp detected:', {
+            console.warn('[StrengthApi.fetchTickerData] Invalid timestamp:', {
               ticker: params.ticker,
               timenow: timenow.toISOString(),
               minutes,
@@ -90,6 +113,11 @@ export class FetchStrengthData {
 
   /**
    * Fetch data for multiple tickers in parallel
+   *
+   * @param tickers - Array of ticker symbols
+   * @param timenow_gt - Start time for data range
+   * @param timenow_lt - Optional end time for data range
+   * @returns Array of strength data arrays (one per ticker)
    */
   static async fetchMultipleTickersData(
     tickers: string[],
@@ -105,7 +133,13 @@ export class FetchStrengthData {
   }
 
   /**
-   * Prepare date for API query (rounded to even minute, no seconds)
+   * Prepare date for API query
+   *
+   * Rounds to even minute with no seconds, which matches
+   * the timestamp format used in the database.
+   *
+   * @param date - Date to prepare
+   * @returns Normalized date
    */
   static prepareDate(date: Date): Date {
     const prepared = new Date(date)
@@ -119,6 +153,9 @@ export class FetchStrengthData {
 
   /**
    * Get the date for initial data load
+   *
+   * @param hoursBack - Number of hours of historical data to fetch
+   * @returns Prepared start date
    */
   static getInitialDataDate(hoursBack: number = HOURS_BACK_INITIAL): Date {
     const date = new Date(Date.now() - hoursBack * 60 * 60 * 1000)
@@ -127,7 +164,15 @@ export class FetchStrengthData {
 
   /**
    * Merge new data with existing data, handling duplicates
-   * IMPORTANT: Uses timenow as the exact timestamp (should be even minutes, no seconds)
+   *
+   * Uses timenow as the unique key. New data overwrites existing
+   * data at the same timestamp.
+   *
+   * IMPORTANT: Timestamps should be at even minutes with no seconds.
+   *
+   * @param existingData - Current data array
+   * @param newData - New data to merge
+   * @returns Merged and sorted data array
    */
   static mergeData(
     existingData: StrengthRowGet[],
@@ -166,7 +211,7 @@ export class FetchStrengthData {
       if (
         sortedData[i]!.timenow.getTime() < sortedData[i - 1]!.timenow.getTime()
       ) {
-        console.error('Data not properly sorted after merge', {
+        console.error('[StrengthApi.mergeData] Data not properly sorted:', {
           current: sortedData[i]!.timenow,
           previous: sortedData[i - 1]!.timenow,
         })
@@ -176,3 +221,6 @@ export class FetchStrengthData {
     return sortedData
   }
 }
+
+// Legacy alias for backward compatibility
+export const FetchStrengthData = StrengthApi

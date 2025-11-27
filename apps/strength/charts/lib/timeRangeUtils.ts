@@ -1,3 +1,10 @@
+/**
+ * Time Range and Data Conversion Utilities
+ *
+ * Utilities for calculating visible time ranges and converting
+ * raw strength data to chart-compatible formats.
+ */
+
 import { LineData, Time } from 'lightweight-charts'
 import { StrengthRowGet } from '@lib/common/sql/strength'
 
@@ -46,6 +53,14 @@ export const convertToChartData = (
 
 /**
  * Calculate time range from raw data
+ *
+ * Determines the visible time window based on:
+ * - The earliest and latest timestamps in the data
+ * - The user's selected hoursBack setting
+ *
+ * @param rawData - Array of ticker data arrays
+ * @param hoursBack - Number of hours to show
+ * @returns Time range object or null if no valid range
  */
 export const calculateTimeRange = (
   rawData: (StrengthRowGet[] | null)[],
@@ -92,10 +107,18 @@ export const calculateTimeRange = (
   return null
 }
 
-
 /**
  * Get nearest series value at a specific time using binary search
  * If multiple intervals are provided, average their values
+ *
+ * Used for crosshair value display and data point lookup.
+ *
+ * @param chartData - The chart's LineData array
+ * @param t - Target time to find
+ * @param chartIndex - Index of the ticker in rawData
+ * @param rawData - Raw strength data arrays
+ * @param control_intervals - Intervals to average
+ * @returns The averaged value at the nearest time, or null
  */
 export const getNearestSeriesValueAtTime = (
   chartData: LineData[] | null | undefined,

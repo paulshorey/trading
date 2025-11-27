@@ -1,9 +1,14 @@
 /**
- * Data processing utilities for charts
+ * Interpolation and Data Processing Utilities
+ *
+ * Functions for handling missing data, normalizing values across tickers,
+ * and preparing data for chart rendering.
  */
 
 /**
  * Generate future timestamps at 2-minute intervals
+ * Used to extend chart data into the future for visualization
+ *
  * @param lastTimestamp - The last timestamp from the real data (in seconds)
  * @param hours - Number of hours to extend into the future
  * @returns Array of future timestamps at 2-minute intervals (in seconds)
@@ -24,8 +29,17 @@ export function generateFutureTimestamps(
 }
 
 /**
- * Forward-fill missing values in price data
- * Uses aggressive interpolation to fill all timestamps with the most recent valid value
+ * Forward-fill missing values in time series data
+ *
+ * Uses aggressive interpolation to fill all timestamps with the most recent
+ * valid value. If no previous value exists, looks forward for the first
+ * available value.
+ *
+ * This ensures continuous chart lines without gaps.
+ *
+ * @param data - Array of timestamp/value pairs
+ * @param sortedTimestamps - All timestamps that should have values
+ * @returns Map of timestamp to filled value
  */
 export function forwardFillData<
   T extends { timestamp: number; value?: number },
@@ -87,7 +101,12 @@ export function forwardFillData<
 
 /**
  * Extract all unique timestamps from multiple data arrays
- * IMPORTANT: Timestamps should be at even minutes with no seconds
+ *
+ * IMPORTANT: Timestamps should be at even minutes with no seconds.
+ * This function validates timestamps and logs warnings for invalid ones.
+ *
+ * @param allData - Array of ticker data arrays
+ * @returns Sorted array of unique timestamps in seconds
  */
 export function extractGlobalTimestamps<T extends { timenow: Date }>(
   allData: (T[] | null)[]
@@ -125,8 +144,19 @@ export function extractGlobalTimestamps<T extends { timenow: Date }>(
 
 /**
  * Normalize price data across multiple tickers
- * Each ticker's prices are normalized relative to its last valid price
- * This allows tickers with different price levels to be compared equally
+ *
+ * Each ticker's prices are normalized relative to its last valid price.
+ * This allows tickers with different price levels (e.g., BTC ~$95k vs ETH ~$3k)
+ * to be compared equally on the same chart.
+ *
+ * Algorithm:
+ * 1. Normalize each ticker so its last price = 1.0
+ * 2. Average the normalized values across tickers
+ * 3. Scale back using the average of all last prices
+ *
+ * @param tickersData - Array of ticker data with filled prices
+ * @param sortedTimestamps - All timestamps to process
+ * @returns Array of normalized and averaged data points
  */
 export function normalizeMultipleTickerData(
   tickersData: Array<{
@@ -194,8 +224,16 @@ export function normalizeMultipleTickerData(
 }
 
 /**
- * Forward-fill missing values for strength data aggregation
- * Similar to forwardFillData but handles strength data aggregation structure
+ * Aggregate strength data with forward-fill interpolation
+ *
+ * Processes multiple tickers' strength data, interpolates missing values,
+ * and returns averaged data points for chart rendering.
+ *
+ * @param allRawData - Array of ticker data arrays
+ * @param sortedTimestamps - All timestamps to process
+ * @param getStrengthValue - Function to extract strength value from a data item
+ * @param controlIntervals - Intervals to average when extracting values
+ * @returns Sorted array of aggregated data points
  */
 export function aggregateStrengthDataWithInterpolation<
   T extends { timenow: Date },

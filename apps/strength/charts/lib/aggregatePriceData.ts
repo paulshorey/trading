@@ -5,7 +5,7 @@ import {
   forwardFillData,
   normalizeMultipleTickerData,
   generateFutureTimestamps,
-} from './aggregateDataUtils'
+} from './interpolation'
 
 /**
  * Aggregate price data from all tickers with normalization

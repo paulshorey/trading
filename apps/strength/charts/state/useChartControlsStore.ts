@@ -13,7 +13,7 @@ export const strengthIntervals = ['2', '4', '12', '30', '60', '240'] as const
  * Each option represents a set of intervals to average together
  */
 export const intervalsOptions = [
-  { value: strengthIntervals, label: 'all' },
+  { value: strengthIntervals as unknown as string[], label: 'all' },
   { value: ['12', '30', '60', '240'], label: 'long' },
   { value: ['2', '4', '12'], label: 'short' },
   { value: ['2'], label: '2m' },
@@ -105,7 +105,7 @@ type State = {
   hoursBack: string
 
   // Interval selection for strength data aggregation
-  interval: readonly string[]
+  interval: string[]
 
   // Single ticker selection for both fetching and display
   chartTickers: string[]

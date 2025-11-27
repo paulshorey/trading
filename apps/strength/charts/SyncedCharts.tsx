@@ -13,7 +13,7 @@ import { useChartControlsStore } from './state/useChartControlsStore'
 import { HOURS_BACK_INITIAL } from './constants'
 import { aggregatePriceData } from './lib/aggregatePriceData'
 import { aggregateStrengthData } from './lib/aggregateStrengthData'
-import MarketControl from './controls/MarketControl'
+import MarketControl from './components/controls/MarketControl'
 
 export interface SyncedChartsProps {
   availableHeight: number

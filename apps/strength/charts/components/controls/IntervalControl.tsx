@@ -2,7 +2,7 @@ import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
 import {
   useChartControlsStore,
   intervalsOptions,
-} from '../state/useChartControlsStore'
+} from '../../state/useChartControlsStore'
 import React from 'react'
 
 interface Props {

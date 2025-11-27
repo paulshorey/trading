@@ -4,7 +4,7 @@ import React from 'react'
 import {
   useChartControlsStore,
   hoursBackOptions,
-} from '../state/useChartControlsStore'
+} from '../../state/useChartControlsStore'
 import { Select } from '@mantine/core'
 
 interface Props {

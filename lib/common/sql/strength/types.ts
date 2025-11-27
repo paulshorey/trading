@@ -7,7 +7,7 @@ export type StrengthRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
-  "1": number | null;
+  "2": number | null;
   "4": number | null;
   "12": number | null;
   "30": number | null;

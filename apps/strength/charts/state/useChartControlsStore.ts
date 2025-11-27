@@ -6,17 +6,17 @@ import { createURLStorage, getQueryParams } from './lib/urlSync'
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
+export const strengthIntervals = ['2', '4', '12', '30', '60', '240'] as const
 
 /**
  * Available interval configurations for strength data aggregation
  * Each option represents a set of intervals to average together
  */
 export const intervalsOptions = [
-  { value: ['4', '12', '30', '60', '240'], label: 'multi' },
-  { value: ['1', '4', '12', '30', '60', '240'], label: 'all' },
+  { value: strengthIntervals, label: 'all' },
   { value: ['12', '30', '60', '240'], label: 'long' },
-  { value: ['1', '4', '12'], label: 'short' },
-  { value: ['1'], label: '1m' },
+  { value: ['2', '4', '12'], label: 'short' },
+  { value: ['2'], label: '2m' },
   { value: ['4'], label: '4m' },
   { value: ['12'], label: '12m' },
   { value: ['30'], label: '30m' },
@@ -105,7 +105,7 @@ type State = {
   hoursBack: string
 
   // Interval selection for strength data aggregation
-  interval: string[]
+  interval: readonly string[]
 
   // Single ticker selection for both fetching and display
   chartTickers: string[]
@@ -168,7 +168,8 @@ const URL_SYNC_KEYS = ['hoursBack', 'interval', 'tickers']
  */
 const getInitialState = (): State => {
   // Default to CX (Crypto Index) ticker
-  const defaultTickers = tickersByMarket[1]!.tickers[2]!.value
+  const defaultTickers =
+    tickersByMarket[tickersByMarket.length - 1]!.tickers[0]!.value
 
   const defaultState: State = {
     hoursBack: hoursBackOptions[hoursBackOptions.length - 2]!,

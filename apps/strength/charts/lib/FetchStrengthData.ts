@@ -151,33 +151,8 @@ export class FetchStrengthData {
     })
 
     // Add or update with new data
-    let updatedCount = 0
-    let addedCount = 0
-    const updates: string[] = []
-
     newData.forEach((item) => {
       const timestamp = item.timenow.getTime()
-      const existingItem = dataMap.get(timestamp)
-
-      if (existingItem) {
-        // Check if values actually changed
-        const strengthChanged =
-          existingItem['1'] !== item['1'] ||
-          existingItem['4'] !== item['4'] ||
-          existingItem['12'] !== item['12'] ||
-          existingItem['60'] !== item['60'] ||
-          existingItem['240'] !== item['240']
-        const priceChanged = existingItem.price !== item.price
-
-        if (strengthChanged || priceChanged) {
-          updates.push(
-            `${item.timenow.toISOString()}: strength=${strengthChanged}, price=${priceChanged}`
-          )
-        }
-        updatedCount++
-      } else {
-        addedCount++
-      }
       dataMap.set(timestamp, item)
     })
 

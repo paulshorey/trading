@@ -5,7 +5,7 @@ import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
 import {
   useChartControlsStore,
   tickersByMarket,
-} from '../state/useChartControlsStore'
+} from '../../state/useChartControlsStore'
 import { IconChevronDown } from '@tabler/icons-react'
 
 interface Props {

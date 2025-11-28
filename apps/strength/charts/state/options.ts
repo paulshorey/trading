@@ -13,7 +13,7 @@
  * All available strength data intervals (in minutes)
  * These correspond to database columns: 2, 4, 12, 30, 60, 240
  */
-export const strengthIntervals = ['2', '4', '12', '30', '60', '240'] as const
+export const strengthIntervals = ['2', '4', '12', '30', '60', '240']
 
 export type StrengthInterval = (typeof strengthIntervals)[number]
 
@@ -143,4 +143,3 @@ export const getDefaultHoursBack = (): string => {
 export const getDefaultInterval = (): string[] => {
   return [...intervalsOptions[0]!.value]
 }
-

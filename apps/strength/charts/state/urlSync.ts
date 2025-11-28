@@ -1,34 +1,25 @@
 /**
  * URL Synchronization Utilities for Zustand Store
  *
- * This module provides two-way synchronization between Zustand store state
- * and URL query parameters, enabling:
+ * Provides two-way synchronization between Zustand store state and URL query parameters:
  *
- * 1. **URL → Store**: On page load, query parameters are read and used as
- *    initial values for the store (e.g., ?hoursBack=24&controlTickers=["ETHUSD"])
+ * 1. **URL → Store**: On page load, query parameters initialize store state
+ * 2. **Store → URL**: Store changes update URL via history.replaceState()
+ * 3. **Bookmarkable State**: URLs can be shared with specific chart configurations
  *
- * 2. **Store → URL**: When store values change, the URL is automatically
- *    updated using history.replaceState() to reflect the new state
- *
- * 3. **Bookmarkable State**: Users can bookmark or share URLs with specific
- *    chart configurations that will be restored when the page loads
- *
- * How it works:
- * - The createURLStorage function creates a custom StateStorage adapter
- * - This adapter is used with Zustand's persist middleware
+ * Usage:
+ * - createURLStorage() creates a custom StateStorage adapter for Zustand persist middleware
  * - Only specified keys (URL_SYNC_KEYS) are synced with the URL
  * - Arrays and objects are JSON stringified/parsed automatically
- * - The URL updates don't cause page reloads (uses replaceState)
  *
- * Example URL with synced parameters:
- * /charts?hoursBack=24&controlInterval=["3","7"]&controlTickers=["ETHUSD","BTCUSD"]
+ * Example URL: /charts?hoursBack=24&interval=["12","30"]&tickers=["ETHUSD","BTCUSD"]
  */
 
 import { StateStorage } from 'zustand/middleware'
 
 /**
  * Parse URL query parameter value
- * Handles JSON arrays and simple strings
+ * Handles JSON arrays/objects and primitive types
  */
 const parseQueryValue = (value: string | null): any => {
   if (!value) return null
@@ -37,8 +28,7 @@ const parseQueryValue = (value: string | null): any => {
   try {
     return JSON.parse(value)
   } catch {
-    // If not JSON, treat as string
-    // Handle special cases
+    // If not JSON, handle primitives
     if (value === 'true') return true
     if (value === 'false') return false
     if (!isNaN(Number(value))) return Number(value)
@@ -48,14 +38,12 @@ const parseQueryValue = (value: string | null): any => {
 
 /**
  * Stringify value for URL query parameter
- * Handles arrays, objects, and primitives
  */
 const stringifyQueryValue = (value: any): string => {
   if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean')
     return String(value)
-  // For arrays and objects, use JSON
   return JSON.stringify(value)
 }
 
@@ -99,8 +87,8 @@ export const updateQueryParams = (updates: Record<string, any>) => {
 }
 
 /**
- * Create a URL storage adapter for specific state keys
- * This allows selective syncing of only certain state properties
+ * Create a URL storage adapter for Zustand persist middleware
+ * Only syncs specified keys with URL query parameters
  */
 export const createURLStorage = (syncKeys: string[]): StateStorage => {
   // Track if we're currently writing to prevent read-after-write issues
@@ -109,16 +97,9 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
   return {
     getItem: (name) => {
       if (typeof window === 'undefined') return null
+      if (isWriting) return null
 
-      // Don't read while writing to prevent conflicts
-      if (isWriting) {
-        return null
-      }
-
-      // Get current query params
       const params = getQueryParams()
-
-      // Build state object from URL params
       const state: any = {}
       let hasData = false
 
@@ -129,16 +110,10 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
         }
       })
 
-      // Return null if no relevant data in URL
-      if (!hasData) {
-        return null
-      }
+      if (!hasData) return null
 
-      // Zustand expects the stored format with state property
-      return JSON.stringify({
-        state,
-        version: 0,
-      })
+      // Zustand expects format with state property
+      return JSON.stringify({ state, version: 0 })
     },
 
     setItem: (name, value) => {
@@ -148,9 +123,8 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
 
       try {
         const { state } = JSON.parse(value)
-
-        // Build updates object with only sync keys
         const updates: Record<string, any> = {}
+
         syncKeys.forEach((key) => {
           if (state[key] !== undefined) {
             updates[key] = state[key]
@@ -161,7 +135,6 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
       } catch (e) {
         console.error('Failed to sync state to URL:', e)
       } finally {
-        // Reset writing flag after a small delay to ensure URL update completes
         setTimeout(() => {
           isWriting = false
         }, 10)
@@ -171,7 +144,6 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
     removeItem: (name) => {
       if (typeof window === 'undefined') return
 
-      // Remove all sync keys from URL
       const searchParams = new URLSearchParams(window.location.search)
       syncKeys.forEach((key) => searchParams.delete(key))
 
@@ -183,23 +155,4 @@ export const createURLStorage = (syncKeys: string[]): StateStorage => {
   }
 }
 
-/**
- * Hook to sync specific store values with URL
- * Returns initial values from URL
- */
-export const useURLSync = (syncKeys: string[]) => {
-  if (typeof window === 'undefined') {
-    return {}
-  }
 
-  const params = getQueryParams()
-  const initialValues: Record<string, any> = {}
-
-  syncKeys.forEach((key) => {
-    if (params[key] !== undefined) {
-      initialValues[key] = params[key]
-    }
-  })
-
-  return initialValues
-}

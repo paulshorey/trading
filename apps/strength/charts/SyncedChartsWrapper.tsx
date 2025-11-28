@@ -3,20 +3,19 @@
 import { useEffect, useState } from 'react'
 
 import { SyncedCharts } from './SyncedCharts'
-import { useChartControlsStore } from './state/useChartControlsStore'
+import { useChartControlsStore } from './state'
 import Header from './components/Header'
 import classes from './classes.module.scss'
 
 interface SyncedChartsWrapperProps {}
 
 /**
- * Responsive wrapper component that:
+ * Entry point wrapper component that:
  * 1. Waits for window dimensions to be available
  * 2. Waits for Zustand store to hydrate from URL query parameters
  * 3. Renders charts only when both are ready
  *
- * This ensures that charts initialize with the correct size and
- * with any URL parameters properly loaded into the store.
+ * This ensures charts initialize with correct size and URL parameters.
  */
 export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
   const [dimensions, setDimensions] = useState<{
@@ -24,44 +23,37 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
     availableHeight: number
   } | null>(null)
 
-  // Get hydration state from the store
-  // The store will set this to true after loading URL parameters
+  // Wait for store hydration from URL
   const isHydrated = useChartControlsStore((state) => state.isHydrated)
 
   useEffect(() => {
-    // Function to calculate and set dimensions
     const updateDimensions = () => {
       if (typeof window !== 'undefined') {
-        const windowWidth = window.innerWidth
-        const windowHeight = window.innerHeight
-
         setDimensions({
-          availableWidth: windowWidth * 2,
-          availableHeight: windowHeight * 2,
+          availableWidth: window.innerWidth * 2,
+          availableHeight: window.innerHeight * 2,
         })
       }
     }
 
-    // Initial calculation when component mounts
     updateDimensions()
 
     // Debounced resize handler
     let resizeTimeout: NodeJS.Timeout
     const handleResize = () => {
       clearTimeout(resizeTimeout)
-      resizeTimeout = setTimeout(updateDimensions, 150) // Debounce by 150ms
+      resizeTimeout = setTimeout(updateDimensions, 150)
     }
 
     window.addEventListener('resize', handleResize)
 
-    // Cleanup
     return () => {
       clearTimeout(resizeTimeout)
       window.removeEventListener('resize', handleResize)
     }
   }, [])
 
-  // Only render charts once we have dimensions and store is hydrated
+  // Wait for dimensions and store hydration
   if (!dimensions || !isHydrated) {
     return (
       <div className="flex items-center justify-center h-screen">

@@ -1,0 +1,186 @@
+# Charts Mini-App
+
+This folder is a self-contained mini-app that renders the financial time series chart page. It acts independently from the rest of the `strength` app - files here import from elsewhere, but nothing imports from this folder.
+
+## Entry Point
+
+**`SyncedChartsWrapper.tsx`** is the entry point, imported by `../app/page.tsx`.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            INITIALIZATION PHASE                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  1. SyncedChartsWrapper.tsx                                                 │
+│     ├── Waits for window dimensions                                         │
+│     ├── Waits for Zustand store hydration from URL params                   │
+│     └── Renders Header + SyncedCharts when ready                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              DATA FLOW PHASE                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  2. SyncedCharts.tsx                                                        │
+│     ├── Reads chartTickers from Zustand store                               │
+│     ├── Calls useStrengthData hook to fetch raw data                        │
+│     ├── Calls useAggregatedData hook to process data                        │
+│     └── Passes processed data to Chart component                            │
+│                                                                             │
+│  3. data/useStrengthData.ts                                                 │
+│     ├── Fetches initial historical data via StrengthDataApi                 │
+│     ├── Sets up 60-second polling for real-time updates                     │
+│     └── Handles forward-fill for missing strength values                    │
+│                                                                             │
+│  4. data/useAggregatedData.ts                                               │
+│     ├── Aggregates rawData → aggregatedStrengthData                         │
+│     ├── Aggregates rawData → aggregatedPriceData                            │
+│     └── Calculates visible timeRange                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            RENDERING PHASE                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  5. components/Chart.tsx                                                    │
+│     ├── Creates lightweight-charts instance with dual y-axes                │
+│     ├── Left axis: strength data (orange line)                              │
+│     ├── Right axis: price data (blue line)                                  │
+│     └── Handles zoom fix for CSS scale(0.5) transform                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Folder Structure
+
+```
+charts/
+├── SyncedChartsWrapper.tsx    # Entry point - hydration & dimension handling
+├── SyncedCharts.tsx           # Main orchestrator - connects hooks to UI
+├── constants.ts               # CHART_WIDTH_INITIAL, HOURS_BACK_INITIAL
+├── classes.module.scss        # Shared CSS modules
+│
+├── state/                     # State Management
+│   ├── index.ts               # Public exports
+│   ├── store.ts               # Zustand store (state + actions)
+│   ├── options.ts             # Configuration (tickers, intervals, hoursBack)
+│   └── urlSync.ts             # URL ↔ Zustand bidirectional sync
+│
+├── data/                      # Data Fetching & Processing
+│   ├── index.ts               # Public exports
+│   ├── api.ts                 # StrengthDataApi - API service
+│   ├── useStrengthData.ts     # Hook: fetch + real-time polling
+│   ├── useAggregatedData.ts   # Hook: raw → chart-ready aggregation
+│   └── aggregation.ts         # Aggregation utilities
+│
+├── chart/                     # Chart Configuration
+│   ├── index.ts               # Public exports
+│   ├── config.ts              # Chart options, colors, styling
+│   └── utils.ts               # Time range, data conversion utilities
+│
+├── components/                # UI Components
+│   ├── Header.tsx             # Top navigation bar with controls
+│   ├── Chart.tsx              # Lightweight-charts wrapper with dual axes
+│   ├── ChartTitle.tsx         # Floating title overlay
+│   ├── ChartStates.tsx        # Loading, Error, NoData states
+│   ├── UpdatedTime.tsx        # Real-time update indicator
+│   ├── DrawerCalendar.tsx     # Calendar sidebar
+│   ├── DrawerNews.tsx         # News sidebar
+│   └── controls/              # User input controls
+│       ├── ControlsDropdown.tsx   # Settings popover (mobile)
+│       ├── InlineControls.tsx     # Interval + Time inline (desktop)
+│       ├── IntervalControl.tsx    # Strength interval selector
+│       ├── TimeControl.tsx        # Hours back selector
+│       └── MarketControl.tsx      # Ticker/market selector
+│
+└── lib/                       # (DEPRECATED - use data/, chart/, state/)
+```
+
+## Import Patterns
+
+```typescript
+// State management
+import { useChartControlsStore, tickersByMarket, intervalsOptions } from './state'
+
+// Data fetching and processing
+import { useStrengthData, useAggregatedData, StrengthDataApi } from './data'
+
+// Chart configuration
+import { getChartConfig, getLineSeriesConfig, CHART_COLORS } from './chart'
+```
+
+## Data Flow Summary
+
+### 1. Initialization
+
+```
+URL Params → Zustand Store (hydrates) → SyncedChartsWrapper (waits) → renders UI
+```
+
+### 2. User Changes Selection
+
+```
+User clicks ticker/interval → Zustand updates → URL updates → useEffect triggers
+→ Data re-fetched or re-aggregated → Chart re-renders
+```
+
+### 3. Real-time Updates (every 60s)
+
+```
+useStrengthData polls API → merges new data → returns rawData
+→ useAggregatedData processes → updates store → Chart re-renders
+```
+
+## State Management
+
+**Zustand Store** (`state/store.ts`) manages:
+
+| State                    | Description                   | URL Synced       |
+| ------------------------ | ----------------------------- | ---------------- |
+| `chartTickers`           | Selected ticker symbols       | ✅ `?tickers=`   |
+| `interval`               | Strength intervals to average | ✅ `?interval=`  |
+| `hoursBack`              | Time range to display         | ✅ `?hoursBack=` |
+| `timeRange`              | Calculated visible range      | ❌               |
+| `aggregatedStrengthData` | Processed chart data          | ❌               |
+| `aggregatedPriceData`    | Processed chart data          | ❌               |
+
+URL sync is bidirectional - changing the URL updates the store, and vice versa.
+
+## Key Concepts
+
+### Dual Y-Axes
+
+- **Left axis (orange)**: Strength values (-100 to +100, RSI-like indicator)
+- **Right axis (blue)**: Price values (normalized across tickers)
+
+### Forward-Fill
+
+Missing data points are filled with the most recent valid value to ensure continuous chart lines.
+
+### Timestamp Requirements
+
+All timestamps must be at **even minutes** (0, 2, 4...) with **no seconds**. This is enforced throughout the codebase.
+
+### CSS Scale Workaround
+
+The page uses `zoom: 0.5` for higher DPI rendering. `Chart.tsx` intercepts mouse events to correct coordinates.
+
+## File Responsibilities
+
+| File                  | Single Responsibility                              |
+| --------------------- | -------------------------------------------------- |
+| `SyncedChartsWrapper` | Hydration gate - only render when ready            |
+| `SyncedCharts`        | Orchestrates hooks and renders chart               |
+| `useStrengthData`     | Fetches raw data with real-time polling            |
+| `useAggregatedData`   | Processes raw data into chart format               |
+| `StrengthDataApi`     | Pure API calls, no state                           |
+| `aggregation.ts`      | Pure functions for data transformation             |
+| `Chart`               | Pure rendering - receives data, renders chart      |
+| `store.ts`            | Single source of truth for all UI state            |
+| `options.ts`          | Configuration options (tickers, intervals, etc.)   |
+
+## Related Files (Outside This Folder)
+
+- `@lib/common/sql/strength/` - Database queries and types
+- `../app/api/v1/strength/route.ts` - API endpoint
+- `../app/page.tsx` - Imports `SyncedChartsWrapper`

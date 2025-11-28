@@ -1,10 +1,7 @@
 'use client'
 
 import React from 'react'
-import {
-  useChartControlsStore,
-  hoursBackOptions,
-} from '../../state/useChartControlsStore'
+import { useChartControlsStore, hoursBackOptions } from '../../state'
 import { Select } from '@mantine/core'
 
 interface Props {
@@ -19,7 +16,7 @@ export default function TimeControl({ showLabel = true }: Props) {
       style={{ width: '80px', zIndex: 10000000 }}
       label={showLabel ? 'Range' : null}
       value={hoursBack.toString()}
-      data={hoursBackOptions}
+      data={hoursBackOptions as unknown as string[]}
       onChange={(value) => (value ? setHoursBack(value) : undefined)}
     />
   )

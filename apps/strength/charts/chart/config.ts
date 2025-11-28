@@ -1,3 +1,9 @@
+/**
+ * Chart Configuration
+ *
+ * Lightweight-charts configuration for styling, axes, and behavior.
+ */
+
 import {
   DeepPartial,
   ChartOptions,
@@ -6,13 +12,14 @@ import {
   SeriesOptionsCommon,
 } from 'lightweight-charts'
 
+/**
+ * Format timestamp for display
+ * Shows: MM/DD HH:mm in local timezone
+ */
 function timeFormatter(time: Time) {
-  // Convert the time (which is in seconds since epoch) to milliseconds
   const date = new Date((time as number) * 1000)
-  // Format the time in the user's local time zone
   const hours = date.getHours().toString().padStart(2, '0')
   const minutes = date.getMinutes().toString().padStart(2, '0')
-
   const month = (date.getMonth() + 1).toString()
   const day = date.getDate().toString()
   return `${month}/${day} ${hours}:${minutes}`
@@ -20,23 +27,24 @@ function timeFormatter(time: Time) {
 
 /**
  * Get base chart configuration
+ * Configures dual y-axes, grid, crosshair, and time scale
  */
 export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
   overlayPriceScales: {},
-  height: height, // Use full height passed from parent
+  height,
   localization: {
     timeFormatter,
   },
   layout: {
     background: { color: '#ffffff' },
     textColor: '#333',
-    attributionLogo: false, // Hide TradingView logo
+    attributionLogo: false,
   },
   grid: {
-    vertLines: { visible: false }, // Hide vertical grid lines to reduce clutter
+    vertLines: { visible: false },
     horzLines: { color: '#f0f0f0' },
   },
-  // Y-Axis - Enable both left and right scales for dual series
+  // Dual Y-Axes configuration
   rightPriceScale: {
     visible: false,
     minimumWidth: 80,
@@ -45,35 +53,37 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
     visible: false,
     minimumWidth: 80,
   },
-  // X-Axis
+  // X-Axis (time scale)
   timeScale: {
     visible: true,
     timeVisible: true,
     secondsVisible: false,
     tickMarkFormatter: timeFormatter,
   },
+  // Crosshair settings
   crosshair: {
-    mode: 0, // Normal mode: we'll set Y explicitly via setCrosshairPosition
+    mode: 0,
     vertLine: {
       visible: true,
       color: '#758391',
       width: 1,
-      style: 0, // Solid line
+      style: 0,
     },
     horzLine: {
       visible: true,
       color: '#758391',
       width: 1,
-      style: 0, // Solid line
+      style: 0,
     },
   },
-  // Disable zoom/scroll but allow crosshair interactions
+  // Allow scroll, disable zoom
   handleScroll: true,
   handleScale: false,
 })
 
 /**
  * Get line series configuration
+ * Base styling for chart line series
  */
 export const getLineSeriesConfig = (): DeepPartial<
   LineStyleOptions & SeriesOptionsCommon
@@ -83,6 +93,15 @@ export const getLineSeriesConfig = (): DeepPartial<
   crosshairMarkerBorderColor: 'transparent',
   crosshairMarkerBorderWidth: 0,
   crosshairMarkerVisible: true,
-  priceLineVisible: false, // Hide horizontal price line
-  lastValueVisible: false, // Hide last value label
+  priceLineVisible: false,
+  lastValueVisible: false,
 })
+
+// Chart color constants
+export const CHART_COLORS = {
+  strength: '#ff9d00d7',
+  price: '#0091ff98',
+  zeroLine: '#ff9d00d7',
+} as const
+
+

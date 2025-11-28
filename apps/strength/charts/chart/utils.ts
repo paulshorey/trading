@@ -1,24 +1,28 @@
+/**
+ * Chart Utilities
+ *
+ * Helper functions for chart data conversion and manipulation.
+ */
+
 import { LineData, Time } from 'lightweight-charts'
 import { StrengthRowGet } from '@lib/common/sql/strength'
 
 /**
- * Convert strength data to chart data using the specified intervals
- * If multiple intervals are provided, average their values
+ * Convert strength data to chart data format
+ * Averages values across specified intervals
  */
 export const convertToChartData = (
   data: StrengthRowGet[],
-  control_intervals: string[]
+  intervals: string[]
 ): LineData[] => {
   return data
     .map((item) => {
-      // Calculate average value across all specified intervals
       let sum = 0
       let count = 0
 
-      for (const interval of control_intervals) {
+      for (const interval of intervals) {
         const value = item[interval as keyof StrengthRowGet]
 
-        // Only include non-null values in the average
         if (value !== null && value !== undefined) {
           const numericValue =
             typeof value === 'string' ? parseFloat(value) : Number(value)
@@ -30,22 +34,19 @@ export const convertToChartData = (
         }
       }
 
-      // Skip this data point if no valid values were found
       if (count === 0) return null
 
-      // Calculate average
-      const averageValue = sum / count
-
       return {
-        time: (new Date(item.timenow).getTime() / 1000) as any,
-        value: averageValue,
+        time: (new Date(item.timenow).getTime() / 1000) as Time,
+        value: sum / count,
       }
     })
-    .filter((item): item is LineData => item !== null) // Remove null values
+    .filter((item): item is LineData => item !== null)
 }
 
 /**
- * Calculate time range from raw data
+ * Calculate visible time range from raw data
+ * Returns the appropriate from/to based on hoursBack setting
  */
 export const calculateTimeRange = (
   rawData: (StrengthRowGet[] | null)[],
@@ -54,12 +55,10 @@ export const calculateTimeRange = (
   let latestOverallTime = 0
   let earliestOverallTime = Infinity
 
-  // Find the overall time range across all tickers
   rawData.forEach((tickerData) => {
     if (tickerData && tickerData.length > 0) {
       const firstTime = tickerData[0]!.timenow.getTime() / 1000
-      const lastTime =
-        tickerData[tickerData.length - 1]!.timenow.getTime() / 1000
+      const lastTime = tickerData[tickerData.length - 1]!.timenow.getTime() / 1000
       earliestOverallTime = Math.min(earliestOverallTime, firstTime)
       latestOverallTime = Math.max(latestOverallTime, lastTime)
     }
@@ -72,10 +71,7 @@ export const calculateTimeRange = (
       latestOverallTime - hoursBackInSeconds
     )
 
-    // Ensure start time is always before end time
-    // Add a small buffer if they're equal or too close
     if (startTime >= latestOverallTime) {
-      // If we don't have enough data, show at least 1 hour
       const oneHourInSeconds = 60 * 60
       return {
         from: (latestOverallTime - oneHourInSeconds) as Time,
@@ -92,34 +88,37 @@ export const calculateTimeRange = (
   return null
 }
 
-
 /**
  * Get nearest series value at a specific time using binary search
- * If multiple intervals are provided, average their values
+ * Useful for crosshair tooltip values
  */
 export const getNearestSeriesValueAtTime = (
   chartData: LineData[] | null | undefined,
-  t: Time,
+  time: Time,
   chartIndex: number,
   rawData: (StrengthRowGet[] | null)[],
-  control_intervals: string[]
+  intervals: string[]
 ): number | null => {
   const tickerRawData = rawData[chartIndex]
   if (
     !tickerRawData ||
     !chartData ||
-    typeof t !== 'number' ||
+    typeof time !== 'number' ||
     tickerRawData.length === 0
-  )
+  ) {
     return null
-  const target = t as number
+  }
 
-  // Binary search to find nearest index by timenow in raw data
+  const target = time as number
+
+  // Binary search for nearest timestamp
   let left = 0
   let right = tickerRawData.length - 1
+
   while (left <= right) {
     const mid = (left + right) >> 1
     const midTime = tickerRawData[mid]!.timenow.getTime() / 1000
+
     if (midTime === target) {
       left = mid
       right = mid - 1
@@ -129,17 +128,16 @@ export const getNearestSeriesValueAtTime = (
     else right = mid - 1
   }
 
-  // Candidates are at indices right and left
+  // Find nearest index
   let idx = right
   if (left >= 0 && left < tickerRawData.length) {
-    if (right < 0) idx = left
-    else {
+    if (right < 0) {
+      idx = left
+    } else {
       const leftTime = tickerRawData[left]!.timenow.getTime() / 1000
       const rightTime = tickerRawData[right]!.timenow.getTime() / 1000
       idx =
-        Math.abs(leftTime - target) < Math.abs(rightTime - target)
-          ? left
-          : right
+        Math.abs(leftTime - target) < Math.abs(rightTime - target) ? left : right
     }
   } else if (right < 0) {
     idx = 0
@@ -149,11 +147,11 @@ export const getNearestSeriesValueAtTime = (
 
   idx = Math.max(0, Math.min(idx, tickerRawData.length - 1))
 
-  // Calculate average value across all specified intervals
+  // Calculate average across intervals
   let sum = 0
   let count = 0
 
-  for (const interval of control_intervals) {
+  for (const interval of intervals) {
     const raw = tickerRawData[idx]![interval as keyof StrengthRowGet]
 
     if (raw !== null && raw !== undefined) {
@@ -165,6 +163,7 @@ export const getNearestSeriesValueAtTime = (
     }
   }
 
-  // Return null if no valid values found, otherwise return average
   return count > 0 ? sum / count : null
 }
+
+

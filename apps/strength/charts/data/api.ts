@@ -1,3 +1,10 @@
+/**
+ * Strength Data API Service
+ *
+ * Handles all API communication for fetching strength/price data.
+ * Pure API calls with no state management.
+ */
+
 import { StrengthRowGet } from '@lib/common/sql/strength'
 import { HOURS_BACK_INITIAL } from '../constants'
 
@@ -15,7 +22,7 @@ export interface FetchStrengthDataResult {
 /**
  * Service for fetching strength data from the API
  */
-export class FetchStrengthData {
+export class StrengthDataApi {
   private static baseUrl = '/api/v1/strength'
 
   /**
@@ -37,7 +44,6 @@ export class FetchStrengthData {
         { method: 'GET' }
       )
       const data = await response.json()
-      console.log('data', data)
 
       if (data.error) {
         return { rows: null, error: data.error }
@@ -55,7 +61,7 @@ export class FetchStrengthData {
           const milliseconds = timenow.getMilliseconds()
 
           if (minutes % 2 !== 0 || seconds !== 0 || milliseconds !== 0) {
-            console.warn('[fetchTickerData] Invalid timestamp detected:', {
+            console.warn('[StrengthDataApi] Invalid timestamp detected:', {
               ticker: params.ticker,
               timenow: timenow.toISOString(),
               minutes,
@@ -109,10 +115,10 @@ export class FetchStrengthData {
    */
   static prepareDate(date: Date): Date {
     const prepared = new Date(date)
-    prepared.setSeconds(0, 0) // Sets seconds and milliseconds to 0
+    prepared.setSeconds(0, 0)
     const minutes = prepared.getMinutes()
     if (minutes % 2 !== 0) {
-      prepared.setMinutes(minutes - 1) // Round down to previous even minute
+      prepared.setMinutes(minutes - 1)
     }
     return prepared
   }
@@ -127,7 +133,7 @@ export class FetchStrengthData {
 
   /**
    * Merge new data with existing data, handling duplicates
-   * IMPORTANT: Uses timenow as the exact timestamp (should be even minutes, no seconds)
+   * Uses timenow as the unique key (should be even minutes, no seconds)
    */
   static mergeData(
     existingData: StrengthRowGet[],
@@ -135,7 +141,6 @@ export class FetchStrengthData {
   ): StrengthRowGet[] {
     if (!newData || newData.length === 0) return existingData
     if (!existingData || existingData.length === 0) {
-      // Ensure new data is sorted
       return [...newData].sort(
         (a, b) => a.timenow.getTime() - b.timenow.getTime()
       )
@@ -144,35 +149,23 @@ export class FetchStrengthData {
     // Create a map of existing data by timestamp
     const dataMap = new Map<number, StrengthRowGet>()
 
-    // Add existing data to map
     existingData.forEach((item) => {
-      const timestamp = item.timenow.getTime()
-      dataMap.set(timestamp, item)
+      dataMap.set(item.timenow.getTime(), item)
     })
 
     // Add or update with new data
     newData.forEach((item) => {
-      const timestamp = item.timenow.getTime()
-      dataMap.set(timestamp, item)
+      dataMap.set(item.timenow.getTime(), item)
     })
 
-    // Convert back to array and sort by time (ascending order)
-    const sortedData = Array.from(dataMap.values()).sort(
+    // Convert back to sorted array
+    return Array.from(dataMap.values()).sort(
       (a, b) => a.timenow.getTime() - b.timenow.getTime()
     )
-
-    // Validate that data is properly sorted
-    for (let i = 1; i < sortedData.length; i++) {
-      if (
-        sortedData[i]!.timenow.getTime() < sortedData[i - 1]!.timenow.getTime()
-      ) {
-        console.error('Data not properly sorted after merge', {
-          current: sortedData[i]!.timenow,
-          previous: sortedData[i - 1]!.timenow,
-        })
-      }
-    }
-
-    return sortedData
   }
 }
+
+// Alias for backwards compatibility
+export const FetchStrengthData = StrengthDataApi
+
+

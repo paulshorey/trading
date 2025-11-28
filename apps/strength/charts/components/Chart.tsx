@@ -15,7 +15,7 @@ import {
   Time,
   IPriceLine,
 } from 'lightweight-charts'
-import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
+import { getChartConfig, getLineSeriesConfig } from '../chart'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'

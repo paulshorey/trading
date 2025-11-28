@@ -22,9 +22,11 @@ import classes from '../classes.module.scss'
 import { VerticalLinePrimitive } from '../lib/VerticalLinePrimitive'
 import {
   TIME_MARKERS,
+  TIME_RANGE_HIGHLIGHTS,
   getMarkerTimestamps,
   markerConfigToOptions,
 } from '../lib/timeMarkers'
+import { TimeRangeHighlightPrimitive } from '../lib/TimeRangeHighlight'
 import { SCALE_FACTOR } from '@/constants'
 
 interface ChartProps {
@@ -65,6 +67,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
+    const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(null)
     const markersInitialized = useRef(false)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
@@ -202,7 +205,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       if (!dataStartTime || !dataEndTime) return
 
-      // Create markers for each configured time marker
+      // Create time range highlights (shaded background areas)
+      if (!timeRangeHighlightRef.current && TIME_RANGE_HIGHLIGHTS.length > 0) {
+        const highlight = new TimeRangeHighlightPrimitive(TIME_RANGE_HIGHLIGHTS)
+        highlight.setDataRange(dataStartTime, dataEndTime)
+        strengthSeriesRef.current.attachPrimitive(highlight)
+        timeRangeHighlightRef.current = highlight
+      }
+
+      // Create vertical line markers for each configured time marker
       TIME_MARKERS.forEach((markerConfig) => {
         const timestamps = getMarkerTimestamps(
           markerConfig.utcHour,

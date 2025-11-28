@@ -7,6 +7,7 @@
  */
 
 import { VerticalLineOptions } from './VerticalLinePrimitive'
+import { TimeRangeConfig } from './TimeRangeHighlight'
 
 export interface TimeMarkerConfig {
   /** Unique identifier for the marker */
@@ -52,29 +53,55 @@ const defaultMarkerStyle: Partial<TimeMarkerConfig> = {
  * - 14:30 UTC = 08:30 US Central (CST) / 09:30 US Central (CDT)
  */
 export const TIME_MARKERS: TimeMarkerConfig[] = [
+  // {
+  //   id: 'us-equities-open',
+  //   label: 'US Equities Open',
+  //   utcHour: 14,
+  //   utcMinute: 30,
+  //   color: '#22c55e', // green
+  //   labelBackgroundColor: '#22c55e',
+  //   labelTextColor: 'white',
+  //   lineStyle: 'dashed',
+  //   width: 1,
+  //   showLabel: true,
+  // },
+  // {
+  //   id: 'us-futures-open',
+  //   label: 'US Futures Open',
+  //   utcHour: 23,
+  //   utcMinute: 0,
+  //   color: '#ef4444', // red
+  //   labelBackgroundColor: '#ef4444',
+  //   labelTextColor: 'white',
+  //   lineStyle: 'dashed',
+  //   width: 1,
+  //   showLabel: true,
+  // },
+]
+
+/**
+ * Time Range Highlights Configuration
+ *
+ * Defines shaded time ranges to display on the chart.
+ * For example, to highlight market hours vs. overnight sessions.
+ * Times are in UTC.
+ */
+export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
   {
-    id: 'us-futures-open',
-    label: 'US Futures Open',
-    utcHour: 23,
-    utcMinute: 0,
-    color: '#ef4444', // red
-    labelBackgroundColor: '#ef4444',
-    labelTextColor: 'white',
-    lineStyle: 'dashed',
-    width: 1,
-    showLabel: true,
+    id: 'us-equities',
+    startUtcHour: 13, // 7 Central
+    startUtcMinute: 30,
+    endUtcHour: 21, // 15 Central
+    endUtcMinute: 0,
+    color: 'rgba(34, 197, 94, 0.08)', // Green
   },
   {
-    id: 'us-equities-open',
-    label: 'US Equities Open',
-    utcHour: 14,
-    utcMinute: 30,
-    color: '#22c55e', // green
-    labelBackgroundColor: '#22c55e',
-    labelTextColor: 'white',
-    lineStyle: 'dashed',
-    width: 1,
-    showLabel: true,
+    id: 'asia-until-europe',
+    startUtcHour: 2, // 20 Central (previous day)
+    startUtcMinute: 0,
+    endUtcHour: 9, // 3 Central
+    endUtcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.08)', // Yellow
   },
 ]
 

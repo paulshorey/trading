@@ -97,6 +97,9 @@ interface ViewData {
 
 /**
  * PaneView - manages the renderer and updates coordinates
+ * 
+ * Uses timeToCoordinate for times with data points, and interpolates
+ * for times outside the data range based on bar spacing.
  */
 class TimeRangeHighlightPaneView implements IPrimitivePaneView {
   private _source: TimeRangeHighlightPrimitive
@@ -107,6 +110,41 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
     this._data = { ranges: [] }
   }
 
+  /**
+   * Convert a timestamp to x-coordinate, interpolating if necessary
+   * when the time falls outside the data range.
+   */
+  private _timeToX(
+    timestamp: number,
+    timeScale: ReturnType<IChartApi['timeScale']>,
+    dataStartTime: number,
+    dataEndTime: number,
+    firstDataX: Coordinate | null,
+    lastDataX: Coordinate | null,
+    pixelsPerSecond: number
+  ): Coordinate | null {
+    // First try the native method - works for times with data points
+    const directCoord = timeScale.timeToCoordinate(timestamp as Time)
+    if (directCoord !== null) {
+      return directCoord
+    }
+
+    // For times outside data range, interpolate based on pixels per second
+    if (timestamp < dataStartTime && firstDataX !== null) {
+      // Before data starts - extrapolate left from first data point
+      const secondsBeforeStart = dataStartTime - timestamp
+      return (firstDataX - secondsBeforeStart * pixelsPerSecond) as Coordinate
+    }
+
+    if (timestamp > dataEndTime && lastDataX !== null) {
+      // After data ends - extrapolate right from last data point
+      const secondsAfterEnd = timestamp - dataEndTime
+      return (lastDataX + secondsAfterEnd * pixelsPerSecond) as Coordinate
+    }
+
+    return null
+  }
+
   update(): void {
     const chart = this._source.chart
     if (!chart) {
@@ -115,11 +153,51 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
     }
 
     const timeScale = chart.timeScale()
-    this._data.ranges = this._source.rangeTimestamps.map((range) => ({
-      x1: timeScale.timeToCoordinate(range.startTime as Time),
-      x2: timeScale.timeToCoordinate(range.endTime as Time),
-      color: range.color,
-    }))
+    const dataStartTime = this._source.dataStartTime
+    const dataEndTime = this._source.dataEndTime
+
+    if (!dataStartTime || !dataEndTime) {
+      this._data.ranges = []
+      return
+    }
+
+    // Get coordinates for the first and last data points
+    const firstDataX = timeScale.timeToCoordinate(dataStartTime as Time)
+    const lastDataX = timeScale.timeToCoordinate(dataEndTime as Time)
+
+    // Calculate pixels per second based on data range
+    // This gives us a consistent scale for extrapolation
+    let pixelsPerSecond = 0
+    if (firstDataX !== null && lastDataX !== null && dataEndTime > dataStartTime) {
+      pixelsPerSecond = (lastDataX - firstDataX) / (dataEndTime - dataStartTime)
+    }
+
+    this._data.ranges = this._source.rangeTimestamps.map((range) => {
+      const x1 = this._timeToX(
+        range.startTime,
+        timeScale,
+        dataStartTime,
+        dataEndTime,
+        firstDataX,
+        lastDataX,
+        pixelsPerSecond
+      )
+      const x2 = this._timeToX(
+        range.endTime,
+        timeScale,
+        dataStartTime,
+        dataEndTime,
+        firstDataX,
+        lastDataX,
+        pixelsPerSecond
+      )
+
+      return {
+        x1,
+        x2,
+        color: range.color,
+      }
+    })
   }
 
   renderer(): IPrimitivePaneRenderer {
@@ -161,6 +239,14 @@ export class TimeRangeHighlightPrimitive implements ISeriesPrimitive<Time> {
 
   get rangeTimestamps(): RangeTimestamp[] {
     return this._rangeTimestamps
+  }
+
+  get dataStartTime(): number {
+    return this._dataStartTime
+  }
+
+  get dataEndTime(): number {
+    return this._dataEndTime
   }
 
   // Called when primitive is attached to a series

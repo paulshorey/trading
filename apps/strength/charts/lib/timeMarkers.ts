@@ -89,7 +89,7 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
 export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
   {
     id: 'us-equities',
-    startUtcHour: 13, // 7 Central
+    startUtcHour: 14, // 8 Central
     startUtcMinute: 30,
     endUtcHour: 21, // 15 Central
     endUtcMinute: 0,

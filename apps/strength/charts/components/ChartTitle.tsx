@@ -9,11 +9,7 @@ interface ChartTitleProps {
   children?: React.ReactNode
 }
 
-export default function ChartTitle({
-  heading,
-  hasData,
-  children,
-}: ChartTitleProps) {
+export function ChartTitle({ heading, hasData, children }: ChartTitleProps) {
   return (
     <div dir="ltr" className={classes.ChartTitleWrapperAbsolute}>
       <div className={classes.ChartTitleInnerFixed}>

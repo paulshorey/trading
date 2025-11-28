@@ -17,7 +17,7 @@ import {
 } from 'lightweight-charts'
 import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import { attachChartScalingFix } from '../lib/chartScalingFix'
-import ChartTitle from './ChartTitle'
+import { ChartTitle } from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
 

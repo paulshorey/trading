@@ -20,6 +20,11 @@ import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
 import { VerticalLinePrimitive } from '../lib/VerticalLinePrimitive'
+import {
+  TIME_MARKERS,
+  getMarkerTimestamps,
+  markerConfigToOptions,
+} from '../lib/timeMarkers'
 import { SCALE_FACTOR } from '@/constants'
 
 interface ChartProps {
@@ -59,8 +64,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const strengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineRef = useRef<IPriceLine | null>(null)
-    const pageLoadTimeRef = useRef<Time | null>(null)
-    const pageLoadMarkerRef = useRef<VerticalLinePrimitive | null>(null)
+    const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
+    const markersInitialized = useRef(false)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
     const lastSecondDataRef = useRef<LineData[] | null>(null)
@@ -188,6 +193,37 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, []) // Only run once on mount - removed all dependencies
 
+    // Helper function to create all time markers
+    const createTimeMarkers = (currentData: LineData[]) => {
+      if (!strengthSeriesRef.current || markersInitialized.current) return
+
+      const dataStartTime = currentData[0]?.time as number
+      const dataEndTime = currentData[currentData.length - 1]?.time as number
+
+      if (!dataStartTime || !dataEndTime) return
+
+      // Create markers for each configured time marker
+      TIME_MARKERS.forEach((markerConfig) => {
+        const timestamps = getMarkerTimestamps(
+          markerConfig.utcHour,
+          markerConfig.utcMinute,
+          dataStartTime,
+          dataEndTime
+        )
+
+        timestamps.forEach((timestamp) => {
+          const marker = new VerticalLinePrimitive(
+            timestamp as Time,
+            markerConfigToOptions(markerConfig)
+          )
+          strengthSeriesRef.current!.attachPrimitive(marker)
+          timeMarkersRef.current.push(marker)
+        })
+      })
+
+      markersInitialized.current = true
+    }
+
     // Update first series (strength) data
     useEffect(() => {
       if (
@@ -215,29 +251,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           })
 
         if (!dataChanged) {
-          // Still try to create marker even if data hasn't changed
+          // Still try to create markers even if data hasn't changed
           // This handles the case where the component re-renders
-          if (!pageLoadTimeRef.current && currentData.length > 0) {
-            const lastDataPoint = currentData[currentData.length - 1]!
-            pageLoadTimeRef.current = lastDataPoint.time
-          }
-
-          if (
-            pageLoadTimeRef.current &&
-            strengthSeriesRef.current &&
-            !pageLoadMarkerRef.current
-          ) {
-            const marker = new VerticalLinePrimitive(pageLoadTimeRef.current, {
-              color: '#2196F3',
-              width: 2,
-              labelText: 'Page Load',
-              labelBackgroundColor: '#2196F3',
-              labelTextColor: 'white',
-              showLabel: true,
-              lineStyle: 'dashed',
-            })
-            strengthSeriesRef.current.attachPrimitive(marker)
-            pageLoadMarkerRef.current = marker
+          if (!markersInitialized.current && currentData.length > 0) {
+            createTimeMarkers(currentData)
           }
           return
         }
@@ -246,36 +263,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         strengthSeriesRef.current.setData(currentData)
         lastDataRef.current = [...currentData]
 
-        // Capture the page load time on first data load and create marker primitive
-        if (!pageLoadTimeRef.current && currentData.length > 0) {
-          // Get start of current day (00:00) in user's local timezone
-          const now = new Date()
-          const startOfDay = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            0,
-            0,
-            0,
-            0
-          )
-          const pageLoadTime = Math.floor(startOfDay.getTime() / 1000) as Time
-          pageLoadTimeRef.current = pageLoadTime
-
-          // Create the vertical line primitive for the page load marker
-          if (strengthSeriesRef.current && !pageLoadMarkerRef.current) {
-            const marker = new VerticalLinePrimitive(pageLoadTime, {
-              color: '#2196F3',
-              width: 2,
-              labelText: 'Start of Day',
-              labelBackgroundColor: '#2196F3',
-              labelTextColor: 'white',
-              showLabel: true,
-              lineStyle: 'dashed',
-            })
-            strengthSeriesRef.current.attachPrimitive(marker)
-            pageLoadMarkerRef.current = marker
-          }
+        // Create time markers on first data load
+        if (!markersInitialized.current && currentData.length > 0) {
+          createTimeMarkers(currentData)
         }
 
         // Reapply time range after data update

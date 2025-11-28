@@ -17,29 +17,6 @@ An un-intended side-effect however is added complexity around all UI elements, a
 ### UI elements are shrunk 2x! This makes them too small. Some must be fixed:
 
 ```
-// app/global.css
-.scale2x {
-  transform: scale(2);
-  transform-origin: top left;
-}
-```
-
-```
-// apps/strength/charts/controls/MarketControl.tsx
-      // @ts-ignore
-      className="scale2x"
-      classNames={{
-        dropdown: 'scale2x',
-      }}
-```
-
-```
-// apps/strength/charts/components/DrawerCalendar.tsx
-// apps/strength/charts/components/DrawerNews.tsx
-className={`${classes.DrawerOverlay} scale2x`}
-```
-
-```
 // apps/strength/charts/SyncedChartsWrapper.tsx
         setDimensions({
           availableWidth: windowWidth * 2,

@@ -7,7 +7,7 @@ type Props = {
 
 export function DrawerCalendar({ drawerOpened, closeDrawer }: Props) {
   const width = 360
-  const height = window.screen.availHeight + 2
+  const height = window.screen.availHeight + 1
   const backColor = '1e222d'
   const fontColor = 'cccccc'
   return (

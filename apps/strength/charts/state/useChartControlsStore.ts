@@ -13,7 +13,8 @@ export const strengthIntervals = ['2', '4', '12', '30', '60', '240'] as const
  * Each option represents a set of intervals to average together
  */
 export const intervalsOptions = [
-  { value: strengthIntervals as unknown as string[], label: 'all' },
+  { value: ['4', '12', '30', '60', '240'], label: 'multi' },
+  { value: ['2', '4', '12', '30', '60', '240'], label: 'all' },
   { value: ['12', '30', '60', '240'], label: 'long' },
   { value: ['2', '4', '12'], label: 'short' },
   { value: ['2'], label: '2m' },

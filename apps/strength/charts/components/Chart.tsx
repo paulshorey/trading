@@ -19,6 +19,8 @@ import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
+import { VerticalLinePrimitive } from '../lib/VerticalLinePrimitive'
+import { SCALE_FACTOR } from '@/constants'
 
 interface ChartProps {
   heading: string | React.ReactNode
@@ -57,6 +59,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const strengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineRef = useRef<IPriceLine | null>(null)
+    const pageLoadTimeRef = useRef<Time | null>(null)
+    const pageLoadMarkerRef = useRef<VerticalLinePrimitive | null>(null)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
     const lastSecondDataRef = useRef<LineData[] | null>(null)
@@ -99,7 +103,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // e.preventDefault() // Optional, might interfere with other things
 
         const rect = container.getBoundingClientRect()
-        const scale = 2 // Inverse of zoom: 0.5
+        const scale = SCALE_FACTOR
 
         // Calculate corrected coordinates relative to the container
         const relativeX = e.clientX - rect.left
@@ -175,12 +179,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Cleanup
       return () => {
-        events.forEach((eventName) => {
-          container.removeEventListener(eventName, eventHandler as any, {
-            capture: true,
-          })
-        })
-
         chart.remove()
         chartRef.current = null
         strengthSeriesRef.current = null
@@ -217,15 +215,68 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           })
 
         if (!dataChanged) {
-          console.warn(
-            `[Chart] No data change detected for ${name} (strength), skipping update`
-          )
+          // Still try to create marker even if data hasn't changed
+          // This handles the case where the component re-renders
+          if (!pageLoadTimeRef.current && currentData.length > 0) {
+            const lastDataPoint = currentData[currentData.length - 1]!
+            pageLoadTimeRef.current = lastDataPoint.time
+          }
+
+          if (
+            pageLoadTimeRef.current &&
+            strengthSeriesRef.current &&
+            !pageLoadMarkerRef.current
+          ) {
+            const marker = new VerticalLinePrimitive(pageLoadTimeRef.current, {
+              color: '#2196F3',
+              width: 2,
+              labelText: 'Page Load',
+              labelBackgroundColor: '#2196F3',
+              labelTextColor: 'white',
+              showLabel: true,
+              lineStyle: 'dashed',
+            })
+            strengthSeriesRef.current.attachPrimitive(marker)
+            pageLoadMarkerRef.current = marker
+          }
           return
         }
 
         // Simply use setData for all updates
         strengthSeriesRef.current.setData(currentData)
         lastDataRef.current = [...currentData]
+
+        // Capture the page load time on first data load and create marker primitive
+        if (!pageLoadTimeRef.current && currentData.length > 0) {
+          // Get start of current day (00:00) in user's local timezone
+          const now = new Date()
+          const startOfDay = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            0,
+            0,
+            0,
+            0
+          )
+          const pageLoadTime = Math.floor(startOfDay.getTime() / 1000) as Time
+          pageLoadTimeRef.current = pageLoadTime
+
+          // Create the vertical line primitive for the page load marker
+          if (strengthSeriesRef.current && !pageLoadMarkerRef.current) {
+            const marker = new VerticalLinePrimitive(pageLoadTime, {
+              color: '#2196F3',
+              width: 2,
+              labelText: 'Start of Day',
+              labelBackgroundColor: '#2196F3',
+              labelTextColor: 'white',
+              showLabel: true,
+              lineStyle: 'dashed',
+            })
+            strengthSeriesRef.current.attachPrimitive(marker)
+            pageLoadMarkerRef.current = marker
+          }
+        }
 
         // Reapply time range after data update
         if (timeRange && chartRef.current && timeRange.from < timeRange.to) {
@@ -274,9 +325,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           })
 
         if (!dataChanged) {
-          console.warn(
-            `[Chart] No data change detected for ${name} (price), skipping update`
-          )
           return
         }
 
@@ -348,6 +396,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         className={classes.Chart}
         style={{
           width: width + 'px',
+          position: 'relative',
         }}
       >
         {/* Chart container */}

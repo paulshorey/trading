@@ -14,6 +14,7 @@ import { HOURS_BACK_INITIAL } from './constants'
 import { aggregatePriceData } from './lib/aggregatePriceData'
 import { aggregateStrengthData } from './lib/aggregateStrengthData'
 import MarketControl from './components/controls/MarketControl'
+import { SCALE_FACTOR } from '@/constants'
 
 export interface SyncedChartsProps {
   availableHeight: number
@@ -170,7 +171,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           }
           strengthData={aggregatedStrengthData}
           priceData={aggregatedPriceData}
-          width={typeof window !== 'undefined' ? window.innerWidth * 2 : 1200}
+          width={
+            typeof window !== 'undefined'
+              ? window.innerWidth * SCALE_FACTOR
+              : 1200
+          }
           height={availableHeight}
           timeRange={timeRange}
           showZeroLine={true}

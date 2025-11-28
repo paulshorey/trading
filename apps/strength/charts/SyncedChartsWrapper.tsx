@@ -6,6 +6,7 @@ import { SyncedCharts } from './SyncedCharts'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import Header from './components/Header'
 import classes from './classes.module.scss'
+import { SCALE_FACTOR } from '@/constants'
 
 interface SyncedChartsWrapperProps {}
 
@@ -36,8 +37,8 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
         const windowHeight = window.innerHeight
 
         setDimensions({
-          availableWidth: windowWidth * 2,
-          availableHeight: windowHeight * 2,
+          availableWidth: windowWidth * SCALE_FACTOR,
+          availableHeight: windowHeight * SCALE_FACTOR,
         })
       }
     }

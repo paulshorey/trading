@@ -200,15 +200,17 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const createTimeMarkers = (currentData: LineData[]) => {
       if (!strengthSeriesRef.current || markersInitialized.current) return
 
-      const dataStartTime = currentData[0]?.time as number
-      const dataEndTime = currentData[currentData.length - 1]?.time as number
+      if (currentData.length === 0) return
 
-      if (!dataStartTime || !dataEndTime) return
+      // Extract all timestamps from the data
+      const dataTimestamps = currentData.map((d) => d.time as number)
+      const dataStartTime = dataTimestamps[0]!
+      const dataEndTime = dataTimestamps[dataTimestamps.length - 1]!
 
       // Create time range highlights (shaded background areas)
       if (!timeRangeHighlightRef.current && TIME_RANGE_HIGHLIGHTS.length > 0) {
         const highlight = new TimeRangeHighlightPrimitive(TIME_RANGE_HIGHLIGHTS)
-        highlight.setDataRange(dataStartTime, dataEndTime)
+        highlight.setDataRange(dataTimestamps)
         strengthSeriesRef.current.attachPrimitive(highlight)
         timeRangeHighlightRef.current = highlight
       }

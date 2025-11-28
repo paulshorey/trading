@@ -99,7 +99,7 @@ interface ViewData {
  * PaneView - manages the renderer and updates coordinates
  * 
  * Uses timeToCoordinate for times with data points, and interpolates
- * for times outside the data range based on bar spacing.
+ * between nearest data points for times within gaps (like holidays).
  */
 class TimeRangeHighlightPaneView implements IPrimitivePaneView {
   private _source: TimeRangeHighlightPrimitive
@@ -111,12 +111,58 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
   }
 
   /**
-   * Convert a timestamp to x-coordinate, interpolating if necessary
-   * when the time falls outside the data range.
+   * Find the nearest data timestamps before and after the target time
+   */
+  private _findNearestDataPoints(
+    timestamp: number,
+    dataTimestamps: number[]
+  ): { before: number | null; after: number | null } {
+    if (dataTimestamps.length === 0) {
+      return { before: null, after: null }
+    }
+
+    // Binary search for efficiency
+    let left = 0
+    let right = dataTimestamps.length - 1
+
+    // Handle edge cases
+    if (timestamp <= dataTimestamps[0]!) {
+      return { before: null, after: dataTimestamps[0]! }
+    }
+    if (timestamp >= dataTimestamps[right]!) {
+      return { before: dataTimestamps[right]!, after: null }
+    }
+
+    // Binary search for the insertion point
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2)
+      if (dataTimestamps[mid]! < timestamp) {
+        left = mid + 1
+      } else {
+        right = mid
+      }
+    }
+
+    // Check if we found an exact match
+    if (dataTimestamps[left] === timestamp) {
+      return { before: timestamp, after: timestamp }
+    }
+
+    // Return the timestamps before and after
+    return {
+      before: dataTimestamps[left - 1] ?? null,
+      after: dataTimestamps[left] ?? null,
+    }
+  }
+
+  /**
+   * Convert a timestamp to x-coordinate, interpolating between
+   * nearest actual data points when necessary.
    */
   private _timeToX(
     timestamp: number,
     timeScale: ReturnType<IChartApi['timeScale']>,
+    dataTimestamps: number[],
     dataStartTime: number,
     dataEndTime: number,
     firstDataX: Coordinate | null,
@@ -129,17 +175,55 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
       return directCoord
     }
 
-    // For times outside data range, interpolate based on pixels per second
-    if (timestamp < dataStartTime && firstDataX !== null) {
-      // Before data starts - extrapolate left from first data point
+    // If we don't have the reference coordinates, we can't interpolate
+    if (firstDataX === null || lastDataX === null) {
+      return null
+    }
+
+    // For times before data starts - extrapolate left from first data point
+    if (timestamp < dataStartTime) {
       const secondsBeforeStart = dataStartTime - timestamp
       return (firstDataX - secondsBeforeStart * pixelsPerSecond) as Coordinate
     }
 
-    if (timestamp > dataEndTime && lastDataX !== null) {
-      // After data ends - extrapolate right from last data point
+    // For times after data ends - extrapolate right from last data point
+    if (timestamp > dataEndTime) {
       const secondsAfterEnd = timestamp - dataEndTime
       return (lastDataX + secondsAfterEnd * pixelsPerSecond) as Coordinate
+    }
+
+    // For times within the data range but in a gap (no data point exists)
+    // Find nearest data points and interpolate between them
+    const nearest = this._findNearestDataPoints(timestamp, dataTimestamps)
+
+    if (nearest.before !== null && nearest.after !== null) {
+      const beforeX = timeScale.timeToCoordinate(nearest.before as Time)
+      const afterX = timeScale.timeToCoordinate(nearest.after as Time)
+
+      if (beforeX !== null && afterX !== null) {
+        // Interpolate between the two known coordinates
+        const timeDiff = nearest.after - nearest.before
+        const offset = timestamp - nearest.before
+        const ratio = timeDiff > 0 ? offset / timeDiff : 0
+        return (beforeX + ratio * (afterX - beforeX)) as Coordinate
+      }
+    }
+
+    // Fallback: use the nearest available coordinate
+    if (nearest.before !== null) {
+      const beforeX = timeScale.timeToCoordinate(nearest.before as Time)
+      if (beforeX !== null) {
+        const offset = timestamp - nearest.before
+        return (beforeX + offset * pixelsPerSecond) as Coordinate
+      }
+    }
+
+    if (nearest.after !== null) {
+      const afterX = timeScale.timeToCoordinate(nearest.after as Time)
+      if (afterX !== null) {
+        const offset = nearest.after - timestamp
+        return (afterX - offset * pixelsPerSecond) as Coordinate
+      }
     }
 
     return null
@@ -155,8 +239,9 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
     const timeScale = chart.timeScale()
     const dataStartTime = this._source.dataStartTime
     const dataEndTime = this._source.dataEndTime
+    const dataTimestamps = this._source.dataTimestamps
 
-    if (!dataStartTime || !dataEndTime) {
+    if (!dataStartTime || !dataEndTime || dataTimestamps.length === 0) {
       this._data.ranges = []
       return
     }
@@ -165,8 +250,7 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
     const firstDataX = timeScale.timeToCoordinate(dataStartTime as Time)
     const lastDataX = timeScale.timeToCoordinate(dataEndTime as Time)
 
-    // Calculate pixels per second based on data range
-    // This gives us a consistent scale for extrapolation
+    // Calculate pixels per second based on data range (for extrapolation)
     let pixelsPerSecond = 0
     if (firstDataX !== null && lastDataX !== null && dataEndTime > dataStartTime) {
       pixelsPerSecond = (lastDataX - firstDataX) / (dataEndTime - dataStartTime)
@@ -176,6 +260,7 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
       const x1 = this._timeToX(
         range.startTime,
         timeScale,
+        dataTimestamps,
         dataStartTime,
         dataEndTime,
         firstDataX,
@@ -185,6 +270,7 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
       const x2 = this._timeToX(
         range.endTime,
         timeScale,
+        dataTimestamps,
         dataStartTime,
         dataEndTime,
         firstDataX,
@@ -226,6 +312,7 @@ export class TimeRangeHighlightPrimitive implements ISeriesPrimitive<Time> {
   private _rangeTimestamps: RangeTimestamp[] = []
   private _dataStartTime: number = 0
   private _dataEndTime: number = 0
+  private _dataTimestamps: number[] = [] // All actual data point timestamps
 
   constructor(configs: TimeRangeConfig[]) {
     this._configs = configs
@@ -247,6 +334,10 @@ export class TimeRangeHighlightPrimitive implements ISeriesPrimitive<Time> {
 
   get dataEndTime(): number {
     return this._dataEndTime
+  }
+
+  get dataTimestamps(): number[] {
+    return this._dataTimestamps
   }
 
   // Called when primitive is attached to a series
@@ -272,11 +363,15 @@ export class TimeRangeHighlightPrimitive implements ISeriesPrimitive<Time> {
   }
 
   /**
-   * Set the data range and calculate all time range occurrences
+   * Set the data range and all data timestamps for proper interpolation
+   * @param dataTimestamps - Array of all data point timestamps (sorted ascending)
    */
-  setDataRange(dataStartTime: number, dataEndTime: number): void {
-    this._dataStartTime = dataStartTime
-    this._dataEndTime = dataEndTime
+  setDataRange(dataTimestamps: number[]): void {
+    if (dataTimestamps.length === 0) return
+    
+    this._dataTimestamps = dataTimestamps
+    this._dataStartTime = dataTimestamps[0]!
+    this._dataEndTime = dataTimestamps[dataTimestamps.length - 1]!
     this._calculateRangeTimestamps()
     this.updateAllViews()
   }

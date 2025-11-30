@@ -1,37 +1,34 @@
 /**
  * Forward Fill Data Utility
  *
- * Ensures data exists at regular intervals by filling gaps with the last known value.
- * This is essential for time range highlighting to work reliably, as lightweight-charts
- * only knows about timestamps that have actual data points.
+ * Ensures data points exist at required timestamps (like time range boundaries)
+ * by adding forward-filled values. Does NOT fill every interval - only adds
+ * data points at specifically required timestamps.
+ *
+ * This preserves natural gaps in the data (weekends, holidays) while ensuring
+ * time range highlighting works correctly at boundaries.
  */
 
 import { LineData, Time } from 'lightweight-charts'
 
 /**
- * Default interval is 2 minutes (120 seconds) to match our data granularity.
- */
-const DEFAULT_INTERVAL_SECONDS = 120
-
-/**
- * Forward-fill data to ensure no time gaps exist.
+ * Add data points at required timestamps using forward-fill.
  *
  * This function:
  * 1. Takes existing data points
- * 2. Fills any gaps with the last known value
- * 3. Returns a continuous timeline with no missing intervals
+ * 2. Adds forward-filled values ONLY at required timestamps (e.g., time range boundaries)
+ * 3. Does NOT fill gaps between regular data points
  *
  * @param data - Original data array (must be sorted by time ascending)
- * @param intervalSeconds - Interval between data points (default: 120 = 2 minutes)
- * @param requiredTimestamps - Optional array of specific timestamps that MUST exist
- * @returns Data array with gaps filled
+ * @param requiredTimestamps - Array of specific timestamps that MUST exist (e.g., time range boundaries)
+ * @returns Data array with required timestamps added
  */
-export function forwardFillData(
+export function addRequiredTimestamps(
   data: LineData[],
-  intervalSeconds: number = DEFAULT_INTERVAL_SECONDS,
-  requiredTimestamps?: number[]
+  requiredTimestamps: number[]
 ): LineData[] {
   if (data.length === 0) return data
+  if (!requiredTimestamps || requiredTimestamps.length === 0) return data
 
   // Create a map for O(1) lookup of existing data
   const dataMap = new Map<number, LineData>()
@@ -40,28 +37,23 @@ export function forwardFillData(
   const startTime = data[0]!.time as number
   const endTime = data[data.length - 1]!.time as number
 
-  // Collect all times that need to exist
-  const requiredTimes = new Set<number>()
+  // Collect all timestamps that should exist
+  const allTimestamps = new Set<number>()
 
-  // Add all regular interval times
-  for (let t = startTime; t <= endTime; t += intervalSeconds) {
-    requiredTimes.add(t)
-  }
+  // Add all existing data timestamps
+  data.forEach((d) => allTimestamps.add(d.time as number))
 
-  // Add any specifically required timestamps (e.g., time range boundaries)
-  if (requiredTimestamps) {
-    requiredTimestamps.forEach((ts) => {
-      // Only add if within or very close to data range
-      if (ts >= startTime - intervalSeconds && ts <= endTime + intervalSeconds) {
-        requiredTimes.add(ts)
-      }
-    })
-  }
+  // Add required timestamps that fall within the data range
+  requiredTimestamps.forEach((ts) => {
+    if (ts >= startTime && ts <= endTime) {
+      allTimestamps.add(ts)
+    }
+  })
 
-  // Sort all required times
-  const sortedTimes = Array.from(requiredTimes).sort((a, b) => a - b)
+  // Sort all timestamps
+  const sortedTimes = Array.from(allTimestamps).sort((a, b) => a - b)
 
-  // Build result with forward-fill
+  // Build result with forward-fill for missing required timestamps
   const result: LineData[] = []
   let lastValue = data[0]!.value
 
@@ -73,12 +65,24 @@ export function forwardFillData(
       result.push(existing)
       lastValue = existing.value
     } else {
-      // Forward-fill with last known value
+      // This is a required timestamp without data - forward-fill
       result.push({ time: t as Time, value: lastValue })
     }
   }
 
   return result
+}
+
+/**
+ * @deprecated Use addRequiredTimestamps instead.
+ * This function is kept for backwards compatibility.
+ */
+export function forwardFillData(
+  data: LineData[],
+  _intervalSeconds: number = 120,
+  requiredTimestamps?: number[]
+): LineData[] {
+  return addRequiredTimestamps(data, requiredTimestamps || [])
 }
 
 /**
@@ -163,12 +167,12 @@ export function getTimeRangeBoundaries(
  * Round a timestamp down to the nearest interval boundary.
  *
  * @param timestamp - Unix timestamp in seconds
- * @param intervalSeconds - Interval in seconds
+ * @param intervalSeconds - Interval in seconds (default: 120 = 2 minutes)
  * @returns Rounded timestamp
  */
 export function roundToInterval(
   timestamp: number,
-  intervalSeconds: number = DEFAULT_INTERVAL_SECONDS
+  intervalSeconds: number = 120
 ): number {
   return Math.floor(timestamp / intervalSeconds) * intervalSeconds
 }

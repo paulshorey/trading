@@ -27,10 +27,7 @@ import {
   markerConfigToOptions,
 } from '../lib/timeMarkers'
 import { TimeRangeHighlightPrimitive } from '../lib/TimeRangeHighlight'
-import {
-  forwardFillData,
-  getTimeRangeBoundaries,
-} from '../lib/forwardFillData'
+import { forwardFillData, getTimeRangeBoundaries } from '../lib/forwardFillData'
 import { SCALE_FACTOR } from '@/constants'
 
 interface ChartProps {
@@ -71,7 +68,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
-    const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(null)
+    const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(
+      null
+    )
     const markersInitialized = useRef(false)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
@@ -242,10 +241,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     }
 
     /**
-     * Apply forward-fill to ensure data exists at all required timestamps.
-     * This is essential for time range highlighting to work correctly.
+     * Ensure data exists at required timestamps (time range boundaries).
+     * This adds forward-filled values ONLY at boundary timestamps,
+     * preserving natural gaps in the data (weekends, holidays).
      */
-    const prepareDataWithForwardFill = (data: LineData[]): LineData[] => {
+    const prepareDataWithRequiredTimestamps = (
+      data: LineData[]
+    ): LineData[] => {
       if (data.length === 0) return data
 
       const dataStartTime = data[0]!.time as number
@@ -258,7 +260,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         dataEndTime
       )
 
-      // Forward-fill the data to ensure no gaps
+      // Add forward-filled values only at required timestamps
       return forwardFillData(data, 120, requiredTimestamps)
     }
 
@@ -273,9 +275,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       try {
         const prevData = lastDataRef.current
-        
+
         // Apply forward-fill to ensure time range boundaries exist
-        const currentData = prepareDataWithForwardFill(strengthData)
+        const currentData = prepareDataWithRequiredTimestamps(strengthData)
 
         // Check if data actually changed
         const dataChanged =
@@ -339,9 +341,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       try {
         const prevData = lastSecondDataRef.current
-        
+
         // Apply forward-fill to ensure time range boundaries exist
-        const currentData = prepareDataWithForwardFill(priceData)
+        const currentData = prepareDataWithRequiredTimestamps(priceData)
 
         // Check if data actually changed
         const dataChanged =

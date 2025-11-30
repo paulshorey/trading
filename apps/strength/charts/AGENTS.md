@@ -62,18 +62,22 @@ lightweight-charts (renders canvas)
 ## Key Concepts
 
 ### Forward-Fill
+
 Data is forward-filled at 2-minute intervals to ensure `timeToCoordinate()` works for any timestamp. This shows gaps as flat lines rather than compressed space, providing consistent time visualization. See `TIME_RANGE_HIGHLIGHTING.md`.
 
 ### Custom Primitives
+
 - **TimeRangeHighlight**: Shaded backgrounds for market hours
 - **VerticalLinePrimitive**: Vertical lines for events (page load, etc.)
 
 Both implement `ISeriesPrimitive<Time>` with PaneView + Renderer pattern.
 
 ### Scroll Sync
+
 Charts are synchronized via `subscribeCrosshairMove` and `subscribeVisibleLogicalRangeChange` callbacks on the timeScale, sharing visible range between strength and price charts.
 
 ### Aggregation
+
 Multiple tickers can be combined using different strategies (average, weighted, min/max). Controlled via Zustand store and URL params.
 
 ## Related Documentation

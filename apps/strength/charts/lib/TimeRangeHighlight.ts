@@ -97,7 +97,7 @@ interface ViewData {
 
 /**
  * PaneView - manages the renderer and updates coordinates
- * 
+ *
  * Uses timeToCoordinate for times with data points, and interpolates
  * between nearest data points for times within gaps (like holidays).
  */
@@ -252,7 +252,11 @@ class TimeRangeHighlightPaneView implements IPrimitivePaneView {
 
     // Calculate pixels per second based on data range (for extrapolation)
     let pixelsPerSecond = 0
-    if (firstDataX !== null && lastDataX !== null && dataEndTime > dataStartTime) {
+    if (
+      firstDataX !== null &&
+      lastDataX !== null &&
+      dataEndTime > dataStartTime
+    ) {
       pixelsPerSecond = (lastDataX - firstDataX) / (dataEndTime - dataStartTime)
     }
 
@@ -368,7 +372,7 @@ export class TimeRangeHighlightPrimitive implements ISeriesPrimitive<Time> {
    */
   setDataRange(dataTimestamps: number[]): void {
     if (dataTimestamps.length === 0) return
-    
+
     this._dataTimestamps = dataTimestamps
     this._dataStartTime = dataTimestamps[0]!
     this._dataEndTime = dataTimestamps[dataTimestamps.length - 1]!

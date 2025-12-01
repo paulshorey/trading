@@ -31,7 +31,7 @@ charts/
 │   ├── aggregateDataUtils.ts        # Shared aggregation utilities
 │   ├── chartConfig.ts               # Chart styling config
 │   ├── chartUtils.ts                # Misc chart helpers
-│   ├── forwardFillData.ts           # Gap-filling for time continuity
+│   ├── forwardFillData.ts           # Add required timestamps for time ranges
 │   ├── timeMarkers.ts               # Time range + marker config
 │   ├── TimeRangeHighlight.ts        # Custom primitive: shaded regions
 │   └── VerticalLinePrimitive.ts     # Custom primitive: vertical lines
@@ -54,16 +54,16 @@ SyncedCharts (fetches raw data via useRealtimeStrengthData)
       ↓
 Aggregation (aggregateStrengthData, aggregatePriceData)
       ↓
-Chart.tsx (forward-fill → setData → attach primitives)
+Chart.tsx (add required timestamps → setData → attach primitives)
       ↓
 lightweight-charts (renders canvas)
 ```
 
 ## Key Concepts
 
-### Forward-Fill
+### Required Timestamps for Time Ranges
 
-Data is forward-filled at 2-minute intervals to ensure `timeToCoordinate()` works for any timestamp. This shows gaps as flat lines rather than compressed space, providing consistent time visualization. See `TIME_RANGE_HIGHLIGHTING.md`.
+Time range boundaries are added to the data as forward-filled points, ensuring `timeToCoordinate()` works correctly for highlighting. Natural gaps (weekends, holidays) are preserved - the chart compresses them, showing time ranges as narrow bars during non-trading periods. See `TIME_RANGE_HIGHLIGHTING.md`.
 
 ### Custom Primitives
 

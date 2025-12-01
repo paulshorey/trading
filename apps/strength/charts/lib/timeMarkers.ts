@@ -53,6 +53,18 @@ const defaultMarkerStyle: Partial<TimeMarkerConfig> = {
  * - 14:30 UTC = 08:30 US Central (CST) / 09:30 US Central (CDT)
  */
 export const TIME_MARKERS: TimeMarkerConfig[] = [
+  {
+    id: 'test1',
+    label: 'Test1',
+    utcHour: 17,
+    utcMinute: 0,
+    color: '#22c55e', // green
+    labelBackgroundColor: '#22c55e',
+    labelTextColor: 'white',
+    lineStyle: 'dashed',
+    width: 1,
+    showLabel: false,
+  },
   // {
   //   id: 'us-equities-open',
   //   label: 'US Equities Open',

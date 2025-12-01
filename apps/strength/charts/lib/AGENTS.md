@@ -3,8 +3,8 @@
 ## Data Fetching & Processing
 
 - `FetchStrengthData.ts` - API client for fetching strength data from backend
-- `useRealtimeStrengthData.ts` - React hook: polls for new data every minute, handles forward-fill
-- `forwardFillData.ts` - Adds data points at required timestamps (time range boundaries)
+- `useRealtimeStrengthData.ts` - React hook: polls for new data every minute
+- `forwardFillData.ts` - Adds data points at required timestamps (time range boundaries only)
 
 ## Data Aggregation
 

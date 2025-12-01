@@ -110,10 +110,9 @@ function forwardFillData(data, sortedTimestamps) {
 ## Critical Timestamp Requirements
 
 All timestamps MUST:
-- Be at even minutes (0, 2, 4, 6...)
 - Have seconds and milliseconds set to 0
 - Use the `timenow` field directly from database
-- Be spaced exactly 2 minutes apart
+- Be spaced exactly 1 minute apart
 
 ## Common Issues and Solutions
 

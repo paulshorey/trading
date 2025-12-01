@@ -79,7 +79,7 @@ export function addRequiredTimestamps(
  */
 export function forwardFillData(
   data: LineData[],
-  _intervalSeconds: number = 120,
+  _intervalSeconds: number = 60,
   requiredTimestamps?: number[]
 ): LineData[] {
   return addRequiredTimestamps(data, requiredTimestamps || [])
@@ -167,12 +167,12 @@ export function getTimeRangeBoundaries(
  * Round a timestamp down to the nearest interval boundary.
  *
  * @param timestamp - Unix timestamp in seconds
- * @param intervalSeconds - Interval in seconds (default: 120 = 2 minutes)
+ * @param intervalSeconds - Interval in seconds (default: 60 = 1 minute)
  * @returns Rounded timestamp
  */
 export function roundToInterval(
   timestamp: number,
-  intervalSeconds: number = 120
+  intervalSeconds: number = 60
 ): number {
   return Math.floor(timestamp / intervalSeconds) * intervalSeconds
 }

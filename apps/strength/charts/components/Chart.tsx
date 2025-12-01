@@ -261,7 +261,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       )
 
       // Add forward-filled values only at required timestamps
-      return forwardFillData(data, 120, requiredTimestamps)
+      return forwardFillData(data, 60, requiredTimestamps)
     }
 
     // Update first series (strength) data

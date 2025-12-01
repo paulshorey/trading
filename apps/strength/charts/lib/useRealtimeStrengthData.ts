@@ -137,21 +137,19 @@ export function useRealtimeStrengthData({
       return
 
     try {
-      // IMPORTANT: Fetch the last TWO 2-minute intervals
+      // IMPORTANT: Fetch the last TWO 1-minute intervals
       // The current interval might be empty (pre-created with just timestamp)
       // The previous interval might still be receiving updates
-      // We go back 4 minutes to ensure we capture both intervals
+      // We go back ~1.5 minutes to ensure we capture both intervals
       const now = new Date()
       const currentMinute = now.getMinutes()
-      const currentEvenMinute =
-        currentMinute % 2 === 0 ? currentMinute : currentMinute - 1
 
       // Calculate the two intervals we want to fetch
       const currentInterval = new Date(now)
-      currentInterval.setMinutes(currentEvenMinute, 0, 0)
+      currentInterval.setMinutes(currentMinute, 0, 0)
 
       const previousInterval = new Date(
-        currentInterval.getTime() - 2 * 60 * 1000
+        currentInterval.getTime() - 1 * 60 * 1000
       )
 
       // Fetch from before the previous interval to ensure we get both

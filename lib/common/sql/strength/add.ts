@@ -8,15 +8,14 @@ import { cc } from "../../cc";
  * Adds strength record to `strength_v1` table.
  *
  * This function consolidates multiple interval strength values into the same table row
- * for each 2-minute period. It creates exactly one row per 2 minutes and updates it with
+ * for each 1-minute period. It creates exactly one row per minute and updates it with
  * different interval values as they come in.
  *
- * The function normalizes the current time to every 2 minutes (seconds set to 00 and odd
- * minutes rounded down to even).
+ * The function normalizes the current time to every minute (seconds set to 00).
  *
  * To prevent race conditions where multiple concurrent requests try to create or update
- * the same rows, this function pre-creates BOTH the current 2-minute interval row AND
- * the next 2-minute interval row (without data) before processing. This ensures both rows
+ * the same rows, this function pre-creates BOTH the current 1-minute interval row AND
+ * the next 1-minute interval row (without data) before processing. This ensures both rows
  * always exist, eliminating any race conditions during data insertion. The database's
  * UNIQUE constraint on (ticker, timenow) prevents duplicate rows, and ON CONFLICT DO NOTHING
  * safely handles simultaneous creation attempts.
@@ -52,20 +51,13 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
       }
     }
 
-    // Normalize current time to every 2 minutes (set seconds to 00 and round down odd minutes)
+    // Normalize current time to every minute (set seconds to 00)
     const normalizedTimenow = new Date();
     normalizedTimenow.setSeconds(0, 0); // Set seconds and milliseconds to 0
 
-    // Round down to the nearest even minute (0, 2, 4, 6, ... 58)
-    const currentMinute = normalizedTimenow.getMinutes();
-    if (currentMinute % 2 === 1) {
-      // If minute is odd, reduce by 1 to make it even
-      normalizedTimenow.setMinutes(currentMinute - 1);
-    }
-
-    // Calculate the future timenow (2 minutes ahead)
+    // Calculate the future timenow (1 minute ahead)
     const futureTimenow = new Date(normalizedTimenow);
-    const futureMinutes = futureTimenow.getMinutes() + 2;
+    const futureMinutes = futureTimenow.getMinutes() + 1;
 
     if (futureMinutes >= 60) {
       // Handle minute overflow - increment hour and set minutes

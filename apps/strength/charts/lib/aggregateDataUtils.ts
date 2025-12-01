@@ -3,18 +3,18 @@
  */
 
 /**
- * Generate future timestamps at 2-minute intervals
+ * Generate future timestamps at 1-minute intervals
  * @param lastTimestamp - The last timestamp from the real data (in seconds)
  * @param hours - Number of hours to extend into the future
- * @returns Array of future timestamps at 2-minute intervals (in seconds)
+ * @returns Array of future timestamps at 1-minute intervals (in seconds)
  */
 export function generateFutureTimestamps(
   lastTimestamp: number,
   hours: number = 12
 ): number[] {
   const futureTimestamps: number[] = []
-  const intervalSeconds = 2 * 60 // 2 minutes in seconds
-  const totalIntervals = (hours * 60) / 2 // Total number of 2-minute intervals
+  const intervalSeconds = 1 * 60 // 1 minute in seconds
+  const totalIntervals = hours * 60 // Total number of 1-minute intervals
 
   for (let i = 1; i <= totalIntervals; i++) {
     futureTimestamps.push(lastTimestamp + i * intervalSeconds)
@@ -87,7 +87,7 @@ export function forwardFillData<
 
 /**
  * Extract all unique timestamps from multiple data arrays
- * IMPORTANT: Timestamps should be at even minutes with no seconds
+ * IMPORTANT: Timestamps should be at 1-minute intervals with no seconds
  */
 export function extractGlobalTimestamps<T extends { timenow: Date }>(
   allData: (T[] | null)[]
@@ -101,10 +101,9 @@ export function extractGlobalTimestamps<T extends { timenow: Date }>(
         const date = new Date(item.timenow)
         const timestamp = date.getTime() / 1000
 
-        // Validate timestamp is at even minute with no seconds
-        const minutes = date.getMinutes()
+        // Validate timestamp has no seconds (1-minute intervals)
         const seconds = date.getSeconds()
-        if (minutes % 2 !== 0 || seconds !== 0) {
+        if (seconds !== 0) {
           invalidTimestamps.push(date.toISOString())
         }
 

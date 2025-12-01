@@ -70,7 +70,7 @@ export const aggregateStrengthData = (
     const lastTimestamp = lastDataPoint.time as number
     const lastValue = lastDataPoint.value
 
-    // Generate future timestamps (12 hours at 2-minute intervals)
+    // Generate future timestamps (12 hours at 1-minute intervals)
     const futureTimestamps = generateFutureTimestamps(lastTimestamp, 12)
 
     // Add future data points with the last known value

@@ -33,18 +33,6 @@ export interface TimeMarkerConfig {
 }
 
 /**
- * Default marker styling
- */
-const defaultMarkerStyle: Partial<TimeMarkerConfig> = {
-  color: '#2196F3',
-  labelBackgroundColor: '#2196F3',
-  labelTextColor: 'white',
-  lineStyle: 'dashed',
-  width: 2,
-  showLabel: true,
-}
-
-/**
  * Configured time markers
  *
  * Add new markers here. Times are in UTC.
@@ -54,8 +42,8 @@ const defaultMarkerStyle: Partial<TimeMarkerConfig> = {
  */
 export const TIME_MARKERS: TimeMarkerConfig[] = [
   {
-    id: 'test1',
-    label: 'Test1',
+    id: '11am-cst',
+    label: '11am CST',
     utcHour: 17,
     utcMinute: 0,
     color: '#22c55e', // green

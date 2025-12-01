@@ -16,7 +16,7 @@ The Strength app displays two synchronized financial charts (Strength and Price)
 
 ```typescript
 {
-  timenow: Date      // CRITICAL: Even minutes only (0, 2, 4...), no seconds
+  timenow: Date      // CRITICAL: 1-minute intervals, no seconds
   ticker: string     // Market ticker symbol
   price: number      // Current price
   volume: number     // Trading volume
@@ -30,9 +30,8 @@ The Strength app displays two synchronized financial charts (Strength and Price)
 
 ### Timestamp Requirements
 
-- **Even Minutes Only**: All timestamps MUST be at even minutes (0, 2, 4, 6...)
+- **1-Minute Intervals**: Data points are spaced exactly 1 minute apart
 - **No Seconds/Milliseconds**: Seconds and milliseconds must be 0
-- **2-Minute Intervals**: Data points are spaced exactly 2 minutes apart
 - **Consistent X-Axis**: The `timenow` field is used directly as chart x-axis
 
 ## Core Architecture Principles
@@ -121,22 +120,22 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 
 ## Real-time Update Flow
 
-### Important: 2-Minute Interval Behavior
+### Important: 1-Minute Interval Behavior
 
-- Database saves data every minute but to 2-minute intervals (even minutes only)
+- Database saves data every minute to 1-minute interval timestamps
 - Database pre-creates empty rows with just timestamps (no data)
 - The same timestamp (e.g., 14:02) might be updated multiple times as data arrives
 - Must handle both new data points AND updates to existing points
 
 1. **Fetch** (every 60 seconds):
 
-   - `fetchRealtimeUpdate()` fetches the LAST TWO 2-minute intervals
+   - `fetchRealtimeUpdate()` fetches the LAST TWO 1-minute intervals
    - Current interval: Might be empty (pre-created) or partially filled
    - Previous interval: Might still be receiving updates
-   - Example: At 14:03, fetches both 14:02 (previous) and 14:04 (current)
+   - Example: At 14:03:30, fetches both 14:02 (previous) and 14:03 (current)
    - This ensures we capture:
      - Updates to the previous interval (14:02)
-     - New data for the current interval (14:04)
+     - New data for the current interval (14:03)
    - Empty pre-created rows are filtered out during aggregation
 
 2. **Merge** (at raw data level):
@@ -242,10 +241,10 @@ if (onlyLastChanged) {
 
 ### Issue: Chart data becomes corrupted after real-time updates
 
-**Cause**: Timestamps not properly aligned to 2-minute intervals
+**Cause**: Timestamps not properly aligned to 1-minute intervals
 **Solution**:
 
-- Ensure all timestamps are at even minutes with 0 seconds
+- Ensure all timestamps have 0 seconds
 - Use `timenow` directly without modification
 - Validate timestamps when fetching data
 - Log warnings for misaligned timestamps

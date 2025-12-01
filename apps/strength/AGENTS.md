@@ -46,7 +46,7 @@ This project is the "strength" app. It renders a single chart with dual y-axes t
 - See `DATA_FLOW_ARCHITECTURE.md` for detailed explanation of the data flow architecture
 - See `FORWARD_FILL_LOGIC.md` for comprehensive documentation of forward-fill implementation
 - SQL types and database functions are in `./sql/strength/` folder
-- All timestamps MUST be at even minutes (0, 2, 4...) with no seconds
+- All timestamps MUST be at 1-minute intervals with no seconds
 - The `timenow` field from database is used as chart x-axis timestamp
 
 ## Keeping notes and documenting changes

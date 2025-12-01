@@ -42,33 +42,31 @@ export class FetchStrengthData {
         return { rows: null, error: data.error }
       }
 
-      // Convert date strings back to Date objects
-      let rows = data.rows
-      if (rows && rows.length > 0) {
-        rows = rows.map((row: any) => {
-          const timenow = new Date(row.timenow)
+        // Convert date strings back to Date objects
+        let rows = data.rows
+        if (rows && rows.length > 0) {
+          rows = rows.map((row: any) => {
+            const timenow = new Date(row.timenow)
 
-          // Validate that timenow is at even minutes with no seconds
-          const minutes = timenow.getMinutes()
-          const seconds = timenow.getSeconds()
-          const milliseconds = timenow.getMilliseconds()
+            // Validate that timenow has no seconds (1-minute intervals)
+            const seconds = timenow.getSeconds()
+            const milliseconds = timenow.getMilliseconds()
 
-          if (minutes % 2 !== 0 || seconds !== 0 || milliseconds !== 0) {
-            console.warn('[fetchTickerData] Invalid timestamp detected:', {
-              ticker: params.ticker,
-              timenow: timenow.toISOString(),
-              minutes,
-              seconds,
-              milliseconds,
-            })
-          }
+            if (seconds !== 0 || milliseconds !== 0) {
+              console.warn('[fetchTickerData] Invalid timestamp detected:', {
+                ticker: params.ticker,
+                timenow: timenow.toISOString(),
+                seconds,
+                milliseconds,
+              })
+            }
 
-          return {
-            ...row,
-            timenow,
-            created_at: new Date(row.created_at),
-          }
-        })
+            return {
+              ...row,
+              timenow,
+              created_at: new Date(row.created_at),
+            }
+          })
 
         // Ensure data is sorted in ascending order by timenow
         rows.sort(
@@ -104,15 +102,11 @@ export class FetchStrengthData {
   }
 
   /**
-   * Prepare date for API query (rounded to even minute, no seconds)
+   * Prepare date for API query (no seconds, 1-minute intervals)
    */
   static prepareDate(date: Date): Date {
     const prepared = new Date(date)
     prepared.setSeconds(0, 0) // Sets seconds and milliseconds to 0
-    const minutes = prepared.getMinutes()
-    if (minutes % 2 !== 0) {
-      prepared.setMinutes(minutes - 1) // Round down to previous even minute
-    }
     return prepared
   }
 
@@ -126,7 +120,7 @@ export class FetchStrengthData {
 
   /**
    * Merge new data with existing data, handling duplicates
-   * IMPORTANT: Uses timenow as the exact timestamp (should be even minutes, no seconds)
+   * IMPORTANT: Uses timenow as the exact timestamp (1-minute intervals, no seconds)
    */
   static mergeData(
     existingData: StrengthRowGet[],

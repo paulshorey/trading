@@ -46,7 +46,7 @@ export interface VerticalLineOptions {
   labelBackgroundColor: string
   labelTextColor: string
   showLabel: boolean
-  lineStyle: 'solid' | 'dashed'
+  lineStyle: 'solid' | 'dashed' | 'dotted'
 }
 
 const defaultOptions: VerticalLineOptions = {
@@ -56,7 +56,7 @@ const defaultOptions: VerticalLineOptions = {
   labelBackgroundColor: '#2196F3',
   labelTextColor: 'white',
   showLabel: true,
-  lineStyle: 'dashed',
+  lineStyle: 'dotted',
 }
 
 /**
@@ -88,6 +88,8 @@ class VerticalLinePaneRenderer implements IPrimitivePaneRenderer {
 
       if (this._options.lineStyle === 'dashed') {
         ctx.setLineDash([6, 4])
+      } else if (this._options.lineStyle === 'dotted') {
+        ctx.setLineDash([2, 2])
       } else {
         ctx.setLineDash([])
       }

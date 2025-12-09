@@ -25,7 +25,7 @@ export interface TimeMarkerConfig {
   /** Text color of the label */
   labelTextColor: string
   /** Line style: 'solid' or 'dashed' */
-  lineStyle: 'solid' | 'dashed' | 'dotted'
+  lineStyle: 'solid' | 'dashed' | 'dotted' | 'dotted-dashed'
   /** Line width in pixels */
   width: number
   /** Whether to show the label */

@@ -6,8 +6,8 @@
  * The chart will display them in the user's local timezone.
  */
 
-import { VerticalLineOptions } from './VerticalLinePrimitive'
-import { TimeRangeConfig } from './TimeRangeHighlight'
+import { VerticalLineOptions } from '../lib/VerticalLinePrimitive'
+import { TimeRangeConfig } from '../lib/TimeRangeHighlight'
 
 export interface TimeMarkerConfig {
   /** Unique identifier for the marker */
@@ -25,7 +25,7 @@ export interface TimeMarkerConfig {
   /** Text color of the label */
   labelTextColor: string
   /** Line style: 'solid' or 'dashed' */
-  lineStyle: 'solid' | 'dashed'
+  lineStyle: 'solid' | 'dashed' | 'dotted'
   /** Line width in pixels */
   width: number
   /** Whether to show the label */
@@ -42,14 +42,158 @@ export interface TimeMarkerConfig {
  */
 export const TIME_MARKERS: TimeMarkerConfig[] = [
   {
-    id: '11am-cst',
-    label: '11am CST',
+    id: '6-cst',
+    label: '6 CST',
+    utcHour: 12,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '7-cst',
+    label: '7 CST',
+    utcHour: 13,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '9-cst',
+    label: '9 CST',
+    utcHour: 15,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '10-cst',
+    label: '10 CST',
+    utcHour: 16,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '11-cst',
+    label: '11 CST',
     utcHour: 17,
     utcMinute: 0,
-    color: '#22c55e', // green
-    labelBackgroundColor: '#22c55e',
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
     labelTextColor: 'white',
-    lineStyle: 'dashed',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '12-cst',
+    label: '12 CST',
+    utcHour: 18,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '13-cst',
+    label: '13 CST',
+    utcHour: 19,
+    utcMinute: 0,
+    color: 'rgba(34, 177, 94, 0.24)',
+    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '18-cst',
+    label: '18 CST',
+    utcHour: 0,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '19-cst',
+    label: '19 CST',
+    utcHour: 1,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '21-cst',
+    label: '21 CST',
+    utcHour: 3,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '22-cst',
+    label: '22 CST',
+    utcHour: 4,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '23-cst',
+    label: '23 CST',
+    utcHour: 5,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    id: '24-cst',
+    label: '24 CST',
+    utcHour: 6,
+    utcMinute: 0,
+    color: 'rgba(200, 100, 0, 0.16)',
+    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    labelTextColor: 'white',
+    lineStyle: 'solid',
     width: 1,
     showLabel: false,
   },
@@ -94,6 +238,14 @@ export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
     endUtcHour: 21, // 15 Central
     endUtcMinute: 0,
     color: 'rgba(34, 197, 94, 0.08)', // Green
+  },
+  {
+    id: 'closing-time',
+    startUtcHour: 20, // 14:45 Central
+    startUtcMinute: 45,
+    endUtcHour: 23, // 17 Central
+    endUtcMinute: 0,
+    color: '#DDF6E6', // Green
   },
   {
     id: 'asia-until-europe',

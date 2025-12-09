@@ -25,7 +25,7 @@ import {
   TIME_RANGE_HIGHLIGHTS,
   getMarkerTimestamps,
   markerConfigToOptions,
-} from '../lib/timeMarkers'
+} from '../state/timeMarkers'
 import { TimeRangeHighlightPrimitive } from '../lib/TimeRangeHighlight'
 import { forwardFillData, getTimeRangeBoundaries } from '../lib/forwardFillData'
 import { SCALE_FACTOR } from '@/constants'

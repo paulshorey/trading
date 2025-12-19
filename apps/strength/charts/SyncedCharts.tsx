@@ -11,7 +11,10 @@ import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { HOURS_BACK_INITIAL } from './constants'
-import { aggregatePriceData } from './lib/aggregatePriceData'
+import {
+  aggregatePriceData,
+  aggregatePriceByTicker,
+} from './lib/aggregatePriceData'
 import {
   aggregateStrengthData,
   aggregateStrengthByInterval,
@@ -41,12 +44,15 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     aggregatedStrengthData,
     aggregatedPriceData,
     intervalStrengthData,
+    tickerPriceData,
     showIntervalLines,
+    showTickerLines,
     // Actions
     setTimeRange,
     setAggregatedStrengthData,
     setAggregatedPriceData,
     setIntervalStrengthData,
+    setTickerPriceData,
   } = useChartControlsStore()
 
   /**
@@ -73,6 +79,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * 1. Strength data: average of selected intervals across all tickers
    * 2. Price data: normalized average of all tickers
    * 3. Individual interval data: separate line for each selected interval
+   * 4. Individual ticker price data: separate line for each selected ticker
    */
   useEffect(() => {
     if (rawData.length > 0 && rawData.some((data) => data !== null)) {
@@ -94,6 +101,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
         rawData // Pass same data for consistent timestamps
       )
 
+      // Calculate individual ticker price data for each selected ticker
+      const individualTickerPriceData = aggregatePriceByTicker(
+        rawData,
+        chartTickers,
+        rawData // Pass same data for consistent timestamps
+      )
+
       // Always create new array references to ensure React detects changes
       const newStrengthData = strengthData.length > 0 ? [...strengthData] : null
       const newPriceData = priceData.length > 0 ? [...priceData] : null
@@ -101,6 +115,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       setAggregatedStrengthData(newStrengthData)
       setAggregatedPriceData(newPriceData)
       setIntervalStrengthData(individualIntervalData)
+      setTickerPriceData(individualTickerPriceData)
     }
   }, [
     interval,
@@ -110,6 +125,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     setAggregatedStrengthData,
     setAggregatedPriceData,
     setIntervalStrengthData,
+    setTickerPriceData,
   ])
 
   /**
@@ -161,7 +177,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           strengthData={aggregatedStrengthData}
           priceData={aggregatedPriceData}
           intervalStrengthData={intervalStrengthData}
+          tickerPriceData={tickerPriceData}
+          tickers={chartTickers}
           showIntervalLines={showIntervalLines}
+          showTickerLines={showTickerLines}
           width={
             typeof window !== 'undefined'
               ? window.innerWidth * SCALE_FACTOR

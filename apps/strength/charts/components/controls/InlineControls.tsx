@@ -3,38 +3,31 @@
 import React from 'react'
 import IntervalControl from './IntervalControl'
 import TimeControl from './TimeControl'
-import { ControlsDropdown } from './ControlsDropdown'
-import { useDisclosure } from '@mantine/hooks'
-import { DrawerCalendar } from '../DrawerCalendar'
-import { DrawerNews } from '../DrawerNews'
-import { useChartControlsStore } from '../../state/useChartControlsStore'
+// import { ControlsDropdown } from './ControlsDropdown'
+import { COLORS } from '../../constants'
+import { useChartControlsStore } from '@/charts/state/useChartControlsStore'
 
-export default function InlineControls() {
-  const [drawerNewsOpened, { open: drawerNewsOpen, close: drawerNewsClose }] =
-    useDisclosure(false)
-  const [
-    drawerCalendarOpened,
-    { open: drawerCalendarOpen, close: drawerCalendarClose },
-  ] = useDisclosure(false)
-
-  const { showIntervalLines, setShowIntervalLines } = useChartControlsStore()
-
+export default function InlineControls({
+  drawerNewsOpen,
+  drawerCalendarOpen,
+}: {
+  drawerNewsOpen: () => void
+  drawerCalendarOpen: () => void
+}) {
+  const {
+    showIntervalLines,
+    setShowIntervalLines,
+    showTickerLines,
+    setShowTickerLines,
+  } = useChartControlsStore()
   return (
     <div
-      className="flex flex-row justify-end mr-[10px] pt-[2px] scale2x"
+      className="flex flex-row justify-end mr-[10px] pt-[6px] scale2x"
       style={{ transformOrigin: 'right top' }}
     >
-      <DrawerCalendar
-        drawerOpened={drawerCalendarOpened}
-        closeDrawer={drawerCalendarClose}
-      />
-      <DrawerNews
-        drawerOpened={drawerNewsOpened}
-        closeDrawer={drawerNewsClose}
-      />
-      <div className="pb-[3px] px-[4px] pt-[4px]">
+      <div className="">
         <div dir="ltr" className="flex flex-row">
-          <span className="flex flex-row pr-2">
+          <span className="flex flex-row">
             <IntervalControl showLabel={false} />
           </span>
           <span className="flex flex-row">
@@ -42,26 +35,49 @@ export default function InlineControls() {
           </span>
         </div>
       </div>
-      <div className="pb-[3px] px-[4px] pt-[4px]">
+      <div>
         <button
           onClick={() => setShowIntervalLines(!showIntervalLines)}
-          className={`px-2 py-0.5 text-xs rounded transition-colors ${
-            showIntervalLines
-              ? 'bg-orange-500 text-white'
-              : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-          }`}
+          className={`px-2 py-0.5 text-xs rounded transition-colors border`}
+          style={{
+            borderColor: COLORS.strength_i,
+            color: COLORS.strength,
+          }}
           title="Show/hide individual interval lines"
         >
-          ±
+          S
         </button>
       </div>
-      <div className="pb-[3px] px-[4px] pt-[4px]">
-        <button onClick={drawerNewsOpen}>N</button>
+      <div>
+        <button
+          onClick={() => setShowTickerLines(!showTickerLines)}
+          className={`px-2 py-0.5 text-xs rounded transition-colors border`}
+          style={{
+            borderColor: COLORS.price_i,
+            color: COLORS.price,
+          }}
+          title="Show/hide individual ticker price lines"
+        >
+          P
+        </button>
       </div>
-      <div className="pb-[3px] px-[4px] pt-[4px]">
-        <button onClick={drawerCalendarOpen}>C</button>
+      <div>
+        <button
+          className={`px-2 py-0.5 text-xs rounded transition-colors border border-gray-300`}
+          onClick={drawerNewsOpen}
+        >
+          N
+        </button>
       </div>
-      <ControlsDropdown />
+      <div>
+        <button
+          className={`px-2 py-0.5 text-xs rounded transition-colors border border-gray-300`}
+          onClick={drawerCalendarOpen}
+        >
+          C
+        </button>
+      </div>
+      {/* <ControlsDropdown /> */}
     </div>
   )
 }

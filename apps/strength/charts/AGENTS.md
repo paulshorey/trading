@@ -80,24 +80,28 @@ Charts are synchronized via `subscribeCrosshairMove` and `subscribeVisibleLogica
 
 Multiple tickers can be combined using different strategies (average, weighted, min/max). Controlled via Zustand store and URL params.
 
-### Individual Interval Lines
+### Chart Lines
 
-The chart displays multiple lines:
+The chart displays multiple lines that can be toggled:
 
-- **Price** (blue) - normalized average of selected tickers
-- **Strength** (orange, thick) - aggregated average of all selected intervals across all tickers
-- **Individual intervals** (thin colored lines) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h)
+**Always visible:**
 
-Individual interval colors:
+- **Price** (green, right scale) - normalized average of all selected tickers
+- **Strength** (orange, thick, left scale) - aggregated average of all selected intervals across all tickers
 
-- 2m: Purple (#9333ea)
-- 4m: Cyan (#06b6d4)
-- 12m: Green (#22c55e)
-- 30m: Yellow (#eab308)
-- 60m: Red (#ef4444)
-- 240m: Pink (#ec4899)
+**Optional (controlled by toggles):**
 
-The `aggregateStrengthByInterval()` function in `lib/aggregateStrengthData.ts` generates data for each interval separately, averaging across all selected tickers.
+- **Individual interval lines** (`showIntervalLines`) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h), uses left scale
+- **Individual ticker price lines** (`showTickerLines`) - separate line for each selected ticker, uses right scale
+
+### Aggregation Functions
+
+- `aggregateStrengthData()` - averages selected intervals across all tickers
+- `aggregateStrengthByInterval()` - generates data for each interval separately
+- `aggregatePriceData()` - normalizes and averages all ticker prices
+- `aggregatePriceByTicker()` - generates normalized price data for each ticker separately
+
+Individual ticker prices are normalized relative to each ticker's last price, then scaled to match the aggregated price range so they can be visually compared on the same scale.
 
 ## Related Documentation
 

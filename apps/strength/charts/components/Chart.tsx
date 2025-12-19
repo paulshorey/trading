@@ -32,21 +32,19 @@ import { SCALE_FACTOR } from '@/constants'
 import {
   strengthIntervals,
   IntervalStrengthData,
+  TickerPriceData,
 } from '../state/useChartControlsStore'
-
-const COLORS = {
-  si: '#ffad2ac0', // Pink
-  strength: '#ffad2a',
-  price: '#33c100',
-}
-
+import { COLORS } from '../constants'
 interface ChartProps {
   heading: string | React.ReactNode
   name: string
   strengthData: LineData[] | null
   priceData?: LineData[] | null
   intervalStrengthData?: IntervalStrengthData
+  tickerPriceData?: TickerPriceData
+  tickers?: string[]
   showIntervalLines?: boolean
+  showTickerLines?: boolean
   width: number
   height: number
   timeRange?: { from: Time; to: Time } | null
@@ -58,6 +56,7 @@ export interface ChartRef {
   strengthSeries: ISeriesApi<'Line'> | null
   priceSeries?: ISeriesApi<'Line'> | null
   intervalSeries?: Record<string, ISeriesApi<'Line'>>
+  tickerSeries?: Record<string, ISeriesApi<'Line'>>
   container: HTMLDivElement | null
 }
 
@@ -69,7 +68,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       strengthData,
       priceData,
       intervalStrengthData,
+      tickerPriceData,
+      tickers = [],
       showIntervalLines = false,
+      showTickerLines = false,
       width,
       height,
       timeRange,
@@ -82,6 +84,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const strengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const intervalSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
+    const tickerSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
     const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(
@@ -92,12 +95,14 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const lastDataRef = useRef<LineData[] | null>(null)
     const lastSecondDataRef = useRef<LineData[] | null>(null)
     const lastIntervalDataRef = useRef<IntervalStrengthData>({})
+    const lastTickerDataRef = useRef<TickerPriceData>({})
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
       strengthSeries: strengthSeriesRef.current,
       priceSeries: priceSeriesRef.current,
       intervalSeries: intervalSeriesRef.current,
+      tickerSeries: tickerSeriesRef.current,
       container: containerRef.current,
     }))
 
@@ -195,7 +200,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
           lineWidth: 1,
-          color: COLORS.si,
+          color: COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
         intervalSeriesRef.current[interval] = intervalSeries
@@ -234,6 +239,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         strengthSeriesRef.current = null
         priceSeriesRef.current = null
         intervalSeriesRef.current = {}
+        tickerSeriesRef.current = {}
         zeroLineRef.current = null
         hasInitialized.current = false
       }
@@ -469,6 +475,95 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         console.warn('Failed to update interval data:', error)
       }
     }, [intervalStrengthData, showIntervalLines, name])
+
+    // Update ticker series data (for individual ticker price lines)
+    useEffect(() => {
+      if (!hasInitialized.current || !chartRef.current) return
+
+      try {
+        const chart = chartRef.current
+
+        // If showTickerLines is false, clear all ticker series
+        if (!showTickerLines) {
+          Object.keys(tickerSeriesRef.current).forEach((ticker) => {
+            const series = tickerSeriesRef.current[ticker]
+            if (series && lastTickerDataRef.current[ticker]) {
+              series.setData([])
+              lastTickerDataRef.current[ticker] = null
+            }
+          })
+          return
+        }
+
+        // Create series for new tickers that don't have one yet
+        tickers.forEach((ticker) => {
+          if (!tickerSeriesRef.current[ticker]) {
+            const tickerSeries = chart.addSeries(LineSeries, {
+              ...getLineSeriesConfig(),
+              lineWidth: 1,
+              color: COLORS.price_i,
+              priceScaleId: 'right', // Use same scale as aggregated price
+            })
+            tickerSeriesRef.current[ticker] = tickerSeries
+          }
+        })
+
+        // Update each ticker series with its data
+        tickers.forEach((ticker) => {
+          const series = tickerSeriesRef.current[ticker]
+          if (!series) return
+
+          const data = tickerPriceData?.[ticker]
+          const prevData = lastTickerDataRef.current[ticker]
+
+          if (!data) {
+            // Clear the series if no data for this ticker
+            if (prevData) {
+              series.setData([])
+              lastTickerDataRef.current[ticker] = null
+            }
+            return
+          }
+
+          // Apply forward-fill to ensure time range boundaries exist
+          const currentData = prepareDataWithRequiredTimestamps(data)
+
+          // Check if data actually changed
+          const dataChanged =
+            !prevData ||
+            prevData.length !== currentData.length ||
+            prevData.some((item, index) => {
+              const currentItem = currentData[index]
+              return (
+                !currentItem ||
+                item.time !== currentItem.time ||
+                Math.abs(item.value - currentItem.value) > 0.0001
+              )
+            })
+
+          if (!dataChanged) {
+            return
+          }
+
+          // Set data for this ticker
+          series.setData(currentData)
+          lastTickerDataRef.current[ticker] = [...currentData]
+        })
+
+        // Clear data for tickers that are no longer selected
+        Object.keys(tickerSeriesRef.current).forEach((ticker) => {
+          if (!tickers.includes(ticker)) {
+            const series = tickerSeriesRef.current[ticker]
+            if (series && lastTickerDataRef.current[ticker]) {
+              series.setData([])
+              lastTickerDataRef.current[ticker] = null
+            }
+          }
+        })
+      } catch (error) {
+        console.warn('Failed to update ticker data:', error)
+      }
+    }, [tickerPriceData, showTickerLines, tickers, name])
 
     // Update chart dimensions when they change
     useEffect(() => {

@@ -103,6 +103,11 @@ export const tickersByMarket = [
 export type IntervalStrengthData = Record<string, LineData[] | null>
 
 /**
+ * Individual ticker price data - keyed by ticker symbol
+ */
+export type TickerPriceData = Record<string, LineData[] | null>
+
+/**
  * Store state for chart controls and data management
  * Simplified: Single chartTickers for both data fetching and display
  */
@@ -127,8 +132,14 @@ type State = {
   // Individual interval strength data (one line per interval)
   intervalStrengthData: IntervalStrengthData
 
+  // Individual ticker price data (one line per ticker)
+  tickerPriceData: TickerPriceData
+
   // Toggle for showing individual interval lines (default: false)
   showIntervalLines: boolean
+
+  // Toggle for showing individual ticker price lines (default: false)
+  showTickerLines: boolean
 
   // Hydration state for URL sync
   isHydrated: boolean
@@ -154,9 +165,11 @@ type Actions = {
   setAggregatedStrengthData: (data: LineData[] | null) => void
   setAggregatedPriceData: (data: LineData[] | null) => void
   setIntervalStrengthData: (data: IntervalStrengthData) => void
+  setTickerPriceData: (data: TickerPriceData) => void
 
   // Display toggles
   setShowIntervalLines: (show: boolean) => void
+  setShowTickerLines: (show: boolean) => void
 
   // Utility actions
   resetToDefaults: () => void
@@ -196,7 +209,9 @@ const getInitialState = (): State => {
     aggregatedStrengthData: null,
     aggregatedPriceData: null,
     intervalStrengthData: {},
-    showIntervalLines: false,
+    tickerPriceData: {},
+    showIntervalLines: true,
+    showTickerLines: true,
     isHydrated: false,
   }
 
@@ -266,9 +281,17 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ intervalStrengthData: { ...data } })
       },
 
+      setTickerPriceData: (data: TickerPriceData) => {
+        set({ tickerPriceData: { ...data } })
+      },
+
       // Display toggles
       setShowIntervalLines: (show: boolean) => {
         set({ showIntervalLines: show })
+      },
+
+      setShowTickerLines: (show: boolean) => {
+        set({ showTickerLines: show })
       },
 
       // Utility actions

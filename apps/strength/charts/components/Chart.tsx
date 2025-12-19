@@ -29,12 +29,24 @@ import {
 import { TimeRangeHighlightPrimitive } from '../lib/TimeRangeHighlight'
 import { forwardFillData, getTimeRangeBoundaries } from '../lib/forwardFillData'
 import { SCALE_FACTOR } from '@/constants'
+import {
+  strengthIntervals,
+  IntervalStrengthData,
+} from '../state/useChartControlsStore'
+
+const COLORS = {
+  si: '#ffad2ac0', // Pink
+  strength: '#ffad2a',
+  price: '#33c100',
+}
 
 interface ChartProps {
   heading: string | React.ReactNode
   name: string
   strengthData: LineData[] | null
   priceData?: LineData[] | null
+  intervalStrengthData?: IntervalStrengthData
+  showIntervalLines?: boolean
   width: number
   height: number
   timeRange?: { from: Time; to: Time } | null
@@ -45,6 +57,7 @@ export interface ChartRef {
   chart: IChartApi | null
   strengthSeries: ISeriesApi<'Line'> | null
   priceSeries?: ISeriesApi<'Line'> | null
+  intervalSeries?: Record<string, ISeriesApi<'Line'>>
   container: HTMLDivElement | null
 }
 
@@ -55,6 +68,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       name,
       strengthData,
       priceData,
+      intervalStrengthData,
+      showIntervalLines = false,
       width,
       height,
       timeRange,
@@ -66,6 +81,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const chartRef = useRef<IChartApi | null>(null)
     const strengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+    const intervalSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const zeroLineRef = useRef<IPriceLine | null>(null)
     const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
     const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(
@@ -75,11 +91,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
     const lastSecondDataRef = useRef<LineData[] | null>(null)
+    const lastIntervalDataRef = useRef<IntervalStrengthData>({})
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
       strengthSeries: strengthSeriesRef.current,
       priceSeries: priceSeriesRef.current,
+      intervalSeries: intervalSeriesRef.current,
       container: containerRef.current,
     }))
 
@@ -156,7 +174,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
         lineWidth: 2,
-        color: '#ff9d00d7',
+        color: COLORS.strength,
         priceScaleId: 'left',
       })
       strengthSeriesRef.current = strengthSeries
@@ -166,10 +184,22 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       const priceSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
         lineWidth: 1,
-        color: '#0091ff98',
+        color: COLORS.price,
         priceScaleId: 'right',
       })
       priceSeriesRef.current = priceSeries
+
+      // Add interval series for each possible interval
+      // These are created once and data is set/updated later
+      strengthIntervals.forEach((interval) => {
+        const intervalSeries = chart.addSeries(LineSeries, {
+          ...getLineSeriesConfig(),
+          lineWidth: 1,
+          color: COLORS.si,
+          priceScaleId: 'left', // Use same scale as aggregated strength
+        })
+        intervalSeriesRef.current[interval] = intervalSeries
+      })
 
       // Set initial data if available
       if (strengthData) {
@@ -177,6 +207,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
       if (priceData && priceSeriesRef.current) {
         priceSeriesRef.current.setData(priceData)
+      }
+
+      // Set initial interval data if available
+      if (intervalStrengthData) {
+        Object.entries(intervalStrengthData).forEach(([interval, data]) => {
+          if (data && intervalSeriesRef.current[interval]) {
+            intervalSeriesRef.current[interval].setData(data)
+          }
+        })
       }
 
       // Apply initial time range if provided
@@ -194,6 +233,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         chartRef.current = null
         strengthSeriesRef.current = null
         priceSeriesRef.current = null
+        intervalSeriesRef.current = {}
         zeroLineRef.current = null
         hasInitialized.current = false
       }
@@ -370,6 +410,66 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, [priceData, name])
 
+    // Update interval series data
+    useEffect(() => {
+      if (!hasInitialized.current) return
+
+      try {
+        // Update each interval series with its data
+        strengthIntervals.forEach((interval) => {
+          const series = intervalSeriesRef.current[interval]
+          if (!series) return
+
+          // If showIntervalLines is false, clear all interval series
+          if (!showIntervalLines) {
+            if (lastIntervalDataRef.current[interval]) {
+              series.setData([])
+              lastIntervalDataRef.current[interval] = null
+            }
+            return
+          }
+
+          const data = intervalStrengthData?.[interval]
+          const prevData = lastIntervalDataRef.current[interval]
+
+          if (!data) {
+            // Clear the series if no data for this interval
+            if (prevData) {
+              series.setData([])
+              lastIntervalDataRef.current[interval] = null
+            }
+            return
+          }
+
+          // Apply forward-fill to ensure time range boundaries exist
+          const currentData = prepareDataWithRequiredTimestamps(data)
+
+          // Check if data actually changed
+          const dataChanged =
+            !prevData ||
+            prevData.length !== currentData.length ||
+            prevData.some((item, index) => {
+              const currentItem = currentData[index]
+              return (
+                !currentItem ||
+                item.time !== currentItem.time ||
+                Math.abs(item.value - currentItem.value) > 0.0001
+              )
+            })
+
+          if (!dataChanged) {
+            return
+          }
+
+          // Set data for this interval
+          series.setData(currentData)
+          lastIntervalDataRef.current[interval] = [...currentData]
+        })
+      } catch (error) {
+        console.warn('Failed to update interval data:', error)
+      }
+    }, [intervalStrengthData, showIntervalLines, name])
+
     // Update chart dimensions when they change
     useEffect(() => {
       if (!chartRef.current || !hasInitialized.current) return
@@ -411,7 +511,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       if (showZeroLine) {
         const zeroLine = strengthSeriesRef.current.createPriceLine({
           price: 0,
-          color: '#ff9d00d7',
+          color: COLORS.strength,
           lineWidth: 2,
           lineStyle: 2, // Dashed line
           axisLabelVisible: false,

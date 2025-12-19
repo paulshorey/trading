@@ -12,7 +12,10 @@ import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { HOURS_BACK_INITIAL } from './constants'
 import { aggregatePriceData } from './lib/aggregatePriceData'
-import { aggregateStrengthData } from './lib/aggregateStrengthData'
+import {
+  aggregateStrengthData,
+  aggregateStrengthByInterval,
+} from './lib/aggregateStrengthData'
 import MarketControl from './components/controls/MarketControl'
 import { SCALE_FACTOR } from '@/constants'
 
@@ -37,10 +40,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     timeRange,
     aggregatedStrengthData,
     aggregatedPriceData,
+    intervalStrengthData,
+    showIntervalLines,
     // Actions
     setTimeRange,
     setAggregatedStrengthData,
     setAggregatedPriceData,
+    setIntervalStrengthData,
   } = useChartControlsStore()
 
   /**
@@ -63,9 +69,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * - interval changes (different intervals selected for averaging)
    * - lastUpdateTime changes (indicates new real-time data)
    *
-   * The aggregation creates two data series:
+   * The aggregation creates multiple data series:
    * 1. Strength data: average of selected intervals across all tickers
    * 2. Price data: normalized average of all tickers
+   * 3. Individual interval data: separate line for each selected interval
    */
   useEffect(() => {
     if (rawData.length > 0 && rawData.some((data) => data !== null)) {
@@ -80,12 +87,20 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
         rawData // Pass same data for consistent timestamps
       )
 
+      // Calculate individual interval data for each selected interval
+      const individualIntervalData = aggregateStrengthByInterval(
+        rawData,
+        interval,
+        rawData // Pass same data for consistent timestamps
+      )
+
       // Always create new array references to ensure React detects changes
       const newStrengthData = strengthData.length > 0 ? [...strengthData] : null
       const newPriceData = priceData.length > 0 ? [...priceData] : null
 
       setAggregatedStrengthData(newStrengthData)
       setAggregatedPriceData(newPriceData)
+      setIntervalStrengthData(individualIntervalData)
     }
   }, [
     interval,
@@ -94,6 +109,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     lastUpdateTime,
     setAggregatedStrengthData,
     setAggregatedPriceData,
+    setIntervalStrengthData,
   ])
 
   /**
@@ -135,7 +151,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           heading={
             <span className="flex flex-row pl-[5px]">
               <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
-                <span className="text-[#0084ff]">Price</span>
+                <span className="text-[#009c10]">Price</span>
                 <span className="text-gray-500"> / </span>
                 <span className="text-[#ff8800]">Strength</span>
                 {/* <span className="text-gray-500"> trend</span> */}
@@ -144,6 +160,8 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           }
           strengthData={aggregatedStrengthData}
           priceData={aggregatedPriceData}
+          intervalStrengthData={intervalStrengthData}
+          showIntervalLines={showIntervalLines}
           width={
             typeof window !== 'undefined'
               ? window.innerWidth * SCALE_FACTOR
@@ -157,16 +175,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
       {/* Last updated time */}
       <UpdatedTime isRealtime={isRealtime} lastUpdateTime={lastUpdateTime} />
-
-      {/* Ticker control */}
-      <div
-        className="fixed top-[33px] left-[9px] font-normal z-[100]"
-        dir="ltr"
-      >
-        <div className="flex flex-row relative">
-          <MarketControl showLabel={false} />
-        </div>
-      </div>
 
       {/* Target box for screen capture */}
       <div

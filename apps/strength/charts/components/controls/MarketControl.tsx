@@ -7,6 +7,7 @@ import {
   tickersByMarket,
 } from '../../state/useChartControlsStore'
 import { IconChevronDown } from '@tabler/icons-react'
+import { cursorTo } from 'readline'
 
 interface Props {
   showLabel?: boolean
@@ -48,9 +49,9 @@ export default function MarketControl({ showLabel = true }: Props) {
       position="top-start"
       onOptionSubmit={handleTickerSelect}
       // @ts-ignore
-      className="scale2x"
-      classNames={{
-        dropdown: 'scale2x',
+      className="flex flex-row justify-end mr-[10px] px-[6px] pt-[6px]"
+      style={{
+        cursor: 'pointer',
       }}
       styles={{
         dropdown: {
@@ -66,6 +67,7 @@ export default function MarketControl({ showLabel = true }: Props) {
     >
       <Combobox.Target>
         <InputBase
+          className="scale2x"
           styles={{
             input: {
               minWidth: '95px',
@@ -76,7 +78,12 @@ export default function MarketControl({ showLabel = true }: Props) {
           component="button"
           type="button"
           pointer
-          rightSection={<IconChevronDown size={14} />}
+          rightSection={
+            <IconChevronDown
+              size={14}
+              style={{ position: 'absolute', top: '0', height: '28px' }}
+            />
+          }
           onClick={() => combobox.toggleDropdown()}
           rightSectionPointerEvents="none"
           label={showLabel ? 'Ticker:' : null}
@@ -89,7 +96,10 @@ export default function MarketControl({ showLabel = true }: Props) {
         </InputBase>
       </Combobox.Target>
 
-      <Combobox.Dropdown style={{ zIndex: 1000000000, minWidth: '125px' }}>
+      <Combobox.Dropdown
+        className="scale2x"
+        style={{ zIndex: 1000000000, minWidth: '125px' }}
+      >
         <Combobox.Options>
           {tickersByMarket.map((market) => (
             <Combobox.Group key={market.market} label={market.market}>

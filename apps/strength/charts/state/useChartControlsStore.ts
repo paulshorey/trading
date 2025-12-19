@@ -98,6 +98,11 @@ export const tickersByMarket = [
 // ============================================================================
 
 /**
+ * Individual interval strength data - keyed by interval string
+ */
+export type IntervalStrengthData = Record<string, LineData[] | null>
+
+/**
  * Store state for chart controls and data management
  * Simplified: Single chartTickers for both data fetching and display
  */
@@ -118,6 +123,12 @@ type State = {
   // Aggregated data for charts
   aggregatedStrengthData: LineData[] | null
   aggregatedPriceData: LineData[] | null
+
+  // Individual interval strength data (one line per interval)
+  intervalStrengthData: IntervalStrengthData
+
+  // Toggle for showing individual interval lines (default: false)
+  showIntervalLines: boolean
 
   // Hydration state for URL sync
   isHydrated: boolean
@@ -142,6 +153,10 @@ type Actions = {
   // Data setters
   setAggregatedStrengthData: (data: LineData[] | null) => void
   setAggregatedPriceData: (data: LineData[] | null) => void
+  setIntervalStrengthData: (data: IntervalStrengthData) => void
+
+  // Display toggles
+  setShowIntervalLines: (show: boolean) => void
 
   // Utility actions
   resetToDefaults: () => void
@@ -180,6 +195,8 @@ const getInitialState = (): State => {
     cursorTime: null,
     aggregatedStrengthData: null,
     aggregatedPriceData: null,
+    intervalStrengthData: {},
+    showIntervalLines: false,
     isHydrated: false,
   }
 
@@ -243,6 +260,15 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       setAggregatedPriceData: (data: LineData[] | null) => {
         set({ aggregatedPriceData: data })
+      },
+
+      setIntervalStrengthData: (data: IntervalStrengthData) => {
+        set({ intervalStrengthData: { ...data } })
+      },
+
+      // Display toggles
+      setShowIntervalLines: (show: boolean) => {
+        set({ showIntervalLines: show })
       },
 
       // Utility actions

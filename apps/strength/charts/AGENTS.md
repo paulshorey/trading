@@ -80,6 +80,25 @@ Charts are synchronized via `subscribeCrosshairMove` and `subscribeVisibleLogica
 
 Multiple tickers can be combined using different strategies (average, weighted, min/max). Controlled via Zustand store and URL params.
 
+### Individual Interval Lines
+
+The chart displays multiple lines:
+
+- **Price** (blue) - normalized average of selected tickers
+- **Strength** (orange, thick) - aggregated average of all selected intervals across all tickers
+- **Individual intervals** (thin colored lines) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h)
+
+Individual interval colors:
+
+- 2m: Purple (#9333ea)
+- 4m: Cyan (#06b6d4)
+- 12m: Green (#22c55e)
+- 30m: Yellow (#eab308)
+- 60m: Red (#ef4444)
+- 240m: Pink (#ec4899)
+
+The `aggregateStrengthByInterval()` function in `lib/aggregateStrengthData.ts` generates data for each interval separately, averaging across all selected tickers.
+
 ## Related Documentation
 
 - `TIME_RANGE_HIGHLIGHTING.md` - Time range shading implementation

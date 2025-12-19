@@ -1,3 +1,8 @@
+const COLOR_ASIA_SESSION = 'rgba(0,0,0,0.05)'
+const COLOR_ASIA_SESSION2 = 'rgba(0,0,0,0.1)'
+const COLOR_US_SESSION = 'rgba(0,0,0,0.05)'
+const COLOR_US_SESSION2 = 'rgba(0,0,0,0.1)'
+
 /**
  * Time Markers Configuration
  *
@@ -46,8 +51,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '6 CST',
     utcHour: 12,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -58,8 +63,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '7 CST',
     utcHour: 13,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -70,8 +75,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '9 CST',
     utcHour: 15,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -82,8 +87,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '10 CST',
     utcHour: 16,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -94,8 +99,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '11 CST',
     utcHour: 17,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -106,8 +111,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '12 CST',
     utcHour: 18,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -118,8 +123,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '13 CST',
     utcHour: 19,
     utcMinute: 0,
-    color: 'rgba(34, 177, 94, 0.24)',
-    labelBackgroundColor: 'rgba(34, 177, 94, 0.24)',
+    color: COLOR_US_SESSION2,
+    labelBackgroundColor: COLOR_US_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -130,8 +135,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '18 CST',
     utcHour: 0,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -142,8 +147,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '19 CST',
     utcHour: 1,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -154,8 +159,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '21 CST',
     utcHour: 3,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -166,8 +171,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '22 CST',
     utcHour: 4,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -178,8 +183,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '23 CST',
     utcHour: 5,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -190,8 +195,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     label: '24 CST',
     utcHour: 6,
     utcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.16)',
-    labelBackgroundColor: 'rgba(200, 100, 0, 0.16)',
+    color: COLOR_ASIA_SESSION2,
+    labelBackgroundColor: COLOR_ASIA_SESSION2,
     labelTextColor: 'white',
     lineStyle: 'solid',
     width: 1,
@@ -237,7 +242,7 @@ export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
     startUtcMinute: 0,
     endUtcHour: 21, // 15 Central
     endUtcMinute: 0,
-    color: 'rgba(34, 197, 94, 0.08)', // Green
+    color: COLOR_US_SESSION, // Grey
   },
   {
     id: 'closing-time',
@@ -245,7 +250,7 @@ export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
     startUtcMinute: 45,
     endUtcHour: 23, // 17 Central
     endUtcMinute: 0,
-    color: '#DDF6E6', // Green
+    color: COLOR_US_SESSION, // Grey
   },
   {
     id: 'asia-until-europe',
@@ -253,7 +258,7 @@ export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
     startUtcMinute: 0,
     endUtcHour: 9, // 3 Central
     endUtcMinute: 0,
-    color: 'rgba(200, 100, 0, 0.08)', // Yellow
+    color: COLOR_ASIA_SESSION, // Grey
   },
 ]
 

@@ -40,7 +40,7 @@ export default function InlineControls({
           onClick={() => setShowIntervalLines(!showIntervalLines)}
           className={`px-2 py-0.5 text-xs rounded transition-colors border`}
           style={{
-            borderColor: COLORS.strength_i,
+            borderColor: showIntervalLines ? COLORS.strength : 'transparent',
             color: COLORS.strength,
           }}
           title="Show/hide individual interval lines"
@@ -53,7 +53,7 @@ export default function InlineControls({
           onClick={() => setShowTickerLines(!showTickerLines)}
           className={`px-2 py-0.5 text-xs rounded transition-colors border`}
           style={{
-            borderColor: COLORS.price_i,
+            borderColor: showTickerLines ? COLORS.price : 'transparent',
             color: COLORS.price,
           }}
           title="Show/hide individual ticker price lines"
@@ -63,7 +63,7 @@ export default function InlineControls({
       </div>
       <div>
         <button
-          className={`px-2 py-0.5 text-xs rounded transition-colors border border-gray-300`}
+          className={`px-2 py-0.5 text-xs rounded transition-colors border border-transparent`}
           onClick={drawerNewsOpen}
         >
           N
@@ -71,7 +71,7 @@ export default function InlineControls({
       </div>
       <div>
         <button
-          className={`px-2 py-0.5 text-xs rounded transition-colors border border-gray-300`}
+          className={`px-2 py-0.5 text-xs rounded transition-colors border border-transparent`}
           onClick={drawerCalendarOpen}
         >
           C

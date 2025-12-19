@@ -84,15 +84,17 @@ Multiple tickers can be combined using different strategies (average, weighted, 
 
 The chart displays multiple lines that can be toggled:
 
-**Always visible:**
+**Strength Lines (Left Scale):**
 
-- **Price** (green, right scale) - normalized average of all selected tickers
-- **Strength** (orange, thick, left scale) - aggregated average of all selected intervals across all tickers
+- **Aggregated Strength** (orange, thick) - average of all selected intervals across all tickers (hidden when `showIntervalLines` is true)
+- **Individual Interval Lines** (`showIntervalLines` toggle) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h)
+  - When enabled, the aggregated strength line is hidden to show only the individual components
 
-**Optional (controlled by toggles):**
+**Price Lines (Right Scale):**
 
-- **Individual interval lines** (`showIntervalLines`) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h), uses left scale
-- **Individual ticker price lines** (`showTickerLines`) - separate line for each selected ticker, uses right scale
+- **Aggregated Price** (purple) - normalized average of all selected tickers (hidden when `showTickerLines` is true)
+- **Individual Ticker Price Lines** (`showTickerLines` toggle) - separate line for each selected ticker
+  - When enabled, the aggregated price line is hidden to show only the individual components
 
 ### Aggregation Functions
 

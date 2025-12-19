@@ -10,7 +10,7 @@ import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
-import { HOURS_BACK_INITIAL } from './constants'
+import { COLORS, HOURS_BACK_INITIAL } from './constants'
 import {
   aggregatePriceData,
   aggregatePriceByTicker,
@@ -167,9 +167,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           heading={
             <span className="flex flex-row pl-[5px]">
               <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
-                <span className="text-[#009c10]">Price</span>
-                <span className="text-gray-500"> / </span>
-                <span className="text-[#ff8800]">Strength</span>
+                <span style={{ color: COLORS.price }}>Price</span>
+                <span style={{ color: COLORS.neutral }}> / </span>
+                <span style={{ color: COLORS.strength }}>Strength</span>
                 {/* <span className="text-gray-500"> trend</span> */}
               </span>
             </span>

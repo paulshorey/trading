@@ -49,11 +49,10 @@ export const tickersByMarket = [
   {
     market: '----------',
     tickers: [
-      { label: 'US Equities', value: ['NQ1!', 'ES1!', 'RTY1!', 'YM1!'] },
+      { label: 'US Equities', value: ['NQ1!', 'ES1!', 'RTY1!'] },
       { label: 'NQ1!', value: ['NQ1!'] },
       { label: 'ES1!', value: ['ES1!'] },
       { label: 'RTY1!', value: ['RTY1!'] },
-      { label: 'YM1!', value: ['YM1!'] },
     ],
   },
   {

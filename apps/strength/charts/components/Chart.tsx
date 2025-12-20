@@ -33,6 +33,7 @@ import {
   strengthIntervals,
   IntervalStrengthData,
   TickerPriceData,
+  useChartControlsStore,
 } from '../state/useChartControlsStore'
 import { COLORS } from '../constants'
 interface ChartProps {
@@ -70,8 +71,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       intervalStrengthData,
       tickerPriceData,
       tickers = [],
-      showIntervalLines = false,
-      showTickerLines = false,
       width,
       height,
       timeRange,
@@ -79,6 +78,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     },
     ref
   ) => {
+    const { showIntervalLines, showTickerLines } = useChartControlsStore()
+
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
     const strengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
@@ -615,6 +616,26 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         zeroLineRef.current = zeroLine
       }
     }, [showZeroLine])
+
+    // Toggle visibility of aggregated strength line based on showIntervalLines
+    // When individual interval lines are shown, hide the aggregated line
+    useEffect(() => {
+      if (!strengthSeriesRef.current || !hasInitialized.current) return
+
+      strengthSeriesRef.current.applyOptions({
+        visible: !showIntervalLines,
+      })
+    }, [showIntervalLines])
+
+    // Toggle visibility of aggregated price line based on showTickerLines
+    // When individual ticker lines are shown, hide the aggregated line
+    useEffect(() => {
+      if (!priceSeriesRef.current || !hasInitialized.current) return
+
+      priceSeriesRef.current.applyOptions({
+        visible: !showTickerLines,
+      })
+    }, [showTickerLines])
 
     const hasData = strengthData !== null
 

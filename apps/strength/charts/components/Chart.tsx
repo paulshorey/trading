@@ -178,7 +178,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Add first series (strength) - uses LEFT price scale
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: 1,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
@@ -200,7 +200,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
           lineWidth: 1,
-          color: COLORS.strength,
+          color: COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
         intervalSeriesRef.current[interval] = intervalSeries
@@ -322,15 +322,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       try {
         const prevData = lastDataRef.current
 
-        // If showIntervalLines is true, hide the main aggregated strength line
-        if (showIntervalLines) {
-          if (prevData && prevData.length > 0) {
-            strengthSeriesRef.current.setData([])
-            lastDataRef.current = null
-          }
-          return
-        }
-
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(strengthData)
 
@@ -387,7 +378,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       } catch (error) {
         console.warn('Failed to update strength data:', error)
       }
-    }, [strengthData, timeRange, name, showIntervalLines])
+    }, [strengthData, timeRange, name])
 
     // Update second series (price) data
     useEffect(() => {
@@ -396,15 +387,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       try {
         const prevData = lastSecondDataRef.current
-
-        // If showTickerLines is true, hide the main aggregated price line
-        if (showTickerLines) {
-          if (prevData && prevData.length > 0) {
-            priceSeriesRef.current.setData([])
-            lastSecondDataRef.current = null
-          }
-          return
-        }
 
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(priceData)
@@ -432,7 +414,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       } catch (error) {
         console.warn('Failed to update price data:', error)
       }
-    }, [priceData, name, showTickerLines])
+    }, [priceData, name])
 
     // Update interval series data
     useEffect(() => {
@@ -519,7 +501,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             const tickerSeries = chart.addSeries(LineSeries, {
               ...getLineSeriesConfig(),
               lineWidth: 1,
-              color: COLORS.price,
+              color: COLORS.price_i,
               priceScaleId: 'right', // Use same scale as aggregated price
             })
             tickerSeriesRef.current[ticker] = tickerSeries

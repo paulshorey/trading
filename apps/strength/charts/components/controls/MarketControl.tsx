@@ -52,6 +52,7 @@ export default function MarketControl({ showLabel = true }: Props) {
       className="flex flex-row justify-end mr-[10px] px-[6px] pt-[6px]"
       style={{
         cursor: 'pointer',
+        '--mantine-color-text': 'black',
       }}
       styles={{
         dropdown: {
@@ -73,6 +74,7 @@ export default function MarketControl({ showLabel = true }: Props) {
               minWidth: '95px',
               pointerEvents: 'all',
               userSelect: 'all',
+              boxShadow: '1px 1px 1px 0 rgba(0, 0, 0, 0.1)',
             },
           }}
           component="button"

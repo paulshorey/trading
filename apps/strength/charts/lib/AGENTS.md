@@ -8,9 +8,31 @@
 
 ## Data Aggregation
 
-- `aggregateStrengthData.ts` - Combine multiple tickers for strength series (left y-axis)
-- `aggregatePriceData.ts` - Combine multiple tickers for price series (right y-axis)
-- `aggregateDataUtils.ts` - Shared aggregation utilities
+### aggregateStrengthData.ts
+
+Strength data aggregation for left y-axis:
+
+- `aggregateStrengthData()` - Average selected intervals across all tickers
+- `aggregateStrengthByInterval()` - Separate line for each interval
+
+### aggregatePriceData.ts
+
+Price data aggregation for right y-axis:
+
+- `aggregatePriceData()` - Normalized average of all tickers
+- `aggregatePriceByTicker()` - Separate normalized line for each ticker
+
+**Key**: Both functions share a normalization context (`processTickersForNormalization`)
+to ensure individual lines converge to the same point and are visually consistent.
+
+### aggregateDataUtils.ts
+
+Shared utilities:
+
+- `extractGlobalTimestamps()` - Get all unique timestamps from data
+- `forwardFillData()` - Fill missing values by forward-filling
+- `extendDataIntoFuture()` - Extend data 12 hours into future
+- `aggregateStrengthDataWithInterpolation()` - Interpolation for strength data
 
 ## Chart Configuration
 

@@ -1,6 +1,5 @@
-const COLOR_ASIA_LIGHT = COLORS.neutral_trans
+const COLOR_I = COLORS.neutral_i
 const COLOR_ASIA = COLORS.neutral
-const COLOR_US_LIGHT = COLORS.neutral_trans
 const COLOR_US = COLORS.neutral
 
 /**
@@ -17,7 +16,7 @@ import { COLORS } from '../constants'
 
 export interface TimeMarkerConfig {
   /** Unique identifier for the marker */
-  id: string
+  // id: string
   /** Label text displayed on the marker */
   label: string
   /** Hour in UTC (0-23) */
@@ -47,10 +46,20 @@ export interface TimeMarkerConfig {
  * - 14:30 UTC = 08:30 US Central (CST) / 09:30 US Central (CDT)
  */
 export const TIME_MARKERS: TimeMarkerConfig[] = [
+  // {
+  //   label: '6am',
+  //   utcHour: 12,
+  //   utcMinute: 0,
+  //   color: COLOR_US,
+  //   labelBackgroundColor: COLOR_US,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
   {
-    id: '6-cst',
-    label: '6 CST',
-    utcHour: 12,
+    label: '8am',
+    utcHour: 14,
     utcMinute: 0,
     color: COLOR_US,
     labelBackgroundColor: COLOR_US,
@@ -59,47 +68,32 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     width: 1,
     showLabel: false,
   },
+  // {
+  //   label: '9am',
+  //   utcHour: 15,
+  //   utcMinute: 0,
+  //   color: COLOR_US,
+  //   labelBackgroundColor: COLOR_US,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
+  // {
+  //   label: '10am',
+  //   utcHour: 16,
+  //   utcMinute: 0,
+  //   color: COLOR_US,
+  //   labelBackgroundColor: COLOR_US,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
   {
-    id: '7-cst',
-    label: '7 CST',
-    utcHour: 13,
-    utcMinute: 0,
-    color: COLOR_US,
-    labelBackgroundColor: COLOR_US,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '9-cst',
-    label: '9 CST',
-    utcHour: 15,
-    utcMinute: 0,
-    color: COLOR_US,
-    labelBackgroundColor: COLOR_US,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '10-cst',
-    label: '10 CST',
-    utcHour: 16,
-    utcMinute: 0,
-    color: COLOR_US,
-    labelBackgroundColor: COLOR_US,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '11-cst',
-    label: '11 CST',
+    label: '11:30am',
     utcHour: 17,
-    utcMinute: 0,
+    utcMinute: 30,
     color: COLOR_US,
     labelBackgroundColor: COLOR_US,
     labelTextColor: 'white',
@@ -107,33 +101,31 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     width: 1,
     showLabel: false,
   },
+  // {
+  //   label: '12am',
+  //   utcHour: 18,
+  //   utcMinute: 0,
+  //   color: COLOR_US,
+  //   labelBackgroundColor: COLOR_US,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
+  // {
+  //   label: '13am',
+  //   utcHour: 19,
+  //   utcMinute: 0,
+  //   color: COLOR_US,
+  //   labelBackgroundColor: COLOR_US,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
+  // AFTER US MARKET
   {
-    id: '12-cst',
-    label: '12 CST',
-    utcHour: 18,
-    utcMinute: 0,
-    color: COLOR_US,
-    labelBackgroundColor: COLOR_US,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '13-cst',
-    label: '13 CST',
-    utcHour: 19,
-    utcMinute: 0,
-    color: COLOR_US,
-    labelBackgroundColor: COLOR_US,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '18-cst',
-    label: '18 CST',
+    label: '6pm',
     utcHour: 0,
     utcMinute: 0,
     color: COLOR_ASIA,
@@ -144,8 +136,7 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     showLabel: false,
   },
   {
-    id: '19-cst',
-    label: '19 CST',
+    label: '7pm',
     utcHour: 1,
     utcMinute: 0,
     color: COLOR_ASIA,
@@ -156,9 +147,8 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     showLabel: false,
   },
   {
-    id: '21-cst',
-    label: '21 CST',
-    utcHour: 3,
+    label: '8pm',
+    utcHour: 2,
     utcMinute: 0,
     color: COLOR_ASIA,
     labelBackgroundColor: COLOR_ASIA,
@@ -167,66 +157,6 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     width: 1,
     showLabel: false,
   },
-  {
-    id: '22-cst',
-    label: '22 CST',
-    utcHour: 4,
-    utcMinute: 0,
-    color: COLOR_ASIA,
-    labelBackgroundColor: COLOR_ASIA,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '23-cst',
-    label: '23 CST',
-    utcHour: 5,
-    utcMinute: 0,
-    color: COLOR_ASIA,
-    labelBackgroundColor: COLOR_ASIA,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  {
-    id: '24-cst',
-    label: '24 CST',
-    utcHour: 6,
-    utcMinute: 0,
-    color: COLOR_ASIA,
-    labelBackgroundColor: COLOR_ASIA,
-    labelTextColor: 'white',
-    lineStyle: 'solid',
-    width: 1,
-    showLabel: false,
-  },
-  // {
-  //   id: 'us-equities-open',
-  //   label: 'US Equities Open',
-  //   utcHour: 14,
-  //   utcMinute: 30,
-  //   color: '#22c55e', // green
-  //   labelBackgroundColor: '#22c55e',
-  //   labelTextColor: 'white',
-  //   lineStyle: 'dashed',
-  //   width: 1,
-  //   showLabel: true,
-  // },
-  // {
-  //   id: 'us-futures-open',
-  //   label: 'US Futures Open',
-  //   utcHour: 23,
-  //   utcMinute: 0,
-  //   color: '#ef4444', // red
-  //   labelBackgroundColor: '#ef4444',
-  //   labelTextColor: 'white',
-  //   lineStyle: 'dashed',
-  //   width: 1,
-  //   showLabel: true,
-  // },
 ]
 
 /**
@@ -238,28 +168,25 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
  */
 export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
   {
-    id: 'us-equities',
-    startUtcHour: 14, // 8 Central
-    startUtcMinute: 0,
-    endUtcHour: 21, // 15 Central
-    endUtcMinute: 0,
-    color: COLOR_US_LIGHT, // Grey
-  },
-  {
-    id: 'closing-time',
-    startUtcHour: 20, // 14:45 Central
+    startUtcHour: 20, // 2:45pm
     startUtcMinute: 45,
-    endUtcHour: 23, // 17 Central
-    endUtcMinute: 0,
-    color: COLOR_US_LIGHT, // Grey
+    endUtcHour: 13, // 7:30am
+    endUtcMinute: 30,
+    color: COLOR_I,
   },
   {
-    id: 'asia-until-europe',
-    startUtcHour: 2, // 20 Central (previous day)
+    startUtcHour: 22, // 5pm
     startUtcMinute: 0,
-    endUtcHour: 9, // 3 Central
+    endUtcHour: 12, // 6am
     endUtcMinute: 0,
-    color: COLOR_ASIA_LIGHT, // Grey
+    color: COLOR_I,
+  },
+  {
+    startUtcHour: 3, // 9:30pm
+    startUtcMinute: 30,
+    endUtcHour: 10, // 4:30am
+    endUtcMinute: 30,
+    color: COLOR_I,
   },
 ]
 

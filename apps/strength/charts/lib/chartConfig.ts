@@ -5,6 +5,7 @@ import {
   LineStyleOptions,
   SeriesOptionsCommon,
 } from 'lightweight-charts'
+import { COLORS } from '../constants'
 
 function timeFormatter(time: Time) {
   // Convert the time (which is in seconds since epoch) to milliseconds
@@ -34,7 +35,7 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
   },
   grid: {
     vertLines: { visible: false }, // Hide vertical grid lines to reduce clutter
-    horzLines: { color: '#f0f0f0' },
+    horzLines: { color: COLORS.neutral_i },
   },
   // Y-Axis - Enable both left and right scales for dual series
   rightPriceScale: {

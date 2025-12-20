@@ -9,6 +9,7 @@ body {
   transform-origin: top left;
   width: 200%;
   height: 200%;
+  --mantine-color-text: #000000b9;
 }
 .scale2x {
   transform: scale(2);

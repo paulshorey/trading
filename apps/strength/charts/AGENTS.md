@@ -84,26 +84,43 @@ Multiple tickers can be combined using different strategies (average, weighted, 
 
 The chart displays multiple lines that can be toggled:
 
-**Strength Lines (Left Scale):**
+**Always visible:**
 
-- **Aggregated Strength** (orange, thick) - average of all selected intervals across all tickers (hidden when `showIntervalLines` is true)
-- **Individual Interval Lines** (`showIntervalLines` toggle) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h)
-  - When enabled, the aggregated strength line is hidden to show only the individual components
+- **Price** (green, right scale) - normalized average of all selected tickers
+- **Strength** (orange, thick, left scale) - aggregated average of all selected intervals across all tickers
 
-**Price Lines (Right Scale):**
+**Optional (controlled by toggles):**
 
-- **Aggregated Price** (purple) - normalized average of all selected tickers (hidden when `showTickerLines` is true)
-- **Individual Ticker Price Lines** (`showTickerLines` toggle) - separate line for each selected ticker
-  - When enabled, the aggregated price line is hidden to show only the individual components
+- **Individual interval lines** (`showIntervalLines`) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h), uses left scale
+- **Individual ticker price lines** (`showTickerLines`) - separate line for each selected ticker, uses right scale
 
 ### Aggregation Functions
 
+**Strength aggregation** (`lib/aggregateStrengthData.ts`):
+
 - `aggregateStrengthData()` - averages selected intervals across all tickers
 - `aggregateStrengthByInterval()` - generates data for each interval separately
+
+**Price aggregation** (`lib/aggregatePriceData.ts`):
+
 - `aggregatePriceData()` - normalizes and averages all ticker prices
 - `aggregatePriceByTicker()` - generates normalized price data for each ticker separately
 
-Individual ticker prices are normalized relative to each ticker's last price, then scaled to match the aggregated price range so they can be visually compared on the same scale.
+### Price Normalization (Important!)
+
+Both price functions share a common normalization context to ensure visual consistency:
+
+1. Each ticker's prices are divided by its last valid price (so last = 1.0)
+2. The average of all tickers' last prices (`avgLastPrice`) is computed once
+3. All values are scaled by `avgLastPrice` to get meaningful absolute values
+
+This ensures:
+
+- **Individual ticker lines converge** to the same point at the right edge of the chart
+- **The aggregated line** passes through the average of individual lines
+- **Visual consistency** between aggregated and individual price lines
+
+The normalization is computed in `processTickersForNormalization()` and shared between both functions.
 
 ## Related Documentation
 

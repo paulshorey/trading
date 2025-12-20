@@ -1,11 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { LineData } from 'lightweight-charts'
 import { useRealtimeStrengthData } from './lib/useRealtimeStrengthData'
-
 import { calculateTimeRange } from './lib/chartUtils'
-
 import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
@@ -19,7 +16,6 @@ import {
   aggregateStrengthData,
   aggregateStrengthByInterval,
 } from './lib/aggregateStrengthData'
-import MarketControl from './components/controls/MarketControl'
 import { SCALE_FACTOR } from '@/constants'
 
 export interface SyncedChartsProps {
@@ -165,11 +161,28 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           }}
           name="Strength & Price"
           heading={
-            <span className="flex flex-row pl-[5px]">
+            <span
+              className="flex flex-row pl-[5px] scale2x"
+              style={{ transformOrigin: 'left bottom' }}
+            >
               <span className="pt-1 pr-1 pl-1 opacity-90 text-sm">
-                <span style={{ color: COLORS.price }}>Price</span>
+                <span
+                  style={{
+                    color: COLORS.price,
+                    textShadow: '1px 1px 1px rgba(255, 255, 255, 1)',
+                  }}
+                >
+                  Price
+                </span>
                 <span style={{ color: COLORS.neutral }}> / </span>
-                <span style={{ color: COLORS.strength }}>Strength</span>
+                <span
+                  style={{
+                    color: COLORS.strength,
+                    textShadow: '1px 1px 1px rgba(255, 255, 255, 1)',
+                  }}
+                >
+                  Strength
+                </span>
                 {/* <span className="text-gray-500"> trend</span> */}
               </span>
             </span>

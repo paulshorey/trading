@@ -35,7 +35,7 @@ interface CanvasRenderingTarget2D {
 
 export interface TimeRangeConfig {
   /** Unique identifier for the range */
-  id: string
+  // id: string
   /** Start time in UTC */
   startUtcHour: number
   startUtcMinute: number

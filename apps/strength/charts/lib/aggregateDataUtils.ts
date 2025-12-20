@@ -1,6 +1,17 @@
 /**
  * Data processing utilities for charts
+ *
+ * This module provides shared utilities for:
+ * - Timestamp extraction and forward-filling
+ * - Data normalization for multi-ticker comparison
+ * - Future data extension for chart display
  */
+
+import { LineData, Time } from 'lightweight-charts'
+
+// ============================================================================
+// TIMESTAMP UTILITIES
+// ============================================================================
 
 /**
  * Generate future timestamps at 1-minute intervals
@@ -21,6 +32,39 @@ export function generateFutureTimestamps(
   }
 
   return futureTimestamps
+}
+
+/**
+ * Extend LineData array into the future with the last known value.
+ * This creates a flat line extending from the last data point.
+ *
+ * @param lineData - Original LineData array
+ * @param hours - Number of hours to extend (default: 12)
+ * @returns New LineData array with future points appended
+ */
+export function extendDataIntoFuture(
+  lineData: LineData[],
+  hours: number = 12
+): LineData[] {
+  if (lineData.length === 0) return lineData
+
+  const result = [...lineData]
+  const lastDataPoint = result[result.length - 1]!
+  const lastTimestamp = lastDataPoint.time as number
+  const lastValue = lastDataPoint.value
+
+  // Generate future timestamps
+  const futureTimestamps = generateFutureTimestamps(lastTimestamp, hours)
+
+  // Add future data points with the last known value
+  futureTimestamps.forEach((timestamp) => {
+    result.push({
+      time: timestamp as Time,
+      value: lastValue,
+    })
+  })
+
+  return result
 }
 
 /**
@@ -123,6 +167,9 @@ export function extractGlobalTimestamps<T extends { timenow: Date }>(
 }
 
 /**
+ * @deprecated Use processTickersForNormalization in aggregatePriceData.ts instead.
+ * This function is kept for backwards compatibility but is no longer used by main aggregation.
+ *
  * Normalize price data across multiple tickers
  * Each ticker's prices are normalized relative to its last valid price
  * This allows tickers with different price levels to be compared equally

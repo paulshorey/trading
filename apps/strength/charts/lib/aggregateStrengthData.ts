@@ -3,7 +3,7 @@ import { LineData, Time } from 'lightweight-charts'
 import {
   aggregateStrengthDataWithInterpolation,
   extractGlobalTimestamps,
-  generateFutureTimestamps,
+  extendDataIntoFuture,
 } from './aggregateDataUtils'
 import {
   strengthIntervals,
@@ -68,25 +68,8 @@ export const aggregateStrengthData = (
     value: point.value,
   }))
 
-  // Extend data 12 hours into the future with the last known value
-  if (lineData.length > 0) {
-    const lastDataPoint = lineData[lineData.length - 1]!
-    const lastTimestamp = lastDataPoint.time as number
-    const lastValue = lastDataPoint.value
-
-    // Generate future timestamps (12 hours at 1-minute intervals)
-    const futureTimestamps = generateFutureTimestamps(lastTimestamp, 12)
-
-    // Add future data points with the last known value
-    futureTimestamps.forEach((timestamp) => {
-      lineData.push({
-        time: timestamp as Time,
-        value: lastValue,
-      })
-    })
-  }
-
-  return lineData
+  // Extend data 12 hours into the future
+  return extendDataIntoFuture(lineData, 12)
 }
 
 /**
@@ -151,27 +134,9 @@ export const aggregateStrengthByInterval = (
       value: point.value,
     }))
 
-    // Extend data 12 hours into the future with the last known value
+    // Only add if we have data (extend into future)
     if (lineData.length > 0) {
-      const lastDataPoint = lineData[lineData.length - 1]!
-      const lastTimestamp = lastDataPoint.time as number
-      const lastValue = lastDataPoint.value
-
-      // Generate future timestamps (12 hours at 1-minute intervals)
-      const futureTimestamps = generateFutureTimestamps(lastTimestamp, 12)
-
-      // Add future data points with the last known value
-      futureTimestamps.forEach((timestamp) => {
-        lineData.push({
-          time: timestamp as Time,
-          value: lastValue,
-        })
-      })
-    }
-
-    // Only add if we have data
-    if (lineData.length > 0) {
-      result[interval] = lineData
+      result[interval] = extendDataIntoFuture(lineData, 12)
     }
   }
 

@@ -197,11 +197,10 @@ const URL_SYNC_KEYS = ['hoursBack', 'interval', 'tickers']
  */
 const getInitialState = (): State => {
   // Default to CX (Crypto Index) ticker
-  const defaultTickers =
-    tickersByMarket[tickersByMarket.length - 1]!.tickers[0]!.value
+  const defaultTickers = tickersByMarket[2]!.tickers[0]!.value
 
   const defaultState: State = {
-    hoursBack: hoursBackOptions[hoursBackOptions.length - 2]!,
+    hoursBack: hoursBackOptions[hoursBackOptions.length - 3]!,
     interval: intervalsOptions[0]!.value,
     chartTickers: defaultTickers,
     timeRange: null,

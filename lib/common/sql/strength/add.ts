@@ -135,7 +135,7 @@ async function preCreateRows(client: any, ticker: string, currentTime: Date, fut
  */
 async function fetchRecentRows(client: any, ticker: string, currentTime: Date, limit: number): Promise<StrengthRow[]> {
   const query = `
-    SELECT id, ticker, timenow, "2", "4", "12", "30", "60", "240", average
+    SELECT id, ticker, timenow, "30S", "3", "5", "7", "13", "19", "39", "59", "71", "101", average
     FROM strength_v1
     WHERE ticker = $1 AND timenow <= $2
     ORDER BY timenow DESC

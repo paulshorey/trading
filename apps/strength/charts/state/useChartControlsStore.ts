@@ -6,23 +6,44 @@ import { createURLStorage, getQueryParams } from './lib/urlSync'
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
-export const strengthIntervals = ['2', '4', '12', '30', '60', '240'] as const
+export const strengthIntervals = [
+  '30S',
+  '3',
+  '5',
+  '7',
+  '13',
+  '19',
+  '39',
+  '59',
+  '71',
+  '101',
+] as const
 
 /**
  * Available interval configurations for strength data aggregation
  * Each option represents a set of intervals to average together
  */
 export const intervalsOptions = [
-  { value: ['4', '12', '30', '60', '240'], label: 'multi' },
-  { value: ['2', '4', '12', '30', '60', '240'], label: 'all' },
-  { value: ['12', '30', '60', '240'], label: 'long' },
-  { value: ['2', '4', '12'], label: 'short' },
-  { value: ['2'], label: '2m' },
-  { value: ['4'], label: '4m' },
-  { value: ['12'], label: '12m' },
-  { value: ['30'], label: '30m' },
-  { value: ['60'], label: '1h' },
-  { value: ['240'], label: '4h' },
+  {
+    value: ['5', '7', '13', '19', '39', '59', '71'],
+    label: 'multi',
+  },
+  {
+    value: ['30S', '3', '5', '7', '13', '19', '39', '59', '71', '101'],
+    label: 'all',
+  },
+  { value: ['19', '39', '59', '71', '101'], label: 'long' },
+  { value: ['30S', '3', '5', '7', '13'], label: 'short' },
+  { value: ['30S'], label: '30s' },
+  { value: ['3'], label: '3m' },
+  { value: ['5'], label: '5m' },
+  { value: ['7'], label: '7m' },
+  { value: ['13'], label: '13m' },
+  { value: ['19'], label: '19m' },
+  { value: ['39'], label: '39m' },
+  { value: ['59'], label: '59m' },
+  { value: ['71'], label: '71m' },
+  { value: ['101'], label: '101m' },
 ]
 
 /**

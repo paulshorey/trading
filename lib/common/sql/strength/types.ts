@@ -7,12 +7,16 @@ export type StrengthRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
-  "2": number | null;
-  "4": number | null;
-  "12": number | null;
-  "30": number | null;
-  "60": number | null;
-  "240": number | null;
+  "30S": number | null;
+  "3": number | null;
+  "5": number | null;
+  "7": number | null;
+  "13": number | null;
+  "19": number | null;
+  "39": number | null;
+  "59": number | null;
+  "71": number | null;
+  "101": number | null;
   average: number | null; // Average of all interval columns
   created_at: Date; // DateTime as ISO string
 };

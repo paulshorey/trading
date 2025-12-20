@@ -20,11 +20,16 @@ The Strength app displays two synchronized financial charts (Strength and Price)
   ticker: string     // Market ticker symbol
   price: number      // Current price
   volume: number     // Trading volume
-  "1": number        // 1-minute interval strength
-  "4": number        // 4-minute interval strength
-  "12": number       // 12-minute interval strength
-  "60": number       // 60-minute (1hr) interval strength
-  "240": number      // 240-minute (4hr) interval strength
+  "30S": number      // 30-second interval strength
+  "3": number        // 3-minute interval strength
+  "5": number        // 5-minute interval strength
+  "7": number        // 7-minute interval strength
+  "13": number       // 13-minute interval strength
+  "19": number       // 19-minute interval strength
+  "39": number       // 39-minute interval strength
+  "59": number       // 59-minute interval strength
+  "71": number       // 71-minute interval strength
+  "101": number      // 101-minute interval strength
 }
 ```
 
@@ -168,17 +173,20 @@ const onlyLastChanged = currentData.slice(0, -1).every((item, index) => {
 ### Simplified Selection
 
 **Market Selector**:
-   - Changes ticker selection (`chartTickers`)
-   - Triggers new data fetch for selected tickers
-   - Both strength and price charts update together
+
+- Changes ticker selection (`chartTickers`)
+- Triggers new data fetch for selected tickers
+- Both strength and price charts update together
 
 ### Implementation Details
 
 1. **User Changes Selection**:
+
    - Updates `chartTickers` in store
    - Triggers new data fetch
 
 2. **Data Aggregation**:
+
    - Uses all fetched raw data
    - Creates aggregated arrays for both charts
 

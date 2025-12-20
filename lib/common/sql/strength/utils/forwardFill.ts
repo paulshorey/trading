@@ -15,12 +15,16 @@ export interface StrengthRow {
   id?: number;
   ticker: string;
   timenow: Date;
-  "2": number | null;
-  "4": number | null;
-  "12": number | null;
-  "30": number | null;
-  "60": number | null;
-  "240": number | null;
+  "30S": number | null;
+  "3": number | null;
+  "5": number | null;
+  "7": number | null;
+  "13": number | null;
+  "19": number | null;
+  "39": number | null;
+  "59": number | null;
+  "71": number | null;
+  "101": number | null;
   average?: number | null;
   [key: string]: any;
 }
@@ -34,12 +38,7 @@ export interface StrengthRow {
  * @param maxDepth - Maximum number of rows to look back
  * @returns The filled value or null if no value found
  */
-export function forwardFillInterval(
-  rows: StrengthRow[],
-  interval: StrengthInterval,
-  rowIndex: number,
-  maxDepth: number = FORWARD_FILL_DEPTH
-): number | null {
+export function forwardFillInterval(rows: StrengthRow[], interval: StrengthInterval, rowIndex: number, maxDepth: number = FORWARD_FILL_DEPTH): number | null {
   // First check if the current row already has a value
   const currentValue = rows[rowIndex]?.[interval];
   if (currentValue !== null && currentValue !== undefined) {
@@ -110,4 +109,3 @@ export function getMissingIntervals(row: StrengthRow): StrengthInterval[] {
 export function needsForwardFill(row: StrengthRow): boolean {
   return getMissingIntervals(row).length > 0;
 }
-

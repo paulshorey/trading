@@ -27,6 +27,10 @@ charts/
 │   │   ├── aggregateDataUtils.ts    # Shared aggregation utilities
 │   │   ├── aggregatePriceData.ts    # Price data aggregation
 │   │   └── aggregateStrengthData.ts # Strength data aggregation
+│   ├── workers/                     # Web Workers (performance)
+│   │   ├── aggregation.worker.ts    # Off-thread aggregation
+│   │   ├── useAggregationWorker.ts  # React hook for worker
+│   │   └── types.ts                 # Worker message types
 │   ├── primitives/                  # Custom chart primitives
 │   │   ├── TimeRangeHighlight.ts    # Custom primitive: shaded regions
 │   │   ├── VerticalLinePrimitive.ts # Custom primitive: vertical lines
@@ -51,7 +55,7 @@ SyncedChartsWrapper (dimensions + hydration)
       ↓
 SyncedCharts (fetches raw data via useRealtimeStrengthData)
       ↓
-Aggregation (aggregateStrengthData, aggregatePriceData)
+Web Worker (aggregation runs off main thread for performance)
       ↓
 Chart.tsx (add required timestamps → setData → attach primitives)
       ↓
@@ -77,14 +81,19 @@ lightweight-charts (renders canvas)
 - **TimeRangeHighlight** - Shaded backgrounds for market hours (see `lib/primitives/AGENTS.md`)
 - **VerticalLinePrimitive** - Vertical line markers for events
 
+### Performance
+
+- **Web Worker** - Aggregation runs off main thread to prevent UI freezes
+- **Real-time updates** - Polls every 10 seconds for latest interval values
+
 ### State Management
 
 - **Zustand store** - Centralized state for chart controls
 - **URL sync** - Query params preserve state across page loads
-- **Real-time updates** - Polls every 10 seconds for latest interval values
 
 ## Related Documentation
 
+- `lib/workers/AGENTS.md` - Web Worker for off-thread aggregation
 - `lib/primitives/AGENTS.md` - Custom primitives and time range highlighting
 - `lib/aggregation/AGENTS.md` - Data aggregation and price normalization
 - `lib/data/AGENTS.md` - API client and real-time data fetching

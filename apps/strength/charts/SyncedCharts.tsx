@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useRealtimeStrengthData } from './lib/data/useRealtimeStrengthData'
 import { calculateTimeRange } from './lib/chartUtils'
 import { Chart, ChartRef } from './components/Chart'
@@ -9,13 +9,9 @@ import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { COLORS, HOURS_BACK_INITIAL } from './constants'
 import {
-  aggregatePriceData,
-  aggregatePriceByTicker,
-} from './lib/aggregation/aggregatePriceData'
-import {
-  aggregateStrengthData,
-  aggregateStrengthByInterval,
-} from './lib/aggregation/aggregateStrengthData'
+  useAggregationWorker,
+  AggregationResult,
+} from './lib/workers/useAggregationWorker'
 import { SCALE_FACTOR } from '@/constants'
 
 export interface SyncedChartsProps {
@@ -51,6 +47,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     setTickerPriceData,
   } = useChartControlsStore()
 
+  // Track if worker is processing for UI feedback
+  const [isAggregating, setIsAggregating] = useState(false)
+
   /**
    * Use the real-time data hook to manage data fetching and updates
    * Fetches data for all selected chartTickers
@@ -71,12 +70,59 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   })
 
   /**
-   * Data Aggregation Effect with Real-time Updates
+   * Handle aggregation results from the Web Worker
+   * This callback updates the Zustand store with the computed data
+   */
+  const handleAggregationResult = useCallback(
+    (result: AggregationResult, processingTimeMs: number) => {
+      setIsAggregating(false)
+
+      // Update all aggregated data in the store
+      setAggregatedStrengthData(result.strengthData)
+      setAggregatedPriceData(result.priceData)
+      setIntervalStrengthData(result.intervalStrengthData)
+      setTickerPriceData(result.tickerPriceData)
+
+      // Log processing time for debugging
+      if (processingTimeMs > 100) {
+        console.log(
+          `[Worker] Aggregation completed in ${processingTimeMs.toFixed(1)}ms`
+        )
+      }
+    },
+    [
+      setAggregatedStrengthData,
+      setAggregatedPriceData,
+      setIntervalStrengthData,
+      setTickerPriceData,
+    ]
+  )
+
+  /**
+   * Handle aggregation errors from the Web Worker
+   */
+  const handleAggregationError = useCallback((errorMsg: string) => {
+    setIsAggregating(false)
+    console.error('[Worker] Aggregation error:', errorMsg)
+  }, [])
+
+  /**
+   * Initialize the Web Worker for data aggregation
+   * All heavy computations happen off the main thread
+   */
+  const { aggregate, isProcessing, isReady } = useAggregationWorker({
+    enabled: true,
+    onResult: handleAggregationResult,
+    onError: handleAggregationError,
+  })
+
+  /**
+   * Data Aggregation Effect with Web Worker
    *
    * PERFORMANCE OPTIMIZATION:
-   * - Initial load: Full aggregation of all data
-   * - Incremental updates: Only re-aggregate the last few minutes of data,
-   *   then merge with existing aggregated data to avoid processing thousands of points
+   * - All aggregation happens in a Web Worker (off main thread)
+   * - Main thread stays responsive for user interactions
+   * - Worker processes all data and returns the results
    *
    * The aggregation creates multiple data series:
    * 1. Strength data: average of selected intervals across all tickers
@@ -89,64 +135,21 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       return
     }
 
-    // For incremental updates (not initial load), use requestAnimationFrame
-    // to yield to the browser and prevent UI freezing
-    const processAggregation = () => {
-      // Use all raw data for both charts (no filtering needed)
-      const strengthData = aggregateStrengthData(
-        rawData,
-        interval,
-        rawData // Pass same data for consistent timestamps
-      )
-      const priceData = aggregatePriceData(
-        rawData,
-        rawData // Pass same data for consistent timestamps
-      )
-
-      // Calculate individual interval data for each selected interval
-      const individualIntervalData = aggregateStrengthByInterval(
-        rawData,
-        interval,
-        rawData // Pass same data for consistent timestamps
-      )
-
-      // Calculate individual ticker price data for each selected ticker
-      const individualTickerPriceData = aggregatePriceByTicker(
-        rawData,
-        chartTickers,
-        rawData // Pass same data for consistent timestamps
-      )
-
-      // Always create new array references to ensure React detects changes
-      const newStrengthData = strengthData.length > 0 ? [...strengthData] : null
-      const newPriceData = priceData.length > 0 ? [...priceData] : null
-
-      setAggregatedStrengthData(newStrengthData)
-      setAggregatedPriceData(newPriceData)
-      setIntervalStrengthData(individualIntervalData)
-      setTickerPriceData(individualTickerPriceData)
+    if (!isReady) {
+      // Worker not ready yet, wait for next effect run
+      return
     }
 
-    // Use setTimeout(0) to yield to browser between heavy operations
-    // This prevents UI freezing by allowing event loop to process user interactions
-    if (isInitialLoad) {
-      // Initial load: process immediately (user expects loading)
-      processAggregation()
-    } else {
-      // Incremental update: yield to browser first
-      const timeoutId = setTimeout(processAggregation, 0)
-      return () => clearTimeout(timeoutId)
+    // Don't trigger if already processing (prevents queue buildup)
+    if (isProcessing) {
+      return
     }
-  }, [
-    interval,
-    rawData,
-    chartTickers,
-    isInitialLoad,
-    setAggregatedStrengthData,
-    setAggregatedPriceData,
-    setIntervalStrengthData,
-    setTickerPriceData,
-  ])
+
+    setIsAggregating(true)
+
+    // Send data to Web Worker for aggregation
+    aggregate(rawData, interval, chartTickers)
+  }, [interval, rawData, chartTickers, isReady, isProcessing, aggregate])
 
   /**
    * Time Range Effect

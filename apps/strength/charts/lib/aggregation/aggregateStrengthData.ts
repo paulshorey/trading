@@ -142,4 +142,3 @@ export const aggregateStrengthByInterval = (
 
   return result
 }
-

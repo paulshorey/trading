@@ -21,6 +21,7 @@ The Strength app displays two synchronized financial charts (Strength and Price)
   price: number      // Current price
   volume: number     // Trading volume
   "30S": number      // 30-second interval strength
+  "1": number        // 3-minute interval strength
   "3": number        // 3-minute interval strength
   "5": number        // 5-minute interval strength
   "7": number        // 7-minute interval strength

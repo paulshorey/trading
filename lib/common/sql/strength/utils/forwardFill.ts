@@ -15,16 +15,25 @@ export interface StrengthRow {
   id?: number;
   ticker: string;
   timenow: Date;
+  // even
+  "2": number | null;
+  "4": number | null;
+  "12": number | null;
+  "30": number | null;
+  "60": number | null;
+  "240": number | null;
+  // prime
   "30S": number | null;
+  "1": number | null;
   "3": number | null;
   "5": number | null;
   "7": number | null;
+  "9": number | null;
   "13": number | null;
   "19": number | null;
+  "29": number | null;
   "39": number | null;
   "59": number | null;
-  "71": number | null;
-  "101": number | null;
   average?: number | null;
   [key: string]: any;
 }

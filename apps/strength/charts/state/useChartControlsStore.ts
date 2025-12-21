@@ -25,15 +25,15 @@ export const strengthIntervals = [
  */
 export const intervalsOptions = [
   {
-    value: ['5', '7', '13', '19', '39', '59', '71'],
-    label: 'multi',
+    value: ['3', '5', '7', '13', '19'],
+    label: 'mid',
   },
   {
     value: ['30S', '3', '5', '7', '13', '19', '39', '59', '71', '101'],
     label: 'all',
   },
-  { value: ['19', '39', '59', '71', '101'], label: 'long' },
-  { value: ['30S', '3', '5', '7', '13'], label: 'short' },
+  { value: ['13', '19', '39', '59', '71', '101'], label: 'long' },
+  { value: ['30S', '3', '5', '7', '13', '19'], label: 'short' },
   { value: ['30S'], label: '30s' },
   { value: ['3'], label: '3m' },
   { value: ['5'], label: '5m' },

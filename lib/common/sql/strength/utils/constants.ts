@@ -9,7 +9,7 @@
  * All interval columns in the strength_v1 table.
  * Used for forward-filling and average calculations.
  */
-export const STRENGTH_INTERVALS = ["30S", "3", "5", "7", "13", "19", "39", "59", "71", "101"] as const;
+export const STRENGTH_INTERVALS = ["2", "4", "12", "30", "60", "240", "30S", "1", "3", "5", "7", "13", "19", "39", "59", "71", "101"] as const;
 
 /**
  * Type for valid interval column names

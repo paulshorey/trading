@@ -7,7 +7,16 @@ export type StrengthRowGet = {
   server_name: string;
   app_name: string;
   node_env: string;
+  // even
+  "2": number | null;
+  "4": number | null;
+  "12": number | null;
+  "30": number | null;
+  "60": number | null;
+  "240": number | null;
+  // prime
   "30S": number | null;
+  "1": number | null;
   "3": number | null;
   "5": number | null;
   "7": number | null;

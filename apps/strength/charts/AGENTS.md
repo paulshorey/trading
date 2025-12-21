@@ -81,7 +81,7 @@ lightweight-charts (renders canvas)
 
 - **Zustand store** - Centralized state for chart controls
 - **URL sync** - Query params preserve state across page loads
-- **Real-time updates** - Polls for new data every minute
+- **Real-time updates** - Polls every 10 seconds for latest interval values
 
 ## Related Documentation
 

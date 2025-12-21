@@ -60,7 +60,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       tickers: chartTickers,
       enabled: chartTickers.length > 0,
       maxDataHours: HOURS_BACK_INITIAL,
-      updateIntervalMs: 60000, // Update every minute
+      updateIntervalMs: 10000, // Update every 10 seconds for real-time interval updates
     })
 
   /**

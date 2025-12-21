@@ -6,23 +6,28 @@ API client and React hook for fetching real-time strength data.
 
 **FetchStrengthData.ts** - API service class:
 - `fetchTickerData()` / `fetchMultipleTickersData()` - Fetch from API
-- `mergeData()` - Merge new data with existing, handle duplicates
+- `mergeData()` - Merge new data with existing, update same timestamps
 - `prepareDate()` - Ensure 1-minute intervals (no seconds)
 
 **useRealtimeStrengthData.ts** - Real-time data React hook:
 - Fetches initial historical data (configurable hours back)
-- Polls every minute for updates
+- Polls every 10 seconds for latest interval values
 - Merges and forward-fills missing values
-- Handles "unreliable latest row" by using second-to-last
+- Updates existing chart timestamps with new values
 
-**Important**: All timestamps are 1-minute intervals with no seconds.
+**Important**: Database rows are at 1-minute intervals, but are UPDATED every
+few seconds with new interval data. We poll every 10 seconds to get the latest.
 
-## Real-time Strategy
+## Real-time Strategy (10-second polling)
 
-Fetches last TWO intervals on each update:
-1. Current interval may be empty (pre-created placeholder)
-2. Previous interval may still be receiving updates
-3. Forward-fills missing values from historical data
+Database rows exist at 1-minute intervals (10:01:00, 10:02:00, etc.) but each
+row is updated every few seconds as new interval values become available.
 
-Ensures reliable updates without incomplete data.
+On each 10-second poll:
+1. Fetch last 3 minutes of data (current + previous + buffer)
+2. Forward-fill any null interval values from previous rows
+3. Merge into existing data (same timestamps get UPDATED, not duplicated)
+4. Chart updates to show latest interval values
+
+This allows the chart to show real-time updates as intervals complete.
 

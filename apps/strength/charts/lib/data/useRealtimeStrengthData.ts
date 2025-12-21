@@ -21,13 +21,18 @@ export interface UseRealtimeStrengthDataResult {
 
 /**
  * Custom hook for managing real-time strength data updates
- * Fetches initial historical data and then polls for new data every minute
+ * Fetches initial historical data and then polls for new data every 10 seconds.
+ *
+ * NOTE: Database rows are at 1-minute intervals, but each row is UPDATED every
+ * few seconds with new interval values. We fetch every 10 seconds to get the
+ * latest interval data as it becomes available, then update existing chart
+ * points with new values.
  */
 export function useRealtimeStrengthData({
   tickers,
   enabled = true,
   maxDataHours = HOURS_BACK_INITIAL,
-  updateIntervalMs = 60000, // 1 minute default
+  updateIntervalMs = 10000, // 10 seconds default for real-time interval updates
 }: UseRealtimeStrengthDataOptions): UseRealtimeStrengthDataResult {
   const [rawData, setRawData] = useState<(StrengthRowGet[] | null)[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -104,9 +109,14 @@ export function useRealtimeStrengthData({
 
   /**
    * Forward-fill missing strength values from historical data
-   * @param currentRow The row to forward-fill (should be index 1)
-   * @param historicalRow The row to use for filling (should be index 2)
-   * @returns The forward-filled row
+   *
+   * When fetching every 10 seconds, some intervals in the current row may still
+   * be null (not yet calculated by the server). We fill these from the previous
+   * row's values to ensure chart continuity.
+   *
+   * @param currentRow The row to forward-fill (may have null interval values)
+   * @param historicalRow The row to use for filling (previous minute's data)
+   * @returns The forward-filled row with null values replaced
    */
   const forwardFillStrengthData = (
     currentRow: StrengthRowGet,
@@ -131,29 +141,25 @@ export function useRealtimeStrengthData({
 
   /**
    * Fetch incremental updates for real-time data
+   *
+   * With 10-second polling:
+   * - Database rows exist at 1-minute intervals (e.g., 10:01:00, 10:02:00)
+   * - Each row is UPDATED every few seconds with new interval values
+   * - We fetch the last 2-3 minutes to get current + previous intervals
+   * - Current interval: Forward-fill any missing values from previous
+   * - Both intervals are returned to update existing chart data
    */
   const fetchRealtimeUpdate = useCallback(async () => {
     if (!enabled || tickers.length === 0 || !lastDataTimestampRef.current)
       return
 
     try {
-      // IMPORTANT: Fetch the last TWO 1-minute intervals
-      // The current interval might be empty (pre-created with just timestamp)
-      // The previous interval might still be receiving updates
-      // We go back ~1.5 minutes to ensure we capture both intervals
+      // Fetch the last 3 minutes of data to ensure we get:
+      // - Current minute (actively being updated with new intervals)
+      // - Previous minute (for forward-fill reference)
+      // - One more for safety buffer
       const now = new Date()
-      const currentMinute = now.getMinutes()
-
-      // Calculate the two intervals we want to fetch
-      const currentInterval = new Date(now)
-      currentInterval.setMinutes(currentMinute, 0, 0)
-
-      const previousInterval = new Date(
-        currentInterval.getTime() - 1 * 60 * 1000
-      )
-
-      // Fetch from before the previous interval to ensure we get both
-      const fromDate = new Date(previousInterval.getTime() - 30 * 1000) // 30 seconds before previous interval
+      const fromDate = new Date(now.getTime() - 3 * 60 * 1000) // 3 minutes back
       const toDate = new Date() // Current time
 
       const newTickerData = await FetchStrengthData.fetchMultipleTickersData(
@@ -164,36 +170,35 @@ export function useRealtimeStrengthData({
 
       // Process each ticker's data to forward-fill missing values
       const processedTickerData = newTickerData.map((tickerData) => {
-        if (!tickerData || tickerData.length < 2) {
-          // Not enough data to process
+        if (!tickerData || tickerData.length === 0) {
           return tickerData
         }
 
-        // Sort by timenow descending (newest first)
+        // Sort by timenow ascending (oldest first) for processing
         const sortedData = [...tickerData].sort(
-          (a, b) => b.timenow.getTime() - a.timenow.getTime()
+          (a, b) => a.timenow.getTime() - b.timenow.getTime()
         )
 
-        // We need at least 2 rows to forward-fill
-        // Index 0: Latest row (unreliable placeholder, ignore)
-        // Index 1: Current real-time update (may have missing values)
-        // Index 2: Historical data (usually complete)
-        if (sortedData.length >= 3 && sortedData[1] && sortedData[2]) {
-          // Forward-fill index 1 from index 2
-          const filledRow = forwardFillStrengthData(
-            sortedData[1],
-            sortedData[2]
-          )
+        // Forward-fill each row from its predecessor
+        // This ensures any missing interval values are filled from historical data
+        const filledRows: StrengthRowGet[] = []
 
-          // Return only the filled row for merging (ignore the unreliable latest)
-          return [filledRow]
-        } else if (sortedData.length === 2 && sortedData[1]) {
-          // If we only have 2 rows, use the older one (index 1)
-          return [sortedData[1]]
-        } else {
-          // Only one row, use it as is
-          return sortedData
+        for (let i = 0; i < sortedData.length; i++) {
+          const currentRow = sortedData[i]!
+
+          if (i === 0) {
+            // First row has nothing to forward-fill from (in this batch)
+            // It will merge with existing data which has historical context
+            filledRows.push(currentRow)
+          } else {
+            // Forward-fill from previous row
+            const previousRow = sortedData[i - 1]!
+            const filledRow = forwardFillStrengthData(currentRow, previousRow)
+            filledRows.push(filledRow)
+          }
         }
+
+        return filledRows
       })
 
       if (isMountedRef.current) {

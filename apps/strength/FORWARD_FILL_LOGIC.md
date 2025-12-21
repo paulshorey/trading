@@ -14,16 +14,22 @@ The strength app implements forward-fill logic at multiple layers to handle miss
 
 **Purpose**: Fill missing strength values in real-time updates before merging with historical data
 
-**Process**:
+**Process** (10-second polling):
 ```typescript
-// Fetches 3 rows sorted by timenow (newest first):
-// [0] - Latest row (unreliable placeholder, ignored)
-// [1] - Current real-time update (may have nulls)
-// [2] - Historical data (usually complete)
+// Fetches last 3 minutes of data, sorted by timenow ascending (oldest first)
+// Each row may have some null interval values (not yet calculated)
+
+// Forward-fill each row from its predecessor
+for (let i = 0; i < sortedData.length; i++) {
+  if (i > 0) {
+    const filledRow = forwardFillStrengthData(sortedData[i], sortedData[i-1])
+    // Use filled row
+  }
+}
 
 const forwardFillStrengthData = (currentRow, historicalRow) => {
   // Forward-fill each strength interval if null
-  ['1', '4', '12', '60', '240'].forEach(interval => {
+  strengthIntervals.forEach(interval => {
     if (currentRow[interval] === null && historicalRow[interval] !== null) {
       currentRow[interval] = historicalRow[interval]
     }
@@ -36,9 +42,10 @@ const forwardFillStrengthData = (currentRow, historicalRow) => {
 ```
 
 **Key Points**:
-- Only uses index 1 (current) and index 2 (historical)
-- Ignores index 0 as it's a pre-created placeholder
-- Fills nulls in current row with values from historical row
+- Polls every 10 seconds to get latest interval values
+- Database rows are at 1-minute intervals but UPDATE every few seconds
+- Forward-fills null values from previous minute's row
+- Merged data UPDATES existing timestamps (not just adds new ones)
 
 ### 2. Historical Data Forward-Fill (`aggregateDataUtils.ts`)
 
@@ -134,11 +141,13 @@ All timestamps MUST:
 ## Data Flow Summary
 
 ```
-Database Row
+Database Row (1-minute intervals, updated every few seconds)
     ↓
-Real-time Forward-Fill (useRealtimeStrengthData)
+Fetch every 10 seconds (useRealtimeStrengthData)
     ↓
-Raw Data Storage (in memory)
+Real-time Forward-Fill (fill null intervals from previous row)
+    ↓
+Merge with existing data (UPDATE same timestamps)
     ↓
 Filter by Selected Tickers
     ↓
@@ -146,7 +155,7 @@ Historical Forward-Fill (aggregateDataUtils)
     ↓
 Aggregation & Normalization
     ↓
-Chart Display
+Chart Display (existing x-axis points updated with new values)
 ```
 
 ## Testing Checklist

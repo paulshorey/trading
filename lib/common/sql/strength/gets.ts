@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { getDb } from "../../lib/db/neon";
 import { cc } from "../../cc";
 import { StrengthRowGet } from "./types";
+import { extractIntervalValues } from "./constants";
 
 type Output = {
   ip?: string;
@@ -82,7 +83,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
     const strengths = result.rows;
 
     // Convert database results to StrengthRowGet format
-    // Note: Adding 'time' field for consistency with other modules' UI display
+    // Interval values are extracted dynamically using the centralized utility
     const rows = strengths.map((strength) => ({
       id: strength.id,
       ticker: strength.ticker,
@@ -93,26 +94,9 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       app_name: strength.app_name || "",
       node_env: strength.node_env || "",
       created_at: new Date(strength.created_at),
-      // even
-      "2": strength["2"] !== null ? Number(strength["2"]) : null,
-      "4": strength["4"] !== null ? Number(strength["4"]) : null,
-      "12": strength["12"] !== null ? Number(strength["12"]) : null,
-      "30": strength["30"] !== null ? Number(strength["30"]) : null,
-      "60": strength["60"] !== null ? Number(strength["60"]) : null,
-      "240": strength["240"] !== null ? Number(strength["240"]) : null,
-      // prime
-      "30S": strength["30S"] !== null ? Number(strength["30S"]) : null,
-      "1": strength["1"] !== null ? Number(strength["1"]) : null,
-      "3": strength["3"] !== null ? Number(strength["3"]) : null,
-      "5": strength["5"] !== null ? Number(strength["5"]) : null,
-      "7": strength["7"] !== null ? Number(strength["7"]) : null,
-      "13": strength["13"] !== null ? Number(strength["13"]) : null,
-      "19": strength["19"] !== null ? Number(strength["19"]) : null,
-      "39": strength["39"] !== null ? Number(strength["39"]) : null,
-      "59": strength["59"] !== null ? Number(strength["59"]) : null,
-      "71": strength["71"] !== null ? Number(strength["71"]) : null,
-      "101": strength["101"] !== null ? Number(strength["101"]) : null,
       average: strength.average !== null ? Number(strength.average) : null,
+      // Extract all interval values dynamically from constants
+      ...extractIntervalValues(strength),
     })) as StrengthRowGet[];
 
     output.ip = ip;

@@ -4,10 +4,17 @@ Utility functions for processing strength data during database operations.
 
 ## Files
 
-- `constants.ts` - Defines interval column names and configuration constants
 - `forwardFill.ts` - Forward-fill logic to populate missing interval values from previous rows
 - `average.ts` - Calculate average of all interval columns
-- `index.ts` - Exports all utilities
+- `index.ts` - Re-exports from parent constants.ts and local utilities
+
+## Intervals
+
+**All interval definitions are centralized in `@lib/common/sql/strength/constants.ts` (parent folder).**
+
+```typescript
+import { ALL_INTERVALS, StrengthInterval, IntervalValues } from "@lib/common/sql/strength/constants";
+```
 
 ## Key Concepts
 
@@ -17,9 +24,8 @@ When new data arrives, some interval columns may be missing. Forward-fill looks 
 
 ### Average Column
 
-The `average` column stores the mean of all interval columns ("2", "4", "12", "30", "60", "240"). It's automatically calculated and updated whenever any interval value changes.
+The `average` column stores the mean of all interval columns. It's automatically calculated and updated whenever any interval value changes.
 
 ## Usage
 
 These utilities are used internally by `add.ts`. They're not typically called directly from frontend code.
-

@@ -3,15 +3,7 @@
 import { StrengthDataAdd } from "./types";
 import { getDb } from "../../lib/db/neon";
 import { cc } from "../../cc";
-import {
-  STRENGTH_INTERVALS,
-  FORWARD_FILL_DEPTH,
-  forwardFillAllIntervals,
-  calculateAverage,
-  extractIntervalValues,
-  StrengthRow,
-  StrengthInterval,
-} from "./utils";
+import { ALL_INTERVALS, FORWARD_FILL_DEPTH, forwardFillAllIntervals, calculateAverage, extractIntervalValues, StrengthRow, StrengthInterval } from "./utils";
 
 /**
  * Adds strength record to `strength_v1` table.
@@ -167,7 +159,7 @@ async function updateRowWithForwardFill(
   // Build the current interval values, starting with existing values
   // Convert to numbers explicitly (PostgreSQL may return strings)
   const currentValues: Record<string, number | null> = {};
-  for (const int of STRENGTH_INTERVALS) {
+  for (const int of ALL_INTERVALS) {
     const rawValue = currentRow?.[int];
     currentValues[int] = rawValue !== null && rawValue !== undefined ? Number(rawValue) : null;
   }
@@ -187,7 +179,7 @@ async function updateRowWithForwardFill(
     }
 
     // Forward-fill each missing interval
-    for (const int of STRENGTH_INTERVALS) {
+    for (const int of ALL_INTERVALS) {
       if (currentValues[int] === null) {
         // Look back through previous rows to find a value
         const startIdx = currentRowIndex >= 0 ? currentRowIndex : 0;
@@ -217,7 +209,7 @@ async function updateRowWithForwardFill(
   paramIndex++;
 
   // Update forward-filled intervals (only if they were null before)
-  for (const int of STRENGTH_INTERVALS) {
+  for (const int of ALL_INTERVALS) {
     if (int !== interval && currentValues[int] !== null && (currentRow?.[int] === null || currentRow?.[int] === undefined)) {
       setClauses.push(`"${int}" = COALESCE("${int}", $${paramIndex})`);
       values.push(currentValues[int]);

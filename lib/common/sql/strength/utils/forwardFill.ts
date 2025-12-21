@@ -6,36 +6,18 @@
  * from previous rows when current values are null.
  */
 
-import { STRENGTH_INTERVALS, FORWARD_FILL_DEPTH, StrengthInterval } from "./constants";
+import { ALL_INTERVALS, FORWARD_FILL_DEPTH, StrengthInterval, IntervalValues } from "../constants";
 
 /**
- * Row structure returned from database with interval values
+ * Row structure for forward-fill operations.
+ * Uses the centralized IntervalValues type for consistency.
  */
-export interface StrengthRow {
+export interface StrengthRow extends IntervalValues {
   id?: number;
   ticker: string;
   timenow: Date;
-  // even
-  "2": number | null;
-  "4": number | null;
-  "12": number | null;
-  "30": number | null;
-  "60": number | null;
-  "240": number | null;
-  // prime
-  "30S": number | null;
-  "1": number | null;
-  "3": number | null;
-  "5": number | null;
-  "7": number | null;
-  "9": number | null;
-  "13": number | null;
-  "19": number | null;
-  "29": number | null;
-  "39": number | null;
-  "59": number | null;
   average?: number | null;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -82,7 +64,7 @@ export function forwardFillAllIntervals(
 ): Record<StrengthInterval, number | null> {
   const filled: Record<string, number | null> = {};
 
-  for (const interval of STRENGTH_INTERVALS) {
+  for (const interval of ALL_INTERVALS) {
     const value = forwardFillInterval(rows, interval, rowIndex, maxDepth);
     // Ensure value is a proper number or null
     filled[interval] = value !== null && !isNaN(value) ? value : null;
@@ -100,7 +82,7 @@ export function forwardFillAllIntervals(
 export function getMissingIntervals(row: StrengthRow): StrengthInterval[] {
   const missing: StrengthInterval[] = [];
 
-  for (const interval of STRENGTH_INTERVALS) {
+  for (const interval of ALL_INTERVALS) {
     if (row[interval] === null || row[interval] === undefined) {
       missing.push(interval);
     }

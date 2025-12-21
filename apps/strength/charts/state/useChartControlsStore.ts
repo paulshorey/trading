@@ -2,23 +2,22 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
 import { createURLStorage, getQueryParams } from './lib/urlSync'
+import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
-export const strengthIntervals = [
-  '30S',
-  '1',
-  '3',
-  '5',
-  '7',
-  '13',
-  '19',
-  '39',
-  '59',
-  '71',
-  '101',
-] as const
+export const strengthIntervals = NEW_INTERVALS
+// Remove first and last values from array
+const strengthIntervalsMid = strengthIntervals.slice(1, -1)
+
+const strengthIntervalsFirstHalf = strengthIntervals.slice(
+  0,
+  Math.ceil(strengthIntervals.length / 2)
+)
+const strengthIntervalsSecondHalf = strengthIntervals.slice(
+  Math.ceil(strengthIntervals.length / 2)
+)
 
 /**
  * Available interval configurations for strength data aggregation
@@ -26,27 +25,19 @@ export const strengthIntervals = [
  */
 export const intervalsOptions = [
   {
-    value: ['1', '3', '5', '7', '13', '19'],
+    value: strengthIntervalsMid,
     label: 'mid',
   },
   {
-    value: ['30S', '1', '3', '5', '7', '13', '19', '39', '59', '71', '101'],
+    value: strengthIntervals,
     label: 'all',
   },
-  { value: ['13', '19', '39', '59', '71', '101'], label: 'long' },
-  { value: ['30S', '1', '3', '5', '7', '13', '19'], label: 'short' },
-  { value: ['30S'], label: '30s' },
-  { value: ['1'], label: '1m' },
-  { value: ['3'], label: '3m' },
-  { value: ['5'], label: '5m' },
-  { value: ['7'], label: '7m' },
-  { value: ['13'], label: '13m' },
-  { value: ['19'], label: '19m' },
-  { value: ['39'], label: '39m' },
-  { value: ['59'], label: '59m' },
-  { value: ['71'], label: '71m' },
-  { value: ['101'], label: '101m' },
+  { value: strengthIntervalsSecondHalf, label: 'long' },
+  { value: strengthIntervalsFirstHalf, label: 'short' },
 ]
+for (const interval of strengthIntervals) {
+  intervalsOptions.push({ value: [interval], label: interval })
+}
 
 /**
  * Available time range options for historical data
@@ -59,7 +50,7 @@ export const hoursBackOptions = ['120h', '96h', '72h', '48h', '24h']
  */
 export const tickersByMarket = [
   {
-    market: '',
+    market: '---meta---',
     tickers: [
       { label: 'Bullish', value: ['NQ1!', 'RTY1!', 'HG1!', 'CX'] },
       { label: 'Bearish', value: ['VX1!', 'UVIX', 'ZN1!', 'CL1!', 'Forex'] },
@@ -70,7 +61,7 @@ export const tickersByMarket = [
     ],
   },
   {
-    market: '----------',
+    market: '---equities---',
     tickers: [
       { label: 'US Equities', value: ['NQ1!', 'ES1!', 'RTY1!'] },
       { label: 'NQ1!', value: ['NQ1!'] },
@@ -79,7 +70,7 @@ export const tickersByMarket = [
     ],
   },
   {
-    market: '----------',
+    market: '---metals---',
     tickers: [
       { label: 'Precious Metals', value: ['GC1!', 'SI1!', 'PL1!'] },
       { label: 'GC1!', value: ['GC1!'] },
@@ -88,7 +79,7 @@ export const tickersByMarket = [
     ],
   },
   {
-    market: '----------',
+    market: '---commodities---',
     tickers: [
       { label: 'HG1!', value: ['HG1!'] },
       { label: 'CL1!', value: ['CL1!'] },
@@ -99,7 +90,7 @@ export const tickersByMarket = [
     ],
   },
   {
-    market: '----------',
+    market: '---crypto---',
     tickers: [
       { label: 'Crypto', value: ['CX'] },
       { label: 'BTCUSD', value: ['BTCUSD'] },
@@ -223,7 +214,7 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackOptions[hoursBackOptions.length - 3]!,
-    interval: intervalsOptions[0]!.value,
+    interval: intervalsOptions[0]!.value as string[],
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,

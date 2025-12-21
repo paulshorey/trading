@@ -41,6 +41,8 @@ Be careful optimizing imports. There are multiple folders in the project with th
 
 Note "fe" means "front end", and "be" means "back end". Several apps have this naming convention to separate client-side from server-side files.
 
+Common shared library files (./lib/common) can be imported from `@lib/common` such as this:
+
 ### Questions:
 
 If I present you with a contradictory or confusing request, if you do not understand what I mean, please ask me to clarify.
@@ -49,3 +51,9 @@ If I present you with a contradictory or confusing request, if you do not unders
 
 You are an AI agent. You will read AGENTS.md file in any relevant folder every time you think about a prompt. AGENTS.md files will serve as documentation about the files and code concepts in that folder, how this folder relates to the app as a whole. Add or edit AGENTS.md files as you make changes, to document complex topics which are not immediately obvious. Documentation you write will help you remember which folder or file to open next time when you are starting work on a similar topic.
 When writing documentation to AGENTS.md or any other CUSTOM_INSTRUCTIONS.md files, be very concise and minimal. These md documentation files should be only a hint to help you find relevant files in the codebase. More documentation can be written in comment blocks above each file or function.
+
+### Build and lint:
+
+Don't bother checking linting / typescript separately. Simply run `npm run build` in the app that you're working on.
+
+If working on the strength app then `cd apps/strength` (if not in that folder already) and run `npm run build` to check lint / types together.

@@ -27,7 +27,10 @@ import {
   markerConfigToOptions,
 } from '../lib/primitives/timeMarkers'
 import { TimeRangeHighlightPrimitive } from '../lib/primitives/TimeRangeHighlight'
-import { forwardFillData, getTimeRangeBoundaries } from '../lib/primitives/forwardFillData'
+import {
+  forwardFillData,
+  getTimeRangeBoundaries,
+} from '../lib/primitives/forwardFillData'
 import { SCALE_FACTOR } from '@/constants'
 import {
   strengthIntervals,
@@ -311,6 +314,98 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       return forwardFillData(data, 60, requiredTimestamps)
     }
 
+    /**
+     * Helper to efficiently update series data
+     * Uses update() for small changes, setData() only when necessary
+     */
+    const updateSeriesEfficiently = (
+      series: ISeriesApi<'Line'>,
+      currentData: LineData[],
+      prevData: LineData[] | null
+    ): boolean => {
+      if (currentData.length === 0) return false
+
+      // First load or major change: use setData
+      if (!prevData || prevData.length === 0) {
+        series.setData(currentData)
+        return true
+      }
+
+      // Check if only the last few points changed (typical for real-time updates)
+      // Compare lengths first
+      const lengthDiff = currentData.length - prevData.length
+
+      if (lengthDiff === 0) {
+        // Same length - check last 5 points for value changes
+        let changesFound = 0
+        const checkCount = Math.min(5, currentData.length)
+
+        for (let i = 0; i < checkCount; i++) {
+          const idx = currentData.length - 1 - i
+          const curr = currentData[idx]
+          const prev = prevData[idx]
+          if (
+            !curr ||
+            !prev ||
+            curr.time !== prev.time ||
+            Math.abs(curr.value - prev.value) > 0.0001
+          ) {
+            changesFound++
+          }
+        }
+
+        if (changesFound === 0) {
+          return false // No changes detected
+        }
+
+        // Only last few points changed - use update() for each
+        if (changesFound <= 5) {
+          for (let i = checkCount - 1; i >= 0; i--) {
+            const idx = currentData.length - 1 - i
+            const curr = currentData[idx]
+            const prev = prevData[idx]
+            if (
+              curr &&
+              (!prev ||
+                curr.time !== prev.time ||
+                Math.abs(curr.value - prev.value) > 0.0001)
+            ) {
+              series.update(curr)
+            }
+          }
+          return true
+        }
+      } else if (lengthDiff > 0 && lengthDiff <= 10) {
+        // Small number of new points added - update last points
+        // First update any changed existing points
+        for (let i = 0; i < Math.min(5, prevData.length); i++) {
+          const idx = prevData.length - 1 - i
+          const curr = currentData[idx]
+          const prev = prevData[idx]
+          if (
+            curr &&
+            prev &&
+            curr.time === prev.time &&
+            Math.abs(curr.value - prev.value) > 0.0001
+          ) {
+            series.update(curr)
+          }
+        }
+        // Then add new points
+        for (let i = prevData.length; i < currentData.length; i++) {
+          const point = currentData[i]
+          if (point) {
+            series.update(point)
+          }
+        }
+        return true
+      }
+
+      // Significant changes - use setData (this causes the freeze but is necessary)
+      series.setData(currentData)
+      return true
+    }
+
     // Update first series (strength) data
     useEffect(() => {
       if (
@@ -326,39 +421,30 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(strengthData)
 
-        // Check if data actually changed
-        const dataChanged =
-          !prevData ||
-          prevData.length !== currentData.length ||
-          prevData.some((item, index) => {
-            const currentItem = currentData[index]
-            return (
-              !currentItem ||
-              item.time !== currentItem.time ||
-              Math.abs(item.value - currentItem.value) > 0.0001
-            )
-          })
+        // Use efficient update strategy
+        const updated = updateSeriesEfficiently(
+          strengthSeriesRef.current,
+          currentData,
+          prevData
+        )
 
-        if (!dataChanged) {
-          // Still try to create markers even if data hasn't changed
-          // This handles the case where the component re-renders
-          if (!markersInitialized.current && currentData.length > 0) {
-            createTimeMarkers(currentData)
-          }
-          return
+        if (updated) {
+          lastDataRef.current = currentData // Don't spread - keep reference for comparison
         }
-
-        // Simply use setData for all updates
-        strengthSeriesRef.current.setData(currentData)
-        lastDataRef.current = [...currentData]
 
         // Create time markers on first data load
         if (!markersInitialized.current && currentData.length > 0) {
           createTimeMarkers(currentData)
         }
 
-        // Reapply time range after data update
-        if (timeRange && chartRef.current && timeRange.from < timeRange.to) {
+        // Reapply time range after data update (only on significant changes)
+        if (
+          updated &&
+          !prevData &&
+          timeRange &&
+          chartRef.current &&
+          timeRange.from < timeRange.to
+        ) {
           setTimeout(() => {
             if (
               chartRef.current &&
@@ -392,26 +478,16 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(priceData)
 
-        // Check if data actually changed
-        const dataChanged =
-          !prevData ||
-          prevData.length !== currentData.length ||
-          prevData.some((item, index) => {
-            const currentItem = currentData[index]
-            return (
-              !currentItem ||
-              item.time !== currentItem.time ||
-              Math.abs(item.value - currentItem.value) > 0.0001
-            )
-          })
+        // Use efficient update strategy
+        const updated = updateSeriesEfficiently(
+          priceSeriesRef.current,
+          currentData,
+          prevData
+        )
 
-        if (!dataChanged) {
-          return
+        if (updated) {
+          lastSecondDataRef.current = currentData
         }
-
-        // Simply use setData for all updates
-        priceSeriesRef.current.setData(currentData)
-        lastSecondDataRef.current = [...currentData]
       } catch (error) {
         console.warn('Failed to update price data:', error)
       }
@@ -451,26 +527,16 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           // Apply forward-fill to ensure time range boundaries exist
           const currentData = prepareDataWithRequiredTimestamps(data)
 
-          // Check if data actually changed
-          const dataChanged =
-            !prevData ||
-            prevData.length !== currentData.length ||
-            prevData.some((item, index) => {
-              const currentItem = currentData[index]
-              return (
-                !currentItem ||
-                item.time !== currentItem.time ||
-                Math.abs(item.value - currentItem.value) > 0.0001
-              )
-            })
+          // Use efficient update strategy
+          const updated = updateSeriesEfficiently(
+            series,
+            currentData,
+            prevData || null
+          )
 
-          if (!dataChanged) {
-            return
+          if (updated) {
+            lastIntervalDataRef.current[interval] = currentData
           }
-
-          // Set data for this interval
-          series.setData(currentData)
-          lastIntervalDataRef.current[interval] = [...currentData]
         })
       } catch (error) {
         console.warn('Failed to update interval data:', error)
@@ -529,26 +595,16 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           // Apply forward-fill to ensure time range boundaries exist
           const currentData = prepareDataWithRequiredTimestamps(data)
 
-          // Check if data actually changed
-          const dataChanged =
-            !prevData ||
-            prevData.length !== currentData.length ||
-            prevData.some((item, index) => {
-              const currentItem = currentData[index]
-              return (
-                !currentItem ||
-                item.time !== currentItem.time ||
-                Math.abs(item.value - currentItem.value) > 0.0001
-              )
-            })
+          // Use efficient update strategy
+          const updated = updateSeriesEfficiently(
+            series,
+            currentData,
+            prevData || null
+          )
 
-          if (!dataChanged) {
-            return
+          if (updated) {
+            lastTickerDataRef.current[ticker] = currentData
           }
-
-          // Set data for this ticker
-          series.setData(currentData)
-          lastTickerDataRef.current[ticker] = [...currentData]
         })
 
         // Clear data for tickers that are no longer selected

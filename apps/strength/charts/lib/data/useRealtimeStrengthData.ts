@@ -17,6 +17,10 @@ export interface UseRealtimeStrengthDataResult {
   error: string | null
   lastUpdateTime: Date | null
   isRealtime: boolean
+  /** True only on initial load, false for incremental updates */
+  isInitialLoad: boolean
+  /** Timestamps that were updated in the last fetch (for incremental updates) */
+  updatedTimestamps: number[]
 }
 
 /**
@@ -39,6 +43,8 @@ export function useRealtimeStrengthData({
   const [error, setError] = useState<string | null>(null)
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
   const [isRealtime, setIsRealtime] = useState(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [updatedTimestamps, setUpdatedTimestamps] = useState<number[]>([])
 
   // Track the last data timestamp we've received
   const lastDataTimestampRef = useRef<Date | null>(null)
@@ -202,6 +208,14 @@ export function useRealtimeStrengthData({
       })
 
       if (isMountedRef.current) {
+        // Collect timestamps from new data for incremental updates
+        const newTimestamps = new Set<number>()
+        processedTickerData.forEach((tickerData) => {
+          tickerData?.forEach((row) => {
+            newTimestamps.add(row.timenow.getTime() / 1000)
+          })
+        })
+
         setRawData((prevData) => {
           // Track the latest timestamp after merge
           let newLatestTimestamp = lastDataTimestampRef.current
@@ -235,6 +249,9 @@ export function useRealtimeStrengthData({
           return mergedData
         })
 
+        // Mark as incremental update (not initial load)
+        setIsInitialLoad(false)
+        setUpdatedTimestamps(Array.from(newTimestamps))
         setLastUpdateTime(new Date())
       }
     } catch (err) {
@@ -304,5 +321,7 @@ export function useRealtimeStrengthData({
     error,
     lastUpdateTime,
     isRealtime,
+    isInitialLoad,
+    updatedTimestamps,
   }
 }

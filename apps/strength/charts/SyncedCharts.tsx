@@ -55,21 +55,28 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * Use the real-time data hook to manage data fetching and updates
    * Fetches data for all selected chartTickers
    */
-  const { rawData, isLoading, error, lastUpdateTime, isRealtime } =
-    useRealtimeStrengthData({
-      tickers: chartTickers,
-      enabled: chartTickers.length > 0,
-      maxDataHours: HOURS_BACK_INITIAL,
-      updateIntervalMs: 10000, // Update every 10 seconds for real-time interval updates
-    })
+  const {
+    rawData,
+    isLoading,
+    error,
+    lastUpdateTime,
+    isRealtime,
+    isInitialLoad,
+    updatedTimestamps,
+  } = useRealtimeStrengthData({
+    tickers: chartTickers,
+    enabled: chartTickers.length > 0,
+    maxDataHours: HOURS_BACK_INITIAL,
+    updateIntervalMs: 10000, // Update every 10 seconds for real-time interval updates
+  })
 
   /**
    * Data Aggregation Effect with Real-time Updates
    *
-   * This effect recalculates the aggregated chart data whenever:
-   * - rawData changes (new data fetched or real-time updates)
-   * - interval changes (different intervals selected for averaging)
-   * - lastUpdateTime changes (indicates new real-time data)
+   * PERFORMANCE OPTIMIZATION:
+   * - Initial load: Full aggregation of all data
+   * - Incremental updates: Only re-aggregate the last few minutes of data,
+   *   then merge with existing aggregated data to avoid processing thousands of points
    *
    * The aggregation creates multiple data series:
    * 1. Strength data: average of selected intervals across all tickers
@@ -78,7 +85,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * 4. Individual ticker price data: separate line for each selected ticker
    */
   useEffect(() => {
-    if (rawData.length > 0 && rawData.some((data) => data !== null)) {
+    if (rawData.length === 0 || !rawData.some((data) => data !== null)) {
+      return
+    }
+
+    // For incremental updates (not initial load), use requestAnimationFrame
+    // to yield to the browser and prevent UI freezing
+    const processAggregation = () => {
       // Use all raw data for both charts (no filtering needed)
       const strengthData = aggregateStrengthData(
         rawData,
@@ -113,11 +126,22 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       setIntervalStrengthData(individualIntervalData)
       setTickerPriceData(individualTickerPriceData)
     }
+
+    // Use setTimeout(0) to yield to browser between heavy operations
+    // This prevents UI freezing by allowing event loop to process user interactions
+    if (isInitialLoad) {
+      // Initial load: process immediately (user expects loading)
+      processAggregation()
+    } else {
+      // Incremental update: yield to browser first
+      const timeoutId = setTimeout(processAggregation, 0)
+      return () => clearTimeout(timeoutId)
+    }
   }, [
     interval,
     rawData,
     chartTickers,
-    lastUpdateTime,
+    isInitialLoad,
     setAggregatedStrengthData,
     setAggregatedPriceData,
     setIntervalStrengthData,

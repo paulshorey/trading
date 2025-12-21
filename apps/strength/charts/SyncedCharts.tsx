@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useStrengthData } from './lib/data/useStrengthData'
 import { calculateTimeRange } from './lib/chartUtils'
 import { Chart, ChartRef } from './components/Chart'
@@ -24,16 +24,15 @@ export interface SyncedChartsProps {
  * SyncedCharts - Main chart component with controlled data flow
  *
  * Data Flow:
- * 1. User selects tickers → dataState = 'loading'
- * 2. Historical data fetched → send to worker
- * 3. Worker returns aggregated data → render chart
+ * 1. User selects tickers → dataState = 'loading', dataVersion++
+ * 2. Historical data fetched → send to worker with dataVersion
+ * 3. Worker returns aggregated data → validate dataVersion → render chart
  * 4. Real-time updates poll every 10s → incremental worker updates
  *
- * When tickers change:
- * - Real-time updates paused automatically by useStrengthData
- * - Chart data cleared
- * - New data fetched and processed
- * - Chart re-rendered with new data
+ * Race Condition Prevention:
+ * - dataVersion is tied to the data source (tickers)
+ * - Worker results include dataVersion
+ * - Results with stale dataVersion are ignored
  */
 export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const chartRef = useRef<ChartRef | null>(null)
@@ -44,10 +43,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     interval,
     chartTickers,
     timeRange,
-    aggregatedStrengthData,
-    aggregatedPriceData,
-    intervalStrengthData,
-    tickerPriceData,
     showIntervalLines,
     showTickerLines,
     setTimeRange,
@@ -69,7 +64,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     intervalStrength: {},
     tickerPrice: {},
   })
-  const [isChartReady, setIsChartReady] = useState(false)
+
+  // Track which dataVersion the current chartData corresponds to
+  const chartDataVersionRef = useRef<number>(-1)
 
   /**
    * Controlled data fetching hook
@@ -85,14 +82,27 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
   /**
    * Handle aggregation results from the Web Worker
+   * Only accepts results where dataVersion matches current
    */
   const handleAggregationResult = useCallback(
     (
       result: AggregationResult,
       processingTimeMs: number,
-      requestId: number
+      resultDataVersion: number
     ) => {
-      // Update local chart data (not the store - for immediate rendering)
+      // Double-check: only update if this is for the current data version
+      // (The worker hook already filters, but this is an extra safety check)
+      if (resultDataVersion < chartDataVersionRef.current) {
+        console.log(
+          `[SyncedCharts] Ignoring stale result (version: ${resultDataVersion}, current: ${chartDataVersionRef.current})`
+        )
+        return
+      }
+
+      // Update the version this chart data corresponds to
+      chartDataVersionRef.current = resultDataVersion
+
+      // Update local chart data
       setChartData({
         strength: result.strengthData,
         price: result.priceData,
@@ -106,12 +116,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       setIntervalStrengthData(result.intervalStrengthData)
       setTickerPriceData(result.tickerPriceData)
 
-      // Mark chart as ready to render
-      setIsChartReady(true)
-
       if (processingTimeMs > 100) {
         console.log(
-          `[Worker] Aggregation #${requestId} completed in ${processingTimeMs.toFixed(1)}ms`
+          `[Worker] Aggregation v${resultDataVersion} completed in ${processingTimeMs.toFixed(
+            1
+          )}ms`
         )
       }
     },
@@ -130,7 +139,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   /**
    * Web Worker for aggregation
    */
-  const { aggregate, isProcessing, isReady, cancelPending } =
+  const { aggregate, isProcessing, isReady, setValidDataVersion } =
     useAggregationWorker({
       enabled: true,
       onResult: handleAggregationResult,
@@ -138,30 +147,32 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     })
 
   /**
-   * Effect: Clear chart when dataVersion changes (ticker switch)
-   * This ensures old data is never shown during the transition
+   * Effect: When dataVersion changes (ticker switch), immediately clear chart
+   * and update the valid version so old worker results are ignored
    */
   useEffect(() => {
-    // Cancel any pending worker requests
-    cancelPending()
+    // Set the valid version - any results with older version will be ignored
+    setValidDataVersion(dataVersion)
 
-    // Clear chart data immediately
-    setChartData({
-      strength: null,
-      price: null,
-      intervalStrength: {},
-      tickerPrice: {},
-    })
-    setIsChartReady(false)
+    // Clear chart data immediately when version changes
+    // This prevents showing old data while new data loads
+    if (chartDataVersionRef.current !== dataVersion) {
+      setChartData({
+        strength: null,
+        price: null,
+        intervalStrength: {},
+        tickerPrice: {},
+      })
 
-    // Clear store data
-    setAggregatedStrengthData(null)
-    setAggregatedPriceData(null)
-    setIntervalStrengthData({})
-    setTickerPriceData({})
+      // Clear store data too
+      setAggregatedStrengthData(null)
+      setAggregatedPriceData(null)
+      setIntervalStrengthData({})
+      setTickerPriceData({})
+    }
   }, [
     dataVersion,
-    cancelPending,
+    setValidDataVersion,
     setAggregatedStrengthData,
     setAggregatedPriceData,
     setIntervalStrengthData,
@@ -181,13 +192,14 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     // Don't queue up requests if already processing
     if (isProcessing) return
 
-    // Send to worker for aggregation
-    aggregate(rawData, interval, chartTickers)
+    // Send to worker for aggregation with the current dataVersion
+    aggregate(rawData, interval, chartTickers, dataVersion)
   }, [
     rawData,
     dataState,
     interval,
     chartTickers,
+    dataVersion,
     isReady,
     isProcessing,
     aggregate,
@@ -195,27 +207,24 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
   /**
    * Effect: Calculate time range when data is ready
-   * Only calculates when we have aggregated data ready to display
    */
   useEffect(() => {
-    if (!isChartReady || !chartData.strength || chartData.strength.length === 0)
-      return
+    if (!chartData.strength || chartData.strength.length === 0) return
 
     const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
     if (newRange && newRange.from < newRange.to) {
       setTimeRange(newRange)
     }
-  }, [hoursBack, rawData, isChartReady, chartData.strength, setTimeRange])
+  }, [hoursBack, rawData, chartData.strength, setTimeRange])
 
   /**
    * Determine what to render based on state
    */
   const showLoading = dataState === 'loading'
   const showError = error && dataState !== 'loading'
-  const showChart =
-    dataState === 'ready' && isChartReady && chartData.strength !== null
+  const showChart = chartData.strength !== null
 
-  // Only pass timeRange to chart when data is ready
+  // Only pass timeRange to chart when we have valid data
   const chartTimeRange = showChart ? timeRange : undefined
 
   return (

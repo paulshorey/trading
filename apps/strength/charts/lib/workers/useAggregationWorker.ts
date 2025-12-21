@@ -65,29 +65,28 @@ export interface UseAggregationWorkerOptions {
   onResult?: (
     result: AggregationResult,
     processingTimeMs: number,
-    requestId: number
+    dataVersion: number
   ) => void
   /** Callback on error */
   onError?: (error: string) => void
 }
 
 export interface UseAggregationWorkerReturn {
-  /** Trigger aggregation with new data, returns requestId for tracking */
+  /** Trigger aggregation with new data */
   aggregate: (
     rawData: (StrengthRowGet[] | null)[],
     intervals: string[],
-    tickers: string[]
-  ) => number
+    tickers: string[],
+    dataVersion: number
+  ) => void
   /** Whether the worker is currently processing */
   isProcessing: boolean
   /** Last processing time in milliseconds */
   lastProcessingTimeMs: number | null
   /** Whether the worker is ready */
   isReady: boolean
-  /** Current request ID (increments with each request) */
-  currentRequestId: number
-  /** Cancel any pending requests (marks them as stale) */
-  cancelPending: () => void
+  /** Set the valid data version (results with older versions are ignored) */
+  setValidDataVersion: (version: number) => void
 }
 
 /**
@@ -135,11 +134,9 @@ export function useAggregationWorker(
   >(null)
   const [isReady, setIsReady] = useState(false)
 
-  // Request ID tracking for race condition handling
+  // Track the valid dataVersion - results with older versions are ignored
+  const validDataVersionRef = useRef(0)
   const requestIdRef = useRef(0)
-  const [currentRequestId, setCurrentRequestId] = useState(0)
-  // Track which requestId is considered "valid" - any older requests are stale
-  const validRequestIdRef = useRef(0)
 
   // Store callbacks in refs to avoid recreating worker on callback changes
   const onResultRef = useRef(onResult)
@@ -167,12 +164,12 @@ export function useAggregationWorker(
 
       if (message.type === 'result') {
         const response = message as AggregationWorkerResponse
-        const { requestId, payload } = response
+        const { dataVersion, payload } = response
 
-        // Check if this result is stale (from an older request)
-        if (requestId < validRequestIdRef.current) {
+        // Check if this result is stale (from an older data version)
+        if (dataVersion < validDataVersionRef.current) {
           console.log(
-            `[Worker] Ignoring stale result (requestId: ${requestId}, valid: ${validRequestIdRef.current})`
+            `[Worker] Ignoring stale result (dataVersion: ${dataVersion}, valid: ${validDataVersionRef.current})`
           )
           return
         }
@@ -191,7 +188,7 @@ export function useAggregationWorker(
             tickerPriceData: convertRecordToLineData(payload.tickerPriceData),
           },
           payload.processingTimeMs,
-          requestId
+          dataVersion
         )
       } else if (message.type === 'error') {
         setIsProcessing(false)
@@ -216,10 +213,9 @@ export function useAggregationWorker(
     }
   }, [enabled])
 
-  // Function to cancel any pending requests (marks them as stale)
-  const cancelPending = useCallback(() => {
-    // Any results with requestId less than current will be ignored
-    validRequestIdRef.current = requestIdRef.current
+  // Function to set the valid data version (results with older versions are ignored)
+  const setValidDataVersion = useCallback((version: number) => {
+    validDataVersionRef.current = version
     setIsProcessing(false)
   }, [])
 
@@ -228,17 +224,20 @@ export function useAggregationWorker(
     (
       rawData: (StrengthRowGet[] | null)[],
       intervals: string[],
-      tickers: string[]
-    ): number => {
+      tickers: string[],
+      dataVersion: number
+    ): void => {
       if (!workerRef.current || !isReady) {
         console.warn('Worker not ready, skipping aggregation')
-        return -1
+        return
       }
 
-      // Increment request ID
+      // Update valid version to this version
+      validDataVersionRef.current = dataVersion
+
+      // Increment request ID for internal tracking
       requestIdRef.current += 1
       const requestId = requestIdRef.current
-      setCurrentRequestId(requestId)
 
       setIsProcessing(true)
 
@@ -248,6 +247,7 @@ export function useAggregationWorker(
       const request: AggregationWorkerRequest = {
         type: 'aggregate',
         requestId,
+        dataVersion,
         payload: {
           rawData: serializedData,
           intervals,
@@ -257,8 +257,6 @@ export function useAggregationWorker(
       }
 
       workerRef.current.postMessage(request)
-
-      return requestId
     },
     [isReady]
   )
@@ -268,7 +266,6 @@ export function useAggregationWorker(
     isProcessing,
     lastProcessingTimeMs,
     isReady,
-    currentRequestId,
-    cancelPending,
+    setValidDataVersion,
   }
 }

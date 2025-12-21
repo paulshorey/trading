@@ -505,7 +505,7 @@ self.onmessage = (event: MessageEvent<AggregationWorkerRequest>) => {
   const startTime = performance.now()
 
   try {
-    const { type, requestId, payload } = event.data
+    const { type, requestId, dataVersion, payload } = event.data
 
     if (type !== 'aggregate') {
       throw new Error(`Unknown message type: ${type}`)
@@ -528,6 +528,7 @@ self.onmessage = (event: MessageEvent<AggregationWorkerRequest>) => {
     const response: AggregationWorkerResponse = {
       type: 'result',
       requestId, // Echo back the request ID
+      dataVersion, // Echo back the data version for validation
       payload: {
         strengthData: strengthData.length > 0 ? strengthData : null,
         priceData: priceData.length > 0 ? priceData : null,

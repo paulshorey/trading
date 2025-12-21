@@ -1,10 +1,6 @@
 # Charts Mini-App
 
-Financial charting system built on TradingView's `lightweight-charts` library (v5.0.8).
-
-## Purpose
-
-Renders synchronized strength and price charts with real-time data updates, custom primitives (time range highlighting, vertical markers), and aggregation controls.
+Financial charting system built on `lightweight-charts` (v5.0.8). Renders dual y-axis charts showing strength (left) and price (right) data with real-time updates, time range highlighting, and aggregation controls.
 
 ## Folder Structure
 
@@ -62,73 +58,34 @@ Chart.tsx (add required timestamps → setData → attach primitives)
 lightweight-charts (renders canvas)
 ```
 
-## Key Concepts
-
-### Required Timestamps for Time Ranges
-
-Time range boundaries are added to the data as forward-filled points, ensuring `timeToCoordinate()` works correctly for highlighting. Natural gaps (weekends, holidays) are preserved - the chart compresses them, showing time ranges as narrow bars during non-trading periods. See `TIME_RANGE_HIGHLIGHTING.md`.
-
-### Custom Primitives
-
-- **TimeRangeHighlight**: Shaded backgrounds for market hours
-- **VerticalLinePrimitive**: Vertical lines for events (page load, etc.)
-
-Both implement `ISeriesPrimitive<Time>` with PaneView + Renderer pattern.
-
-### Scroll Sync
-
-Charts are synchronized via `subscribeCrosshairMove` and `subscribeVisibleLogicalRangeChange` callbacks on the timeScale, sharing visible range between strength and price charts.
-
-### Aggregation
-
-Multiple tickers can be combined using different strategies (average, weighted, min/max). Controlled via Zustand store and URL params.
+## Key Features
 
 ### Chart Lines
 
-The chart displays multiple lines that can be toggled:
-
 **Always visible:**
 
-- **Price** (green, right scale) - normalized average of all selected tickers
-- **Strength** (orange, thick, left scale) - aggregated average of all selected intervals across all tickers
+- **Strength** (orange, left axis) - average of selected intervals across all tickers
+- **Price** (green, right axis) - normalized average of all selected tickers
 
-**Optional (controlled by toggles):**
+**Optional toggles:**
 
-- **Individual interval lines** (`showIntervalLines`) - separate line for each selected interval (2m, 4m, 12m, 30m, 1h, 4h), uses left scale
-- **Individual ticker price lines** (`showTickerLines`) - separate line for each selected ticker, uses right scale
+- **Individual interval lines** - each interval (2m, 4m, 12m, 30m, 1h, 4h) separately
+- **Individual ticker price lines** - each ticker separately, normalized to converge at right edge
 
-### Aggregation Functions
+### Custom Primitives
 
-**Strength aggregation** (`lib/aggregateStrengthData.ts`):
+- **TimeRangeHighlight** - Shaded backgrounds for market hours (see `lib/primitives/AGENTS.md`)
+- **VerticalLinePrimitive** - Vertical line markers for events
 
-- `aggregateStrengthData()` - averages selected intervals across all tickers
-- `aggregateStrengthByInterval()` - generates data for each interval separately
+### State Management
 
-**Price aggregation** (`lib/aggregatePriceData.ts`):
-
-- `aggregatePriceData()` - normalizes and averages all ticker prices
-- `aggregatePriceByTicker()` - generates normalized price data for each ticker separately
-
-### Price Normalization (Important!)
-
-Both price functions share a common normalization context to ensure visual consistency:
-
-1. Each ticker's prices are divided by its last valid price (so last = 1.0)
-2. The average of all tickers' last prices (`avgLastPrice`) is computed once
-3. All values are scaled by `avgLastPrice` to get meaningful absolute values
-
-This ensures:
-
-- **Individual ticker lines converge** to the same point at the right edge of the chart
-- **The aggregated line** passes through the average of individual lines
-- **Visual consistency** between aggregated and individual price lines
-
-The normalization is computed in `processTickersForNormalization()` and shared between both functions.
+- **Zustand store** - Centralized state for chart controls
+- **URL sync** - Query params preserve state across page loads
+- **Real-time updates** - Polls for new data every minute
 
 ## Related Documentation
 
-- `TIME_RANGE_HIGHLIGHTING.md` - Time range shading implementation
-- `state/AGENTS.md` - Zustand store details
-- `lib/AGENTS.md` - Library utilities
-
-@TIME_RANGE_HIGHLIGHTING.md
+- `lib/primitives/AGENTS.md` - Custom primitives and time range highlighting
+- `lib/aggregation/AGENTS.md` - Data aggregation and price normalization
+- `lib/data/AGENTS.md` - API client and real-time data fetching
+- `state/AGENTS.md` - Zustand store and URL sync

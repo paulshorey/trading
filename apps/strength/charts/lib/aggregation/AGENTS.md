@@ -4,32 +4,21 @@ Functions for aggregating strength and price data across multiple tickers and in
 
 ## Files
 
-### aggregateDataUtils.ts
+**aggregateDataUtils.ts** - Shared utilities:
+- `extractGlobalTimestamps()` - Collect all unique timestamps from data
+- `forwardFillData()` - Forward-fill missing values (aggressive interpolation)
+- `extendDataIntoFuture()` - Add 12 hours of flat projection
+- `aggregateStrengthDataWithInterpolation()` - Forward-fill and aggregate strength
 
-Shared utilities for data processing:
+**aggregateStrengthData.ts** - Strength aggregation (left y-axis):
+- `aggregateStrengthData()` - Average selected intervals across all tickers
+- `aggregateStrengthByInterval()` - Separate line per interval
 
-- `extractGlobalTimestamps()` - Extract all unique timestamps from multiple data arrays
-- `forwardFillData()` - Forward-fill missing values in data (aggressive interpolation)
-- `extendDataIntoFuture()` - Extend LineData array into future with last known value
-- `generateFutureTimestamps()` - Generate future timestamps at 1-minute intervals
-- `aggregateStrengthDataWithInterpolation()` - Forward-fill and aggregate strength data
-- `normalizeMultipleTickerData()` - (Deprecated) Normalize price data across tickers
+**aggregatePriceData.ts** - Price aggregation (right y-axis):
+- `aggregatePriceData()` - Normalized average of all tickers
+- `aggregatePriceByTicker()` - Separate normalized line per ticker
 
-### aggregateStrengthData.ts
-
-Strength data aggregation for left y-axis:
-
-- `aggregateStrengthData()` - Average selected intervals across all tickers (main line)
-- `aggregateStrengthByInterval()` - Separate line for each selected interval
-
-### aggregatePriceData.ts
-
-Price data aggregation for right y-axis:
-
-- `aggregatePriceData()` - Normalized average of all tickers (main line)
-- `aggregatePriceByTicker()` - Separate normalized line for each ticker
-
-**Important**: Both price functions share a normalization context (`processTickersForNormalization`) to ensure individual ticker lines converge to the same point at the chart's right edge.
+**Important**: Both price functions share normalization context to ensure ticker lines converge at the right edge.
 
 ## Data Flow
 

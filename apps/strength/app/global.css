@@ -16,6 +16,17 @@ body {
   transform-origin: top left;
 }
 
+.mantine-MultiSelect-options {
+  --mantine-scale: 2;
+}
+/* .mantine-MultiSelect-options > div,
+.mantine-MultiSelect-options > div > div,
+.mantine-MultiSelect-options > div > div > div,
+.mantine-ScrollArea-root,
+.mantine-ScrollArea-viewport {
+  max-height: auto !important;
+} */
+
 .mantine-Combobox-dropdown [role='group'],
 .mantine-Combobox-dropdown [role='group'] [role='group'] {
   display: block;

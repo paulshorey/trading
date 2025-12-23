@@ -1,4 +1,4 @@
-import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
+import { MultiSelect } from '@mantine/core'
 import {
   useChartControlsStore,
   strengthIntervals,
@@ -13,66 +13,31 @@ export default function IntervalControl({ showLabel = true }: Props) {
   // Get state and actions from Zustand store
   const { interval, setInterval } = useChartControlsStore()
 
-  // ComboBox for interval selector
-  const combobox = useCombobox({
-    onDropdownClose: () => combobox.resetSelectedOption(),
-  })
-
-  // Convert array to string for value comparison
-  const currentInterval = JSON.stringify(interval)
-
-  // Find the selected option label
-  const selectedOption = strengthIntervals.find(
-    (item) => JSON.stringify(item.value) === currentInterval
-  )
+  // Show count of selected intervals in placeholder
+  const placeholderText =
+    interval.length > 0 ? `${interval.length} timeframes` : 'Timeframes'
 
   return (
-    <Combobox
-      offset={0}
-      store={combobox}
-      withinPortal={false}
-      onOptionSubmit={(val) => {
-        setInterval(JSON.parse(val) as string[])
-        combobox.closeDropdown()
+    <MultiSelect
+      label={showLabel ? 'Interval' : undefined}
+      value={interval}
+      data={strengthIntervals}
+      onChange={setInterval}
+      styles={{
+        pill: {
+          display: 'none',
+        },
+        input: {},
       }}
-    >
-      <Combobox.Target>
-        <InputBase
-          styles={{
-            input: {
-              minWidth: '70px',
-              maxHeight: '30px',
-              overflow: 'hidden',
-            },
-          }}
-          component="button"
-          type="button"
-          pointer
-          rightSection={<Combobox.Chevron />}
-          onClick={() => combobox.toggleDropdown()}
-          rightSectionPointerEvents="none"
-          label={showLabel ? 'Interval' : null}
-        >
-          {selectedOption ? (
-            selectedOption.label
-          ) : (
-            <Input.Placeholder>Pick interval</Input.Placeholder>
-          )}
-        </InputBase>
-      </Combobox.Target>
-
-      <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '70px' }}>
-        <Combobox.Options>
-          {strengthIntervals.map((option) => (
-            <Combobox.Option
-              value={JSON.stringify(option.value)}
-              key={JSON.stringify(option.value)}
-            >
-              {option.label}
-            </Combobox.Option>
-          ))}
-        </Combobox.Options>
-      </Combobox.Dropdown>
-    </Combobox>
+      placeholder={placeholderText}
+      hidePickedOptions={false}
+      // Custom options format (not needed now, maybe in the future):
+      // renderOption={({ option, checked }) => (
+      //   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      //     {checked && <span>✓</span>}
+      //     <span>{option.label}</span>
+      //   </div>
+      // )}
+    />
   )
 }

@@ -13,7 +13,7 @@ export const strengthIntervals = NEW_INTERVALS
  * Available interval configurations for strength data aggregation
  * Each option represents a set of intervals to average together
  */
-const intervalsOptions = [
+export const intervalsOptions = [
   {
     value: strengthIntervals,
     label: 'all',
@@ -215,7 +215,7 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackOptions[hoursBackOptions.length - 3]!,
-    interval: intervalsOptions[0]!.value as string[],
+    interval: [...strengthIntervals],
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,

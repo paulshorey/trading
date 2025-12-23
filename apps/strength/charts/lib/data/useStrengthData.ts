@@ -250,22 +250,6 @@ export function useStrengthData({
           // This handles cases where different intervals have different lag
           const lastKnownValues = buildLastKnownValuesRow(existingData)
 
-          // DEBUG: Log forward-fill context
-          if (lastKnownValues) {
-            const filledIntervals = strengthIntervals.filter(
-              (i) => lastKnownValues[i] !== null
-            )
-            console.log(
-              `[useStrengthData] Forward-fill context for ticker ${idx}:`,
-              {
-                existingDataLength: existingData?.length || 0,
-                filledIntervalCount: filledIntervals.length,
-                totalIntervals: strengthIntervals.length,
-                newDataLength: sortedNewData.length,
-              }
-            )
-          }
-
           // Forward-fill new data, using existing historical data for the first row
           const filledNewData: StrengthRowGet[] = []
           for (let i = 0; i < sortedNewData.length; i++) {
@@ -291,25 +275,6 @@ export function useStrengthData({
             existingData,
             filledNewData
           )
-
-          // DEBUG: Log merge results
-          const existingLast = existingData[existingData.length - 1]
-          const mergedLast = merged[merged.length - 1]
-          const newDataFirst = sortedNewData[0]
-          const newDataLast = sortedNewData[sortedNewData.length - 1]
-          console.log(`[useStrengthData] Merge for ticker ${idx}:`, {
-            existingLen: existingData.length,
-            newDataLen: sortedNewData.length,
-            mergedLen: merged.length,
-            existingLastTime: existingLast?.timenow?.toISOString(),
-            newDataFirstTime: newDataFirst?.timenow?.toISOString(),
-            newDataLastTime: newDataLast?.timenow?.toISOString(),
-            mergedLastTime: mergedLast?.timenow?.toISOString(),
-            // Check if intervals are filled in merged data
-            mergedLastIntervalsFilled: strengthIntervals.filter(
-              (i) => mergedLast?.[i] !== null
-            ).length,
-          })
 
           // Track latest timestamp
           if (merged.length > 0) {

@@ -149,8 +149,14 @@ type State = {
   // Individual ticker price data (one line per ticker)
   tickerPriceData: TickerPriceData
 
-  // Toggle for showing individual interval lines (default: false)
+  // Toggle for showing aggregate average strength line (default: true)
+  showStrengthLine: boolean
+
+  // Toggle for showing individual interval strength lines (default: false)
   showIntervalLines: boolean
+
+  // Toggle for showing aggregate average price line (default: true)
+  showPriceLine: boolean
 
   // Toggle for showing individual ticker price lines (default: false)
   showTickerLines: boolean
@@ -182,7 +188,9 @@ type Actions = {
   setTickerPriceData: (data: TickerPriceData) => void
 
   // Display toggles
+  setShowStrengthLine: (show: boolean) => void
   setShowIntervalLines: (show: boolean) => void
+  setShowPriceLine: (show: boolean) => void
   setShowTickerLines: (show: boolean) => void
 
   // Utility actions
@@ -223,7 +231,9 @@ const getInitialState = (): State => {
     aggregatedPriceData: null,
     intervalStrengthData: {},
     tickerPriceData: {},
-    showIntervalLines: false,
+    showStrengthLine: true,
+    showIntervalLines: true,
+    showPriceLine: true,
     showTickerLines: true,
     isHydrated: false,
   }
@@ -299,8 +309,16 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       },
 
       // Display toggles
+      setShowStrengthLine: (show: boolean) => {
+        set({ showStrengthLine: show })
+      },
+
       setShowIntervalLines: (show: boolean) => {
         set({ showIntervalLines: show })
+      },
+
+      setShowPriceLine: (show: boolean) => {
+        set({ showPriceLine: show })
       },
 
       setShowTickerLines: (show: boolean) => {

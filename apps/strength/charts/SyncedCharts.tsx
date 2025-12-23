@@ -227,30 +227,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
         tickerPrice: result.tickerPriceData,
       }
 
-      // DEBUG: Log interval data lengths
-      const intervalDataInfo = Object.entries(result.intervalStrengthData).map(
-        ([key, data]) => `${key}:${data?.length || 0}`
-      )
-      const hasIntervalData =
-        Object.keys(result.intervalStrengthData).length > 0
-      console.log(`[SyncedCharts] Aggregation result v${resultDataVersion}:`, {
-        strengthLen: result.strengthData?.length || 0,
-        priceLen: result.priceData?.length || 0,
-        intervalData: intervalDataInfo.join(', ') || 'EMPTY!',
-        hasIntervalData,
-      })
-
-      // WARN if strengthData exists but intervalStrengthData is empty
-      if (
-        result.strengthData &&
-        result.strengthData.length > 0 &&
-        !hasIntervalData
-      ) {
-        console.warn(
-          '[SyncedCharts] WARNING: strengthData exists but intervalStrengthData is empty!'
-        )
-      }
-
       setChartData(newChartData)
 
       // Cache the results for instant ticker switching

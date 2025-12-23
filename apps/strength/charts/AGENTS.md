@@ -68,9 +68,14 @@ When user scrolls/pans the chart, real-time polling pauses automatically:
 
 ## Chart Lines
 
-- **Strength** (orange, left axis) - average of selected intervals
-- **Price** (blue, right axis) - normalized average of tickers
-- **Individual lines** - toggle to show per-interval or per-ticker
+4 independent toggles control visibility:
+
+- **Aggregate Strength** (orange, left axis) - average of selected intervals
+- **Individual Interval Strength** (light orange, left axis) - one line per interval
+- **Aggregate Price** (blue, right axis) - normalized average of tickers
+- **Individual Ticker Price** (light blue, right axis) - one line per ticker
+
+UI buttons: `S` (strength), `s` (intervals), `P` (price), `p` (tickers)
 
 ## Known Issues / Fixes
 

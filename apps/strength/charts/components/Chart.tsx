@@ -81,7 +81,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     ref
   ) => {
     const {
+      showStrengthLine,
       showIntervalLines,
+      showPriceLine,
       showTickerLines,
       hoursBack,
       interval: selectedIntervals,
@@ -106,8 +108,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const lastSecondDataRef = useRef<LineData[] | null>(null)
     const lastIntervalDataRef = useRef<IntervalStrengthData>({})
     const lastTickerDataRef = useRef<TickerPriceData>({})
-    const strengthEffectRunCount = useRef(0)
-    const intervalEffectRunCount = useRef(0)
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
@@ -498,11 +498,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
     // Update first series (strength) data
     useEffect(() => {
-      strengthEffectRunCount.current++
-      console.log(
-        `[Chart] Strength effect run #${strengthEffectRunCount.current}`
-      )
-
       if (
         !strengthSeriesRef.current ||
         !strengthData ||
@@ -607,53 +602,17 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     }, [priceData, name])
 
     // Update interval series data
+    // ALWAYS update data, control visibility separately via series.applyOptions
     useEffect(() => {
-      intervalEffectRunCount.current++
-      console.log(
-        `[Chart] Interval effect run #${intervalEffectRunCount.current}`
-      )
-
       if (!hasInitialized.current) return
 
-      // DEBUG: Log interval data received
-      const receivedIntervals = Object.keys(intervalStrengthData || {})
-      if (receivedIntervals.length > 0) {
-        const lastTimestamps = receivedIntervals.map((interval) => {
-          const data = intervalStrengthData?.[interval]
-          if (!data || data.length === 0) return `${interval}:empty`
-          const lastTime = data[data.length - 1]?.time
-          return `${interval}:${data.length}pts,last=${lastTime}`
-        })
-        console.log(`[Chart] Interval data update:`, lastTimestamps.join(', '))
-      }
-
-      // DEBUG: Log showIntervalLines state and first interval
-      console.log(
-        `[Chart] showIntervalLines=${showIntervalLines}, firstInterval=${strengthIntervals[0]}`
-      )
-
       try {
-        // Update each interval series with its data
-        // ALWAYS update data, control visibility separately via series.applyOptions
         strengthIntervals.forEach((interval) => {
           const series = intervalSeriesRef.current[interval]
-          if (!series) {
-            console.log(`[Chart] No series for interval ${interval}`)
-            return
-          }
+          if (!series) return
 
           const data = intervalStrengthData?.[interval]
           const prevData = lastIntervalDataRef.current[interval]
-
-          // DEBUG: Log every interval's state (first few only to reduce noise)
-          const intervalIdx = strengthIntervals.indexOf(interval)
-          if (intervalIdx < 2) {
-            console.log(`[Chart] Processing interval ${interval}:`, {
-              hasData: !!data,
-              dataLen: data?.length || 0,
-              prevLen: prevData?.length || 0,
-            })
-          }
 
           if (!data) {
             // Clear the series if no data for this interval
@@ -674,15 +633,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             prevData || null
           )
 
-          // DEBUG: Log update result for first few intervals
-          if (intervalIdx < 2) {
-            console.log(
-              `[Chart] Update result for ${interval}: ${
-                updated ? 'SUCCESS' : 'NO CHANGE'
-              }, currLen=${currentData.length}`
-            )
-          }
-
           if (updated) {
             lastIntervalDataRef.current[interval] = currentData
           }
@@ -698,23 +648,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     }, [intervalStrengthData, showIntervalLines, name])
 
     // Update ticker series data (for individual ticker price lines)
+    // ALWAYS update data, control visibility separately via series.applyOptions
     useEffect(() => {
       if (!hasInitialized.current || !chartRef.current) return
 
       try {
         const chart = chartRef.current
-
-        // If showTickerLines is false, clear all ticker series
-        if (!showTickerLines) {
-          Object.keys(tickerSeriesRef.current).forEach((ticker) => {
-            const series = tickerSeriesRef.current[ticker]
-            if (series && lastTickerDataRef.current[ticker]) {
-              series.setData([])
-              lastTickerDataRef.current[ticker] = null
-            }
-          })
-          return
-        }
 
         // Create series for new tickers that don't have one yet
         tickers.forEach((ticker) => {
@@ -724,6 +663,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               lineWidth: 1,
               color: COLORS.price_i,
               priceScaleId: 'right', // Use same scale as aggregated price
+              visible: showTickerLines, // Set initial visibility
             })
             tickerSeriesRef.current[ticker] = tickerSeries
           }
@@ -759,6 +699,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           if (updated) {
             lastTickerDataRef.current[ticker] = currentData
           }
+
+          // Control visibility based on showTickerLines
+          series.applyOptions({
+            visible: showTickerLines,
+          })
         })
 
         // Clear data for tickers that are no longer selected
@@ -810,25 +755,23 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, [timeRange])
 
-    // Toggle visibility of aggregated strength line based on showIntervalLines
-    // When individual interval lines are shown, hide the aggregated line
+    // Toggle visibility of aggregated strength line
     useEffect(() => {
       if (!strengthSeriesRef.current || !hasInitialized.current) return
 
       strengthSeriesRef.current.applyOptions({
-        visible: !showIntervalLines,
+        visible: showStrengthLine,
       })
-    }, [showIntervalLines])
+    }, [showStrengthLine])
 
-    // Toggle visibility of aggregated price line based on showTickerLines
-    // When individual ticker lines are shown, hide the aggregated line
+    // Toggle visibility of aggregated price line
     useEffect(() => {
       if (!priceSeriesRef.current || !hasInitialized.current) return
 
       priceSeriesRef.current.applyOptions({
-        visible: !showTickerLines,
+        visible: showPriceLine,
       })
-    }, [showTickerLines])
+    }, [showPriceLine])
 
     const hasData = strengthData !== null
 

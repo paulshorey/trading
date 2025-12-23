@@ -1,7 +1,7 @@
 import { Combobox, InputBase, Input, useCombobox } from '@mantine/core'
 import {
   useChartControlsStore,
-  intervalsOptions,
+  strengthIntervals,
 } from '../../state/useChartControlsStore'
 import React from 'react'
 
@@ -22,7 +22,7 @@ export default function IntervalControl({ showLabel = true }: Props) {
   const currentInterval = JSON.stringify(interval)
 
   // Find the selected option label
-  const selectedOption = intervalsOptions.find(
+  const selectedOption = strengthIntervals.find(
     (item) => JSON.stringify(item.value) === currentInterval
   )
 
@@ -63,7 +63,7 @@ export default function IntervalControl({ showLabel = true }: Props) {
 
       <Combobox.Dropdown style={{ zIndex: 10000000, minWidth: '70px' }}>
         <Combobox.Options>
-          {intervalsOptions.map((option) => (
+          {strengthIntervals.map((option) => (
             <Combobox.Option
               value={JSON.stringify(option.value)}
               key={JSON.stringify(option.value)}

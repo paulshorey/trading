@@ -13,7 +13,7 @@ export const strengthIntervals = NEW_INTERVALS
  * Available interval configurations for strength data aggregation
  * Each option represents a set of intervals to average together
  */
-export const intervalsOptions = [
+const intervalsOptions = [
   {
     value: strengthIntervals,
     label: 'all',

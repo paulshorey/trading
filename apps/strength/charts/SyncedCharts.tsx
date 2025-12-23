@@ -43,8 +43,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     interval,
     chartTickers,
     timeRange,
-    showIntervalLines,
-    showTickerLines,
     setTimeRange,
     setAggregatedStrengthData,
     setAggregatedPriceData,
@@ -274,8 +272,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           intervalStrengthData={chartData.intervalStrength}
           tickerPriceData={chartData.tickerPrice}
           tickers={chartTickers}
-          showIntervalLines={showIntervalLines}
-          showTickerLines={showTickerLines}
           width={
             typeof window !== 'undefined'
               ? window.innerWidth * SCALE_FACTOR
@@ -283,7 +279,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           }
           height={availableHeight}
           timeRange={chartTimeRange}
-          showZeroLine={true}
         />
       )}
 

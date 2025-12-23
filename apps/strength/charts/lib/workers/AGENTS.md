@@ -1,62 +1,47 @@
 # Web Workers
 
-This folder contains Web Worker implementations for offloading heavy computations from the main thread.
+Aggregation runs in a Web Worker to prevent UI freezes.
 
 ## Files
 
-- **aggregation.worker.ts**: Self-contained Web Worker that performs all data aggregation
-  - Strength data aggregation (average of intervals across tickers)
-  - Price data aggregation (normalized average of all tickers)
-  - Individual interval strength data
-  - Individual ticker price data
-  - Echoes back `dataVersion` for race condition handling
-  - Note: All aggregation logic is duplicated (inlined) from `/lib/aggregation/` to avoid import issues in workers
+- **aggregation.worker.ts** - Self-contained worker (all logic inlined, no imports)
+- **useAggregationWorker.ts** - React hook managing worker lifecycle
+- **types.ts** - Shared types for worker communication
 
-- **useAggregationWorker.ts**: React hook that manages the worker lifecycle
-  - Creates/terminates worker on mount/unmount
-  - Serializes data before sending to worker (Dates → ISO strings)
-  - **dataVersion tracking**: Tied to data source (tickers) for race condition prevention
-  - **Stale result filtering**: Results with old dataVersion are ignored
-  - `setValidDataVersion()`: Set minimum acceptable version (older results ignored)
+## Why Workers?
 
-- **types.ts**: Shared types for worker communication
-  - `WorkerStrengthRow`: Serializable version of `StrengthRowGet`
-  - `AggregationWorkerRequest/Response`: Message types with `dataVersion`
-
-## Why Web Workers?
-
-Aggregation involves processing thousands of data points with complex calculations (forward-fill, normalization, averaging). Running this on the main thread causes UI freezes during real-time updates.
-
-Workers run in a separate thread, keeping the UI responsive.
+Aggregation processes ~14,400 data points with forward-fill, normalization, and averaging.
+Takes 1000-1500ms. Running on main thread would freeze the UI.
 
 ## Race Condition Prevention
 
-The `dataVersion` system prevents showing stale data when tickers change:
+When tickers change rapidly, multiple aggregations may be in flight.
+The `dataVersion` system ensures stale results are ignored:
 
-1. `dataVersion` is tied to the data source (increments when tickers change)
-2. Each worker request includes the `dataVersion`
-3. Worker echoes back `dataVersion` in results
-4. Results with old `dataVersion` are ignored at multiple levels:
-   - Worker hook checks `dataVersion >= validDataVersionRef`
-   - SyncedCharts double-checks against `chartDataVersionRef`
-
-This ensures old ticker data is NEVER shown after switching tickers.
+1. `dataVersion` increments on ticker change
+2. Worker echoes back `dataVersion` in results
+3. Results with old version are discarded at multiple levels
 
 ## Usage
 
-```tsx
-const { aggregate, isProcessing, setValidDataVersion } = useAggregationWorker({
-  onResult: (result, processingTimeMs, dataVersion) => { /* update chart */ },
-  onError: (error) => { /* handle error */ },
+```typescript
+const { aggregate, isReady, setValidDataVersion } = useAggregationWorker({
+  onResult: (result, processingTimeMs, dataVersion) => { ... },
+  onError: (error) => { ... },
 })
 
-// When data source changes, set the valid version
-useEffect(() => {
-  setValidDataVersion(dataVersion)
-  clearChartData()
-}, [dataVersion])
+// Set valid version to ignore stale results
+setValidDataVersion(dataVersion)
 
-// Trigger aggregation with dataVersion
+// Trigger aggregation
 aggregate(rawData, intervals, tickers, dataVersion)
 ```
 
+## What the Worker Computes
+
+1. **Strength data** - Average of selected intervals across all tickers
+2. **Price data** - Normalized average of all tickers
+3. **Interval data** - Individual line per interval (for detail view)
+4. **Ticker data** - Individual line per ticker (for detail view)
+
+All results extend 12 hours into the future (flat projection).

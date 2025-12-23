@@ -21,8 +21,9 @@ export interface SyncedChartsProps {
 }
 
 /**
- * Generate a simple hash of rawData to detect changes
- * Only checks timestamps and data lengths for efficiency
+ * Generate a hash of rawData to detect meaningful changes
+ * Includes timestamps AND sample values from recent data
+ * This prevents re-aggregation when only old historical data exists
  */
 function getRawDataHash(rawData: unknown[]): string {
   if (!rawData || rawData.length === 0) return 'empty'
@@ -33,15 +34,51 @@ function getRawDataHash(rawData: unknown[]): string {
       hash += '|null'
       continue
     }
-    const arr = tickerData as { timenow: Date }[]
-    // Include length and first/last timestamps
+    const arr = tickerData as { timenow: Date; price?: number }[]
     const len = arr.length
     const first = arr[0]?.timenow?.getTime() || 0
     const last = arr[len - 1]?.timenow?.getTime() || 0
-    hash += `|${len}:${first}:${last}`
+
+    // Also include the price of the last few rows to detect value changes
+    // (not just timestamp changes)
+    let recentPriceHash = ''
+    for (let i = Math.max(0, len - 5); i < len; i++) {
+      const price = arr[i]?.price || 0
+      recentPriceHash += `:${price.toFixed(2)}`
+    }
+
+    hash += `|${len}:${first}:${last}${recentPriceHash}`
   }
   return hash
 }
+
+/**
+ * Generate a cache key for aggregated results
+ * Based on tickers and intervals (not data content)
+ */
+function getAggregationCacheKey(
+  tickers: string[],
+  intervals: string[]
+): string {
+  return `${tickers.sort().join(',')}|${intervals.sort().join(',')}`
+}
+
+// Cache for aggregated results - survives ticker switches
+// Keyed by ticker+interval combination
+type AggregationCache = Map<
+  string,
+  {
+    strength: LineData<Time>[] | null
+    price: LineData<Time>[] | null
+    intervalStrength: Record<string, LineData<Time>[]>
+    tickerPrice: Record<string, LineData<Time>[]>
+    timestamp: number // When this was cached
+  }
+>
+
+// Module-level cache (persists across component re-renders)
+const aggregationCache: AggregationCache = new Map()
+const CACHE_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes cache validity
 
 /**
  * SyncedCharts - Main chart component with controlled data flow
@@ -115,6 +152,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   /**
    * Handle aggregation results from the Web Worker
    * Only accepts results where dataVersion matches current
+   * Caches results for instant ticker switching
    */
   const handleAggregationResult = useCallback(
     (
@@ -139,12 +177,26 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       chartDataVersionRef.current = resultDataVersion
 
       // Update local chart data
-      setChartData({
+      const newChartData = {
         strength: result.strengthData,
         price: result.priceData,
         intervalStrength: result.intervalStrengthData,
         tickerPrice: result.tickerPriceData,
+      }
+      setChartData(newChartData)
+
+      // Cache the results for instant ticker switching
+      const cacheKey = getAggregationCacheKey(chartTickers, interval)
+      aggregationCache.set(cacheKey, {
+        ...newChartData,
+        timestamp: Date.now(),
       })
+
+      // Limit cache size to prevent memory leaks (keep last 10 combinations)
+      if (aggregationCache.size > 10) {
+        const oldestKey = aggregationCache.keys().next().value
+        if (oldestKey) aggregationCache.delete(oldestKey)
+      }
 
       // Also update store for any external consumers
       setAggregatedStrengthData(result.strengthData)
@@ -161,6 +213,8 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       }
     },
     [
+      chartTickers,
+      interval,
       setAggregatedStrengthData,
       setAggregatedPriceData,
       setIntervalStrengthData,
@@ -218,13 +272,43 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   ])
 
   /**
+   * Effect: Load from cache when ticker/interval changes
+   * Provides instant display while fresh data is being fetched
+   */
+  useEffect(() => {
+    if (dataState !== 'ready') return
+
+    const cacheKey = getAggregationCacheKey(chartTickers, interval)
+    const cached = aggregationCache.get(cacheKey)
+
+    if (cached) {
+      const age = Date.now() - cached.timestamp
+      if (age < CACHE_MAX_AGE_MS) {
+        // Use cached data immediately for instant display
+        // Fresh aggregation will update this shortly
+        if (chartData.strength === null) {
+          setChartData({
+            strength: cached.strength,
+            price: cached.price,
+            intervalStrength: cached.intervalStrength,
+            tickerPrice: cached.tickerPrice,
+          })
+        }
+      } else {
+        // Cache expired, remove it
+        aggregationCache.delete(cacheKey)
+      }
+    }
+  }, [chartTickers, interval, dataState]) // Only when tickers/intervals change
+
+  /**
    * Effect: Process data through worker when rawData changes
    *
    * Performance optimizations:
    * - Uses refs for processing state (not in dependency array)
-   * - Debounces rapid changes with 500ms minimum interval
-   * - Skips if rawData hash hasn't changed
-   * - Clears pending aggregations when new data arrives
+   * - Debounces rapid changes with 2000ms minimum interval (real-time data is 10s)
+   * - Skips if rawData hash hasn't changed (includes value comparison)
+   * - Caches results for instant ticker switching
    */
   useEffect(() => {
     // Don't process if still loading or no data
@@ -232,7 +316,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     if (rawData.length === 0 || !rawData.some((data) => data !== null)) return
     if (!isReady) return
 
-    // Check if rawData actually changed (by comparing hashes)
+    // Check if rawData actually changed (by comparing hashes including values)
     const currentHash = getRawDataHash(rawData)
     if (currentHash === lastRawDataHashRef.current) {
       // Data hasn't changed, skip aggregation
@@ -250,7 +334,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       // Don't queue up requests if already processing
       if (isProcessingRef.current) {
         // Schedule retry after a short delay
-        pendingAggregationRef.current = setTimeout(triggerAggregation, 200)
+        pendingAggregationRef.current = setTimeout(triggerAggregation, 500)
         return
       }
 
@@ -262,9 +346,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       aggregate(rawData, interval, chartTickers, dataVersion)
     }
 
-    // Check if we need to debounce (minimum 500ms between aggregations)
+    // Debounce: 2000ms for real-time updates (data comes every 10s, no need for faster)
+    // But use 100ms for initial load (when lastAggregationTime is 0)
     const timeSinceLastAggregation = Date.now() - lastAggregationTimeRef.current
-    const DEBOUNCE_MS = 500
+    const isInitialLoad = lastAggregationTimeRef.current === 0
+    const DEBOUNCE_MS = isInitialLoad ? 100 : 2000
 
     if (timeSinceLastAggregation < DEBOUNCE_MS) {
       // Schedule aggregation after debounce period

@@ -1,119 +1,70 @@
 # Charts Mini-App
 
-Financial charting system built on `lightweight-charts` (v5.0.8). Renders dual y-axis charts showing strength (left) and price (right) data with real-time updates.
+Financial charting system built on `lightweight-charts` (v5.0.8). Dual y-axis charts showing strength (left) and price (right) with real-time updates.
 
 ## Folder Structure
 
 ```
 charts/
-├── SyncedChartsWrapper.tsx   # Entry point - waits for dimensions + hydration
-├── SyncedCharts.tsx          # Orchestrates data flow to charts
-├── constants.ts              # Chart colors, default values
-├── classes.module.scss       # Shared styles
-│
+├── SyncedChartsWrapper.tsx   # Entry point - waits for dimensions
+├── SyncedCharts.tsx          # Orchestrates data flow
 ├── components/
-│   ├── Chart.tsx             # Core chart rendering
-│   ├── ChartTitle.tsx        # Title with ticker/aggregation info
-│   ├── ChartStates.tsx       # Loading/error states
-│   ├── Header.tsx            # Top controls bar
-│   ├── UpdatedTime.tsx       # Last update timestamp
+│   ├── Chart.tsx             # Core chart rendering (lightweight-charts)
 │   └── controls/             # Ticker, interval, date selectors
-│
 ├── lib/
 │   ├── data/                 # Data fetching (see lib/data/AGENTS.md)
-│   ├── aggregation/          # Data aggregation (see lib/aggregation/AGENTS.md)
 │   ├── workers/              # Web Workers (see lib/workers/AGENTS.md)
-│   ├── primitives/           # Custom chart primitives (see lib/primitives/AGENTS.md)
-│   ├── chartConfig.ts        # Chart styling config
-│   └── chartUtils.ts         # Time range calculations
-│
-└── state/
-    ├── useChartControlsStore.ts  # Zustand store for UI controls
-    └── urlSync.ts                # URL query param sync
+│   ├── aggregation/          # Data aggregation
+│   └── primitives/           # Custom chart primitives
+└── state/                    # Zustand store + URL sync
 ```
 
 ## Data Flow
 
 ```
-URL Query Params
+useStrengthData (fetches raw data, polls every 10s)
       ↓
-useChartControlsStore (Zustand) - hydrates from URL
+SyncedCharts (debounces, checks hash, triggers aggregation)
       ↓
-SyncedChartsWrapper - waits for dimensions + hydration
+Web Worker (aggregates all data off main thread)
       ↓
-SyncedCharts - orchestrates data flow
-      ↓
-useStrengthData - fetches data, manages polling (every 10s)
-      ↓
-Debounce (500ms min) + Hash comparison
-      ↓
-Web Worker - aggregates data off main thread (~1000-1500ms)
-      ↓
-Chart.tsx - renders when data ready
+Chart.tsx (uses setData/update efficiently)
 ```
-
-### Ticker Change Flow
-
-1. User selects tickers → `dataState = 'loading'`, `dataVersion++`
-2. Real-time polling paused, chart cleared
-3. Historical data fetched (up to 240 hours)
-4. Worker aggregates → Chart renders
-5. Real-time polling resumes (every 10 seconds)
-
-### Real-Time Update Flow
-
-Every 10 seconds while `dataState === 'ready'`:
-
-1. Calculate dynamic fetch window (based on time since last fetch)
-2. Fetch data for calculated window (4 min minimum, up to 2 hours if returning from background)
-3. Forward-fill null intervals from existing historical data
-4. Merge into existing data
-5. Debounce (500ms min between aggregations)
-6. Skip if data hash unchanged
-7. Worker re-aggregates
-8. Chart updates
-
-### Background Tab Recovery
-
-When tab is in background, JavaScript execution is limited. On return:
-- Visibility change event triggers immediate fetch
-- Dynamic window calculates time since last successful fetch
-- All missing data is fetched in one request (up to 2 hours max)
-
-**See `lib/data/AGENTS.md`** for detailed documentation on historical vs real-time data.
 
 ## Performance Optimizations
 
-### Problem Solved: Infinite Aggregation Loop
+### 1. Aggregation Debouncing (2000ms)
+Real-time data arrives every 10 seconds. Aggregation takes ~1000-1500ms.
+Debounce prevents excessive aggregations while ensuring fresh data.
 
-Previously, the aggregation effect had `isProcessing` in its dependency array. When aggregation completed, `isProcessing` changed, triggering another aggregation in an infinite loop (~every 2 seconds).
+### 2. Smart Hash Comparison
+Before aggregating, we compare a hash of:
+- Data lengths and timestamps
+- Last 5 price values (detects actual value changes)
+Skips aggregation if hash unchanged.
 
-**Solution:**
-- Use refs instead of state for processing flag
-- Add 500ms debounce between aggregations
-- Skip aggregation if rawData hash hasn't changed
+### 3. Result Caching
+Aggregated results are cached by ticker+interval combination.
+When switching back to a previously viewed ticker, cached data displays instantly.
+Cache expires after 5 minutes.
 
-### Current Optimizations
+### 4. Efficient Chart Updates
+`Chart.tsx` uses `update()` for single-point changes and `setData()` only when necessary.
+This is the `lightweight-charts` best practice for real-time data.
 
-1. **Debouncing**: 500ms minimum gap between aggregations
-2. **Hash comparison**: Skip if rawData hasn't changed
-3. **Refs for state**: `isProcessingRef` doesn't trigger re-renders
-4. **Web Worker**: Aggregation runs off main thread
+### 5. Background Tab Recovery
+When tab is in background, polling may stop. On return:
+- Visibility change triggers immediate fetch
+- Dynamic window calculates missed time
+- All missing data fetched in one request
 
 ## Chart Lines
 
-**Always visible:**
-- **Strength** (orange, left axis) - average of selected intervals across all tickers
-- **Price** (blue, right axis) - normalized average of all selected tickers
+- **Strength** (orange, left axis) - average of selected intervals
+- **Price** (blue, right axis) - normalized average of tickers
+- **Individual lines** - toggle to show per-interval or per-ticker
 
-**Optional toggles:**
-- **Individual interval lines** - each interval separately (2m, 4m, 12m, etc.)
-- **Individual ticker price lines** - each ticker separately, normalized
+## Related Docs
 
-## Related Documentation
-
-- `lib/data/AGENTS.md` - Historical vs real-time data, polling strategy, optimizations
-- `lib/workers/AGENTS.md` - Web Worker and race condition prevention
-- `lib/aggregation/AGENTS.md` - Data aggregation and price normalization
-- `lib/primitives/AGENTS.md` - Custom chart primitives
-- `state/AGENTS.md` - Zustand store and URL sync
+- `lib/data/AGENTS.md` - Data fetching and polling
+- `lib/workers/AGENTS.md` - Web Worker and race conditions

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useStrengthData } from './lib/data/useStrengthData'
 import { calculateTimeRange } from './lib/chartUtils'
 import { Chart, ChartRef } from './components/Chart'
@@ -14,6 +14,7 @@ import {
 } from './lib/workers/useAggregationWorker'
 import { SCALE_FACTOR } from '@/constants'
 import { LineData, Time } from 'lightweight-charts'
+import { SCROLL_PAUSE_RESUME_MS } from './constants'
 
 export interface SyncedChartsProps {
   availableHeight: number
@@ -104,9 +105,6 @@ const CACHE_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes cache validity
  * - Worker results include dataVersion
  * - Results with stale dataVersion are ignored
  */
-// Time in ms to wait after user stops scrolling before resuming polling
-const SCROLL_PAUSE_RESUME_MS = 30000
-
 export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const chartRef = useRef<ChartRef | null>(null)
 

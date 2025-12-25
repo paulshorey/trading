@@ -30,3 +30,11 @@ apps/strength/
 ## Database
 
 See `@lib/common/sql/strength/` for data types and queries.
+
+## Charts
+
+This strength app consists mostly of the charts logic and components in `charts` folder.
+
+This app uses light-weight charts library. Documentation in `docs/lightweight-charts`.
+
+@docs/lightweight-charts/AGENTS.md

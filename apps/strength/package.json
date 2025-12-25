@@ -28,7 +28,7 @@
     "colorful-console-logger": "^1.1.0",
     "html-entities": "^2.5.2",
     "iron-session": "^8.0.3",
-    "lightweight-charts": "^5.0.8",
+    "lightweight-charts": "^5.1",
     "next": "^14.2.5",
     "openai": "^4.67.3",
     "pg": "^8.16.3",

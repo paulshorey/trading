@@ -22,3 +22,6 @@ export const COLORS = {
   price_i: 'hsla(233 100% 75% / 0.67)', // Blue transparent
   neutral_i: '#CDCCC835',
 }
+
+// Time in ms to wait after user stops scrolling before resuming polling
+export const SCROLL_PAUSE_RESUME_MS = 30000 // 30 seconds

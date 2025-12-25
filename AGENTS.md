@@ -51,20 +51,18 @@ import { strengthGets } from '@lib/common/sql/strength/gets'
 
 ### Build and lint:
 
-Don't bother checking linting / typescript separately. Simply run `npm run build` in the app that you're working on.
-
-If working on the strength app then `cd apps/strength` (if not in that folder already) and run `npm run build` to check lint / types together.
+Don't bother checking linting / typescript separately. Simply run `npm run build` in the app that you're working on. If working on the strength app for example then `cd apps/strength` and run `npm run build` to check lint / types together.
 
 ### Questions:
 
-If I present you with a contradictory or confusing request, ask me to clarify.
+If I present you with a contradictory or confusing request, ask to clarify.
 
-If the solution is not obvious technically, search the web about best practices. Search for more information about the library or framework we're using.
+If the solution is not obvious, search the web about best practices. Search for more information about the library or framework we're using.
 
 ### AGENTS.md files memory and documentation:
 
-You are an AI agent. You will read AGENTS.md file in any relevant folder every time you think about a prompt. AGENTS.md files will serve as documentation about the files and code concepts in that folder, how this folder relates to the app as a whole. Add or edit AGENTS.md files as you make changes, to document complex topics which are not immediately obvious. Documentation you write will help you remember which folder or file to open next time when you are starting work on a similar topic.
-
-When writing documentation, be very concise. AGENTS.md files should only include hints to help you find relevant files in the codebase. Specific documentation should be written in comment blocks above each file or function.
+You are an AI agent. You will read AGENTS.md file in any relevant folder every time you think about a prompt. AGENTS.md files will serve as documentation about the files and relationships in that folder. Add or edit AGENTS.md files as you make changes. Document complex topics which are not immediately obvious. Documentation you write will help you remember which folder or file to open next time when you work on a similar topic.
 
 Always try to improve AGENTS.md files as you look throughout the codebase. Remove irrelevant or incorrect info. Consolidate documentation that is redundant or verbose.
+
+Do not write too much documentation, make it very conscise. Avoid duplicate redundant comments. Do not write documentation and comments for every little change, only for big major concepts. Do not add comments or documentation for code that is easy to read. If code makes sense at a glance, it does not need documentation.

@@ -13,7 +13,6 @@ import {
   LineSeries,
   ISeriesApi,
   Time,
-  IPriceLine,
 } from 'lightweight-charts'
 import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import ChartTitle from './ChartTitle'
@@ -27,7 +26,10 @@ import {
   markerConfigToOptions,
 } from '../lib/primitives/timeMarkers'
 import { TimeRangeHighlightPrimitive } from '../lib/primitives/TimeRangeHighlight'
-import { forwardFillData, getTimeRangeBoundaries } from '../lib/primitives/forwardFillData'
+import {
+  forwardFillData,
+  getTimeRangeBoundaries,
+} from '../lib/primitives/forwardFillData'
 import { SCALE_FACTOR } from '@/constants'
 import {
   strengthIntervals,
@@ -36,6 +38,7 @@ import {
   useChartControlsStore,
 } from '../state/useChartControlsStore'
 import { COLORS } from '../constants'
+
 interface ChartProps {
   heading: string | React.ReactNode
   name: string
@@ -44,12 +47,11 @@ interface ChartProps {
   intervalStrengthData?: IntervalStrengthData
   tickerPriceData?: TickerPriceData
   tickers?: string[]
-  showIntervalLines?: boolean
-  showTickerLines?: boolean
   width: number
   height: number
   timeRange?: { from: Time; to: Time } | null
-  showZeroLine?: boolean
+  /** Called when user scrolls/pans the chart (visible time range changes) */
+  onUserScroll?: () => void
 }
 
 export interface ChartRef {
@@ -74,11 +76,17 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       width,
       height,
       timeRange,
-      showZeroLine,
+      onUserScroll,
     },
     ref
   ) => {
-    const { showIntervalLines, showTickerLines } = useChartControlsStore()
+    const {
+      showStrengthLine,
+      showIntervalLines,
+      showPriceLine,
+      showTickerLines,
+      hoursBack,
+    } = useChartControlsStore()
 
     const containerRef = useRef<HTMLDivElement>(null)
     const chartRef = useRef<IChartApi | null>(null)
@@ -86,7 +94,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const intervalSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const tickerSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
-    const zeroLineRef = useRef<IPriceLine | null>(null)
+    const zeroLineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
     const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(
       null
@@ -94,6 +102,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const markersInitialized = useRef(false)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
+    const onUserScrollRef = useRef(onUserScroll)
+    onUserScrollRef.current = onUserScroll
     const lastSecondDataRef = useRef<LineData[] | null>(null)
     const lastIntervalDataRef = useRef<IntervalStrengthData>({})
     const lastTickerDataRef = useRef<TickerPriceData>({})
@@ -115,6 +125,24 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       const chart = createChart(containerRef.current, getChartConfig(height))
       chartRef.current = chart
       hasInitialized.current = true
+
+      // Track whether this is the initial render (skip first callback which fires on setup)
+      let isInitialRender = true
+
+      // Subscribe to visible time range changes (fires when user scrolls/pans)
+      // Note: This will also fire on programmatic range changes, but onUserScroll
+      // is debounced upstream so it won't cause issues
+      const handleTimeRangeChange = () => {
+        // Skip the initial callback that fires when chart is created
+        if (isInitialRender) {
+          isInitialRender = false
+          return
+        }
+        onUserScrollRef.current?.()
+      }
+      chart
+        .timeScale()
+        .subscribeVisibleLogicalRangeChange(handleTimeRangeChange)
 
       // --- Fix for zoom: 0.5 ---
       // Intercept mouse events to correct coordinates for the 2x width
@@ -179,17 +207,30 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Add first series (strength) - uses LEFT price scale
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 1,
+        lineWidth: 2,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
       strengthSeriesRef.current = strengthSeries
 
+      // Add dedicated zero line series (always visible, independent of other series)
+      // This ensures the zero line is always shown regardless of which strength lines are displayed
+      const zeroLineSeries = chart.addSeries(LineSeries, {
+        color: COLORS.neutral,
+        lineWidth: 2,
+        lineStyle: 2, // Dashed line
+        priceScaleId: 'left', // Same scale as strength series
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      zeroLineSeriesRef.current = zeroLineSeries
+
       // Add second series (price) - uses RIGHT price scale (default)
       // Always create the series, even if data doesn't exist yet
       const priceSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 1,
+        lineWidth: 2,
         color: COLORS.price,
         priceScaleId: 'right',
       })
@@ -198,10 +239,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Add interval series for each possible interval
       // These are created once and data is set/updated later
       strengthIntervals.forEach((interval) => {
+        // if (interval === '30S' && parseInt(hoursBack) > 12) return
+        // if (interval === '1' && parseInt(hoursBack) > 24) return
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
           lineWidth: 1,
-          color: COLORS.strength_i,
+          color: interval === '181' ? COLORS.strength : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
         intervalSeriesRef.current[interval] = intervalSeries
@@ -224,27 +267,25 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         })
       }
 
-      // Apply initial time range if provided
-      if (timeRange && timeRange.from < timeRange.to) {
-        try {
-          chart.timeScale().setVisibleRange(timeRange)
-        } catch (error) {
-          console.warn('Failed to set initial visible range:', error)
-        }
-      }
+      // NOTE: Don't set initial time range here - wait for data to be loaded
+      // setVisibleRange fails if the series has no data
+      // Time range is applied after data is set in the useEffect hooks below
 
       // Cleanup
       return () => {
+        chart
+          .timeScale()
+          .unsubscribeVisibleLogicalRangeChange(handleTimeRangeChange)
         chart.remove()
         chartRef.current = null
         strengthSeriesRef.current = null
         priceSeriesRef.current = null
+        zeroLineSeriesRef.current = null
         intervalSeriesRef.current = {}
         tickerSeriesRef.current = {}
-        zeroLineRef.current = null
         hasInitialized.current = false
       }
-    }, []) // Only run once on mount - removed all dependencies
+    }, []) // Only run once on mount - uses ref for callback
 
     // Helper function to create all time markers
     const createTimeMarkers = (currentData: LineData[]) => {
@@ -311,6 +352,151 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       return forwardFillData(data, 60, requiredTimestamps)
     }
 
+    /**
+     * Helper to efficiently update series data
+     *
+     * IMPORTANT: lightweight-charts update() can ONLY:
+     * 1. Update the LAST point in the series (if same timestamp)
+     * 2. Append a new point that comes AFTER the last point
+     *
+     * It CANNOT update points in the middle of the series.
+     * For any other changes, we must use setData().
+     */
+    const updateSeriesEfficiently = (
+      series: ISeriesApi<'Line'>,
+      currentData: LineData[],
+      prevData: LineData[] | null
+    ): boolean => {
+      if (currentData.length === 0) return false
+
+      // First load or no previous data: use setData
+      if (!prevData || prevData.length === 0) {
+        series.setData(currentData)
+        return true
+      }
+
+      const lengthDiff = currentData.length - prevData.length
+
+      // Check if this is a simple append (new points at the end only)
+      if (lengthDiff > 0 && lengthDiff <= 10) {
+        // Verify that existing data hasn't changed (timestamps match)
+        // We only check the last few points of the existing data for performance
+        const checkCount = Math.min(5, prevData.length)
+        let existingDataUnchanged = true
+
+        for (let i = 0; i < checkCount; i++) {
+          const idx = prevData.length - 1 - i
+          const curr = currentData[idx]
+          const prev = prevData[idx]
+
+          // If timestamps differ or values significantly differ, data changed
+          if (
+            !curr ||
+            !prev ||
+            curr.time !== prev.time ||
+            Math.abs(curr.value - prev.value) > 0.0001
+          ) {
+            existingDataUnchanged = false
+            break
+          }
+        }
+
+        // Only use update() if existing data is unchanged
+        // (meaning we're just appending new points)
+        if (existingDataUnchanged) {
+          try {
+            // Append only the new points
+            for (let i = prevData.length; i < currentData.length; i++) {
+              const point = currentData[i]
+              if (point) {
+                series.update(point)
+              }
+            }
+            return true
+          } catch (e) {
+            // If update fails for any reason, fall back to setData
+            console.warn('update() failed, falling back to setData:', e)
+            series.setData(currentData)
+            return true
+          }
+        }
+      }
+
+      // Same length - check if only the LAST point changed
+      if (lengthDiff === 0) {
+        const lastCurr = currentData[currentData.length - 1]
+        const lastPrev = prevData[prevData.length - 1]
+
+        // If only the last point changed (same timestamp, different value)
+        if (
+          lastCurr &&
+          lastPrev &&
+          lastCurr.time === lastPrev.time &&
+          Math.abs(lastCurr.value - lastPrev.value) > 0.0001
+        ) {
+          // Check if everything else is the same
+          let onlyLastChanged = true
+          const checkCount = Math.min(5, currentData.length - 1)
+
+          for (let i = 0; i < checkCount; i++) {
+            const idx = currentData.length - 2 - i
+            if (idx < 0) break
+            const curr = currentData[idx]
+            const prev = prevData[idx]
+
+            if (
+              !curr ||
+              !prev ||
+              curr.time !== prev.time ||
+              Math.abs(curr.value - prev.value) > 0.0001
+            ) {
+              onlyLastChanged = false
+              break
+            }
+          }
+
+          if (onlyLastChanged) {
+            try {
+              // Safe to use update() - only the last point changed
+              series.update(lastCurr)
+              return true
+            } catch (e) {
+              // Fall back to setData if update fails
+              console.warn('update() failed, falling back to setData:', e)
+              series.setData(currentData)
+              return true
+            }
+          }
+        }
+
+        // Check if data is identical (no changes needed)
+        let identical = true
+        for (let i = 0; i < Math.min(10, currentData.length); i++) {
+          const idx = currentData.length - 1 - i
+          const curr = currentData[idx]
+          const prev = prevData[idx]
+          if (
+            !curr ||
+            !prev ||
+            curr.time !== prev.time ||
+            Math.abs(curr.value - prev.value) > 0.0001
+          ) {
+            identical = false
+            break
+          }
+        }
+
+        if (identical) {
+          return false // No changes detected
+        }
+      }
+
+      // For any other changes (data in middle changed, length decreased, etc.)
+      // we must use setData()
+      series.setData(currentData)
+      return true
+    }
+
     // Update first series (strength) data
     useEffect(() => {
       if (
@@ -326,55 +512,64 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(strengthData)
 
-        // Check if data actually changed
-        const dataChanged =
-          !prevData ||
-          prevData.length !== currentData.length ||
-          prevData.some((item, index) => {
-            const currentItem = currentData[index]
-            return (
-              !currentItem ||
-              item.time !== currentItem.time ||
-              Math.abs(item.value - currentItem.value) > 0.0001
-            )
-          })
+        // Use efficient update strategy
+        const updated = updateSeriesEfficiently(
+          strengthSeriesRef.current,
+          currentData,
+          prevData
+        )
 
-        if (!dataChanged) {
-          // Still try to create markers even if data hasn't changed
-          // This handles the case where the component re-renders
-          if (!markersInitialized.current && currentData.length > 0) {
-            createTimeMarkers(currentData)
+        if (updated) {
+          lastDataRef.current = currentData // Don't spread - keep reference for comparison
+
+          // Update zero line series to span the full data range
+          // Only needs start and end points to draw a horizontal line at y=0
+          if (zeroLineSeriesRef.current && currentData.length > 0) {
+            const firstTime = currentData[0]!.time
+            const lastTime = currentData[currentData.length - 1]!.time
+            zeroLineSeriesRef.current.setData([
+              { time: firstTime, value: 0 },
+              { time: lastTime, value: 0 },
+            ])
           }
-          return
         }
-
-        // Simply use setData for all updates
-        strengthSeriesRef.current.setData(currentData)
-        lastDataRef.current = [...currentData]
 
         // Create time markers on first data load
         if (!markersInitialized.current && currentData.length > 0) {
           createTimeMarkers(currentData)
         }
 
-        // Reapply time range after data update
-        if (timeRange && chartRef.current && timeRange.from < timeRange.to) {
-          setTimeout(() => {
+        // Apply time range on first data load (when we had no previous data)
+        // Only do this if we have actual data to display
+        if (
+          updated &&
+          !prevData &&
+          currentData.length > 0 &&
+          timeRange &&
+          chartRef.current &&
+          timeRange.from < timeRange.to
+        ) {
+          // Use requestAnimationFrame to ensure chart has processed the data
+          requestAnimationFrame(() => {
             if (
               chartRef.current &&
+              lastDataRef.current &&
+              lastDataRef.current.length > 0 &&
               timeRange &&
               timeRange.from < timeRange.to
             ) {
               try {
                 chartRef.current.timeScale().setVisibleRange(timeRange)
               } catch (error) {
+                // This can happen if the time range is outside the data bounds
+                // Just log and ignore - chart will auto-fit
                 console.warn(
                   'Failed to set visible range after data update:',
                   error
                 )
               }
             }
-          }, 100)
+          })
         }
       } catch (error) {
         console.warn('Failed to update strength data:', error)
@@ -392,49 +587,30 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // Apply forward-fill to ensure time range boundaries exist
         const currentData = prepareDataWithRequiredTimestamps(priceData)
 
-        // Check if data actually changed
-        const dataChanged =
-          !prevData ||
-          prevData.length !== currentData.length ||
-          prevData.some((item, index) => {
-            const currentItem = currentData[index]
-            return (
-              !currentItem ||
-              item.time !== currentItem.time ||
-              Math.abs(item.value - currentItem.value) > 0.0001
-            )
-          })
+        // Use efficient update strategy
+        const updated = updateSeriesEfficiently(
+          priceSeriesRef.current,
+          currentData,
+          prevData
+        )
 
-        if (!dataChanged) {
-          return
+        if (updated) {
+          lastSecondDataRef.current = currentData
         }
-
-        // Simply use setData for all updates
-        priceSeriesRef.current.setData(currentData)
-        lastSecondDataRef.current = [...currentData]
       } catch (error) {
         console.warn('Failed to update price data:', error)
       }
     }, [priceData, name])
 
     // Update interval series data
+    // ALWAYS update data, control visibility separately via series.applyOptions
     useEffect(() => {
       if (!hasInitialized.current) return
 
       try {
-        // Update each interval series with its data
         strengthIntervals.forEach((interval) => {
           const series = intervalSeriesRef.current[interval]
           if (!series) return
-
-          // If showIntervalLines is false, clear all interval series
-          if (!showIntervalLines) {
-            if (lastIntervalDataRef.current[interval]) {
-              series.setData([])
-              lastIntervalDataRef.current[interval] = null
-            }
-            return
-          }
 
           const data = intervalStrengthData?.[interval]
           const prevData = lastIntervalDataRef.current[interval]
@@ -451,26 +627,21 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           // Apply forward-fill to ensure time range boundaries exist
           const currentData = prepareDataWithRequiredTimestamps(data)
 
-          // Check if data actually changed
-          const dataChanged =
-            !prevData ||
-            prevData.length !== currentData.length ||
-            prevData.some((item, index) => {
-              const currentItem = currentData[index]
-              return (
-                !currentItem ||
-                item.time !== currentItem.time ||
-                Math.abs(item.value - currentItem.value) > 0.0001
-              )
-            })
+          // Use efficient update strategy
+          const updated = updateSeriesEfficiently(
+            series,
+            currentData,
+            prevData || null
+          )
 
-          if (!dataChanged) {
-            return
+          if (updated) {
+            lastIntervalDataRef.current[interval] = currentData
           }
 
-          // Set data for this interval
-          series.setData(currentData)
-          lastIntervalDataRef.current[interval] = [...currentData]
+          // Control visibility based on showIntervalLines
+          series.applyOptions({
+            visible: showIntervalLines,
+          })
         })
       } catch (error) {
         console.warn('Failed to update interval data:', error)
@@ -478,23 +649,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     }, [intervalStrengthData, showIntervalLines, name])
 
     // Update ticker series data (for individual ticker price lines)
+    // ALWAYS update data, control visibility separately via series.applyOptions
     useEffect(() => {
       if (!hasInitialized.current || !chartRef.current) return
 
       try {
         const chart = chartRef.current
-
-        // If showTickerLines is false, clear all ticker series
-        if (!showTickerLines) {
-          Object.keys(tickerSeriesRef.current).forEach((ticker) => {
-            const series = tickerSeriesRef.current[ticker]
-            if (series && lastTickerDataRef.current[ticker]) {
-              series.setData([])
-              lastTickerDataRef.current[ticker] = null
-            }
-          })
-          return
-        }
 
         // Create series for new tickers that don't have one yet
         tickers.forEach((ticker) => {
@@ -504,6 +664,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               lineWidth: 1,
               color: COLORS.price_i,
               priceScaleId: 'right', // Use same scale as aggregated price
+              visible: showTickerLines, // Set initial visibility
             })
             tickerSeriesRef.current[ticker] = tickerSeries
           }
@@ -529,26 +690,21 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           // Apply forward-fill to ensure time range boundaries exist
           const currentData = prepareDataWithRequiredTimestamps(data)
 
-          // Check if data actually changed
-          const dataChanged =
-            !prevData ||
-            prevData.length !== currentData.length ||
-            prevData.some((item, index) => {
-              const currentItem = currentData[index]
-              return (
-                !currentItem ||
-                item.time !== currentItem.time ||
-                Math.abs(item.value - currentItem.value) > 0.0001
-              )
-            })
+          // Use efficient update strategy
+          const updated = updateSeriesEfficiently(
+            series,
+            currentData,
+            prevData || null
+          )
 
-          if (!dataChanged) {
-            return
+          if (updated) {
+            lastTickerDataRef.current[ticker] = currentData
           }
 
-          // Set data for this ticker
-          series.setData(currentData)
-          lastTickerDataRef.current[ticker] = [...currentData]
+          // Control visibility based on showTickerLines
+          series.applyOptions({
+            visible: showTickerLines,
+          })
         })
 
         // Clear data for tickers that are no longer selected
@@ -586,6 +742,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         return
       }
 
+      // Check that we have data in the series before setting visible range
+      // setVisibleRange will fail with "Value is null" if series is empty
+      if (!lastDataRef.current || lastDataRef.current.length === 0) {
+        // No data yet - don't try to set range
+        return
+      }
+
       try {
         chartRef.current.timeScale().setVisibleRange(timeRange)
       } catch (error) {
@@ -593,49 +756,23 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, [timeRange])
 
-    // Handle showZeroLine changes
-    useEffect(() => {
-      if (!strengthSeriesRef.current || !hasInitialized.current) return
-
-      // Remove existing zero line if it exists
-      if (zeroLineRef.current) {
-        strengthSeriesRef.current.removePriceLine(zeroLineRef.current)
-        zeroLineRef.current = null
-      }
-
-      // Add zero line if requested
-      if (showZeroLine) {
-        const zeroLine = strengthSeriesRef.current.createPriceLine({
-          price: 0,
-          color: COLORS.strength,
-          lineWidth: 2,
-          lineStyle: 2, // Dashed line
-          axisLabelVisible: false,
-          title: '',
-        })
-        zeroLineRef.current = zeroLine
-      }
-    }, [showZeroLine])
-
-    // Toggle visibility of aggregated strength line based on showIntervalLines
-    // When individual interval lines are shown, hide the aggregated line
+    // Toggle visibility of aggregated strength line
     useEffect(() => {
       if (!strengthSeriesRef.current || !hasInitialized.current) return
 
       strengthSeriesRef.current.applyOptions({
-        visible: !showIntervalLines,
+        visible: showStrengthLine,
       })
-    }, [showIntervalLines])
+    }, [showStrengthLine])
 
-    // Toggle visibility of aggregated price line based on showTickerLines
-    // When individual ticker lines are shown, hide the aggregated line
+    // Toggle visibility of aggregated price line
     useEffect(() => {
       if (!priceSeriesRef.current || !hasInitialized.current) return
 
       priceSeriesRef.current.applyOptions({
-        visible: !showTickerLines,
+        visible: showPriceLine,
       })
-    }, [showTickerLines])
+    }, [showPriceLine])
 
     const hasData = strengthData !== null
 

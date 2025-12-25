@@ -2,47 +2,25 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
 import { createURLStorage, getQueryParams } from './urlSync'
-import { OLD_INTERVALS } from '@lib/common/sql/strength/constants'
+import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
 
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
-export const strengthIntervals = OLD_INTERVALS
-// Remove first and last values from array
-const strengthIntervalsMid = strengthIntervals.slice(1, -1)
-
-const strengthIntervalsFirstHalf = strengthIntervals.slice(
-  0,
-  Math.ceil(strengthIntervals.length / 2)
-)
-const strengthIntervalsSecondHalf = strengthIntervals.slice(
-  Math.ceil(strengthIntervals.length / 2)
-)
-
-/**
- * Available interval configurations for strength data aggregation
- * Each option represents a set of intervals to average together
- */
-export const intervalsOptions = [
-  {
-    value: strengthIntervalsMid,
-    label: 'mid',
-  },
-  {
-    value: strengthIntervals,
-    label: 'all',
-  },
-  { value: strengthIntervalsSecondHalf, label: 'long' },
-  { value: strengthIntervalsFirstHalf, label: 'short' },
-]
-for (const interval of strengthIntervals) {
-  intervalsOptions.push({ value: [interval], label: interval })
-}
+export const strengthIntervals = NEW_INTERVALS
 
 /**
  * Available time range options for historical data
  */
-export const hoursBackOptions = ['120h', '96h', '72h', '48h', '24h']
+export const hoursBackOptions = [
+  '120h',
+  '96h',
+  '72h',
+  '48h',
+  '24h',
+  '12h',
+  '6h',
+]
 
 /**
  * Market categories and their ticker options
@@ -50,20 +28,9 @@ export const hoursBackOptions = ['120h', '96h', '72h', '48h', '24h']
  */
 export const tickersByMarket = [
   {
-    market: '---meta---',
-    tickers: [
-      { label: 'Bullish', value: ['NQ1!', 'RTY1!', 'HG1!', 'CX'] },
-      { label: 'Bearish', value: ['VX1!', 'UVIX', 'ZN1!', 'CL1!', 'Forex'] },
-      { label: 'VX1!', value: ['VX1!'] },
-      { label: 'UVIX', value: ['UVIX'] },
-      { label: 'ZN1!', value: ['ZN1!'] },
-      { label: 'Other Currencies', value: ['Forex'] },
-    ],
-  },
-  {
     market: '---equities---',
     tickers: [
-      { label: 'US Equities', value: ['NQ1!', 'ES1!', 'RTY1!'] },
+      { label: 'All Indexes', value: ['NQ1!', 'ES1!', 'RTY1!'] },
       { label: 'NQ1!', value: ['NQ1!'] },
       { label: 'ES1!', value: ['ES1!'] },
       { label: 'RTY1!', value: ['RTY1!'] },
@@ -72,36 +39,20 @@ export const tickersByMarket = [
   {
     market: '---metals---',
     tickers: [
-      { label: 'Precious Metals', value: ['GC1!', 'SI1!', 'PL1!'] },
+      { label: 'Monetary', value: ['GC1!', 'SI1!'] },
+      { label: 'Precious', value: ['GC1!', 'SI1!', 'PL1!'] },
       { label: 'GC1!', value: ['GC1!'] },
       { label: 'SI1!', value: ['SI1!'] },
       { label: 'PL1!', value: ['PL1!'] },
-    ],
-  },
-  {
-    market: '---commodities---',
-    tickers: [
       { label: 'HG1!', value: ['HG1!'] },
-      { label: 'CL1!', value: ['CL1!'] },
-      { label: 'XC1!', value: ['XC1!'] },
-      { label: 'XW1!', value: ['XW1!'] },
-      { label: 'SB1!', value: ['SB1!'] },
-      { label: 'ZL1!', value: ['ZL1!'] },
     ],
   },
   {
     market: '---crypto---',
     tickers: [
-      { label: 'Crypto', value: ['CX'] },
+      { label: 'BTC + SOL', value: ['BTCUSD', 'SOLUSD'] },
       { label: 'BTCUSD', value: ['BTCUSD'] },
-      { label: 'ETHUSD', value: ['ETHUSD'] },
       { label: 'SOLUSD', value: ['SOLUSD'] },
-      { label: 'XRPUSD', value: ['XRPUSD'] },
-      { label: 'BNBUSD', value: ['BNBUSD'] },
-      { label: 'SUIUSD', value: ['SUIUSD'] },
-      // { label: 'DOGEUSD', value: ['DOGEUSD'] },
-      // { label: 'AVAXUSD', value: ['AVAXUSD'] },
-      // { label: 'XLMUSD', value: ['XLMUSD'] },
     ],
   },
 ]
@@ -148,8 +99,14 @@ type State = {
   // Individual ticker price data (one line per ticker)
   tickerPriceData: TickerPriceData
 
-  // Toggle for showing individual interval lines (default: false)
+  // Toggle for showing aggregate average strength line (default: true)
+  showStrengthLine: boolean
+
+  // Toggle for showing individual interval strength lines (default: false)
   showIntervalLines: boolean
+
+  // Toggle for showing aggregate average price line (default: true)
+  showPriceLine: boolean
 
   // Toggle for showing individual ticker price lines (default: false)
   showTickerLines: boolean
@@ -181,7 +138,9 @@ type Actions = {
   setTickerPriceData: (data: TickerPriceData) => void
 
   // Display toggles
+  setShowStrengthLine: (show: boolean) => void
   setShowIntervalLines: (show: boolean) => void
+  setShowPriceLine: (show: boolean) => void
   setShowTickerLines: (show: boolean) => void
 
   // Utility actions
@@ -214,7 +173,7 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackOptions[hoursBackOptions.length - 3]!,
-    interval: intervalsOptions[0]!.value as string[],
+    interval: [...strengthIntervals],
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,
@@ -222,7 +181,9 @@ const getInitialState = (): State => {
     aggregatedPriceData: null,
     intervalStrengthData: {},
     tickerPriceData: {},
+    showStrengthLine: true,
     showIntervalLines: true,
+    showPriceLine: true,
     showTickerLines: true,
     isHydrated: false,
   }
@@ -298,8 +259,16 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       },
 
       // Display toggles
+      setShowStrengthLine: (show: boolean) => {
+        set({ showStrengthLine: show })
+      },
+
       setShowIntervalLines: (show: boolean) => {
         set({ showIntervalLines: show })
+      },
+
+      setShowPriceLine: (show: boolean) => {
+        set({ showPriceLine: show })
       },
 
       setShowTickerLines: (show: boolean) => {

@@ -1,91 +1,99 @@
 # Charts Mini-App
 
-Financial charting system built on `lightweight-charts` (v5.0.8). Renders dual y-axis charts showing strength (left) and price (right) data with real-time updates, time range highlighting, and aggregation controls.
+Financial charting system built on `lightweight-charts` (v5.0.8). Dual y-axis charts showing strength (left) and price (right) with real-time updates.
 
 ## Folder Structure
 
 ```
 charts/
-├── SyncedChartsWrapper.tsx   # Entry point - waits for dimensions + hydration
-├── SyncedCharts.tsx          # Orchestrates data flow to child charts
-├── constants.ts              # Chart configuration constants
-├── classes.module.scss       # Shared chart styles
-│
+├── SyncedChartsWrapper.tsx   # Entry point - waits for dimensions
+├── SyncedCharts.tsx          # Orchestrates data flow
 ├── components/
-│   ├── Chart.tsx             # Core chart rendering + primitive attachment
-│   ├── ChartTitle.tsx        # Title with ticker/aggregation info
-│   ├── ChartStates.tsx       # Loading/error states
-│   ├── Header.tsx            # Top controls bar
-│   ├── UpdatedTime.tsx       # Last update timestamp
-│   └── controls/             # Aggregation, date, ticker selectors
-│
+│   ├── Chart.tsx             # Core chart rendering (lightweight-charts)
+│   └── controls/             # Ticker, interval, date selectors
 ├── lib/
-│   ├── data/                        # Data fetching
-│   │   ├── FetchStrengthData.ts     # API client for strength data
-│   │   └── useRealtimeStrengthData.ts # Real-time data polling hook
-│   ├── aggregation/                 # Data aggregation
-│   │   ├── aggregateDataUtils.ts    # Shared aggregation utilities
-│   │   ├── aggregatePriceData.ts    # Price data aggregation
-│   │   └── aggregateStrengthData.ts # Strength data aggregation
-│   ├── primitives/                  # Custom chart primitives
-│   │   ├── TimeRangeHighlight.ts    # Custom primitive: shaded regions
-│   │   ├── VerticalLinePrimitive.ts # Custom primitive: vertical lines
-│   │   ├── timeMarkers.ts           # Time range + marker config
-│   │   └── forwardFillData.ts       # Add required timestamps for time ranges
-│   ├── chartConfig.ts               # Chart styling config
-│   └── chartUtils.ts                # Misc chart helpers
-│
-└── state/
-    ├── useChartControlsStore.ts     # Zustand store for UI controls
-    └── lib/                         # Store utilities
+│   ├── data/                 # Data fetching (see lib/data/AGENTS.md)
+│   ├── workers/              # Web Workers (see lib/workers/AGENTS.md)
+│   ├── aggregation/          # Data aggregation
+│   └── primitives/           # Custom chart primitives
+└── state/                    # Zustand store + URL sync
 ```
 
 ## Data Flow
 
 ```
-URL Query Params
+useStrengthData (fetches raw data, polls every 10s)
       ↓
-useChartControlsStore (Zustand)
+SyncedCharts (debounces, checks hash, triggers aggregation)
       ↓
-SyncedChartsWrapper (dimensions + hydration)
+Web Worker (aggregates all data off main thread)
       ↓
-SyncedCharts (fetches raw data via useRealtimeStrengthData)
-      ↓
-Aggregation (aggregateStrengthData, aggregatePriceData)
-      ↓
-Chart.tsx (add required timestamps → setData → attach primitives)
-      ↓
-lightweight-charts (renders canvas)
+Chart.tsx (uses setData/update efficiently)
 ```
 
-## Key Features
+## Performance Optimizations
 
-### Chart Lines
+### 1. Aggregation Debouncing (2000ms)
 
-**Always visible:**
+Real-time data arrives every 10 seconds. Aggregation takes ~1000-1500ms.
+Debounce prevents excessive aggregations while ensuring fresh data.
 
-- **Strength** (orange, left axis) - average of selected intervals across all tickers
-- **Price** (green, right axis) - normalized average of all selected tickers
+### 2. Smart Hash Comparison
 
-**Optional toggles:**
+Before aggregating, we compare a hash of:
 
-- **Individual interval lines** - each interval (2m, 4m, 12m, 30m, 1h, 4h) separately
-- **Individual ticker price lines** - each ticker separately, normalized to converge at right edge
+- Data lengths and timestamps
+- Last 5 price values (detects actual value changes)
+  Skips aggregation if hash unchanged.
 
-### Custom Primitives
+### 3. Result Caching
 
-- **TimeRangeHighlight** - Shaded backgrounds for market hours (see `lib/primitives/AGENTS.md`)
-- **VerticalLinePrimitive** - Vertical line markers for events
+Aggregated results are cached by ticker+interval combination.
+When switching back to a previously viewed ticker, cached data displays instantly.
+Cache expires after 5 minutes.
 
-### State Management
+### 4. Efficient Chart Updates
 
-- **Zustand store** - Centralized state for chart controls
-- **URL sync** - Query params preserve state across page loads
-- **Real-time updates** - Polls for new data every minute
+`Chart.tsx` uses `update()` for single-point changes and `setData()` only when necessary.
+This is the `lightweight-charts` best practice for real-time data.
 
-## Related Documentation
+### 5. Background Tab Recovery
 
-- `lib/primitives/AGENTS.md` - Custom primitives and time range highlighting
-- `lib/aggregation/AGENTS.md` - Data aggregation and price normalization
-- `lib/data/AGENTS.md` - API client and real-time data fetching
-- `state/AGENTS.md` - Zustand store and URL sync
+When tab is in background, polling may stop. On return:
+
+- Visibility change triggers immediate fetch
+- Dynamic window calculates missed time
+- All missing data fetched in one request
+
+### 6. Scroll-to-Pause Polling
+
+When user scrolls/pans the chart, real-time polling pauses automatically:
+
+- Chart detects scroll via `subscribeVisibleLogicalRangeChange`
+- Polling pauses to prevent chart jumping while user explores
+- After 30 seconds of no scrolling, polling resumes
+- On resume, all missed data is fetched (using dynamic fetch window)
+- Visual indicator shows "⏸ paused" in bottom-right corner
+
+## Chart Lines
+
+4 independent toggles control visibility:
+
+- **Aggregate Strength** (orange, left axis) - average of selected intervals
+- **Individual Interval Strength** (light orange, left axis) - one line per interval
+- **Aggregate Price** (blue, right axis) - normalized average of tickers
+- **Individual Ticker Price** (light blue, right axis) - one line per ticker
+
+UI buttons: `S` (strength), `s` (intervals), `P` (price), `p` (tickers)
+
+## Key Implementation Notes
+
+- **dataVersion:** Increments on ticker change, used to ignore stale worker results
+- **Never mutate arrays:** Use `[...arr].sort()` not `arr.sort()` to avoid mutating store state
+- **Ticker comparison:** Uses Set-based comparison (order-independent) to detect changes
+- **Forward-fill:** `buildLastKnownValuesRow()` finds last non-null value per interval separately
+
+## Related Docs
+
+- `lib/data/AGENTS.md` - Data fetching and polling
+- `lib/workers/AGENTS.md` - Web Worker and race conditions

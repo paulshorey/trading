@@ -24,7 +24,7 @@ export const OLD_INTERVALS = ["2", "4", "12", "30", "60", "240"] as const;
  * New intervals (prime-ish numbers) - current active intervals.
  * The app uses these for display and calculations.
  */
-export const NEW_INTERVALS = ["30S", "1", "3", "5", "7", "13", "19", "39", "59"] as const;
+export const NEW_INTERVALS = ["30S", "1", "5", "7", "13", "19", "29", "59", "109", "181"] as const;
 
 /**
  * All intervals combined - used by the library for database operations.

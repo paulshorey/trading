@@ -3,7 +3,7 @@
 import { StrengthDataAdd } from "./types";
 import { getDb } from "../../lib/db/neon";
 import { cc } from "../../cc";
-import { ALL_INTERVALS, FORWARD_FILL_DEPTH, forwardFillAllIntervals, calculateAverage, extractIntervalValues, StrengthRow, StrengthInterval } from "./utils";
+import { ALL_INTERVALS, FORWARD_FILL_DEPTH, calculateAverage, StrengthRow, StrengthInterval } from "./utils";
 
 /**
  * Adds strength record to `strength_v1` table.

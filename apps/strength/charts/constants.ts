@@ -14,7 +14,10 @@ export const COLORS = {
   neutral: '#B5B5B566', // Gray
 
   // Individual lines (lighter versions)
-  strength_i: 'hsla(35 100% 50% / 0.67)', // Orange transparent
+  strength_i: 'hsla(35 100% 50% / 0.55)', // Orange transparent
+  strength_ii: 'hsla(35 100% 50% / 0.44)', // Orange transparent
+  strength_iii: 'hsla(35 100% 50% / 0.22)', // Orange transparent
+
   // price_i: 'hsla(275 85% 70% / 0.5)', // Purple transparent
   price_i: 'hsla(233 100% 75% / 0.67)', // Blue transparent
   neutral_i: '#CDCCC835',

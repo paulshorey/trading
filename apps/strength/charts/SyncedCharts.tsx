@@ -500,7 +500,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
                 >
                   Price
                 </span>
-                <span style={{ color: COLORS.neutral }}> / </span>
+                <span style={{ color: COLORS.light }}> / </span>
                 <span
                   style={{
                     color: COLORS.strength,

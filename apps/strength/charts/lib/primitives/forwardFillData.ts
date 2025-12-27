@@ -177,3 +177,41 @@ export function roundToInterval(
   return Math.floor(timestamp / intervalSeconds) * intervalSeconds
 }
 
+/**
+ * Time range highlight configuration interface.
+ */
+export interface TimeRangeConfig {
+  startUtcHour: number
+  startUtcMinute: number
+  endUtcHour: number
+  endUtcMinute: number
+}
+
+/**
+ * Prepare data by ensuring required timestamps exist at time range boundaries.
+ * This adds forward-filled values ONLY at boundary timestamps,
+ * preserving natural gaps in the data (weekends, holidays).
+ *
+ * @param data - Original data array
+ * @param timeRangeHighlights - Time range configurations defining boundaries
+ * @returns Data array with boundary timestamps added
+ */
+export function prepareDataWithRequiredTimestamps(
+  data: LineData[],
+  timeRangeHighlights: TimeRangeConfig[]
+): LineData[] {
+  if (data.length === 0) return data
+
+  const dataStartTime = data[0]!.time as number
+  const dataEndTime = data[data.length - 1]!.time as number
+
+  // Get all time range boundaries that need to exist in the data
+  const requiredTimestamps = getTimeRangeBoundaries(
+    timeRangeHighlights,
+    dataStartTime,
+    dataEndTime
+  )
+
+  // Add forward-filled values only at required timestamps
+  return forwardFillData(data, 60, requiredTimestamps)
+}

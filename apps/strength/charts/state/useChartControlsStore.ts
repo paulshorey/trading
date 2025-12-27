@@ -10,6 +10,14 @@ import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
 export const strengthIntervals = NEW_INTERVALS
 
 /**
+ * Filter out intervals that are too noisy or not useful for default display
+ */
+const getDefaultIntervals = (intervals: readonly string[]): string[] => {
+  const excludedIntervals = ['30S', '7', '19']
+  return intervals.filter((i) => !excludedIntervals.includes(i))
+}
+
+/**
  * Available time range options for historical data
  */
 export const hoursBackOptions = [
@@ -174,7 +182,7 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackInitial,
-    interval: [...strengthIntervals],
+    interval: getDefaultIntervals(strengthIntervals),
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,
@@ -228,11 +236,8 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         if (hoursNum > 24) {
           interval = interval.filter((i) => i !== '1')
         }
-        if (hoursNum > 36) {
-          interval = interval.filter((i) => i !== '5')
-        }
         if (hoursNum > 48) {
-          interval = interval.filter((i) => i !== '7')
+          interval = interval.filter((i) => i !== '5')
         }
         set({ hoursBack: hours, interval })
       },

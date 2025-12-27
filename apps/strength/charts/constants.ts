@@ -1,20 +1,23 @@
-// Fetch this much data from the database (more than enough for most hoursBack store values)
+import { TimeMarkerConfig } from './lib/primitives/timeMarkers'
+import { TimeRangeConfig } from './lib/primitives/TimeRangeHighlight'
+
+// Fetch this much data from the database (enough for all hoursBack values)
 export const FETCH_DATA_HOURS_BACK = 240
+export const FETCH_DATA_ROWS = 7250
 
 // Time in ms to wait after user stops scrolling before resuming polling
-export const SCROLL_PAUSE_RESUME_MS = 30000 // 30 seconds
+export const SCROLL_PAUSE_RESUME_MS = 300000 // 30 seconds
 
-/**
- * Chart color palette
- * - Main series (strength, price) are more prominent
- * - Individual series (_i suffix) are lighter/transparent for background context
- */
+// Color palette
 export const COLORS = {
+  red: 'hsl(0 75.53% 53.53%)',
+  green: 'hsl(120 70.8% 44.31%)',
+  dark: '#777777',
   // Main aggregated lines
   strength: 'hsl(35 100% 50%)', // Orange
   // price: 'hsl(275 85% 70%)', // Purple
   price: 'hsl(233 100% 75%)', // Blue
-  neutral: '#B5B5B566', // Gray
+  light: '#B5B5B566', // Light gray
 
   // Individual lines (lighter versions)
   strength_i: 'hsla(35 100% 50% / 0.55)', // Orange transparent
@@ -23,5 +26,90 @@ export const COLORS = {
 
   // price_i: 'hsla(275 85% 70% / 0.5)', // Purple transparent
   price_i: 'hsla(233 100% 75% / 0.67)', // Blue transparent
-  neutral_i: '#CDCCC835',
+  light_i: '#CDCCC835',
 }
+
+// Time markers - vertical lines on the chart
+export const TIME_MARKERS: TimeMarkerConfig[] = [
+  {
+    label: '8am',
+    utcHour: 14,
+    utcMinute: 0,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    label: '11:30am',
+    utcHour: 17,
+    utcMinute: 30,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  // AFTER US MARKET:
+  {
+    label: '6pm',
+    utcHour: 0,
+    utcMinute: 0,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    label: '7pm',
+    utcHour: 1,
+    utcMinute: 0,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    label: '8pm',
+    utcHour: 2,
+    utcMinute: 0,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+]
+
+// Time Ranges - shaded vertical areas on the chart
+export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
+  {
+    startUtcHour: 20, // 2:45pm
+    startUtcMinute: 45,
+    endUtcHour: 13, // 7:30am
+    endUtcMinute: 30,
+    color: COLORS.light_i,
+  },
+  {
+    startUtcHour: 22, // 5pm
+    startUtcMinute: 0,
+    endUtcHour: 12, // 6am
+    endUtcMinute: 0,
+    color: COLORS.light_i,
+  },
+  {
+    startUtcHour: 3, // 9:30pm
+    startUtcMinute: 30,
+    endUtcHour: 10, // 4:30am
+    endUtcMinute: 30,
+    color: COLORS.light_i,
+  },
+]

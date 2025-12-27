@@ -15,22 +15,14 @@ import {
   Time,
 } from 'lightweight-charts'
 import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
+import { updateSeriesEfficiently } from '../lib/chartUtils'
+import { useChartEventPatcher } from '../lib/useChartEventPatcher'
+import { useTimeMarkers } from '../lib/primitives/useTimeMarkers'
 import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
-import { VerticalLinePrimitive } from '../lib/primitives/VerticalLinePrimitive'
-import {
-  TIME_MARKERS,
-  TIME_RANGE_HIGHLIGHTS,
-  getMarkerTimestamps,
-  markerConfigToOptions,
-} from '../lib/primitives/timeMarkers'
-import { TimeRangeHighlightPrimitive } from '../lib/primitives/TimeRangeHighlight'
-import {
-  forwardFillData,
-  getTimeRangeBoundaries,
-} from '../lib/primitives/forwardFillData'
-import { SCALE_FACTOR } from '@/constants'
+import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
+import { TIME_RANGE_HIGHLIGHTS } from '../constants'
 import {
   strengthIntervals,
   IntervalStrengthData,
@@ -95,18 +87,17 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const intervalSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const tickerSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const zeroLineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
-    const timeMarkersRef = useRef<VerticalLinePrimitive[]>([])
-    const timeRangeHighlightRef = useRef<TimeRangeHighlightPrimitive | null>(
-      null
-    )
-    const markersInitialized = useRef(false)
+    const plus100LineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+    const minus100LineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const hasInitialized = useRef(false)
     const lastDataRef = useRef<LineData[] | null>(null)
-    const onUserScrollRef = useRef(onUserScroll)
-    onUserScrollRef.current = onUserScroll
     const lastSecondDataRef = useRef<LineData[] | null>(null)
     const lastIntervalDataRef = useRef<IntervalStrengthData>({})
     const lastTickerDataRef = useRef<TickerPriceData>({})
+
+    // Use extracted hooks
+    const { createTimeMarkers, markersInitialized } = useTimeMarkers()
+    useChartEventPatcher(containerRef, onUserScroll)
 
     useImperativeHandle(ref, () => ({
       chart: chartRef.current,
@@ -126,96 +117,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       chartRef.current = chart
       hasInitialized.current = true
 
-      // --- Fix for zoom: 0.5 ---
-      // Intercept mouse events to correct coordinates for the 2x width
-      // Since the body is scaled by 0.5 and chart width is 2x, we need to double the mouse coordinates
-      // so the chart (which thinks it's 2x wide) gets the correct relative position.
-      const container = containerRef.current
-
-      // Detect actual user scrolling via wheel/touch events
-      // (Don't use subscribeVisibleLogicalRangeChange - it fires on programmatic updates too)
-      const handleUserInteraction = () => {
-        onUserScrollRef.current?.()
-      }
-
-      // Wheel event = user scrolling horizontally on the chart
-      container.addEventListener('wheel', handleUserInteraction, {
-        passive: true,
-      })
-      // Touch events for mobile panning
-      container.addEventListener('touchmove', handleUserInteraction, {
-        passive: true,
-      })
-      const events = [
-        'mousemove',
-        'mouseenter',
-        'mouseleave',
-        'mousedown',
-        'mouseup',
-        'click',
-        'dblclick',
-      ]
-
-      const eventHandler = (e: MouseEvent) => {
-        if ((e as any)._patched) return
-
-        e.stopPropagation()
-        // e.preventDefault() // Optional, might interfere with other things
-
-        const rect = container.getBoundingClientRect()
-        const scale = SCALE_FACTOR
-
-        // Calculate corrected coordinates relative to the container
-        const relativeX = e.clientX - rect.left
-        const relativeY = e.clientY - rect.top
-
-        const newClientX = rect.left + relativeX * scale
-        const newClientY = rect.top + relativeY * scale
-
-        const newEvent = new MouseEvent(e.type, {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-          detail: e.detail,
-          screenX: e.screenX,
-          screenY: e.screenY,
-          clientX: newClientX,
-          clientY: newClientY,
-          ctrlKey: e.ctrlKey,
-          altKey: e.altKey,
-          shiftKey: e.shiftKey,
-          metaKey: e.metaKey,
-          button: e.button,
-          buttons: e.buttons,
-          relatedTarget: e.relatedTarget,
-        })
-
-        Object.defineProperty(newEvent, '_patched', { value: true })
-        e.target?.dispatchEvent(newEvent)
-      }
-
-      events.forEach((eventName) => {
-        container.addEventListener(eventName, eventHandler as any, {
-          capture: true,
-        })
-      })
-      // -------------------------
-
-      // Add first series (strength) - uses LEFT price scale
-      const strengthSeries = chart.addSeries(LineSeries, {
-        ...getLineSeriesConfig(),
-        lineWidth: 2,
-        color: COLORS.strength,
-        priceScaleId: 'left',
-      })
-      strengthSeriesRef.current = strengthSeries
-
-      // Add dedicated zero line series (always visible, independent of other series)
-      // This ensures the zero line is always shown regardless of which strength lines are displayed
+      // Add dedicated horizontal line series (always visible, independent of other series)
+      // These ensure the reference lines are always shown regardless of which strength lines are displayed
       const zeroLineSeries = chart.addSeries(LineSeries, {
-        color: COLORS.neutral,
-        lineWidth: 2,
-        lineStyle: 2, // Dashed line
+        color: COLORS.dark,
+        lineWidth: 1,
+        lineStyle: 1, // Solid: 0, Dotted: 1, Dashed: 2
         priceScaleId: 'left', // Same scale as strength series
         crosshairMarkerVisible: false,
         lastValueVisible: false,
@@ -223,7 +130,31 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       })
       zeroLineSeriesRef.current = zeroLineSeries
 
-      // Add second series (price) - uses RIGHT price scale (default)
+      // +100 line (upper bound)
+      const plus100LineSeries = chart.addSeries(LineSeries, {
+        color: COLORS.red,
+        lineWidth: 1,
+        lineStyle: 1,
+        priceScaleId: 'left',
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      plus100LineSeriesRef.current = plus100LineSeries
+
+      // -100 line (lower bound)
+      const minus100LineSeries = chart.addSeries(LineSeries, {
+        color: COLORS.green,
+        lineWidth: 1,
+        lineStyle: 1,
+        priceScaleId: 'left',
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      })
+      minus100LineSeriesRef.current = minus100LineSeries
+
+      // Price - uses 'right' scale (default)
       // Always create the series, even if data doesn't exist yet
       const priceSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
@@ -233,12 +164,21 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       })
       priceSeriesRef.current = priceSeries
 
-      // Add interval series for each possible interval
+      // Strength - uses 'left' scale
+      const strengthSeries = chart.addSeries(LineSeries, {
+        ...getLineSeriesConfig(),
+        lineWidth: 2,
+        color: COLORS.strength,
+        priceScaleId: 'left',
+      })
+      strengthSeriesRef.current = strengthSeries
+
+      // Strength intervals - uses 'left' scale to compare with Strength series
       // These are created once and data is set/updated later
       strengthIntervals.forEach((interval) => {
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
-          lineWidth: 1,
+          lineWidth: interval === '181' ? 2 : 1,
           color: interval === '181' ? COLORS.strength : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
@@ -268,228 +208,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Cleanup
       return () => {
-        container.removeEventListener('wheel', handleUserInteraction)
-        container.removeEventListener('touchmove', handleUserInteraction)
         chart.remove()
         chartRef.current = null
         strengthSeriesRef.current = null
         priceSeriesRef.current = null
         zeroLineSeriesRef.current = null
+        plus100LineSeriesRef.current = null
+        minus100LineSeriesRef.current = null
         intervalSeriesRef.current = {}
         tickerSeriesRef.current = {}
         hasInitialized.current = false
       }
-    }, []) // Only run once on mount - uses ref for callback
-
-    // Helper function to create all time markers
-    const createTimeMarkers = (currentData: LineData[]) => {
-      if (!strengthSeriesRef.current || markersInitialized.current) return
-
-      if (currentData.length === 0) return
-
-      // Extract all timestamps from the data
-      const dataTimestamps = currentData.map((d) => d.time as number)
-      const dataStartTime = dataTimestamps[0]!
-      const dataEndTime = dataTimestamps[dataTimestamps.length - 1]!
-
-      // Create time range highlights (shaded background areas)
-      if (!timeRangeHighlightRef.current && TIME_RANGE_HIGHLIGHTS.length > 0) {
-        const highlight = new TimeRangeHighlightPrimitive(TIME_RANGE_HIGHLIGHTS)
-        highlight.setDataRange(dataTimestamps)
-        strengthSeriesRef.current.attachPrimitive(highlight)
-        timeRangeHighlightRef.current = highlight
-      }
-
-      // Create vertical line markers for each configured time marker
-      TIME_MARKERS.forEach((markerConfig) => {
-        const timestamps = getMarkerTimestamps(
-          markerConfig.utcHour,
-          markerConfig.utcMinute,
-          dataStartTime,
-          dataEndTime
-        )
-
-        timestamps.forEach((timestamp) => {
-          const marker = new VerticalLinePrimitive(
-            timestamp as Time,
-            markerConfigToOptions(markerConfig)
-          )
-          strengthSeriesRef.current!.attachPrimitive(marker)
-          timeMarkersRef.current.push(marker)
-        })
-      })
-
-      markersInitialized.current = true
-    }
-
-    /**
-     * Ensure data exists at required timestamps (time range boundaries).
-     * This adds forward-filled values ONLY at boundary timestamps,
-     * preserving natural gaps in the data (weekends, holidays).
-     */
-    const prepareDataWithRequiredTimestamps = (
-      data: LineData[]
-    ): LineData[] => {
-      if (data.length === 0) return data
-
-      const dataStartTime = data[0]!.time as number
-      const dataEndTime = data[data.length - 1]!.time as number
-
-      // Get all time range boundaries that need to exist in the data
-      const requiredTimestamps = getTimeRangeBoundaries(
-        TIME_RANGE_HIGHLIGHTS,
-        dataStartTime,
-        dataEndTime
-      )
-
-      // Add forward-filled values only at required timestamps
-      return forwardFillData(data, 60, requiredTimestamps)
-    }
-
-    /**
-     * Helper to efficiently update series data
-     *
-     * IMPORTANT: lightweight-charts update() can ONLY:
-     * 1. Update the LAST point in the series (if same timestamp)
-     * 2. Append a new point that comes AFTER the last point
-     *
-     * It CANNOT update points in the middle of the series.
-     * For any other changes, we must use setData().
-     */
-    const updateSeriesEfficiently = (
-      series: ISeriesApi<'Line'>,
-      currentData: LineData[],
-      prevData: LineData[] | null
-    ): boolean => {
-      if (currentData.length === 0) return false
-
-      // First load or no previous data: use setData
-      if (!prevData || prevData.length === 0) {
-        series.setData(currentData)
-        return true
-      }
-
-      const lengthDiff = currentData.length - prevData.length
-
-      // Check if this is a simple append (new points at the end only)
-      if (lengthDiff > 0 && lengthDiff <= 10) {
-        // Verify that existing data hasn't changed (timestamps match)
-        // We only check the last few points of the existing data for performance
-        const checkCount = Math.min(5, prevData.length)
-        let existingDataUnchanged = true
-
-        for (let i = 0; i < checkCount; i++) {
-          const idx = prevData.length - 1 - i
-          const curr = currentData[idx]
-          const prev = prevData[idx]
-
-          // If timestamps differ or values significantly differ, data changed
-          if (
-            !curr ||
-            !prev ||
-            curr.time !== prev.time ||
-            Math.abs(curr.value - prev.value) > 0.0001
-          ) {
-            existingDataUnchanged = false
-            break
-          }
-        }
-
-        // Only use update() if existing data is unchanged
-        // (meaning we're just appending new points)
-        if (existingDataUnchanged) {
-          try {
-            // Append only the new points
-            for (let i = prevData.length; i < currentData.length; i++) {
-              const point = currentData[i]
-              if (point) {
-                series.update(point)
-              }
-            }
-            return true
-          } catch (e) {
-            // If update fails for any reason, fall back to setData
-            console.warn('update() failed, falling back to setData:', e)
-            series.setData(currentData)
-            return true
-          }
-        }
-      }
-
-      // Same length - check if only the LAST point changed
-      if (lengthDiff === 0) {
-        const lastCurr = currentData[currentData.length - 1]
-        const lastPrev = prevData[prevData.length - 1]
-
-        // If only the last point changed (same timestamp, different value)
-        if (
-          lastCurr &&
-          lastPrev &&
-          lastCurr.time === lastPrev.time &&
-          Math.abs(lastCurr.value - lastPrev.value) > 0.0001
-        ) {
-          // Check if everything else is the same
-          let onlyLastChanged = true
-          const checkCount = Math.min(5, currentData.length - 1)
-
-          for (let i = 0; i < checkCount; i++) {
-            const idx = currentData.length - 2 - i
-            if (idx < 0) break
-            const curr = currentData[idx]
-            const prev = prevData[idx]
-
-            if (
-              !curr ||
-              !prev ||
-              curr.time !== prev.time ||
-              Math.abs(curr.value - prev.value) > 0.0001
-            ) {
-              onlyLastChanged = false
-              break
-            }
-          }
-
-          if (onlyLastChanged) {
-            try {
-              // Safe to use update() - only the last point changed
-              series.update(lastCurr)
-              return true
-            } catch (e) {
-              // Fall back to setData if update fails
-              console.warn('update() failed, falling back to setData:', e)
-              series.setData(currentData)
-              return true
-            }
-          }
-        }
-
-        // Check if data is identical (no changes needed)
-        let identical = true
-        for (let i = 0; i < Math.min(10, currentData.length); i++) {
-          const idx = currentData.length - 1 - i
-          const curr = currentData[idx]
-          const prev = prevData[idx]
-          if (
-            !curr ||
-            !prev ||
-            curr.time !== prev.time ||
-            Math.abs(curr.value - prev.value) > 0.0001
-          ) {
-            identical = false
-            break
-          }
-        }
-
-        if (identical) {
-          return false // No changes detected
-        }
-      }
-
-      // For any other changes (data in middle changed, length decreased, etc.)
-      // we must use setData()
-      series.setData(currentData)
-      return true
-    }
+    }, []) // Only run once on mount
 
     // Update first series (strength) data
     useEffect(() => {
@@ -504,7 +234,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const prevData = lastDataRef.current
 
         // Apply forward-fill to ensure time range boundaries exist
-        const currentData = prepareDataWithRequiredTimestamps(strengthData)
+        const currentData = prepareDataWithRequiredTimestamps(
+          strengthData,
+          TIME_RANGE_HIGHLIGHTS
+        )
 
         // Use efficient update strategy
         const updated = updateSeriesEfficiently(
@@ -516,21 +249,41 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         if (updated) {
           lastDataRef.current = currentData // Don't spread - keep reference for comparison
 
-          // Update zero line series to span the full data range
-          // Only needs start and end points to draw a horizontal line at y=0
-          if (zeroLineSeriesRef.current && currentData.length > 0) {
+          // Update horizontal line series to span the full data range
+          // Only needs start and end points to draw horizontal lines
+          if (currentData.length > 0) {
             const firstTime = currentData[0]!.time
             const lastTime = currentData[currentData.length - 1]!.time
-            zeroLineSeriesRef.current.setData([
-              { time: firstTime, value: 0 },
-              { time: lastTime, value: 0 },
-            ])
+
+            // Zero line (y=0)
+            if (zeroLineSeriesRef.current) {
+              zeroLineSeriesRef.current.setData([
+                { time: firstTime, value: 0 },
+                { time: lastTime, value: 0 },
+              ])
+            }
+
+            // +100 line (upper bound)
+            if (plus100LineSeriesRef.current) {
+              plus100LineSeriesRef.current.setData([
+                { time: firstTime, value: 50 },
+                { time: lastTime, value: 50 },
+              ])
+            }
+
+            // -100 line (lower bound)
+            if (minus100LineSeriesRef.current) {
+              minus100LineSeriesRef.current.setData([
+                { time: firstTime, value: -50 },
+                { time: lastTime, value: -50 },
+              ])
+            }
           }
         }
 
         // Create time markers on first data load
         if (!markersInitialized.current && currentData.length > 0) {
-          createTimeMarkers(currentData)
+          createTimeMarkers(strengthSeriesRef.current, currentData)
         }
 
         // Apply time range on first data load (when we had no previous data)
@@ -579,7 +332,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const prevData = lastSecondDataRef.current
 
         // Apply forward-fill to ensure time range boundaries exist
-        const currentData = prepareDataWithRequiredTimestamps(priceData)
+        const currentData = prepareDataWithRequiredTimestamps(
+          priceData,
+          TIME_RANGE_HIGHLIGHTS
+        )
 
         // Use efficient update strategy
         const updated = updateSeriesEfficiently(
@@ -619,7 +375,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           }
 
           // Apply forward-fill to ensure time range boundaries exist
-          const currentData = prepareDataWithRequiredTimestamps(data)
+          const currentData = prepareDataWithRequiredTimestamps(
+            data,
+            TIME_RANGE_HIGHLIGHTS
+          )
 
           // Use efficient update strategy
           const updated = updateSeriesEfficiently(
@@ -682,7 +441,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           }
 
           // Apply forward-fill to ensure time range boundaries exist
-          const currentData = prepareDataWithRequiredTimestamps(data)
+          const currentData = prepareDataWithRequiredTimestamps(
+            data,
+            TIME_RANGE_HIGHLIGHTS
+          )
 
           // Use efficient update strategy
           const updated = updateSeriesEfficiently(

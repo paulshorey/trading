@@ -6,24 +6,13 @@ Utilities and functions for chart rendering, data processing, and real-time upda
 
 ```
 lib/
-├── data/               # Data fetching (@data/AGENTS.md)
-│   ├── FetchStrengthData.ts
-│   └── useRealtimeStrengthData.ts
-├── aggregation/        # Data aggregation (@aggregation/AGENTS.md)
-│   ├── aggregateDataUtils.ts
-│   ├── aggregatePriceData.ts
-│   └── aggregateStrengthData.ts
-├── workers/            # Web Workers (@workers/AGENTS.md)
-│   ├── aggregation.worker.ts
-│   ├── useAggregationWorker.ts
-│   └── types.ts
-├── primitives/         # Custom chart primitives (@primitives/AGENTS.md)
-│   ├── TimeRangeHighlight.ts
-│   ├── VerticalLinePrimitive.ts
-│   ├── timeMarkers.ts
-│   └── forwardFillData.ts
-├── chartConfig.ts      # Chart styling and configuration
-└── chartUtils.ts       # Time range calculations, formatting
+├── data/                   # Data fetching (@data/AGENTS.md)
+├── aggregation/            # Data aggregation (@aggregation/AGENTS.md)
+├── workers/                # Web Workers (@workers/AGENTS.md)
+├── primitives/             # Time ranges and markers (@primitives/AGENTS.md)
+├── chartConfig.ts          # Chart styling and configuration
+├── chartUtils.ts           # Time range calculations, series update utilities
+└── useChartEventPatcher.ts # Mouse event coordinate fix for zoom: 0.5
 ```
 
 ## Web Workers (@workers/AGENTS.md)
@@ -57,4 +46,9 @@ Note: These functions are also inlined in the worker for off-thread execution.
 ## Chart Configuration
 
 - **chartConfig.ts** - Chart options, dual y-axes configuration
-- **chartUtils.ts** - Time range calculations, data formatting
+- **chartUtils.ts** - Time range calculations, data formatting, `updateSeriesEfficiently()` for optimal chart updates
+
+## Chart Hooks
+
+- **useChartEventPatcher.ts** - Patches mouse events for zoom: 0.5 scaling fix (coordinates need doubling)
+- **useTimeMarkers.ts** - Creates time markers (vertical lines) and range highlights (shaded backgrounds)

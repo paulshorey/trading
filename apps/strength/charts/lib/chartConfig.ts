@@ -35,7 +35,7 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
   },
   grid: {
     vertLines: { visible: false }, // Hide vertical grid lines to reduce clutter
-    horzLines: { color: COLORS.neutral_i },
+    horzLines: { color: COLORS.light_i },
   },
   // Y-Axis - Enable both left and right scales for dual series
   rightPriceScale: {

@@ -167,7 +167,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength - uses 'left' scale
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: showStrengthLine ? 4 : 1,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
@@ -178,8 +178,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       strengthIntervals.forEach((interval) => {
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
-          lineWidth: interval === '181' ? 2 : 1,
-          color: interval === '181' ? COLORS.strength : COLORS.strength_i,
+          lineWidth: interval === '181' && !showStrengthLine ? 4 : 1,
+          color:
+            interval === '181' && !showStrengthLine
+              ? COLORS.green
+              : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
         intervalSeriesRef.current[interval] = intervalSeries
@@ -391,15 +394,17 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             lastIntervalDataRef.current[interval] = currentData
           }
 
-          // Control visibility based on showIntervalLines
+          // Control visibility and highlight the most important line
+          // If showStrengthLine is false, the highest timeframe (181) becomes the "main" line
           series.applyOptions({
             visible: showIntervalLines,
+            lineWidth: interval === '181' && !showStrengthLine ? 2 : 1,
           })
         })
       } catch (error) {
         console.warn('Failed to update interval data:', error)
       }
-    }, [intervalStrengthData, showIntervalLines, name])
+    }, [intervalStrengthData, showIntervalLines, showStrengthLine, name])
 
     // Update ticker series data (for individual ticker price lines)
     // ALWAYS update data, control visibility separately via series.applyOptions
@@ -518,6 +523,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       strengthSeriesRef.current.applyOptions({
         visible: showStrengthLine,
+        lineWidth: 2, // Always prominent when visible (it's the main aggregate line)
       })
     }, [showStrengthLine])
 

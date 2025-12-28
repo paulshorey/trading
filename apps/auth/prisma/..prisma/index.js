@@ -164,7 +164,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "/Users/pshorey/git/m/apps/auth/prisma/..prisma",
+      "value": "/home/user/m/apps/auth/prisma/..prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -173,17 +173,16 @@ const config = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "darwin-arm64",
+        "value": "debian-openssl-3.0.x",
         "native": true
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/pshorey/git/m/apps/auth/prisma/schema.prisma",
+    "sourceFilePath": "/home/user/m/apps/auth/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null,
-    "schemaEnvPath": "../../.env"
+    "rootEnvPath": null
   },
   "relativePath": "..",
   "clientVersion": "6.15.0",

@@ -81,6 +81,7 @@ type AggregationCache = Map<
     strengthIntervals: Record<string, LineData<Time>[]>
     priceTickers: Record<string, LineData<Time>[]>
     strengthIndicator: LineData<Time>[] | null
+    priceIndicator: LineData<Time>[] | null
     timestamp: number // When this was cached
   }
 >

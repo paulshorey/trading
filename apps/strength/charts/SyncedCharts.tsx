@@ -230,11 +230,17 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       // Update the version this chart data corresponds to
       chartDataVersionRef.current = resultDataVersion
 
-      // Compute indicator from strength average
-      const strengthIndicator = computeStrengthIndicator(result.strengthAverage)
+      // Compute indicators incrementally (pass previous values for efficiency)
+      // Only new data points will be calculated, reusing previous EMA values
+      const strengthIndicator = computeStrengthIndicator(
+        result.strengthAverage,
+        chartData.strengthIndicator
+      )
 
-      // Compute indicator from price average
-      const priceIndicator = computePriceIndicator(result.priceAverage)
+      const priceIndicator = computePriceIndicator(
+        result.priceAverage,
+        chartData.priceIndicator
+      )
 
       // Update local chart data
       const newChartData = {

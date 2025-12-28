@@ -15,7 +15,7 @@ import {
 import { SCALE_FACTOR } from '@/constants'
 import { LineData, Time } from 'lightweight-charts'
 import { SCROLL_PAUSE_RESUME_MS } from './constants'
-import { computeStrengthIndicator } from './lib/computeIndicator'
+import { computeStrengthIndicator } from './lib/computeStrengthIndicator'
 
 export interface SyncedChartsProps {
   availableHeight: number

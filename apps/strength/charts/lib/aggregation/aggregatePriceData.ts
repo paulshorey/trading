@@ -6,7 +6,7 @@ import {
   generateFutureTimestamps,
   extendDataIntoFuture,
 } from './aggregateDataUtils'
-import { TickerPriceData } from '../../state/useChartControlsStore'
+import { PriceTickersData } from '../../state/useChartControlsStore'
 
 // ============================================================================
 // TYPES
@@ -242,7 +242,7 @@ export const aggregatePriceByTicker = (
   allRawData: (StrengthRowGet[] | null)[],
   tickers: string[],
   allMarketData?: (StrengthRowGet[] | null)[]
-): TickerPriceData => {
+): PriceTickersData => {
   const context = processTickersForNormalization(
     allRawData,
     tickers,
@@ -256,7 +256,7 @@ export const aggregatePriceByTicker = (
     processedTickers,
     sortedTimestamps,
   } = context
-  const result: TickerPriceData = {}
+  const result: PriceTickersData = {}
 
   // Process each ticker using the shared normalization context
   processedTickers.forEach((ticker) => {

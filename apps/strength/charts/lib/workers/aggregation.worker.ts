@@ -574,20 +574,20 @@ self.onmessage = (event: MessageEvent<AggregationWorkerRequest>) => {
       throw new Error(`Unknown message type: ${type}`)
     }
 
-    const { rawData, intervals, tickers, strengthIntervals } = payload
+    const { rawData, intervals, tickers, strengthIntervals: strengthIntervals_all } = payload
 
     // Perform all aggregations
     // Average strength uses selected intervals (user controls what goes into average)
-    const strengthData = aggregateStrengthData(rawData, intervals)
-    const priceData = aggregatePriceData(rawData)
+    const strengthAverage = aggregateStrengthData(rawData, intervals)
+    const priceAverage = aggregatePriceData(rawData)
     // Individual interval lines: compute ALL intervals (visibility controlled by UI)
     // This avoids re-aggregation when user changes interval selection
-    const intervalStrengthData = aggregateStrengthByInterval(
+    const strengthIntervals = aggregateStrengthByInterval(
       rawData,
-      strengthIntervals,  // ALL intervals, not just selected
-      strengthIntervals
+      strengthIntervals_all,  // ALL intervals, not just selected
+      strengthIntervals_all
     )
-    const tickerPriceData = aggregatePriceByTicker(rawData, tickers)
+    const priceTickers = aggregatePriceByTicker(rawData, tickers)
 
     const processingTimeMs = performance.now() - startTime
 
@@ -596,10 +596,10 @@ self.onmessage = (event: MessageEvent<AggregationWorkerRequest>) => {
       requestId, // Echo back the request ID
       dataVersion, // Echo back the data version for validation
       payload: {
-        strengthData: strengthData.length > 0 ? strengthData : null,
-        priceData: priceData.length > 0 ? priceData : null,
-        intervalStrengthData,
-        tickerPriceData,
+        strengthAverage: strengthAverage.length > 0 ? strengthAverage : null,
+        priceAverage: priceAverage.length > 0 ? priceAverage : null,
+        strengthIntervals,
+        priceTickers,
         processingTimeMs,
       },
     }

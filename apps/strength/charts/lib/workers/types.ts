@@ -55,10 +55,10 @@ export interface AggregationWorkerResponse {
   requestId: number // Echo back the request ID
   dataVersion: number // Echo back the data version
   payload: {
-    strengthData: WorkerLineData[] | null
-    priceData: WorkerLineData[] | null
-    intervalStrengthData: Record<string, WorkerLineData[]>
-    tickerPriceData: Record<string, WorkerLineData[]>
+    strengthAverage: WorkerLineData[] | null
+    priceAverage: WorkerLineData[] | null
+    strengthIntervals: Record<string, WorkerLineData[]>
+    priceTickers: Record<string, WorkerLineData[]>
     processingTimeMs: number
   }
 }

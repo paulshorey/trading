@@ -24,7 +24,7 @@ import classes from '../classes.module.scss'
 import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
 import { TIME_RANGE_HIGHLIGHTS } from '../constants'
 import {
-  strengthIntervals as STRENGTH_INTERVALS,
+  strengthIntervalsAll as STRENGTH_INTERVALS,
   StrengthIntervalsData,
   PriceTickersData,
   useChartControlsStore,
@@ -34,10 +34,10 @@ import { COLORS } from '../constants'
 interface ChartProps {
   heading: string | React.ReactNode
   name: string
-  strengthAverage: LineData[] | null
-  priceAverage?: LineData[] | null
-  strengthIntervals?: StrengthIntervalsData
-  priceTickers?: PriceTickersData
+  strengthAverageData: LineData[] | null
+  priceAverageData?: LineData[] | null
+  strengthIntervalsData?: StrengthIntervalsData
+  priceTickersData?: PriceTickersData
   tickers?: string[]
   width: number
   height: number
@@ -60,10 +60,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     {
       heading,
       name,
-      strengthAverage,
-      priceAverage,
-      strengthIntervals,
-      priceTickers,
+      strengthAverageData: strengthAverage,
+      priceAverageData: priceAverage,
+      strengthIntervalsData: strengthIntervals,
+      priceTickersData: priceTickers,
       tickers = [],
       width,
       height,

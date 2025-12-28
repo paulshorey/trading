@@ -7,7 +7,7 @@ import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
-export const strengthIntervals = NEW_INTERVALS
+export const strengthIntervalsAll = NEW_INTERVALS
 
 /**
  * Filter out intervals that are too noisy or not useful for default display
@@ -184,7 +184,7 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackInitial,
-    interval: getDefaultIntervals(strengthIntervals),
+    interval: getDefaultIntervals(strengthIntervalsAll),
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,

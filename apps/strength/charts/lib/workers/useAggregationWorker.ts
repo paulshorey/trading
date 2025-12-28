@@ -19,7 +19,7 @@ import type {
   AggregationWorkerResponse,
   WorkerMessage,
 } from './types'
-import { strengthIntervals } from '../../state/useChartControlsStore'
+import { strengthIntervalsAll } from '../../state/useChartControlsStore'
 
 export interface AggregationResult {
   strengthAverage: LineData<Time>[] | null
@@ -103,7 +103,7 @@ function toWorkerRow(row: StrengthRowGet): WorkerStrengthRow {
   }
 
   // Copy all interval values
-  for (const interval of strengthIntervals) {
+  for (const interval of strengthIntervalsAll) {
     result[interval] = row[interval as keyof StrengthRowGet] as number | null
   }
 
@@ -252,7 +252,7 @@ export function useAggregationWorker(
           rawData: serializedData,
           intervals,
           tickers,
-          strengthIntervals: [...strengthIntervals],
+          strengthIntervals: [...strengthIntervalsAll],
         },
       }
 

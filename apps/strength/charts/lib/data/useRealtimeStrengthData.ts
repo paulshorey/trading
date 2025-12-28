@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { StrengthRowGet } from '@lib/common/sql/strength'
 import { FetchStrengthData } from './FetchStrengthData'
 import { FETCH_DATA_HOURS_BACK } from '../../constants'
-import { strengthIntervals } from '../../state/useChartControlsStore'
+import { strengthIntervalsAll } from '../../state/useChartControlsStore'
 
 export interface UseRealtimeStrengthDataOptions {
   tickers: string[]
@@ -131,7 +131,7 @@ export function useRealtimeStrengthData({
     const filled = { ...currentRow }
 
     // Forward-fill each strength interval if null
-    strengthIntervals.forEach((interval) => {
+    strengthIntervalsAll.forEach((interval) => {
       if (filled[interval] === null && historicalRow[interval] !== null) {
         filled[interval] = historicalRow[interval]
       }

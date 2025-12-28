@@ -26,7 +26,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { StrengthRowGet } from '@lib/common/sql/strength'
 import { FetchStrengthData } from './FetchStrengthData'
 import { FETCH_DATA_HOURS_BACK } from '../../constants'
-import { strengthIntervals } from '../../state/useChartControlsStore'
+import { strengthIntervalsAll } from '../../state/useChartControlsStore'
 
 export type DataState = 'idle' | 'loading' | 'ready'
 
@@ -61,7 +61,7 @@ function forwardFillRow(
   const filled = { ...currentRow }
 
   // Forward-fill each interval if null
-  strengthIntervals.forEach((interval) => {
+  strengthIntervalsAll.forEach((interval) => {
     if (filled[interval] === null && previousRow[interval] !== null) {
       filled[interval] = previousRow[interval]
     }
@@ -97,7 +97,7 @@ function buildLastKnownValuesRow(
   const compositeRow: StrengthRowGet = { ...lastRow }
 
   // For each interval, search backwards to find the last non-null value
-  for (const interval of strengthIntervals) {
+  for (const interval of strengthIntervalsAll) {
     if (compositeRow[interval] !== null) continue // Already have a value
 
     // Search backwards for a non-null value for this specific interval

@@ -452,7 +452,8 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * Effect: Calculate time range when data is ready
    */
   useEffect(() => {
-    if (!chartData.strengthAverage || chartData.strengthAverage.length === 0) return
+    if (!chartData.strengthAverage || chartData.strengthAverage.length === 0)
+      return
 
     const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
     if (newRange && newRange.from < newRange.to) {
@@ -512,10 +513,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
               </span>
             </span>
           }
-          strengthAverage={chartData.strengthAverage}
-          priceAverage={chartData.priceAverage}
-          strengthIntervals={chartData.strengthIntervals}
-          priceTickers={chartData.priceTickers}
+          strengthAverageData={chartData.strengthAverage}
+          priceAverageData={chartData.priceAverage}
+          strengthIntervalsData={chartData.strengthIntervals}
+          priceTickersData={chartData.priceTickers}
           tickers={chartTickers}
           width={
             typeof window !== 'undefined'

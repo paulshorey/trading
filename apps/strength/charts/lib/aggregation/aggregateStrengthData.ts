@@ -6,7 +6,7 @@ import {
   extendDataIntoFuture,
 } from './aggregateDataUtils'
 import {
-  strengthIntervals as STRENGTH_INTERVALS,
+  strengthIntervalsAll as STRENGTH_INTERVALS,
   StrengthIntervalsData,
 } from '../../state/useChartControlsStore'
 

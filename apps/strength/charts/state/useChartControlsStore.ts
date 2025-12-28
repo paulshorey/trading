@@ -113,11 +113,17 @@ type State = {
   // Strength indicator (moving average of strengthAverage)
   strengthIndicator: LineData[] | null
 
+  // Price indicator (moving average of priceAverage)
+  priceIndicator: LineData[] | null
+
   // Toggle for showing aggregate average strength line (default: true)
   showStrengthLine: boolean
 
   // Toggle for showing strength indicator line (default: true)
   showIndicatorLine: boolean
+
+  // Toggle for showing price indicator line (default: true)
+  showPriceIndicatorLine: boolean
 
   // Toggle for showing individual interval strength lines (default: false)
   showIntervalLines: boolean
@@ -154,10 +160,12 @@ type Actions = {
   setStrengthIntervals: (data: StrengthIntervalsData) => void
   setPriceTickers: (data: PriceTickersData) => void
   setStrengthIndicator: (data: LineData[] | null) => void
+  setPriceIndicator: (data: LineData[] | null) => void
 
   // Display toggles
   setShowStrengthLine: (show: boolean) => void
   setShowIndicatorLine: (show: boolean) => void
+  setShowPriceIndicatorLine: (show: boolean) => void
   setShowIntervalLines: (show: boolean) => void
   setShowPriceLine: (show: boolean) => void
   setShowTickerLines: (show: boolean) => void
@@ -201,11 +209,13 @@ const getInitialState = (): State => {
     strengthIntervals: {},
     priceTickers: {},
     strengthIndicator: null,
+    priceIndicator: null,
     showStrengthLine: false,
     showIntervalLines: true,
     showPriceLine: false,
     showTickerLines: true,
     showIndicatorLine: false,
+    showPriceIndicatorLine: false,
     isHydrated: false,
   }
 
@@ -294,6 +304,10 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ strengthIndicator: data })
       },
 
+      setPriceIndicator: (data: LineData[] | null) => {
+        set({ priceIndicator: data })
+      },
+
       // Display toggles
       setShowStrengthLine: (show: boolean) => {
         set({ showStrengthLine: show })
@@ -301,6 +315,10 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       setShowIndicatorLine: (show: boolean) => {
         set({ showIndicatorLine: show })
+      },
+
+      setShowPriceIndicatorLine: (show: boolean) => {
+        set({ showPriceIndicatorLine: show })
       },
 
       setShowIntervalLines: (show: boolean) => {

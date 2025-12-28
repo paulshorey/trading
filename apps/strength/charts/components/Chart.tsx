@@ -39,6 +39,7 @@ interface ChartProps {
   strengthIntervalsData?: StrengthIntervalsData
   priceTickersData?: PriceTickersData
   strengthIndicatorData?: LineData[] | null
+  priceIndicatorData?: LineData[] | null
   tickers?: string[]
   width: number
   height: number
@@ -66,6 +67,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       strengthIntervalsData: strengthIntervals,
       priceTickersData: priceTickers,
       strengthIndicatorData: strengthIndicator,
+      priceIndicatorData: priceIndicator,
       tickers = [],
       width,
       height,
@@ -80,6 +82,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       showPriceLine,
       showTickerLines,
       showIndicatorLine,
+      showPriceIndicatorLine,
       hoursBack,
       interval: selectedIntervals, // Which intervals are selected (for visibility)
     } = useChartControlsStore()
@@ -93,6 +96,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     >({})
     const priceTickerSeriesRef = useRef<Record<string, ISeriesApi<'Line'>>>({})
     const strengthIndicatorSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+    const priceIndicatorSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const zeroLineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const plus100LineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
     const minus100LineSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
@@ -102,6 +106,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const lastStrengthIntervalsRef = useRef<StrengthIntervalsData>({})
     const lastPriceTickersRef = useRef<PriceTickersData>({})
     const lastStrengthIndicatorRef = useRef<LineData[] | null>(null)
+    const lastPriceIndicatorRef = useRef<LineData[] | null>(null)
 
     // Use extracted hooks
     const { createTimeMarkers, markersInitialized } = useTimeMarkers()
@@ -172,6 +177,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       })
       priceAverageSeriesRef.current = priceAverageSeries
 
+      // Price indicator (moving average) - uses 'right' scale
+      const priceIndicatorSeries = chart.addSeries(LineSeries, {
+        ...getLineSeriesConfig(),
+        lineWidth: 2,
+        color: COLORS.indicator,
+        priceScaleId: 'right',
+      })
+      priceIndicatorSeriesRef.current = priceIndicatorSeries
+
       // Strength average - uses 'left' scale
       const strengthAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
@@ -215,6 +229,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       if (strengthIndicator && strengthIndicatorSeriesRef.current) {
         strengthIndicatorSeriesRef.current.setData(strengthIndicator)
       }
+      if (priceIndicator && priceIndicatorSeriesRef.current) {
+        priceIndicatorSeriesRef.current.setData(priceIndicator)
+      }
 
       // Set initial strength intervals data if available
       if (strengthIntervals) {
@@ -236,6 +253,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         strengthAverageSeriesRef.current = null
         priceAverageSeriesRef.current = null
         strengthIndicatorSeriesRef.current = null
+        priceIndicatorSeriesRef.current = null
         zeroLineSeriesRef.current = null
         plus100LineSeriesRef.current = null
         minus100LineSeriesRef.current = null
@@ -412,6 +430,39 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         console.warn('Failed to update strength indicator data:', error)
       }
     }, [strengthIndicator, name])
+
+    // Update price indicator series data
+    useEffect(() => {
+      if (
+        !priceIndicatorSeriesRef.current ||
+        !priceIndicator ||
+        !hasInitialized.current
+      )
+        return
+
+      try {
+        const prevData = lastPriceIndicatorRef.current
+
+        // Apply forward-fill to ensure time range boundaries exist
+        const currentData = prepareDataWithRequiredTimestamps(
+          priceIndicator,
+          TIME_RANGE_HIGHLIGHTS
+        )
+
+        // Use efficient update strategy
+        const updated = updateSeriesEfficiently(
+          priceIndicatorSeriesRef.current,
+          currentData,
+          prevData
+        )
+
+        if (updated) {
+          lastPriceIndicatorRef.current = currentData
+        }
+      } catch (error) {
+        console.warn('Failed to update price indicator data:', error)
+      }
+    }, [priceIndicator, name])
 
     // Update strength interval series data
     // ALWAYS update data, control visibility separately via series.applyOptions
@@ -617,6 +668,15 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         visible: showIndicatorLine,
       })
     }, [showIndicatorLine])
+
+    // Toggle visibility of price indicator line
+    useEffect(() => {
+      if (!priceIndicatorSeriesRef.current || !hasInitialized.current) return
+
+      priceIndicatorSeriesRef.current.applyOptions({
+        visible: showPriceIndicatorLine,
+      })
+    }, [showPriceIndicatorLine])
 
     const hasData = strengthAverage !== null
 

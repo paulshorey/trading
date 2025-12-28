@@ -17,6 +17,8 @@ export default function InlineControls({
   const {
     showIndicatorLine,
     setShowIndicatorLine,
+    showPriceIndicatorLine,
+    setShowPriceIndicatorLine,
     showStrengthLine,
     setShowStrengthLine,
     showIntervalLines,
@@ -41,7 +43,7 @@ export default function InlineControls({
           </span>
         </div>
       </div>
-      {/* Indicator line toggle */}
+      {/* Strength indicator line toggle */}
       <div className="flex">
         <button
           onClick={() => setShowIndicatorLine(!showIndicatorLine)}
@@ -53,7 +55,7 @@ export default function InlineControls({
               : 'transparent',
             color: COLORS.indicator,
           }}
-          title="Show/hide aggregate indicator line"
+          title="Show/hide strength indicator line"
         >
           I
         </button>
@@ -89,11 +91,28 @@ export default function InlineControls({
           s
         </button>
       </div>
-      {/* Price line toggles */}
+      {/* Price indicator line toggle */}
       <div className="flex ml-1">
         <button
-          onClick={() => setShowPriceLine(!showPriceLine)}
+          onClick={() => setShowPriceIndicatorLine(!showPriceIndicatorLine)}
           className={`px-1.5 py-0.5 text-xs rounded-l transition-colors border-l border-t border-b`}
+          style={{
+            borderColor: showPriceIndicatorLine ? COLORS.indicator : 'transparent',
+            backgroundColor: showPriceIndicatorLine
+              ? COLORS.indicator + '20'
+              : 'transparent',
+            color: COLORS.indicator,
+          }}
+          title="Show/hide price indicator line"
+        >
+          i
+        </button>
+      </div>
+      {/* Price line toggles */}
+      <div className="flex">
+        <button
+          onClick={() => setShowPriceLine(!showPriceLine)}
+          className={`px-1.5 py-0.5 text-xs transition-colors border-l border-t border-b`}
           style={{
             borderColor: showPriceLine ? COLORS.price : 'transparent',
             backgroundColor: showPriceLine

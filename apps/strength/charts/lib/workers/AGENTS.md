@@ -41,7 +41,9 @@ aggregate(rawData, intervals, tickers, dataVersion)
 
 1. **Strength data** - Average of selected intervals across all tickers
 2. **Price data** - Normalized average of all tickers
-3. **Interval data** - Individual line per interval (for detail view)
+3. **Interval data** - Individual line per ALL intervals (not just selected)
 4. **Ticker data** - Individual line per ticker (for detail view)
 
 All results extend 12 hours into the future (flat projection).
+
+**Note:** Individual interval lines are computed for ALL intervals regardless of selection. This enables instant visibility toggling without re-aggregation. Chart.tsx controls which lines are visible based on the `interval` selection array.

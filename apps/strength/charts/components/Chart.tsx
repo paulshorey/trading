@@ -78,6 +78,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       showPriceLine,
       showTickerLines,
       hoursBack,
+      interval: selectedIntervals, // Which intervals are selected (for visibility)
     } = useChartControlsStore()
 
     const containerRef = useRef<HTMLDivElement>(null)
@@ -167,7 +168,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength - uses 'left' scale
       const strengthSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: showStrengthLine ? 4 : 1,
+        lineWidth: 2,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
@@ -178,10 +179,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       strengthIntervals.forEach((interval) => {
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
-          lineWidth: interval === '181' && !showStrengthLine ? 4 : 1,
+          lineWidth: interval === '181' && !showStrengthLine ? 2 : 1,
           color:
             interval === '181' && !showStrengthLine
-              ? COLORS.green
+              ? COLORS.strength
               : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as aggregated strength
         })
@@ -394,17 +395,29 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             lastIntervalDataRef.current[interval] = currentData
           }
 
-          // Control visibility and highlight the most important line
-          // If showStrengthLine is false, the highest timeframe (181) becomes the "main" line
+          // Control visibility based on:
+          // 1. Master toggle (showIntervalLines)
+          // 2. Per-interval selection (selectedIntervals)
+          // Highlight the most important line when aggregate is hidden
+          const isSelected = selectedIntervals.includes(interval)
+          const isHighlightedInterval = interval === '181' && !showStrengthLine
+
           series.applyOptions({
-            visible: showIntervalLines,
-            lineWidth: interval === '181' && !showStrengthLine ? 2 : 1,
+            visible: showIntervalLines && isSelected,
+            lineWidth: isHighlightedInterval ? 2 : 1,
+            color: isHighlightedInterval ? COLORS.strength : COLORS.strength_i,
           })
         })
       } catch (error) {
         console.warn('Failed to update interval data:', error)
       }
-    }, [intervalStrengthData, showIntervalLines, showStrengthLine, name])
+    }, [
+      intervalStrengthData,
+      showIntervalLines,
+      showStrengthLine,
+      selectedIntervals,
+      name,
+    ])
 
     // Update ticker series data (for individual ticker price lines)
     // ALWAYS update data, control visibility separately via series.applyOptions

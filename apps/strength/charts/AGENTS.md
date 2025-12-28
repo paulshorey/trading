@@ -86,6 +86,20 @@ When user scrolls/pans the chart, real-time polling pauses automatically:
 
 UI buttons: `S` (strength), `s` (intervals), `P` (price), `p` (tickers)
 
+### Dynamic Line Options via `applyOptions()`
+
+Series options (`visible`, `lineWidth`, `color`) can be changed dynamically without recreating the chart or re-aggregating data. This enables instant show/hide and highlighting:
+
+```typescript
+series.applyOptions({
+  visible: showIntervalLines && isSelected,
+  lineWidth: isHighlightedInterval ? 2 : 1,
+  color: isHighlightedInterval ? COLORS.strength : COLORS.strength_i,
+})
+```
+
+**Key pattern:** Worker always computes ALL individual interval lines (not just selected). Chart.tsx controls visibility based on user selection. This avoids re-aggregation when user changes interval selection.
+
 ## Key Implementation Notes
 
 - **dataVersion:** Increments on ticker change, used to ignore stale worker results

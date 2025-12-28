@@ -577,11 +577,14 @@ self.onmessage = (event: MessageEvent<AggregationWorkerRequest>) => {
     const { rawData, intervals, tickers, strengthIntervals } = payload
 
     // Perform all aggregations
+    // Average strength uses selected intervals (user controls what goes into average)
     const strengthData = aggregateStrengthData(rawData, intervals)
     const priceData = aggregatePriceData(rawData)
+    // Individual interval lines: compute ALL intervals (visibility controlled by UI)
+    // This avoids re-aggregation when user changes interval selection
     const intervalStrengthData = aggregateStrengthByInterval(
       rawData,
-      intervals,
+      strengthIntervals,  // ALL intervals, not just selected
       strengthIntervals
     )
     const tickerPriceData = aggregatePriceByTicker(rawData, tickers)

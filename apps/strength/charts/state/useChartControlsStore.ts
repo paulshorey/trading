@@ -190,9 +190,9 @@ const getInitialState = (): State => {
     aggregatedPriceData: null,
     intervalStrengthData: {},
     tickerPriceData: {},
-    showStrengthLine: true,
+    showStrengthLine: false,
     showIntervalLines: true,
-    showPriceLine: true,
+    showPriceLine: false,
     showTickerLines: true,
     isHydrated: false,
   }

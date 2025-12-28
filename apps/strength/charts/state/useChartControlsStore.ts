@@ -7,7 +7,7 @@ import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
 // ============================================================================
 // CONFIGURATION CONSTANTS
 // ============================================================================
-export const strengthIntervals = NEW_INTERVALS
+export const strengthIntervalsAll = NEW_INTERVALS
 
 /**
  * Filter out intervals that are too noisy or not useful for default display
@@ -72,13 +72,15 @@ export const tickersByMarket = [
 
 /**
  * Individual interval strength data - keyed by interval string
+ * Each interval (e.g., "30S", "1", "3") has its own line data
  */
-export type IntervalStrengthData = Record<string, LineData[] | null>
+export type StrengthIntervalsData = Record<string, LineData[] | null>
 
 /**
  * Individual ticker price data - keyed by ticker symbol
+ * Each ticker (e.g., "ES1!", "NQ1!") has its own line data
  */
-export type TickerPriceData = Record<string, LineData[] | null>
+export type PriceTickersData = Record<string, LineData[] | null>
 
 /**
  * Store state for chart controls and data management
@@ -98,18 +100,24 @@ type State = {
   timeRange: { from: Time; to: Time } | null
   cursorTime: Time | null
 
-  // Aggregated data for charts
-  aggregatedStrengthData: LineData[] | null
-  aggregatedPriceData: LineData[] | null
+  // Aggregated data for charts (averaged from intervals/tickers)
+  strengthAverage: LineData[] | null
+  priceAverage: LineData[] | null
 
   // Individual interval strength data (one line per interval)
-  intervalStrengthData: IntervalStrengthData
+  strengthIntervals: StrengthIntervalsData
 
   // Individual ticker price data (one line per ticker)
-  tickerPriceData: TickerPriceData
+  priceTickers: PriceTickersData
+
+  // Strength indicator (moving average of strengthAverage)
+  strengthIndicator: LineData[] | null
 
   // Toggle for showing aggregate average strength line (default: true)
   showStrengthLine: boolean
+
+  // Toggle for showing strength indicator line (default: true)
+  showIndicatorLine: boolean
 
   // Toggle for showing individual interval strength lines (default: false)
   showIntervalLines: boolean
@@ -141,13 +149,15 @@ type Actions = {
   setCursorTime: (time: Time | null) => void
 
   // Data setters
-  setAggregatedStrengthData: (data: LineData[] | null) => void
-  setAggregatedPriceData: (data: LineData[] | null) => void
-  setIntervalStrengthData: (data: IntervalStrengthData) => void
-  setTickerPriceData: (data: TickerPriceData) => void
+  setStrengthAverage: (data: LineData[] | null) => void
+  setPriceAverage: (data: LineData[] | null) => void
+  setStrengthIntervals: (data: StrengthIntervalsData) => void
+  setPriceTickers: (data: PriceTickersData) => void
+  setStrengthIndicator: (data: LineData[] | null) => void
 
   // Display toggles
   setShowStrengthLine: (show: boolean) => void
+  setShowIndicatorLine: (show: boolean) => void
   setShowIntervalLines: (show: boolean) => void
   setShowPriceLine: (show: boolean) => void
   setShowTickerLines: (show: boolean) => void
@@ -182,18 +192,20 @@ const getInitialState = (): State => {
 
   const defaultState: State = {
     hoursBack: hoursBackInitial,
-    interval: getDefaultIntervals(strengthIntervals),
+    interval: getDefaultIntervals(strengthIntervalsAll),
     chartTickers: defaultTickers,
     timeRange: null,
     cursorTime: null,
-    aggregatedStrengthData: null,
-    aggregatedPriceData: null,
-    intervalStrengthData: {},
-    tickerPriceData: {},
+    strengthAverage: null,
+    priceAverage: null,
+    strengthIntervals: {},
+    priceTickers: {},
+    strengthIndicator: null,
     showStrengthLine: false,
     showIntervalLines: true,
     showPriceLine: false,
     showTickerLines: true,
+    showIndicatorLine: false,
     isHydrated: false,
   }
 
@@ -262,25 +274,33 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       },
 
       // Data setters
-      setAggregatedStrengthData: (data: LineData[] | null) => {
-        set({ aggregatedStrengthData: data })
+      setStrengthAverage: (data: LineData[] | null) => {
+        set({ strengthAverage: data })
       },
 
-      setAggregatedPriceData: (data: LineData[] | null) => {
-        set({ aggregatedPriceData: data })
+      setPriceAverage: (data: LineData[] | null) => {
+        set({ priceAverage: data })
       },
 
-      setIntervalStrengthData: (data: IntervalStrengthData) => {
-        set({ intervalStrengthData: { ...data } })
+      setStrengthIntervals: (data: StrengthIntervalsData) => {
+        set({ strengthIntervals: { ...data } })
       },
 
-      setTickerPriceData: (data: TickerPriceData) => {
-        set({ tickerPriceData: { ...data } })
+      setPriceTickers: (data: PriceTickersData) => {
+        set({ priceTickers: { ...data } })
+      },
+
+      setStrengthIndicator: (data: LineData[] | null) => {
+        set({ strengthIndicator: data })
       },
 
       // Display toggles
       setShowStrengthLine: (show: boolean) => {
         set({ showStrengthLine: show })
+      },
+
+      setShowIndicatorLine: (show: boolean) => {
+        set({ showIndicatorLine: show })
       },
 
       setShowIntervalLines: (show: boolean) => {

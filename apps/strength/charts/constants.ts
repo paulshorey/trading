@@ -12,11 +12,15 @@ export const SCROLL_PAUSE_RESUME_MS = 300000 // 30 seconds
 export const COLORS = {
   red: 'hsl(0 75.53% 53.53%)',
   green: 'hsl(120 70.8% 44.31%)',
+  purple: 'hsl(275 85% 70%)', // Purple
   dark: '#777777',
-  // Main aggregated lines
+  // Indicator
+  indicator: 'hsl(120 70.8% 44.31%)',
+  // Strength
   strength: 'hsl(35 100% 50%)', // Orange
-  // price: 'hsl(275 85% 70%)', // Purple
+  // Price
   price: 'hsl(233 100% 75%)', // Blue
+  // Etc
   light: '#B5B5B566', // Light gray
 
   // Individual lines (lighter versions)

@@ -17,6 +17,7 @@ Zustand store for chart controls with URL query parameter synchronization.
   - `showIntervalLines` - Toggle individual interval strength lines
   - `showPriceLine` - Toggle aggregate price line
   - `showTickerLines` - Toggle individual ticker price lines
-- `aggregatedStrengthData` / `aggregatedPriceData` - Cached aggregated data
+- `strengthAverage` / `priceAverage` - Cached aggregated data
+- `strengthIntervals` / `priceTickers` - Individual interval/ticker line data
 
 State changes automatically update URL, allowing users to bookmark specific chart configurations.

@@ -19,13 +19,13 @@ import type {
   AggregationWorkerResponse,
   WorkerMessage,
 } from './types'
-import { strengthIntervals } from '../../state/useChartControlsStore'
+import { strengthIntervalsAll } from '../../state/useChartControlsStore'
 
 export interface AggregationResult {
-  strengthData: LineData<Time>[] | null
-  priceData: LineData<Time>[] | null
-  intervalStrengthData: Record<string, LineData<Time>[]>
-  tickerPriceData: Record<string, LineData<Time>[]>
+  strengthAverage: LineData<Time>[] | null
+  priceAverage: LineData<Time>[] | null
+  strengthIntervals: Record<string, LineData<Time>[]>
+  priceTickers: Record<string, LineData<Time>[]>
 }
 
 /**
@@ -103,7 +103,7 @@ function toWorkerRow(row: StrengthRowGet): WorkerStrengthRow {
   }
 
   // Copy all interval values
-  for (const interval of strengthIntervals) {
+  for (const interval of strengthIntervalsAll) {
     result[interval] = row[interval as keyof StrengthRowGet] as number | null
   }
 
@@ -180,12 +180,12 @@ export function useAggregationWorker(
         // Convert WorkerLineData to LineData<Time> for lightweight-charts
         onResultRef.current?.(
           {
-            strengthData: convertToLineData(payload.strengthData),
-            priceData: convertToLineData(payload.priceData),
-            intervalStrengthData: convertRecordToLineData(
-              payload.intervalStrengthData
+            strengthAverage: convertToLineData(payload.strengthAverage),
+            priceAverage: convertToLineData(payload.priceAverage),
+            strengthIntervals: convertRecordToLineData(
+              payload.strengthIntervals
             ),
-            tickerPriceData: convertRecordToLineData(payload.tickerPriceData),
+            priceTickers: convertRecordToLineData(payload.priceTickers),
           },
           payload.processingTimeMs,
           dataVersion
@@ -252,7 +252,7 @@ export function useAggregationWorker(
           rawData: serializedData,
           intervals,
           tickers,
-          strengthIntervals: [...strengthIntervals],
+          strengthIntervals: [...strengthIntervalsAll],
         },
       }
 

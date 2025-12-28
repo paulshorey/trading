@@ -15,6 +15,7 @@ import {
 import { SCALE_FACTOR } from '@/constants'
 import { LineData, Time } from 'lightweight-charts'
 import { SCROLL_PAUSE_RESUME_MS } from './constants'
+import { computeStrengthIndicator } from './lib/computeStrengthIndicator'
 
 export interface SyncedChartsProps {
   availableHeight: number
@@ -74,10 +75,11 @@ function getAggregationCacheKey(
 type AggregationCache = Map<
   string,
   {
-    strength: LineData<Time>[] | null
-    price: LineData<Time>[] | null
-    intervalStrength: Record<string, LineData<Time>[]>
-    tickerPrice: Record<string, LineData<Time>[]>
+    strengthAverage: LineData<Time>[] | null
+    priceAverage: LineData<Time>[] | null
+    strengthIntervals: Record<string, LineData<Time>[]>
+    priceTickers: Record<string, LineData<Time>[]>
+    strengthIndicator: LineData<Time>[] | null
     timestamp: number // When this was cached
   }
 >
@@ -119,23 +121,26 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     chartTickers,
     timeRange,
     setTimeRange,
-    setAggregatedStrengthData,
-    setAggregatedPriceData,
-    setIntervalStrengthData,
-    setTickerPriceData,
+    setStrengthAverage,
+    setPriceAverage,
+    setStrengthIntervals,
+    setPriceTickers,
+    setStrengthIndicator,
   } = useChartControlsStore()
 
   // Local state for chart rendering control
   const [chartData, setChartData] = useState<{
-    strength: LineData<Time>[] | null
-    price: LineData<Time>[] | null
-    intervalStrength: Record<string, LineData<Time>[]>
-    tickerPrice: Record<string, LineData<Time>[]>
+    strengthAverage: LineData<Time>[] | null
+    priceAverage: LineData<Time>[] | null
+    strengthIntervals: Record<string, LineData<Time>[]>
+    priceTickers: Record<string, LineData<Time>[]>
+    strengthIndicator: LineData<Time>[] | null
   }>({
-    strength: null,
-    price: null,
-    intervalStrength: {},
-    tickerPrice: {},
+    strengthAverage: null,
+    priceAverage: null,
+    strengthIntervals: {},
+    priceTickers: {},
+    strengthIndicator: null,
   })
 
   // Track which dataVersion the current chartData corresponds to
@@ -220,12 +225,16 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       // Update the version this chart data corresponds to
       chartDataVersionRef.current = resultDataVersion
 
+      // Compute indicator from strength average
+      const strengthIndicator = computeStrengthIndicator(result.strengthAverage)
+
       // Update local chart data
       const newChartData = {
-        strength: result.strengthData,
-        price: result.priceData,
-        intervalStrength: result.intervalStrengthData,
-        tickerPrice: result.tickerPriceData,
+        strengthAverage: result.strengthAverage,
+        priceAverage: result.priceAverage,
+        strengthIntervals: result.strengthIntervals,
+        priceTickers: result.priceTickers,
+        strengthIndicator,
       }
 
       setChartData(newChartData)
@@ -233,7 +242,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       // Cache the results for instant ticker switching
       const cacheKey = getAggregationCacheKey(chartTickers, interval)
       aggregationCache.set(cacheKey, {
-        ...newChartData,
+        strengthAverage: newChartData.strengthAverage,
+        priceAverage: newChartData.priceAverage,
+        strengthIntervals: newChartData.strengthIntervals,
+        priceTickers: newChartData.priceTickers,
+        strengthIndicator: newChartData.strengthIndicator,
         timestamp: Date.now(),
       })
 
@@ -244,10 +257,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       }
 
       // Also update store for any external consumers
-      setAggregatedStrengthData(result.strengthData)
-      setAggregatedPriceData(result.priceData)
-      setIntervalStrengthData(result.intervalStrengthData)
-      setTickerPriceData(result.tickerPriceData)
+      setStrengthAverage(result.strengthAverage)
+      setPriceAverage(result.priceAverage)
+      setStrengthIntervals(result.strengthIntervals)
+      setPriceTickers(result.priceTickers)
+      setStrengthIndicator(strengthIndicator)
 
       if (processingTimeMs > 100) {
         console.log(
@@ -260,10 +274,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     [
       chartTickers,
       interval,
-      setAggregatedStrengthData,
-      setAggregatedPriceData,
-      setIntervalStrengthData,
-      setTickerPriceData,
+      setStrengthAverage,
+      setPriceAverage,
+      setStrengthIntervals,
+      setPriceTickers,
+      setStrengthIndicator,
     ]
   )
 
@@ -311,25 +326,28 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     // This prevents showing old data while new data loads
     if (chartDataVersionRef.current !== dataVersion) {
       setChartData({
-        strength: null,
-        price: null,
-        intervalStrength: {},
-        tickerPrice: {},
+        strengthAverage: null,
+        priceAverage: null,
+        strengthIntervals: {},
+        priceTickers: {},
+        strengthIndicator: null,
       })
 
       // Clear store data too
-      setAggregatedStrengthData(null)
-      setAggregatedPriceData(null)
-      setIntervalStrengthData({})
-      setTickerPriceData({})
+      setStrengthAverage(null)
+      setPriceAverage(null)
+      setStrengthIntervals({})
+      setPriceTickers({})
+      setStrengthIndicator(null)
     }
   }, [
     dataVersion,
     setValidDataVersion,
-    setAggregatedStrengthData,
-    setAggregatedPriceData,
-    setIntervalStrengthData,
-    setTickerPriceData,
+    setStrengthAverage,
+    setPriceAverage,
+    setStrengthIntervals,
+    setPriceTickers,
+    setStrengthIndicator,
   ])
 
   /**
@@ -347,12 +365,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       if (age < CACHE_MAX_AGE_MS) {
         // Use cached data immediately for instant display
         // Fresh aggregation will update this shortly
-        if (chartData.strength === null) {
+        if (chartData.strengthAverage === null) {
           setChartData({
-            strength: cached.strength,
-            price: cached.price,
-            intervalStrength: cached.intervalStrength,
-            tickerPrice: cached.tickerPrice,
+            strengthAverage: cached.strengthAverage,
+            priceAverage: cached.priceAverage,
+            strengthIntervals: cached.strengthIntervals,
+            priceTickers: cached.priceTickers,
+            strengthIndicator: cached.strengthIndicator,
           })
         }
       } else {
@@ -452,20 +471,21 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * Effect: Calculate time range when data is ready
    */
   useEffect(() => {
-    if (!chartData.strength || chartData.strength.length === 0) return
+    if (!chartData.strengthAverage || chartData.strengthAverage.length === 0)
+      return
 
     const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
     if (newRange && newRange.from < newRange.to) {
       setTimeRange(newRange)
     }
-  }, [hoursBack, rawData, chartData.strength, setTimeRange])
+  }, [hoursBack, rawData, chartData.strengthAverage, setTimeRange])
 
   /**
    * Determine what to render based on state
    */
   const showLoading = dataState === 'loading'
   const showError = error && dataState !== 'loading'
-  const showChart = chartData.strength !== null
+  const showChart = chartData.strengthAverage !== null
 
   // Only pass timeRange to chart when we have valid data
   const chartTimeRange = showChart ? timeRange : undefined
@@ -512,10 +532,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
               </span>
             </span>
           }
-          strengthData={chartData.strength}
-          priceData={chartData.price}
-          intervalStrengthData={chartData.intervalStrength}
-          tickerPriceData={chartData.tickerPrice}
+          strengthAverageData={chartData.strengthAverage}
+          priceAverageData={chartData.priceAverage}
+          strengthIntervalsData={chartData.strengthIntervals}
+          priceTickersData={chartData.priceTickers}
+          strengthIndicatorData={chartData.strengthIndicator}
           tickers={chartTickers}
           width={
             typeof window !== 'undefined'

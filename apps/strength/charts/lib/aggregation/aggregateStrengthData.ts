@@ -6,8 +6,8 @@ import {
   extendDataIntoFuture,
 } from './aggregateDataUtils'
 import {
-  strengthIntervals,
-  IntervalStrengthData,
+  strengthIntervalsAll as STRENGTH_INTERVALS,
+  StrengthIntervalsData,
 } from '../../state/useChartControlsStore'
 
 /**
@@ -86,7 +86,7 @@ export const aggregateStrengthByInterval = (
   allRawData: (StrengthRowGet[] | null)[],
   selectedIntervals: string[],
   allMarketData?: (StrengthRowGet[] | null)[]
-): IntervalStrengthData => {
+): StrengthIntervalsData => {
   // Extract all unique timestamps from ALL market data to ensure consistency
   const dataForTimestamps = allMarketData || allRawData
   const sortedTimestamps = extractGlobalTimestamps(dataForTimestamps)
@@ -95,10 +95,10 @@ export const aggregateStrengthByInterval = (
     return {}
   }
 
-  const result: IntervalStrengthData = {}
+  const result: StrengthIntervalsData = {}
 
   // Process each interval that's selected
-  for (const interval of strengthIntervals) {
+  for (const interval of STRENGTH_INTERVALS) {
     // Only process intervals that are selected
     if (!selectedIntervals.includes(interval)) {
       continue

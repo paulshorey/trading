@@ -1,7 +1,7 @@
 import { MultiSelect } from '@mantine/core'
 import {
   useChartControlsStore,
-  strengthIntervals,
+  strengthIntervalsAll,
 } from '../../state/useChartControlsStore'
 import React from 'react'
 
@@ -21,7 +21,7 @@ export default function IntervalControl({ showLabel = true }: Props) {
     <MultiSelect
       label={showLabel ? 'Interval' : undefined}
       value={interval}
-      data={strengthIntervals}
+      data={strengthIntervalsAll}
       onChange={setInterval}
       styles={{
         pill: {

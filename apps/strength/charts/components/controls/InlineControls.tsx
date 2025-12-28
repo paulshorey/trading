@@ -15,6 +15,8 @@ export default function InlineControls({
   drawerCalendarOpen: () => void
 }) {
   const {
+    showIndicatorLine,
+    setShowIndicatorLine,
     showStrengthLine,
     setShowStrengthLine,
     showIntervalLines,
@@ -39,11 +41,28 @@ export default function InlineControls({
           </span>
         </div>
       </div>
+      {/* Indicator line toggle */}
+      <div className="flex">
+        <button
+          onClick={() => setShowIndicatorLine(!showIndicatorLine)}
+          className={`px-1.5 py-0.5 text-xs rounded-l transition-colors border-l border-t border-b`}
+          style={{
+            borderColor: showIndicatorLine ? COLORS.indicator : 'transparent',
+            backgroundColor: showIndicatorLine
+              ? COLORS.indicator + '20'
+              : 'transparent',
+            color: COLORS.indicator,
+          }}
+          title="Show/hide aggregate indicator line"
+        >
+          I
+        </button>
+      </div>
       {/* Strength line toggles */}
       <div className="flex">
         <button
           onClick={() => setShowStrengthLine(!showStrengthLine)}
-          className={`px-1.5 py-0.5 text-xs rounded-l transition-colors border-l border-t border-b`}
+          className={`px-1.5 py-0.5 text-xs transition-colors border-l border-t border-b`}
           style={{
             borderColor: showStrengthLine ? COLORS.strength : 'transparent',
             backgroundColor: showStrengthLine

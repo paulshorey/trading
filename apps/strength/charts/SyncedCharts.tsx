@@ -12,7 +12,6 @@ import {
   useAggregationWorker,
   AggregationResult,
 } from './lib/workers/useAggregationWorker'
-import { SCALE_FACTOR } from '@/constants'
 import { LineData, Time } from 'lightweight-charts'
 import { SCROLL_PAUSE_RESUME_MS } from './constants'
 import { computeStrengthIndicator } from './lib/computeStrengthIndicator'
@@ -563,7 +562,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           tickers={chartTickers}
           width={
             typeof window !== 'undefined'
-              ? window.innerWidth * SCALE_FACTOR
+              ? window.innerWidth * (window.scaleFactor || 1)
               : 1200
           }
           height={availableHeight}

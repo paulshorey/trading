@@ -67,7 +67,7 @@ export type PartialIntervalValues = Partial<IntervalValues>;
  * Going back 3 rows ensures we have enough historical data without
  * excessive database queries.
  */
-export const FORWARD_FILL_DEPTH = 3;
+export const FORWARD_FILL_DEPTH = 5;
 
 // =============================================================================
 // UTILITY FUNCTIONS

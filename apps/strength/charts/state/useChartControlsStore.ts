@@ -13,23 +13,15 @@ export const strengthIntervalsAll = NEW_INTERVALS
  * Filter out intervals that are too noisy or not useful for default display
  */
 const getDefaultIntervals = (intervals: readonly string[]): string[] => {
-  const excludedIntervals = ['5', '7', '59', '109', 'W']
+  const excludedIntervals = ['5', '7', '59', '109', 'D', 'W']
   return intervals.filter((i) => !excludedIntervals.includes(i))
 }
 
 /**
  * Available time range options for historical data
  */
-export const hoursBackOptions = [
-  '120h',
-  '96h',
-  '72h',
-  '48h',
-  '24h',
-  '12h',
-  '6h',
-]
-export const hoursBackInitial = hoursBackOptions[hoursBackOptions.length - 3]!
+export const hoursBackOptions = ['120h', '96h', '48h', '24h', '12h', '6h']
+export const hoursBackInitial = hoursBackOptions[0]!
 
 /**
  * Market categories and their ticker options
@@ -120,19 +112,19 @@ type State = {
   showStrengthLine: boolean
 
   // Toggle for showing strength indicator line (default: true)
-  showIndicatorLine: boolean
+  showStrengthIndicatorLine: boolean
 
   // Toggle for showing price indicator line (default: true)
   showPriceIndicatorLine: boolean
 
   // Toggle for showing individual interval strength lines (default: false)
-  showIntervalLines: boolean
+  showStrengthIntervalLines: boolean
 
   // Toggle for showing aggregate average price line (default: true)
   showPriceLine: boolean
 
   // Toggle for showing individual ticker price lines (default: false)
-  showTickerLines: boolean
+  showPriceTickerLines: boolean
 
   // Hydration state for URL sync
   isHydrated: boolean
@@ -164,11 +156,11 @@ type Actions = {
 
   // Display toggles
   setShowStrengthLine: (show: boolean) => void
-  setShowIndicatorLine: (show: boolean) => void
+  setshowStrengthIndicatorLine: (show: boolean) => void
   setShowPriceIndicatorLine: (show: boolean) => void
-  setShowIntervalLines: (show: boolean) => void
+  setShowStrengthIntervalLines: (show: boolean) => void
   setShowPriceLine: (show: boolean) => void
-  setShowTickerLines: (show: boolean) => void
+  setShowPriceTickerLines: (show: boolean) => void
 
   // Utility actions
   resetToDefaults: () => void
@@ -196,7 +188,7 @@ const URL_SYNC_KEYS = ['hoursBack', 'interval', 'tickers']
  */
 const getInitialState = (): State => {
   // Default to CX (Crypto Index) ticker
-  const defaultTickers = tickersByMarket[2]!.tickers[0]!.value
+  const defaultTickers = tickersByMarket[0]!.tickers[0]!.value
 
   const defaultState: State = {
     hoursBack: hoursBackInitial,
@@ -210,11 +202,11 @@ const getInitialState = (): State => {
     priceTickers: {},
     strengthIndicator: null,
     priceIndicator: null,
-    showStrengthLine: false,
-    showIntervalLines: true,
+    showStrengthLine: true,
+    showStrengthIntervalLines: true,
     showPriceLine: false,
-    showTickerLines: true,
-    showIndicatorLine: false,
+    showPriceTickerLines: true,
+    showStrengthIndicatorLine: false,
     showPriceIndicatorLine: false,
     isHydrated: false,
   }
@@ -252,14 +244,23 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       setHoursBack: (hours: string) => {
         const hoursNum = parseInt(hours)
         let interval = [...get().interval]
-        if (hoursNum > 12) {
-          interval = interval.filter((i) => i !== '30S')
+        if (hoursNum === 6) {
+          interval = ['1', '3', '5', '7', '13', '29', '59', '109', '181', 'D']
         }
-        if (hoursNum > 24) {
-          interval = interval.filter((i) => i !== '1')
+        if (hoursNum === 12) {
+          interval = ['3', '5', '7', '13', '29', '59', '109', '181', 'D']
         }
-        if (hoursNum > 48) {
-          interval = interval.filter((i) => i !== '5')
+        if (hoursNum === 24) {
+          interval = ['5', '7', '13', '29', '59', '109', '181', 'D']
+        }
+        if (hoursNum === 48) {
+          interval = ['7', '13', '29', '59', '109', '181', 'D']
+        }
+        if (hoursNum === 96) {
+          interval = ['13', '29', '59', '109', '181', 'D']
+        }
+        if (hoursNum === 120) {
+          interval = ['29', '59', '109', '181', 'D']
         }
         set({ hoursBack: hours, interval })
       },
@@ -313,24 +314,24 @@ export const useChartControlsStore = create<ChartControlsStore>()(
         set({ showStrengthLine: show })
       },
 
-      setShowIndicatorLine: (show: boolean) => {
-        set({ showIndicatorLine: show })
+      setshowStrengthIndicatorLine: (show: boolean) => {
+        set({ showStrengthIndicatorLine: show })
       },
 
       setShowPriceIndicatorLine: (show: boolean) => {
         set({ showPriceIndicatorLine: show })
       },
 
-      setShowIntervalLines: (show: boolean) => {
-        set({ showIntervalLines: show })
+      setShowStrengthIntervalLines: (show: boolean) => {
+        set({ showStrengthIntervalLines: show })
       },
 
       setShowPriceLine: (show: boolean) => {
         set({ showPriceLine: show })
       },
 
-      setShowTickerLines: (show: boolean) => {
-        set({ showTickerLines: show })
+      setShowPriceTickerLines: (show: boolean) => {
+        set({ showPriceTickerLines: show })
       },
 
       // Utility actions

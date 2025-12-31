@@ -167,26 +167,15 @@ async function updateRowWithForwardFill(
   // Set the new interval value
   currentValues[interval] = strengthValue;
 
-  // Forward-fill missing intervals from previous rows
+  // Forward-fill missing intervals from previous rows (recentRows is sorted DESC, newest first)
   if (recentRows.length > 0) {
-    // Create a modified rows array where current row has the new value
-    const modifiedRows = [...recentRows];
-    if (currentRowIndex >= 0) {
-      modifiedRows[currentRowIndex] = {
-        ...modifiedRows[currentRowIndex]!,
-        [interval]: strengthValue,
-      };
-    }
-
-    // Forward-fill each missing interval
+    const startIdx = currentRowIndex >= 0 ? currentRowIndex : 0;
     for (const int of ALL_INTERVALS) {
       if (currentValues[int] === null) {
-        // Look back through previous rows to find a value
-        const startIdx = currentRowIndex >= 0 ? currentRowIndex : 0;
-        for (let i = startIdx + 1; i < Math.min(modifiedRows.length, startIdx + FORWARD_FILL_DEPTH + 1); i++) {
-          const rawValue = modifiedRows[i]?.[int];
+        // Look back through previous rows to find the most recent value
+        for (let i = startIdx + 1; i < Math.min(recentRows.length, startIdx + FORWARD_FILL_DEPTH + 1); i++) {
+          const rawValue = recentRows[i]?.[int];
           if (rawValue !== null && rawValue !== undefined) {
-            // Convert to number (PostgreSQL may return strings)
             currentValues[int] = Number(rawValue);
             break;
           }

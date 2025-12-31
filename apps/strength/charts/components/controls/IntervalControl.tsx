@@ -27,7 +27,11 @@ export default function IntervalControl({ showLabel = true }: Props) {
         pill: {
           display: 'none',
         },
-        input: {},
+        input: {
+          maxWidth: '100px',
+          maxHeight: '27px',
+          lineHeight: '27px',
+        },
       }}
       placeholder={placeholderText}
       hidePickedOptions={false}

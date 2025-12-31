@@ -6,7 +6,7 @@ import { SyncedCharts } from './SyncedCharts'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import Header from './components/Header'
 import classes from './classes.module.scss'
-import { SCALE_FACTOR } from '@/constants'
+import { SCALE_FACTOR_DESKTOP, SCALE_FACTOR_MOBILE } from './constants'
 
 interface SyncedChartsWrapperProps {}
 
@@ -35,10 +35,18 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
       if (typeof window !== 'undefined') {
         const windowWidth = window.innerWidth
         const windowHeight = window.innerHeight
+        const isMobile =
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent || navigator.vendor || window.opera
+          )
+        window.scaleFactor = isMobile
+          ? SCALE_FACTOR_MOBILE
+          : SCALE_FACTOR_DESKTOP
+        window.isMobile = isMobile
 
         setDimensions({
-          availableWidth: windowWidth * SCALE_FACTOR,
-          availableHeight: windowHeight * SCALE_FACTOR,
+          availableWidth: windowWidth * window.scaleFactor,
+          availableHeight: windowHeight * window.scaleFactor,
         })
       }
     }

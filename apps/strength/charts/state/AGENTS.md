@@ -14,9 +14,9 @@ Zustand store for chart controls with URL query parameter synchronization.
 - `hoursBack` - Time range (hours of historical data)
 - **Line visibility toggles (4 independent toggles):**
   - `showStrengthLine` - Toggle aggregate strength line
-  - `showIntervalLines` - Toggle individual interval strength lines
+  - `showStrengthIntervalLines` - Toggle individual interval strength lines
   - `showPriceLine` - Toggle aggregate price line
-  - `showTickerLines` - Toggle individual ticker price lines
+  - `showPriceTickerLines` - Toggle individual ticker price lines
 - `strengthAverage` / `priceAverage` - Cached aggregated data
 - `strengthIntervals` / `priceTickers` - Individual interval/ticker line data
 

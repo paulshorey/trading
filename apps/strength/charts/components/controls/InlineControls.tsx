@@ -15,18 +15,18 @@ export default function InlineControls({
   drawerCalendarOpen: () => void
 }) {
   const {
-    showIndicatorLine,
-    setShowIndicatorLine,
+    showStrengthIndicatorLine,
+    setshowStrengthIndicatorLine,
     showPriceIndicatorLine,
     setShowPriceIndicatorLine,
     showStrengthLine,
     setShowStrengthLine,
-    showIntervalLines,
-    setShowIntervalLines,
+    showStrengthIntervalLines,
+    setShowStrengthIntervalLines,
     showPriceLine,
     setShowPriceLine,
-    showTickerLines,
-    setShowTickerLines,
+    showPriceTickerLines,
+    setShowPriceTickerLines,
   } = useChartControlsStore()
   return (
     <div
@@ -46,11 +46,15 @@ export default function InlineControls({
       {/* Strength indicator line toggle */}
       <div className="flex">
         <button
-          onClick={() => setShowIndicatorLine(!showIndicatorLine)}
+          onClick={() =>
+            setshowStrengthIndicatorLine(!showStrengthIndicatorLine)
+          }
           className={`px-1.5 py-0.5 text-xs rounded-l transition-colors border-l border-t border-b`}
           style={{
-            borderColor: showIndicatorLine ? COLORS.indicator : 'transparent',
-            backgroundColor: showIndicatorLine
+            borderColor: showStrengthIndicatorLine
+              ? COLORS.indicator
+              : 'transparent',
+            backgroundColor: showStrengthIndicatorLine
               ? COLORS.indicator + '20'
               : 'transparent',
             color: COLORS.indicator,
@@ -77,11 +81,15 @@ export default function InlineControls({
           S
         </button>
         <button
-          onClick={() => setShowIntervalLines(!showIntervalLines)}
+          onClick={() =>
+            setShowStrengthIntervalLines(!showStrengthIntervalLines)
+          }
           className={`px-1.5 py-0.5 text-xs rounded-r transition-colors border`}
           style={{
-            borderColor: showIntervalLines ? COLORS.strength_i : 'transparent',
-            backgroundColor: showIntervalLines
+            borderColor: showStrengthIntervalLines
+              ? COLORS.strength_i
+              : 'transparent',
+            backgroundColor: showStrengthIntervalLines
               ? COLORS.strength_i + '20'
               : 'transparent',
             color: COLORS.strength_i,
@@ -97,7 +105,9 @@ export default function InlineControls({
           onClick={() => setShowPriceIndicatorLine(!showPriceIndicatorLine)}
           className={`px-1.5 py-0.5 text-xs rounded-l transition-colors border-l border-t border-b`}
           style={{
-            borderColor: showPriceIndicatorLine ? COLORS.indicator : 'transparent',
+            borderColor: showPriceIndicatorLine
+              ? COLORS.indicator
+              : 'transparent',
             backgroundColor: showPriceIndicatorLine
               ? COLORS.indicator + '20'
               : 'transparent',
@@ -125,11 +135,11 @@ export default function InlineControls({
           P
         </button>
         <button
-          onClick={() => setShowTickerLines(!showTickerLines)}
+          onClick={() => setShowPriceTickerLines(!showPriceTickerLines)}
           className={`px-1.5 py-0.5 text-xs rounded-r transition-colors border`}
           style={{
-            borderColor: showTickerLines ? COLORS.price_i : 'transparent',
-            backgroundColor: showTickerLines
+            borderColor: showPriceTickerLines ? COLORS.price_i : 'transparent',
+            backgroundColor: showPriceTickerLines
               ? COLORS.price_i + '20'
               : 'transparent',
             color: COLORS.price_i,

@@ -92,7 +92,7 @@ Series options (`visible`, `lineWidth`, `color`) can be changed dynamically with
 
 ```typescript
 series.applyOptions({
-  visible: showIntervalLines && isSelected,
+  visible: showStrengthIntervalLines && isSelected,
   lineWidth: isHighlightedInterval ? 2 : 1,
   color: isHighlightedInterval ? COLORS.strength : COLORS.strength_i,
 })

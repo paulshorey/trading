@@ -1,6 +1,9 @@
 import { TimeMarkerConfig } from './lib/primitives/timeMarkers'
 import { TimeRangeConfig } from './lib/primitives/TimeRangeHighlight'
 
+export const SCALE_FACTOR_DESKTOP = 2
+export const SCALE_FACTOR_MOBILE = 1
+
 // Fetch this much data from the database (enough for all hoursBack values)
 export const FETCH_DATA_HOURS_BACK = 240
 export const FETCH_DATA_ROWS = 7250
@@ -16,6 +19,7 @@ export const COLORS = {
   green: 'hsl(120 70.8% 44.31%)',
   purple: 'hsl(275 85% 70%)', // Purple
   dark: '#777777',
+  neutral: '#999999',
   // Indicator
   indicator: 'hsl(120 70.8% 44.31%)',
   // Strength
@@ -82,9 +86,42 @@ export const TIME_MARKERS: TimeMarkerConfig[] = [
     width: 1,
     showLabel: false,
   },
+  // {
+  //   label: '8pm',
+  //   utcHour: 2,
+  //   utcMinute: 0,
+  //   color: COLORS.dark,
+  //   labelBackgroundColor: COLORS.dark,
+  //   labelTextColor: 'white',
+  //   lineStyle: 'solid',
+  //   width: 1,
+  //   showLabel: false,
+  // },
   {
-    label: '8pm',
+    label: '8:30pm',
     utcHour: 2,
+    utcMinute: 30,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    label: '11:45pm',
+    utcHour: 5,
+    utcMinute: 45,
+    color: COLORS.light,
+    labelBackgroundColor: COLORS.light,
+    labelTextColor: 'white',
+    lineStyle: 'solid',
+    width: 1,
+    showLabel: false,
+  },
+  {
+    label: '3am',
+    utcHour: 9,
     utcMinute: 0,
     color: COLORS.light,
     labelBackgroundColor: COLORS.light,
@@ -112,8 +149,8 @@ export const TIME_RANGE_HIGHLIGHTS: TimeRangeConfig[] = [
     color: COLORS.light_i,
   },
   {
-    startUtcHour: 3, // 9:30pm
-    startUtcMinute: 30,
+    startUtcHour: 1, // 8pm
+    startUtcMinute: 0,
     endUtcHour: 10, // 4:30am
     endUtcMinute: 30,
     color: COLORS.light_i,

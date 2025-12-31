@@ -6,6 +6,6 @@
     "declarationMap": false,
     "noEmit": true
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
+  "include": ["./**/*.ts", "./**/*.tsx", "../../apps/strength/scripts/backfill-nulls.ts"],
   "exclude": ["node_modules", ".next"]
 }

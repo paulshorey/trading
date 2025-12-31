@@ -78,10 +78,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
   ) => {
     const {
       showStrengthLine,
-      showIntervalLines,
+      showStrengthIntervalLines,
       showPriceLine,
-      showTickerLines,
-      showIndicatorLine,
+      showPriceTickerLines,
+      showStrengthIndicatorLine,
       showPriceIndicatorLine,
       hoursBack,
       interval: selectedIntervals, // Which intervals are selected (for visibility)
@@ -172,7 +172,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Always create the series, even if data doesn't exist yet
       const priceAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: !window.isMobile && showPriceTickerLines ? 2 : 1,
         color: COLORS.price,
         priceScaleId: 'right',
       })
@@ -181,7 +181,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Price indicator (moving average) - uses 'right' scale
       const priceIndicatorSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: 1,
         color: COLORS.indicator,
         priceScaleId: 'right',
       })
@@ -190,7 +190,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength average - uses 'left' scale
       const strengthAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: !window.isMobile && showStrengthIntervalLines ? 2 : 1,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
@@ -199,7 +199,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength indicator (moving average) - uses 'left' scale
       const strengthIndicatorSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: 2,
+        lineWidth: 1,
         color: COLORS.indicator,
         priceScaleId: 'left',
       })
@@ -505,14 +505,14 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           }
 
           // Control visibility based on:
-          // 1. Master toggle (showIntervalLines)
+          // 1. Master toggle (showStrengthIntervalLines)
           // 2. Per-interval selection (selectedIntervals)
           // Highlight the most important line when aggregate is hidden
           const isSelected = selectedIntervals.includes(interval)
           const isHighlightedInterval = interval === '181' && !showStrengthLine
 
           series.applyOptions({
-            visible: showIntervalLines && isSelected,
+            visible: showStrengthIntervalLines && isSelected,
             lineWidth: isHighlightedInterval ? 2 : 1,
             color: isHighlightedInterval ? COLORS.strength : COLORS.strength_i,
           })
@@ -522,7 +522,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
     }, [
       strengthIntervals,
-      showIntervalLines,
+      showStrengthIntervalLines,
       showStrengthLine,
       selectedIntervals,
       name,
@@ -544,7 +544,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               lineWidth: 1,
               color: COLORS.price_i,
               priceScaleId: 'right', // Use same scale as price average
-              visible: showTickerLines, // Set initial visibility
+              visible: showPriceTickerLines, // Set initial visibility
             })
             priceTickerSeriesRef.current[ticker] = tickerSeries
           }
@@ -584,9 +584,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             lastPriceTickersRef.current[ticker] = currentData
           }
 
-          // Control visibility based on showTickerLines
+          // Control visibility based on showPriceTickerLines
           series.applyOptions({
-            visible: showTickerLines,
+            visible: showPriceTickerLines,
           })
         })
 
@@ -603,7 +603,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       } catch (error) {
         console.warn('Failed to update price tickers data:', error)
       }
-    }, [priceTickers, showTickerLines, tickers, name])
+    }, [priceTickers, showPriceTickerLines, tickers, name])
 
     // Update chart dimensions when they change
     useEffect(() => {
@@ -666,9 +666,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       if (!strengthIndicatorSeriesRef.current || !hasInitialized.current) return
 
       strengthIndicatorSeriesRef.current.applyOptions({
-        visible: showIndicatorLine,
+        visible: showStrengthIndicatorLine,
       })
-    }, [showIndicatorLine])
+    }, [showStrengthIndicatorLine])
 
     // Toggle visibility of price indicator line
     useEffect(() => {

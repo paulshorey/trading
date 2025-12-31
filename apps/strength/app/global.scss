@@ -5,21 +5,27 @@
 } */
 
 body {
-  transform: scale(0.5);
-  transform-origin: top left;
-  width: 200%;
-  height: 200%;
+  @media (pointer: fine) {
+    transform: scale(0.5);
+    transform-origin: top left;
+    width: 200%;
+    height: 200%;
+  }
   --mantine-color-text: #000000b9;
 }
 .scale2x {
-  transform: scale(2);
-  transform-origin: top left;
+  @media (pointer: fine) {
+    transform: scale(2);
+    transform-origin: top left;
+  }
+}
+.mantine-MultiSelect-options {
+  @media (pointer: fine) {
+    --mantine-scale: 2;
+    max-height: auto !important;
+  }
 }
 
-.mantine-MultiSelect-options {
-  --mantine-scale: 2;
-  max-height: auto !important;
-}
 /* .mantine-MultiSelect-options > div,
 .mantine-MultiSelect-options > div > div,
 .mantine-MultiSelect-options > div > div > div,

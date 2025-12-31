@@ -1,5 +1,4 @@
 import { useEffect, RefObject, useRef } from 'react'
-import { SCALE_FACTOR } from '@/constants'
 
 /**
  * Hook to patch mouse events for charts rendered at zoom: 0.5
@@ -54,7 +53,7 @@ export function useChartEventPatcher(
       e.stopPropagation()
 
       const rect = container.getBoundingClientRect()
-      const scale = SCALE_FACTOR
+      const scale = window.scaleFactor || 1
 
       // Calculate corrected coordinates relative to the container
       const relativeX = e.clientX - rect.left

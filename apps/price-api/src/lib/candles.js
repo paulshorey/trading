@@ -38,10 +38,10 @@ function selectTimeframe(startMs, endMs) {
  * Query candles from the appropriate table
  * @param {number} startMs - Start timestamp in milliseconds
  * @param {number} endMs - End timestamp in milliseconds
- * @param {string} ticker - Optional ticker filter (default: all)
+ * @param {string} ticker - Ticker symbol (required)
  * @returns {Promise<Array>} Array of [timestamp, open, high, low, close, volume]
  */
-async function getCandles(startMs, endMs, ticker = null) {
+async function getCandles(startMs, endMs, ticker) {
   const timeframe = selectTimeframe(startMs, endMs);
 
   // Convert ms timestamps to ISO for database query
@@ -49,19 +49,13 @@ async function getCandles(startMs, endMs, ticker = null) {
   const endISO = new Date(endMs).toISOString();
 
   // Build query - table name uses double quotes due to dash in "candles-1m"
-  let query = `
+  const query = `
     SELECT time, open, high, low, close, volume
     FROM "${timeframe.table}"
-    WHERE time >= $1 AND time <= $2
+    WHERE time >= $1 AND time <= $2 AND ticker = $3
+    ORDER BY time ASC
   `;
-  const params = [startISO, endISO];
-
-  if (ticker) {
-    query += ` AND ticker = $3`;
-    params.push(ticker);
-  }
-
-  query += ` ORDER BY time ASC`;
+  const params = [startISO, endISO, ticker];
 
   const result = await pool.query(query, params);
 
@@ -84,15 +78,20 @@ async function getCandles(startMs, endMs, ticker = null) {
 }
 
 /**
- * Get the full date range available in the database
- * Returns min/max timestamps across all timeframes
+ * Get the date range available for a ticker
+ * @param {string} ticker - Ticker symbol (required)
+ * @returns {Promise<{start: number, end: number} | null>}
  */
-async function getDateRange() {
-  // Query the 1h table for overall range (good balance of speed/accuracy)
-  const result = await pool.query(`
+async function getDateRange(ticker) {
+  // Query the 1h table for range (good balance of speed/accuracy)
+  const result = await pool.query(
+    `
     SELECT MIN(time) as min_time, MAX(time) as max_time
     FROM "candles_1h"
-  `);
+    WHERE ticker = $1
+  `,
+    [ticker]
+  );
 
   if (!result.rows[0]?.min_time) {
     return null;

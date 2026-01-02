@@ -1,4 +1,7 @@
+require("dotenv").config();
+
 const express = require("express");
+const cors = require("cors");
 const { pool } = require("./lib/db");
 const { getSchema } = require("./lib/schema");
 const { getCandles, getDateRange } = require("./lib/candles");
@@ -6,6 +9,7 @@ const { getCandles, getDateRange } = require("./lib/candles");
 const app = express();
 const port = process.env.PORT || 8080;
 
+app.use(cors());
 app.use(express.json());
 
 /**
@@ -52,13 +56,16 @@ app.get("/tables", async (req, res) => {
   }
 });
 
+// Default date range: 2010-01-01 to now
+const DEFAULT_START_MS = new Date("2010-01-01").getTime();
+
 /**
  * Historical Candles
  *
  * Query params:
- *   start - Start timestamp in ms (required)
- *   end   - End timestamp in ms (required)
- *   ticker - Filter by ticker (optional)
+ *   ticker - Ticker symbol (required)
+ *   start  - Start timestamp in ms (default: 2010-01-01)
+ *   end    - End timestamp in ms (default: now)
  *
  * Returns array of tuples: [timestamp_ms, open, high, low, close, volume]
  * Automatically selects the best timeframe based on date range.
@@ -67,15 +74,15 @@ app.get("/historical/candles", async (req, res) => {
   try {
     const { start, end, ticker } = req.query;
 
-    // Validate required params
-    if (!start || !end) {
+    if (!ticker) {
       return res.status(400).json({
-        error: "Missing required params: start, end (timestamps in ms)",
+        error: "Missing required param: ticker",
       });
     }
 
-    const startMs = parseInt(start, 10);
-    const endMs = parseInt(end, 10);
+    // Use defaults if not provided
+    const startMs = start ? parseInt(start, 10) : DEFAULT_START_MS;
+    const endMs = end ? parseInt(end, 10) : Date.now();
 
     if (isNaN(startMs) || isNaN(endMs)) {
       return res.status(400).json({
@@ -89,7 +96,7 @@ app.get("/historical/candles", async (req, res) => {
       });
     }
 
-    const result = await getCandles(startMs, endMs, ticker || null);
+    const result = await getCandles(startMs, endMs, ticker);
 
     // Return just the data array for Highcharts compatibility
     // Include metadata in headers for debugging
@@ -99,24 +106,32 @@ app.get("/historical/candles", async (req, res) => {
 
     res.json(result.data);
   } catch (error) {
-    console.error("Error fetching candles:", error.message);
+    console.error("Error fetching candles:", error);
     res.status(500).json({
       error: "Failed to fetch candle data",
-      message: error.message,
+      message: error.message || String(error),
     });
   }
 });
 
 /**
  * Historical Candles - Date Range
- * Returns the available date range in the database
+ * Returns the available date range for a ticker
  */
 app.get("/historical/range", async (req, res) => {
   try {
-    const range = await getDateRange();
+    const { ticker } = req.query;
+
+    if (!ticker) {
+      return res.status(400).json({
+        error: "Missing required param: ticker",
+      });
+    }
+
+    const range = await getDateRange(ticker);
 
     if (!range) {
-      return res.status(404).json({ error: "No data available" });
+      return res.status(404).json({ error: "No data available for ticker" });
     }
 
     res.json(range);

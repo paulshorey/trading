@@ -33,7 +33,10 @@ const darkTheme = {
   candleDown: '#ef5350',
 }
 
-const DATA_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
+// const DATA_URL = 'http://localhost:8080/historical/candles?ticker=ES'
+const DATA_URL =
+  'https://m-production-c204.up.railway.app/historical/candles?ticker=ES'
+// const DATA_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
 const DEBOUNCE_MS = 1000 // Necessary on scroll events to prevent continous fetch() calls
 
 export function Chart() {
@@ -81,7 +84,7 @@ export function Chart() {
       debounceRef.current = setTimeout(() => {
         chart.showLoading('Loading data from server...')
 
-        fetch(`${DATA_URL}?start=${Math.round(e.min)}&end=${Math.round(e.max)}`)
+        fetch(`${DATA_URL}&start=${Math.round(e.min)}&end=${Math.round(e.max)}`)
           .then((res) => res.ok && res.json())
           .then((data) => {
             if (data) {
@@ -113,23 +116,23 @@ export function Chart() {
         },
       },
 
-      title: {
-        text: 'AAPL history by the minute from 1998 to 2011',
-        align: 'left',
-        style: {
-          color: darkTheme.text,
-          fontSize: '18px',
-          fontWeight: '600',
-        },
-      },
+      // title: {
+      //   text: 'ES',
+      //   align: 'left',
+      //   style: {
+      //     color: darkTheme.text,
+      //     fontSize: '18px',
+      //     fontWeight: '600',
+      //   },
+      // },
 
-      subtitle: {
-        text: 'Displaying 1.7 million data points in Highcharts Stock by async server loading',
-        align: 'left',
-        style: {
-          color: '#a0a0b0',
-        },
-      },
+      // subtitle: {
+      //   text: 'Displaying 1.7 million data points in Highcharts Stock by async server loading',
+      //   align: 'left',
+      //   style: {
+      //     color: '#a0a0b0',
+      //   },
+      // },
 
       navigator: {
         adaptToUpdatedData: false,

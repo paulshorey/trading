@@ -20,7 +20,7 @@ const TARGET_CANDLES = 400;
  */
 function selectTimeframe(startMs, endMs) {
   const rangeMs = endMs - startMs;
-  
+
   // Find the smallest timeframe that would result in <= TARGET_CANDLES
   // Iterate from smallest to largest timeframe
   for (const tf of TIMEFRAMES) {
@@ -29,7 +29,7 @@ function selectTimeframe(startMs, endMs) {
       return tf;
     }
   }
-  
+
   // Default to largest timeframe for very long ranges
   return TIMEFRAMES[TIMEFRAMES.length - 1];
 }
@@ -38,16 +38,16 @@ function selectTimeframe(startMs, endMs) {
  * Query candles from the appropriate table
  * @param {number} startMs - Start timestamp in milliseconds
  * @param {number} endMs - End timestamp in milliseconds
- * @param {string} symbol - Optional symbol filter (default: all)
+ * @param {string} ticker - Optional ticker filter (default: all)
  * @returns {Promise<Array>} Array of [timestamp, open, high, low, close, volume]
  */
-async function getCandles(startMs, endMs, symbol = null) {
+async function getCandles(startMs, endMs, ticker = null) {
   const timeframe = selectTimeframe(startMs, endMs);
-  
+
   // Convert ms timestamps to ISO for database query
   const startISO = new Date(startMs).toISOString();
   const endISO = new Date(endMs).toISOString();
-  
+
   // Build query - table name uses double quotes due to dash in "candles-1m"
   let query = `
     SELECT time, open, high, low, close, volume
@@ -55,16 +55,16 @@ async function getCandles(startMs, endMs, symbol = null) {
     WHERE time >= $1 AND time <= $2
   `;
   const params = [startISO, endISO];
-  
-  if (symbol) {
-    query += ` AND symbol = $3`;
-    params.push(symbol);
+
+  if (ticker) {
+    query += ` AND ticker = $3`;
+    params.push(ticker);
   }
-  
+
   query += ` ORDER BY time ASC`;
-  
+
   const result = await pool.query(query, params);
-  
+
   // Convert to Highcharts format: [timestamp_ms, open, high, low, close, volume]
   const candles = result.rows.map((row) => [
     new Date(row.time).getTime(), // ISO → Unix ms
@@ -74,7 +74,7 @@ async function getCandles(startMs, endMs, symbol = null) {
     parseFloat(row.close),
     parseFloat(row.volume),
   ]);
-  
+
   return {
     timeframe: timeframe.id,
     table: timeframe.table,
@@ -93,11 +93,11 @@ async function getDateRange() {
     SELECT MIN(time) as min_time, MAX(time) as max_time
     FROM "candles_1h"
   `);
-  
+
   if (!result.rows[0]?.min_time) {
     return null;
   }
-  
+
   return {
     start: new Date(result.rows[0].min_time).getTime(),
     end: new Date(result.rows[0].max_time).getTime(),

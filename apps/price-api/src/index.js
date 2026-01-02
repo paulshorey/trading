@@ -58,14 +58,14 @@ app.get("/tables", async (req, res) => {
  * Query params:
  *   start - Start timestamp in ms (required)
  *   end   - End timestamp in ms (required)
- *   symbol - Filter by symbol (optional)
+ *   ticker - Filter by ticker (optional)
  *
  * Returns array of tuples: [timestamp_ms, open, high, low, close, volume]
  * Automatically selects the best timeframe based on date range.
  */
 app.get("/historical/candles", async (req, res) => {
   try {
-    const { start, end, symbol } = req.query;
+    const { start, end, ticker } = req.query;
 
     // Validate required params
     if (!start || !end) {
@@ -89,7 +89,7 @@ app.get("/historical/candles", async (req, res) => {
       });
     }
 
-    const result = await getCandles(startMs, endMs, symbol || null);
+    const result = await getCandles(startMs, endMs, ticker || null);
 
     // Return just the data array for Highcharts compatibility
     // Include metadata in headers for debugging

@@ -33,10 +33,10 @@ const darkTheme = {
   candleDown: '#ef5350',
 }
 
-// const DATA_URL = 'http://localhost:8080/historical/candles?ticker=ES'
-const DATA_URL =
-  'https://m-production-c204.up.railway.app/historical/candles?ticker=ES'
-// const DATA_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
+// const CANDLES_URL = 'http://localhost:8080/historical/candles?ticker=ES'
+const CANDLES_URL =
+  process.env.MARKET_DATA_API_URL+'/historical/candles?ticker=ES'
+// const CANDLES_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
 const DEBOUNCE_MS = 1000 // Necessary on scroll events to prevent continous fetch() calls
 
 export function Chart() {
@@ -60,7 +60,7 @@ export function Chart() {
 
   // Load initial data
   useEffect(() => {
-    fetch(DATA_URL)
+    fetch(CANDLES_URL)
       .then((res) => res.ok && res.json())
       .then((data) => {
         if (data) {
@@ -84,7 +84,7 @@ export function Chart() {
       debounceRef.current = setTimeout(() => {
         chart.showLoading('Loading data from server...')
 
-        fetch(`${DATA_URL}&start=${Math.round(e.min)}&end=${Math.round(e.max)}`)
+        fetch(`${CANDLES_URL}&start=${Math.round(e.min)}&end=${Math.round(e.max)}`)
           .then((res) => res.ok && res.json())
           .then((data) => {
             if (data) {

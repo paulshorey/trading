@@ -35,7 +35,7 @@ const darkTheme = {
 
 // const CANDLES_URL = 'http://localhost:8080/historical/candles?ticker=ES'
 const CANDLES_URL =
-  process.env.MARKET_DATA_API_URL+'/historical/candles?ticker=ES'
+  process.env.NEXT_PUBLIC_MARKET_DATA_API_URL+'/historical/candles?ticker=ES'
 // const CANDLES_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
 const DEBOUNCE_MS = 1000 // Necessary on scroll events to prevent continous fetch() calls
 

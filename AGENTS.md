@@ -63,3 +63,21 @@ When working in any folder:
 2. **Update** the AGENTS.md file after completing work to document any significant architectural decisions or non-obvious patterns
 3. Keep documentation concise - only document complex concepts that aren't obvious from reading the code
 4. Remove outdated or incorrect info; consolidate redundant content
+
+## GitHub Copilot Agentic Workflow
+
+For complex tasks affecting multiple files or requiring research, use the **@orchestrator** agent to coordinate a multi-phase workflow:
+
+- See `.github/agents/README.md` for full documentation
+- See `.github/copilot-instructions.md` for global project context
+- Each agent has specialized knowledge and isolated context
+- Orchestrator coordinates: explore → research → implement → refactor → test → review
+
+**When to use @orchestrator:**
+- Complex changes touching multiple files
+- Tasks requiring research or exploration
+- Features with unclear implementation path
+
+**When to skip orchestrator:**
+- Simple single-file changes
+- Trivial changes with obvious solutions

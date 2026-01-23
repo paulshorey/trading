@@ -13,10 +13,21 @@ Financial charting app displaying price and relative strength (RSI), with real-t
 Current working directory is `apps/price-ui`
 Inside:
 
-- api/ NextJS api
-- components/ wrappers imported directly from page.tsx should be placed in the root of this folder - all other components for specific features or layout should be nested in sub-folders
-- docs/ documentation markdown files for HighCharts, other libraries, and specific techniques
+- lib/utils/ - Utility functions with unit tests
+- api/ - NextJS API routes
+- components/ - React components (wrappers in root, feature-specific in sub-folders)
+- docs/ - Documentation for HighCharts and other libraries
 
 ## Highcharts
 
 @apps/price-ui/docs/highcharts/overview.md
+
+### Technical Indicators
+
+The chart supports technical indicators via Highcharts' built-in indicators module. Currently implemented:
+
+- **SMA (20-period)**: Simple Moving Average calculated from closing prices
+
+**How indicators work with lazy-loaded data:**
+
+When the user zooms/pans, we fetch extra historical data beyond the visible range to ensure proper indicator calculation. The `estimateDataInterval()` utility function determines the data granularity, then we fetch 20 extra periods before the visible start time. The xAxis `min`/`max` constrains what's displayed while the full data allows correct indicator values at the start of the visible range.

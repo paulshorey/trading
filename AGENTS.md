@@ -8,7 +8,6 @@ This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo t
 - price-ui - ./apps/price-ui - newer financial charts and data analysis built with HighCharts and improved data sources
 - log - ./apps/log - logging and observability for all data types
 - trade ./apps/trade - day trading and investment positions management
-- auth - ./apps/auth - authentication testing app using Next Auth and Prisma
 - facts - ./apps/facts - (additional app in monorepo)
 
 **Shared Libraries:**

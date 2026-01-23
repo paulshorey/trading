@@ -69,7 +69,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
     const result = await client.query(queryText, params);
     const orders = result.rows;
 
-    // Convert Prisma results to OrderRowGet format
+    // Convert query results to OrderRowGet format
     const rows = orders.map((order) => ({
       id: order.id,
       dev: order.node_env === "development",

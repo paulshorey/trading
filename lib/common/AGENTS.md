@@ -36,4 +36,4 @@ import { theme } from '@lib/common/fe/styles/theme'
 
 - All imports within this package use relative paths (e.g., `../../lib/db/neon`)
 - This is a workspace package, not published to npm
-- Used by: apps/trade, apps/log, apps/strength, apps/facts, apps/auth
+- Used by: apps/trade, apps/log, apps/strength, apps/facts, apps/price-ui

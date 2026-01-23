@@ -128,7 +128,5 @@ dist
 .DS_Store
 .vercel
 
-yarn.lock 
+yarn.lock
 .vscode
-
-prisma/

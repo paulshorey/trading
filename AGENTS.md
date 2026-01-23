@@ -2,8 +2,6 @@ This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo t
 
 ### Folder structure:
 
-Before running any terminal npm or pnpm command, make sure to be in the correct folder, depending on the app or utility library that we're working with.
-
 **Apps:**
 
 - strength - ./apps/strength - financial charts and data analysis experiment built with lightweight-charts
@@ -25,9 +23,16 @@ Before running any terminal npm or pnpm command, make sure to be in the correct 
 
 - ./lib/config - build configuration and tooling (eslint, typescript, tailwind, postcss)
 
-### PNPM instead of NPM:
+** Before running CLI commands:**
 
-If you need to run `npm i` or `npm install`, run `pnpm install` instead.
+Use either of these techniques to target the correct app in the monorepo:
+
+1. `cd` into the correct package directory: `cd /apps/trade` then `pnpm run test`
+2. or specify which app in the monorepo to run the command on: `pnpm --filter trade build`
+
+### NPM:
+
+Always use `pnpm` instead of `npm`.
 
 ### Import paths:
 
@@ -37,15 +42,9 @@ Shared utilities are imported from `@lib/common` like this: `import { cc } from 
 
 Internal imports within `@lib/common` use relative paths like `../../` because they're all part of the same package.
 
-Be careful optimizing imports. There are multiple folders in the project with the same name such as `@/lib` vs `@/dydx/lib` vs `@lib/common/lib` vs `@lib/common/fe/lib`. All existing import paths are correct exactly as they are. Do not optimize import paths unless you have moved things around.
+Be careful optimizing imports. There are multiple folders in the project with the same name such as `@/lib` vs `@/dydx/lib` vs `@lib/common/lib` vs `@lib/common/fe/lib`. All existing import paths are correct exactly as they are. Do not try to optimize import paths. Update import paths only if you have moved a file.
 
-Note "fe" means "front end", and "be" means "back end". Several apps have this naming convention to separate client-side from server-side files.
-
-Common shared library files (./lib/common) can be imported from `@lib/common` such as this:
-
-```
-import { formatResponse } from '@lib/common/lib/nextjs/formatResponse'
-```
+Common shared library files `./lib/common` can be imported from `@lib/common`, like this: `import { formatResponse } from '@lib/common/lib/nextjs/formatResponse'`
 
 ### Build and lint:
 
@@ -59,8 +58,9 @@ If the solution is not obvious, search the web about best practices. Search for 
 
 ### AGENTS.md files memory and documentation:
 
-You are an AI agent. You will read AGENTS.md file in any relevant folder every time you think about a prompt. AGENTS.md files will serve as documentation about the files and relationships in that folder. Add or edit AGENTS.md files as you make changes. Document complex topics which are not immediately obvious. Documentation you write will help you remember which folder or file to open next time when you work on a similar topic.
+When working in any folder:
 
-Always try to improve AGENTS.md files as you look throughout the codebase. Remove irrelevant or incorrect info. Consolidate documentation that is redundant or verbose.
-
-Do not write too much documentation, make it very conscise. Avoid duplicate redundant comments. Do not write documentation and comments for every little change, only for big major concepts. Do not add comments or documentation for code that is easy to read. If code makes sense at a glance, it does not need documentation.
+1. **Read** the AGENTS.md file in that folder (if exists) before making changes.
+2. **Update** the AGENTS.md file after completing work to document any significant architectural decisions or non-obvious patterns
+3. Keep documentation concise - only document complex concepts that aren't obvious from reading the code
+4. Remove outdated or incorrect info; consolidate redundant content

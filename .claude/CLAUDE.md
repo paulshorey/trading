@@ -49,7 +49,7 @@ Each app and library inside this monorepo has its own `AGENTS.md` file, such as 
 
 Always use `pnpm` instead of `npm`.
 
-Before running CLI commands use either of these techniques to target the correct app:
+Before running CLI commands use either of these techniques to target the correct directory in the monorepo:
 
 1. `cd` into the correct package directory: `cd /apps/trade` then `pnpm run test`
-2. or specify which app to run the command on: `pnpm --filter trade build`
+2. or from the root, specify which app to run the command on: `pnpm --filter trade build`

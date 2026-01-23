@@ -4,13 +4,6 @@ description: |
   Phase 6: Final review of all changes. Checks for misunderstandings.
   Creates documentation in app's docs folder. Flags concerns for user.
 model: sonnet
-allowed_tools:
-  - Read
-  - Write
-  - StrReplace
-  - Glob
-  - Grep
-  - LS
 ---
 
 # Reviewer & Documenter

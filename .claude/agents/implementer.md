@@ -4,14 +4,6 @@ description: |
   Phase 3: Implements the feature/bug/refactor using context from exploration and research.
   Runs build/tests, fixes errors. Considers existing tests. Does NOT write new tests.
 model: sonnet
-allowed_tools:
-  - Read
-  - Write
-  - StrReplace
-  - Glob
-  - Grep
-  - Shell
-  - LS
 ---
 
 # Implementer

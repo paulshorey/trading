@@ -10,10 +10,10 @@ All agents are defined in `.claude/agents/`:
 
 1. orchestrator.md - Opus 4.5, coordinates all phases sequentially
 2. codebase-explorer.md - Sonnet, reads and understands the codebase
-3. web-researcher.md - Sonnet, performs deep web research
+3. web-researcher.md - Sonnet, performs deep web research **(optional)**
 4. implementer.md - Sonnet, implements the feature/fix
 5. refactorer.md - Sonnet, improves code quality
-6. test-writer.md - Sonnet, writes unit tests
+6. test-writer.md - Sonnet, writes unit tests **(optional)**
 7. reviewer-documenter.md - Sonnet, reviews and documents
 
 ### When to Use This Workflow
@@ -39,6 +39,9 @@ The orchestrator runs each phase **synchronously and sequentially**:
 2. Orchestrator evaluates output before proceeding
 3. Orchestrator may ask user for clarification at any checkpoint
 4. No parallel execution - strict phase ordering
+5. Orchestrator decides which phases to run based on the task
+
+**Optional phases**: Web research and test writing are optional. The orchestrator should skip them if they're not needed for the specific task.
 
 **Context passing**: Subagents have isolated context. They cannot see each other's outputs. The orchestrator must explicitly pass relevant information from previous phases to each subagent.
 

@@ -18,7 +18,7 @@ All agents are defined in `.claude/agents/`:
 
 ### When to Use This Workflow
 
-**Use orchestrator workflow for:**
+**Use orchestrator agent for:**
 
 - Complex changes touching multiple files
 - Tasks requiring research or exploration
@@ -40,6 +40,8 @@ The orchestrator runs each phase **synchronously and sequentially**:
 3. Orchestrator may ask user for clarification at any checkpoint
 4. No parallel execution - strict phase ordering
 
+**Context passing**: Subagents have isolated context. They cannot see each other's outputs. The orchestrator must explicitly pass relevant information from previous phases to each subagent.
+
 ## Project-Specific Notes
 
 This is a TurboRepo monorepo. File structure and configuration is described in root `/AGENTS.md`.
@@ -47,7 +49,7 @@ Each app and library inside this monorepo has its own `AGENTS.md` file, such as 
 
 Always use `pnpm` instead of `npm`.
 
-Before running CLI commands use one of these techniques, to target the correct app:
+Before running CLI commands use either of these techniques to target the correct app:
 
 1. `cd` into the correct package directory: `cd /apps/trade` then `pnpm run test`
 2. or specify which app to run the command on: `pnpm --filter trade build`

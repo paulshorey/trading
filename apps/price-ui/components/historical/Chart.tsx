@@ -70,6 +70,15 @@ export function Chart() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+    }
+  }, [])
+
   // Load initial data
   useEffect(() => {
     fetch(CANDLES_URL)

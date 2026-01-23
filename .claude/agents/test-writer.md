@@ -4,14 +4,6 @@ description: |
   Phase 5: Writes focused unit tests for new functionality.
   Covers base cases, not 100% coverage. Runs build/tests.
 model: sonnet
-allowed_tools:
-  - Read
-  - Write
-  - StrReplace
-  - Glob
-  - Grep
-  - Shell
-  - LS
 ---
 
 # Test Writer

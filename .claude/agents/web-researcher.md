@@ -4,10 +4,6 @@ description: |
   Phase 2: Deep web research on libraries, APIs, usage patterns, TypeScript types,
   troubleshooting. Fills knowledge gaps from codebase exploration.
 model: sonnet
-allowed_tools:
-  - WebSearch
-  - WebFetch
-  - Read
 ---
 
 # Web Researcher

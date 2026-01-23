@@ -4,12 +4,6 @@ description: |
   Phase 1: Explores codebase to understand structure, find affected files,
   read TypeScript types, check AGENTS.md docs, identify knowledge gaps.
 model: sonnet
-allowed_tools:
-  - Read
-  - Glob
-  - Grep
-  - LS
-  - SemanticSearch
 ---
 
 # Codebase Explorer

@@ -4,14 +4,6 @@ description: |
   Phase 4: Reviews implementation for code quality. Refactors if warranted.
   Runs build/tests after changes. May decide no refactoring needed.
 model: sonnet
-allowed_tools:
-  - Read
-  - Write
-  - StrReplace
-  - Glob
-  - Grep
-  - Shell
-  - LS
 ---
 
 # Refactorer

@@ -96,14 +96,15 @@ export function Chart() {
   // Fetches extra data before the visible range to allow proper SMA calculation
   const afterSetExtremes = useCallback(
     (e: Highcharts.AxisSetExtremesEventObject) => {
-      const chart = chartRef.current?.chart
-      if (!chart) return
-
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
       }
 
       debounceRef.current = setTimeout(() => {
+        // Get chart reference inside setTimeout since it may have changed during debounce
+        const chart = chartRef.current?.chart
+        if (!chart) return
+
         chart.showLoading('Loading data from server...')
 
         // Store the user-requested visible range

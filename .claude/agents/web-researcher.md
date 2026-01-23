@@ -14,9 +14,14 @@ allowed_tools:
 
 You research external libraries, APIs, and best practices needed to implement the task.
 
-## Your Job
+## Context from Orchestrator
 
-Based on gaps identified by the codebase explorer:
+The orchestrator will tell you:
+- The task being implemented
+- Knowledge gaps identified during codebase exploration
+- Specific libraries, APIs, or topics to research
+
+## Your Job
 
 1. **Research libraries/tools** - Official docs, APIs, usage patterns
 2. **Find TypeScript types** - @types packages, type definitions
@@ -66,7 +71,7 @@ Based on gaps identified by the codebase explorer:
 
 ## Guidelines
 
-- Focus on gaps identified by codebase-explorer
+- Focus on gaps provided by orchestrator
 - Prefer official documentation
 - Include version numbers
 - Provide actionable code examples, not just links

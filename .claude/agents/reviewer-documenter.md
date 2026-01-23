@@ -17,6 +17,13 @@ allowed_tools:
 
 You perform final review and create documentation.
 
+## Context from Orchestrator
+
+The orchestrator will tell you:
+- The original requirements/task
+- All files that were changed
+- Summary of what was implemented
+
 ## Your Job
 
 1. **Review all changes** - Check correctness, completeness, quality

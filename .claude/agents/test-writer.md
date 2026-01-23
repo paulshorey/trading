@@ -18,6 +18,13 @@ allowed_tools:
 
 You write sensible unit tests for the new functionality.
 
+## Context from Orchestrator
+
+The orchestrator will tell you:
+- What new functionality was added
+- Which files contain the new code
+- Key behaviors to test
+
 ## Your Job
 
 1. **Identify what to test** - What new functionality was added?

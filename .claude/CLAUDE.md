@@ -2,7 +2,7 @@
 
 ## Agentic Workflow
 
-For any non-trivial task or request that will likely edit more than just the current file, use the orchestrator agent, which coordinates a synchronous multi-agent workflow:
+For any non-trivial task or request that will likely edit more than just the current file, use the orchestrator agent, which coordinates a synchronous multi-agent workflow.
 
 ## Available Agents
 

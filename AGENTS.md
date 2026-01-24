@@ -6,7 +6,6 @@ This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo t
 
 - strength - ./apps/strength - financial charts and data analysis experiment built with lightweight-charts
 - price-ui - ./apps/price-ui - newer financial charts and data analysis built with HighCharts and improved data sources
-- price-api - ./apps/price-api - market data polling + API service for futures and crypto
 - log - ./apps/log - logging and observability for all data types
 - trade ./apps/trade - day trading and investment positions management
 - facts - ./apps/facts - (additional app in monorepo)

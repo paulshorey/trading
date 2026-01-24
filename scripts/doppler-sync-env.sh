@@ -31,7 +31,7 @@ echo "Syncing .env.local files from Doppler (config: ${DOPPLER_CONFIG})"
 for app_dir in "${app_dirs[@]}"; do
   app_name="$(basename "${app_dir}")"
   project_name="${DOPPLER_PROJECT_PREFIX}${app_name}"
-  output_file="${app_dir}/.env.local"
+  output_file="${app_dir}.env.local"
 
   echo " - ${app_name}: ${project_name} -> ${output_file}"
   doppler secrets download \

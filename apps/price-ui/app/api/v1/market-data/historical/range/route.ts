@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(range)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    cc.error('GET /api/v1/market-data/historical/range ERROR: ' + message, error)
+    const stack = error instanceof Error ? { error: error.stack } : { error: String(error) }
+    cc.error('GET /api/v1/market-data/historical/range ERROR: ' + message, stack)
     return NextResponse.json(
       {
         error: 'Failed to fetch date range',

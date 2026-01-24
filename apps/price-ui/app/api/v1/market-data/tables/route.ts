@@ -23,7 +23,8 @@ export async function GET() {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    cc.error('GET /api/v1/market-data/tables ERROR: ' + message, error)
+    const stack = error instanceof Error ? { error: error.stack } : { error: String(error) }
+    cc.error('GET /api/v1/market-data/tables ERROR: ' + message, stack)
     return NextResponse.json(
       {
         success: false,

@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
     const { rows, error } = await strengthGets({ where })
 
     if (error) {
-      cc.error(`API strengthGet ERROR: ` + error.message, error)
+      const stack = { error: error.message || String(error) }
+      cc.error(`API strengthGet ERROR: ` + error.message, stack)
       return formatResponse(
         {
           ok: false,
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
       rows: filteredRows || [],
     })
   } catch (error: any) {
-    cc.error(`GET /api/v1/strength CATCH ERROR: ` + error.message, error)
+    const stack = error instanceof Error ? { error: error.stack } : { error: String(error) }
+    cc.error(`GET /api/v1/strength CATCH ERROR: ` + error.message, stack)
     return formatResponse(
       {
         ok: false,

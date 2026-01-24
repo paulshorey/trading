@@ -37,10 +37,11 @@ export function selectTimeframe(startMs: number, endMs: number): Timeframe {
   }
 
   // Default to largest timeframe for very long ranges
-  if (TIMEFRAMES.length === 0) {
+  const fallback = TIMEFRAMES[TIMEFRAMES.length - 1]
+  if (!fallback) {
     throw new Error('No timeframes configured')
   }
-  return TIMEFRAMES[TIMEFRAMES.length - 1]
+  return fallback
 }
 
 export type CandleTuple = [number, number, number, number, number, number]

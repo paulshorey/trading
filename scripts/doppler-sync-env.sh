@@ -28,18 +28,34 @@ fi
 
 echo "Syncing .env.local files from Doppler (config: ${DOPPLER_CONFIG})"
 
+# Set umask to ensure secure permissions for generated files
+umask 077
+
 for app_dir in "${app_dirs[@]}"; do
   app_name="$(basename "${app_dir}")"
   project_name="${DOPPLER_PROJECT_PREFIX}${app_name}"
   output_file="${app_dir}.env.local"
+  temp_file="${output_file}.tmp"
 
   echo " - ${app_name}: ${project_name} -> ${output_file}"
-  doppler secrets download \
+  
+  # Download to temp file first to avoid truncating existing file on error
+  if doppler secrets download \
     --project "${project_name}" \
     --config "${DOPPLER_CONFIG}" \
     --format env \
     --no-file \
-    > "${output_file}"
+    > "${temp_file}"; then
+    # Only move to final location on success
+    mv "${temp_file}" "${output_file}"
+    # Ensure secure permissions
+    chmod 600 "${output_file}"
+  else
+    # Clean up temp file on failure
+    rm -f "${temp_file}"
+    echo "   ERROR: Failed to download secrets for ${app_name}"
+    exit 1
+  fi
 done
 
 echo "Done."

@@ -33,6 +33,12 @@ Use either of these techniques to target the correct app in the monorepo:
 
 Always use `pnpm` instead of `npm`.
 
+### Doppler env sync (start of each session)
+
+Run `pnpm doppler:sync-env` to generate/update `.env.local` files for each app
+from Doppler. Defaults to `DOPPLER_CONFIG=dev`. Override with
+`DOPPLER_CONFIG` and optional `DOPPLER_PROJECT_PREFIX`.
+
 ### Import paths:
 
 Most `./apps/*` apps use project-relative import paths to reference their own root project directory like this: `@/path/to/file`.

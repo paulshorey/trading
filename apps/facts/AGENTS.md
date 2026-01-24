@@ -49,7 +49,7 @@ Uses shared configs from `@lib/config`:
 - TypeScript config extends `@lib/config/typescript/nextjs.json`
 - Next.js config extends `@lib/config/next/base`
 - PostCSS config from `@lib/config/postcss`
-- Tailwind config extends `@lib/config/tailwind/base`
+- Tailwind config from `@lib/config/tailwind/app`
 
 ## Development
 

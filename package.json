@@ -8,7 +8,8 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "doppler:sync-env": "./scripts/doppler-sync-env.sh"
+    "doppler:sync-env": "./scripts/doppler-sync-env.sh",
+    "create:app": "node scripts/create-app.js"
   },
   "devDependencies": {
     "prettier": "^3.6.2",

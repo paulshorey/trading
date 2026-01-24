@@ -18,3 +18,11 @@ Inside:
 - price - /price page - will display new improved chart using highcharts library
 - page.tsx - / homepage - renders old (current version) chart using lightweight-charts
 - components - React components for the new
+
+## Configuration
+
+Shared configs are pulled from `@lib/config`:
+
+- Tailwind preset: `@lib/config/tailwind/app`
+- Jest preset: `@lib/config/jest/next-app`
+- TypeScript/Next/PostCSS: `@lib/config`

@@ -1,5 +1,10 @@
 This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo to build, test, and deploy.
 
+### Start of session
+
+Fetch latest environment variables from Doppler.
+Run `pnpm doppler:sync-env` to generate `.env.local` files.
+
 ### Folder structure:
 
 **Apps:**
@@ -33,12 +38,6 @@ Use either of these techniques to target the correct app in the monorepo:
 
 Always use `pnpm` instead of `npm`.
 
-### Doppler env sync (start of each session)
-
-Run `pnpm doppler:sync-env` to generate/update `.env.local` files for each app
-from Doppler. Defaults to `DOPPLER_CONFIG=dev`. Override with
-`DOPPLER_CONFIG` and optional `DOPPLER_PROJECT_PREFIX`.
-
 ### Import paths:
 
 Most `./apps/*` apps use project-relative import paths to reference their own root project directory like this: `@/path/to/file`.
@@ -55,6 +54,16 @@ Common shared library files `./lib/common` can be imported from `@lib/common`, l
 
 Don't bother checking linting / typescript separately. Simply run `npm run build` in the app that you're working on. If working on the strength app for example then `cd apps/strength` and run `npm run build` to check lint / types together.
 
+### App scaffolding
+
+Use the shared generator to add new apps with the standard config files:
+
+```bash
+pnpm create:app <app-name> --port 3335
+```
+
+This seeds a Next.js app in `apps/<app-name>` using the shared `@lib/config` presets.
+
 ### Questions:
 
 If I present you with a contradictory or confusing request, ask to clarify.
@@ -70,20 +79,6 @@ When working in any folder:
 3. Keep documentation concise - only document complex concepts that aren't obvious from reading the code
 4. Remove outdated or incorrect info; consolidate redundant content
 
-## GitHub Copilot Agentic Workflow
+## Workflow:
 
-For complex tasks affecting multiple files or requiring research, use the **@orchestrator** agent to coordinate a multi-phase workflow:
-
-- Global project context: `.github/copilot-instructions.md`
-- Agent definitions: `.github/agents/*.agent.md`
-- Each agent has specialized knowledge and isolated context
-- Orchestrator coordinates: explore → research → implement → refactor → test → review
-
-**When to use @orchestrator:**
-- Complex changes touching multiple files
-- Tasks requiring research or exploration
-- Features with unclear implementation path
-
-**When to skip orchestrator:**
-- Simple single-file changes
-- Trivial changes with obvious solutions
+After you "think" you've finished the task, run `npm run build` to check for errors. Fix any errors. Then run `npm run build` again! to make sure nothing else is broken. Continue running `npm run build` and fixing errors until no more problems. If there are many errors, rethink the approach. Maybe the code can be written in a better way?

@@ -26,12 +26,17 @@ This package provides shared configuration files for all apps in the monorepo, e
 
 - `base.config.js` - Base Tailwind configuration with common theme extensions
   - Apps extend this and add their own content paths
+- `app.config.js` - App preset with common content globs
 
 ### ESLint (`/eslint`)
 
 - `base.js` - Base ESLint configuration
 - `next.js` - ESLint config for Next.js apps
 - `react-internal.js` - ESLint config for internal React packages
+
+### Jest (`/jest`)
+
+- `next-app.js` - Shared Next.js Jest factory for app tests
 
 ## Usage Examples
 
@@ -75,15 +80,30 @@ module.exports = require("@lib/config/postcss");
 
 ```javascript
 // apps/yourapp/tailwind.config.js
-const baseConfig = require("@lib/config/tailwind/base");
+module.exports = require("@lib/config/tailwind/app");
+```
+
+To add extra content paths, spread the shared config and extend:
+
+```javascript
+// apps/yourapp/tailwind.config.js
+const appConfig = require("@lib/config/tailwind/app");
 
 module.exports = {
-  ...baseConfig,
-  content: [
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    // Add your app-specific content paths
-  ],
+  ...appConfig,
+  content: [...appConfig.content, "../data/fe/**/*.{js,ts,jsx,tsx,mdx}"],
 };
+```
+
+### Jest Configuration
+
+```typescript
+// apps/yourapp/jest.config.ts
+import { createNextJestConfig } from "@lib/config/jest/next-app";
+
+export default createNextJestConfig({
+  testEnvironment: "jsdom",
+});
 ```
 
 ## Benefits

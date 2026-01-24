@@ -18,6 +18,14 @@ Inside:
 - components/ - React components (wrappers in root, feature-specific in sub-folders)
 - docs/ - Documentation for HighCharts and other libraries
 
+## Configuration
+
+Shared configs are pulled from `@lib/config`:
+
+- Tailwind preset: `@lib/config/tailwind/app`
+- Jest preset: `@lib/config/jest/next-app`
+- TypeScript/Next/PostCSS: `@lib/config`
+
 ## Highcharts
 
 @apps/price-ui/docs/highcharts/overview.md
@@ -31,3 +39,12 @@ The chart supports technical indicators via Highcharts' built-in indicators modu
 **How indicators work with lazy-loaded data:**
 
 When the user zooms/pans, we fetch extra historical data beyond the visible range to ensure proper indicator calculation. The `estimateDataInterval()` utility function determines the data granularity, then we fetch 20 extra periods before the visible start time. The xAxis `min`/`max` constrains what's displayed while the full data allows correct indicator values at the start of the visible range.
+
+## Market data API routes
+
+Serverless routes live under `app/api/v1/market-data`:
+- `GET /api/v1/market-data/candles` (ticker required; optional start/end ms)
+- `GET /api/v1/market-data/historical/range` (ticker required)
+- `GET /api/v1/market-data/tables`
+
+These use the shared Neon connection (`NEON_DATABASE_URL`).

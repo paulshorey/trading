@@ -64,20 +64,6 @@ When working in any folder:
 3. Keep documentation concise - only document complex concepts that aren't obvious from reading the code
 4. Remove outdated or incorrect info; consolidate redundant content
 
-## GitHub Copilot Agentic Workflow
+## Workflow:
 
-For complex tasks affecting multiple files or requiring research, use the **@orchestrator** agent to coordinate a multi-phase workflow:
-
-- Global project context: `.github/copilot-instructions.md`
-- Agent definitions: `.github/agents/*.agent.md`
-- Each agent has specialized knowledge and isolated context
-- Orchestrator coordinates: explore → research → implement → refactor → test → review
-
-**When to use @orchestrator:**
-- Complex changes touching multiple files
-- Tasks requiring research or exploration
-- Features with unclear implementation path
-
-**When to skip orchestrator:**
-- Simple single-file changes
-- Trivial changes with obvious solutions
+After you "think" you've finished the task, run `npm run build` to check for errors. Fix any errors. Then run `npm run build` again! to make sure nothing else is broken. Continue running `npm run build` and fixing errors until no more problems. If there are many errors, rethink the approach. Maybe the code can be written in a better way?

@@ -49,6 +49,16 @@ Common shared library files `./lib/common` can be imported from `@lib/common`, l
 
 Don't bother checking linting / typescript separately. Simply run `npm run build` in the app that you're working on. If working on the strength app for example then `cd apps/strength` and run `npm run build` to check lint / types together.
 
+### App scaffolding
+
+Use the shared generator to add new apps with the standard config files:
+
+```bash
+pnpm create:app <app-name> --port 3335
+```
+
+This seeds a Next.js app in `apps/<app-name>` using the shared `@lib/config` presets.
+
 ### Questions:
 
 If I present you with a contradictory or confusing request, ask to clarify.

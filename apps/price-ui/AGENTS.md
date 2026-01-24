@@ -18,6 +18,14 @@ Inside:
 - components/ - React components (wrappers in root, feature-specific in sub-folders)
 - docs/ - Documentation for HighCharts and other libraries
 
+## Configuration
+
+Shared configs are pulled from `@lib/config`:
+
+- Tailwind preset: `@lib/config/tailwind/app`
+- Jest preset: `@lib/config/jest/next-app`
+- TypeScript/Next/PostCSS: `@lib/config`
+
 ## Highcharts
 
 @apps/price-ui/docs/highcharts/overview.md

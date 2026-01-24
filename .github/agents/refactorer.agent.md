@@ -3,14 +3,25 @@ name: refactorer
 description: |
   Phase 4: Reviews implementation for code quality, identifies improvements,
   and refactors if beneficial. Ensures build/tests still pass.
+model: Claude Sonnet 4
 tools:
   - read
   - edit
+  - search
   - build
   - test
+  - bash
+  - usages
+handoffs:
+  - label: Back to Orchestrator
+    agent: orchestrator
+    prompt: Refactoring complete. Build and tests verified. Ready for test writing or final review.
+    send: true
 metadata:
   component: refactoring
   project-area: all
+  priority: medium
+  phase: 4
 ---
 
 # Refactorer Agent

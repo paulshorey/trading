@@ -3,14 +3,25 @@ name: test-writer
 description: |
   Phase 5 (Optional): Writes unit tests for new functionality. Only runs when
   new testable features were added. Skipped for refactoring or doc changes.
+model: Claude Sonnet 4
 tools:
   - read
-  - create
+  - write
   - edit
+  - search
   - test
+  - bash
+handoffs:
+  - label: Back to Orchestrator
+    agent: orchestrator
+    prompt: Tests written and verified. Ready for final review.
+    send: true
 metadata:
   component: testing
   project-area: all
+  optional: true
+  priority: medium
+  phase: 5
 ---
 
 # Test Writer Agent

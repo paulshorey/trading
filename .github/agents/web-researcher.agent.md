@@ -3,12 +3,22 @@ name: web-researcher
 description: |
   Phase 2 (Optional): Performs deep web research for libraries, APIs, data formats,
   TypeScript types, and best practices when knowledge gaps exist.
+model: Claude Sonnet 4
 tools:
   - web-search
+  - fetch
   - read
+  - search
+handoffs:
+  - label: Back to Orchestrator
+    agent: orchestrator
+    prompt: Research complete. Ready to proceed with implementation.
+    send: true
 metadata:
   component: research
   project-area: all
+  optional: true
+  phase: 2
 ---
 
 # Web Researcher Agent

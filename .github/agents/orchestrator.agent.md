@@ -4,15 +4,46 @@ description: |
   Master orchestrator for multi-agent development workflow. Coordinates subagents
   in sequence: explore → research (optional) → implement → refactor → test (optional) → review.
   Use for any non-trivial task touching multiple files in this monorepo.
+model: Claude Sonnet 4.5
 tools:
   - read
   - search
   - edit
   - test
   - build
+  - fetch
+  - githubRepo
+  - usages
+handoffs:
+  - label: Explore Codebase
+    agent: codebase-explorer
+    prompt: Explore the codebase to understand structure, find affected files, and identify knowledge gaps for the task.
+    send: true
+  - label: Research Web
+    agent: web-researcher
+    prompt: Research libraries, APIs, and best practices for implementing the task.
+    send: false
+  - label: Implement Changes
+    agent: implementer
+    prompt: Implement the changes based on exploration and research findings.
+    send: true
+  - label: Refactor Code
+    agent: refactorer
+    prompt: Review and refactor the implementation for code quality.
+    send: true
+  - label: Write Tests
+    agent: test-writer
+    prompt: Write unit tests for the new functionality.
+    send: false
+  - label: Review & Document
+    agent: reviewer-documenter
+    prompt: Perform final review and ensure proper documentation.
+    send: true
 metadata:
   component: orchestration
   project-area: all
+  priority: high
+  complexity: high
 ---
 
 # Orchestrator Agent
@@ -159,3 +190,26 @@ After Phase 6, tell the user:
 - Any concerns or trade-offs
 - Documentation location
 - Ask if anything needs adjustment
+
+## Success Criteria
+
+Before completing the workflow, verify:
+
+✅ **Requirements Met**: All user requirements addressed
+✅ **Build Passes**: `pnpm run build` succeeds in affected apps
+✅ **Tests Pass**: Existing tests pass, new tests added if needed
+✅ **Code Quality**: Refactoring completed, no obvious issues
+✅ **Documentation**: AGENTS.md or path-specific instructions updated
+✅ **Security**: No secrets committed, inputs validated
+✅ **Monorepo Integrity**: No broken cross-package dependencies
+
+## Quality Gates
+
+Each phase must meet its criteria before proceeding:
+
+- **Phase 1**: Files identified, patterns understood, gaps listed
+- **Phase 2**: Research complete with actionable information
+- **Phase 3**: Build passes, existing tests pass
+- **Phase 4**: Code quality improved, tests still pass
+- **Phase 5**: New tests pass, coverage appropriate
+- **Phase 6**: Requirements checklist complete, docs updated

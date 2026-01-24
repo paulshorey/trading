@@ -3,13 +3,25 @@ name: reviewer-documenter
 description: |
   Phase 6: Final review of implementation, checks requirements are met,
   identifies concerns, and ensures proper documentation exists.
+model: Claude Sonnet 4
 tools:
   - read
   - edit
-  - create
+  - write
+  - search
+  - grep
+  - usages
+handoffs:
+  - label: Complete
+    agent: orchestrator
+    prompt: Review complete. Documentation updated. Task ready for delivery.
+    send: true
 metadata:
   component: review
   project-area: all
+  priority: high
+  phase: 6
+  final: true
 ---
 
 # Reviewer & Documenter Agent
@@ -122,3 +134,28 @@ Check for:
 - Prioritize concerns by severity
 - Provide actionable feedback
 - Balance quality with pragmatism
+
+## Success Criteria
+
+Before marking task complete, verify:
+
+✅ **Requirements Met**: All original requirements satisfied
+✅ **Code Quality**: No major code quality concerns
+✅ **Security**: No vulnerabilities or exposed secrets
+✅ **Tests**: Adequate test coverage for new code
+✅ **Documentation**: AGENTS.md or instructions updated if needed
+✅ **Build**: Final build passes in all affected apps
+✅ **Monorepo**: No broken cross-package dependencies
+✅ **Ready to Ship**: Confident changes can be deployed
+
+## Review Checklist
+
+- [ ] Compare implementation to original requirements
+- [ ] Check for security vulnerabilities
+- [ ] Verify no secrets or credentials committed
+- [ ] Assess code maintainability
+- [ ] Verify TypeScript types are appropriate
+- [ ] Check error handling is adequate
+- [ ] Confirm tests cover key behaviors
+- [ ] Update AGENTS.md if needed
+- [ ] Provide final recommendation

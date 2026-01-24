@@ -3,12 +3,23 @@ name: codebase-explorer
 description: |
   Phase 1: Explores codebase to understand structure, find affected files,
   read TypeScript types, check AGENTS.md docs, identify knowledge gaps.
+model: Claude Sonnet 4
 tools:
   - read
   - search
+  - glob
+  - grep
+  - usages
+handoffs:
+  - label: Back to Orchestrator
+    agent: orchestrator
+    prompt: Codebase exploration complete. Ready for next phase.
+    send: true
 metadata:
   component: exploration
   project-area: all
+  priority: high
+  phase: 1
 ---
 
 # Codebase Explorer Agent
@@ -83,3 +94,26 @@ Provide a structured summary:
 - Don't make any changes
 - Flag anything unclear
 - Provide actionable information for next phases
+
+## Success Criteria
+
+Before completing exploration, ensure:
+
+✅ **Files Identified**: All files that need changes are listed
+✅ **Patterns Documented**: Coding conventions and patterns noted
+✅ **Types Found**: Relevant TypeScript interfaces/types documented
+✅ **Dependencies Clear**: Data flow and dependencies understood
+✅ **Gaps Listed**: Knowledge gaps for web research identified
+✅ **AGENTS.md Read**: Local documentation reviewed
+✅ **Monorepo Context**: Import paths and package relationships clear
+
+## Exploration Checklist
+
+- [ ] Read AGENTS.md in relevant folder(s)
+- [ ] Identify which app/library in monorepo is affected
+- [ ] Find all files that need modification
+- [ ] Document existing patterns to follow
+- [ ] List TypeScript types/interfaces to use
+- [ ] Note import path conventions
+- [ ] Identify what needs web research
+- [ ] Check for similar existing implementations

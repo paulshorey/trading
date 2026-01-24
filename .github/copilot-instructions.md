@@ -2,6 +2,8 @@
 
 This is a **TurboRepo monorepo** containing multiple NextJS applications and shared libraries for financial data visualization and trading management.
 
+📖 **Quick Reference**: See [AGENTS-QUICK-REFERENCE.md](.github/AGENTS-QUICK-REFERENCE.md) for agent workflow guide.
+
 ## Project Structure
 
 ### Applications (`apps/`)
@@ -70,16 +72,27 @@ Target specific apps in the monorepo using either method:
 - Add comments only when matching existing style or explaining complex logic
 - Use existing libraries when possible
 
-## Multi-Agent Workflow
+## Multi-Agent Workflow (2026)
 
-For non-trivial tasks affecting multiple files, use the **@orchestrator** agent to coordinate a multi-phase workflow:
+For non-trivial tasks affecting multiple files, use the **@orchestrator** agent to coordinate a multi-phase workflow with specialized subagents.
 
-1. **@codebase-explorer** - Understands current code and identifies files to change
-2. **@web-researcher** - Researches libraries and best practices (optional)
-3. **@implementer** - Implements the changes
-4. **@refactorer** - Improves code quality
-5. **@test-writer** - Writes unit tests (optional)
-6. **@reviewer-documenter** - Final review and documentation
+### Available Agents
+
+1. **@orchestrator** (Sonnet 4.5) - Master coordinator for multi-agent workflows
+2. **@codebase-explorer** (Sonnet 4) - Explores codebase structure and identifies affected files
+3. **@web-researcher** (Sonnet 4) - Researches libraries, APIs, and best practices *(optional)*
+4. **@implementer** (Sonnet 4) - Implements features and fixes with build/test verification
+5. **@refactorer** (Sonnet 4) - Reviews and improves code quality
+6. **@test-writer** (Sonnet 4) - Writes unit tests for new functionality *(optional)*
+7. **@reviewer-documenter** (Sonnet 4) - Final review and documentation
+
+### Agent Features (2026)
+
+- **Model Selection**: Each agent uses optimized model for its task
+- **Handoffs**: Smooth agent-to-agent transitions with context passing
+- **Tool Specialization**: Agents have specific tools for their phase
+- **Validation**: Built-in success criteria and quality checks
+- **Phase Metadata**: Tracks progress through workflow phases
 
 ### When to Use Orchestrator
 
@@ -87,12 +100,23 @@ For non-trivial tasks affecting multiple files, use the **@orchestrator** agent 
 - Complex changes touching multiple files
 - Tasks requiring research or exploration
 - Features with unclear implementation path
-- Anything non-trivial
+- Anything non-trivial or multi-step
+- Cross-app changes in the monorepo
 
 **Skip orchestrator for:**
 - Simple single-file changes
 - Trivial changes with obvious solutions
 - Quick fixes to current file
+- Documentation-only updates
+
+### GitHub Copilot 2026 Features
+
+This workflow leverages:
+- **Custom Agents**: Specialized agents with YAML configuration
+- **Agent Skills**: Composable skills for common tasks
+- **Mission Control**: Orchestrate multiple tasks across repos
+- **Path-Specific Instructions**: Auto-applied based on file location
+- **Enhanced Context**: Improved understanding of monorepo structure
 
 ## Documentation
 
@@ -106,6 +130,17 @@ Each app and library has its own `AGENTS.md` file with specific context:
   - Complex concepts need explanation
 - Remove outdated or incorrect information
 - Keep documentation concise
+
+### Path-Specific Instructions (2026)
+
+The `.github/instructions/` directory contains auto-applied instructions based on file location:
+
+- **`price-ui.instructions.md`** - Auto-applied when working in `apps/price-ui/`
+- **`trade.instructions.md`** - Auto-applied when working in `apps/trade/`
+- **`strength.instructions.md`** - Auto-applied when working in `apps/strength/`
+- **`common-lib.instructions.md`** - Auto-applied when working in `lib/common/`
+
+These files are automatically used by Copilot coding agent and Copilot code review based on the files you're modifying.
 
 ### What to Document
 

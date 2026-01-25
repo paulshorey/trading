@@ -1,4 +1,4 @@
-const baseConfig = require('@lib/config/next/base.config')
+const baseConfig = require('@lib/config/next/base')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

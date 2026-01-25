@@ -1,4 +1,4 @@
-import { BECH32_PREFIX, LocalWallet, SubaccountInfo, CompositeClient, ValidatorClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
+import { BECH32_PREFIX, LocalWallet, SubaccountInfo, SubaccountClient, CompositeClient, ValidatorClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
 import { getOrders } from './methods/getOrders'
 import { getPositions } from './methods/getPositions'
 import { orderStop } from './methods/orderStop'
@@ -80,7 +80,8 @@ export class Dydx implements DydxInterface {
       throw new Error('Could not initialize wallet. Check DYDX_MNEMONIC environment variable.')
     }
     this.address = this.wallet.address
-    this.subaccount = SubaccountInfo.forLocalWallet(this.wallet, 0)
+    // Use SubaccountClient (alias for SubaccountInfo in v3) for better type compatibility
+    this.subaccount = SubaccountClient.forLocalWallet(this.wallet, 0)
     this.subaccountNumber = this.subaccount.subaccountNumber
   }
 

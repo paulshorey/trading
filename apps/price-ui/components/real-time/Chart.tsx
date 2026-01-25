@@ -223,14 +223,11 @@ export function Chart() {
           const min = initialCandles[0]?.[0]
           const max = initialCandles[initialCandles.length - 1]?.[0]
           if (typeof min === 'number' && typeof max === 'number') {
-            resolvedChart.xAxis[0].setExtremes(
-              min,
-              max,
-              false,
-              false,
-              { trigger: 'initial' }
-            )
-            viewRangeRef.current = max - min
+            const axis = resolvedChart.xAxis[0]
+            if (axis) {
+              axis.setExtremes(min, max, false, false, { trigger: 'initial' })
+              viewRangeRef.current = max - min
+            }
           }
           resolvedChart.redraw()
         }

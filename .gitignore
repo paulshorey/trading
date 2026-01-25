@@ -15,18 +15,16 @@ node_modules
 # Testing
 coverage
 
-# Turbo
+# Tools
 .turbo
-
-# Vercel
 .vercel
+._vscode
 
 # Build Outputs
 .next/
 out/
 build
 dist
-
 
 # Debug
 npm-debug.log*

@@ -8,9 +8,11 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "init": "node scripts/fetch-infisical.mjs --all",
     "create:next-app": "node scripts/create-next-app.js"
   },
   "devDependencies": {
+    "@infisical/sdk": "^4.0.0",
     "prettier": "^3.6.2",
     "turbo": "^2.5.5",
     "typescript": "5.8.3"

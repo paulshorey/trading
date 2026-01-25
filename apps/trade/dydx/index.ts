@@ -1,5 +1,69 @@
-import { BECH32_PREFIX, LocalWallet, SubaccountInfo, SubaccountClient, CompositeClient, ValidatorClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
+import { BECH32_PREFIX, LocalWallet, SubaccountInfo, CompositeClient, ValidatorClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
+import * as dydxPackage from '@dydxprotocol/v4-client-js'
 import { getOrders } from './methods/getOrders'
+
+// DEBUG: Log package info to troubleshoot CI/CD issue with SubaccountInfo.forLocalWallet
+const debugDydxPackage = () => {
+  try {
+    // Log Node.js version
+    console.log('[DYDX DEBUG] Node.js version:', process.version)
+    console.log('[DYDX DEBUG] NODE_ENV:', process.env.NODE_ENV)
+    
+    // Log Next.js version (from package.json at runtime)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nextPkg = require('next/package.json')
+      console.log('[DYDX DEBUG] Next.js version:', nextPkg.version)
+    } catch (e) {
+      console.log('[DYDX DEBUG] Could not read Next.js version:', e)
+    }
+    
+    // Log dydx client version
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const dydxPkg = require('@dydxprotocol/v4-client-js/package.json')
+      console.log('[DYDX DEBUG] @dydxprotocol/v4-client-js version:', dydxPkg.version)
+    } catch (e) {
+      console.log('[DYDX DEBUG] Could not read dydx package.json:', e)
+    }
+    
+    // Try to get the resolved module path
+    try {
+      const resolvedPath = require.resolve('@dydxprotocol/v4-client-js')
+      console.log('[DYDX DEBUG] Resolved module path:', resolvedPath)
+    } catch (e) {
+      console.log('[DYDX DEBUG] Could not resolve module path:', e)
+    }
+    
+    // Log what's exported from the package
+    console.log('[DYDX DEBUG] dydxPackage exports:', Object.keys(dydxPackage))
+    
+    // Log SubaccountInfo details
+    console.log('[DYDX DEBUG] SubaccountInfo type:', typeof SubaccountInfo)
+    console.log('[DYDX DEBUG] SubaccountInfo:', SubaccountInfo)
+    console.log('[DYDX DEBUG] SubaccountInfo keys:', SubaccountInfo ? Object.keys(SubaccountInfo) : 'undefined')
+    console.log('[DYDX DEBUG] SubaccountInfo.forLocalWallet:', (SubaccountInfo as any)?.forLocalWallet)
+    console.log('[DYDX DEBUG] SubaccountInfo.forLocalWallet type:', typeof (SubaccountInfo as any)?.forLocalWallet)
+    
+    // Check prototype chain
+    if (SubaccountInfo) {
+      console.log('[DYDX DEBUG] SubaccountInfo.prototype:', SubaccountInfo.prototype)
+      console.log('[DYDX DEBUG] SubaccountInfo own property names:', Object.getOwnPropertyNames(SubaccountInfo))
+    }
+    
+    // Check if it's a class vs object
+    console.log('[DYDX DEBUG] SubaccountInfo.toString():', SubaccountInfo?.toString?.())
+    
+    // Check ESM vs CJS
+    console.log('[DYDX DEBUG] dydxPackage.default:', (dydxPackage as any).default)
+    console.log('[DYDX DEBUG] dydxPackage.__esModule:', (dydxPackage as any).__esModule)
+  } catch (err) {
+    console.error('[DYDX DEBUG] Error in debug function:', err)
+  }
+}
+
+// Run debug immediately on module load
+debugDydxPackage()
 import { getPositions } from './methods/getPositions'
 import { orderStop } from './methods/orderStop'
 import { orderMarket } from './methods/orderMarket'
@@ -80,9 +144,29 @@ export class Dydx implements DydxInterface {
       throw new Error('Could not initialize wallet. Check DYDX_MNEMONIC environment variable.')
     }
     this.address = this.wallet.address
-    // Use SubaccountClient (alias for SubaccountInfo in v3)
-    // @ts-ignore - forLocalWallet exists in v3.4.0 but Vercel CI resolves old cached types
-    this.subaccount = SubaccountClient.forLocalWallet(this.wallet, 0)
+    
+    // Workaround: Use dynamic approach to access forLocalWallet to handle module resolution differences
+    // between local dev (Node 20) and CI/CD (Node 18) environments
+    const SubaccountInfoClass = SubaccountInfo as any
+    if (typeof SubaccountInfoClass.forLocalWallet === 'function') {
+      this.subaccount = SubaccountInfoClass.forLocalWallet(this.wallet, 0)
+    } else if (typeof SubaccountInfoClass.default?.forLocalWallet === 'function') {
+      // Handle ESM default export case
+      this.subaccount = SubaccountInfoClass.default.forLocalWallet(this.wallet, 0)
+    } else {
+      // Last resort: Try to access from the package directly
+      const pkg = dydxPackage as any
+      const SubaccountClass = pkg.SubaccountInfo || pkg.SubaccountClient || pkg.default?.SubaccountInfo
+      if (SubaccountClass && typeof SubaccountClass.forLocalWallet === 'function') {
+        this.subaccount = SubaccountClass.forLocalWallet(this.wallet, 0)
+      } else {
+        console.error('[DYDX ERROR] Could not find forLocalWallet method')
+        console.error('[DYDX ERROR] SubaccountInfo:', SubaccountInfo)
+        console.error('[DYDX ERROR] SubaccountInfo keys:', Object.getOwnPropertyNames(SubaccountInfo))
+        console.error('[DYDX ERROR] dydxPackage keys:', Object.keys(dydxPackage))
+        throw new Error('SubaccountInfo.forLocalWallet not available. Check dydx package exports.')
+      }
+    }
     this.subaccountNumber = this.subaccount.subaccountNumber
   }
 

@@ -1,12 +1,23 @@
-const baseConfig = require('@lib/config/next/base')
+const baseConfig = require('@lib/config/next/base.config')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...baseConfig,
+  // Next.js 14.2+ uses serverExternalPackages (not experimental.serverComponentsExternalPackages)
+  // Prevent Next.js from bundling DYDX - it has static methods and crypto modules
+  // that don't work correctly when bundled/tree-shaken
+  serverExternalPackages: ['@dydxprotocol/v4-client-js'],
   experimental: {
-    // Prevent Next.js from bundling DYDX - it has static methods and crypto modules
-    // that don't work correctly when bundled/tree-shaken
+    // Keep the old config for backwards compatibility during migration
     serverComponentsExternalPackages: ['@dydxprotocol/v4-client-js'],
+  },
+  webpack: (config, { isServer }) => {
+    // Additional externalization for server-side builds
+    if (isServer) {
+      config.externals = config.externals || []
+      config.externals.push('@dydxprotocol/v4-client-js')
+    }
+    return config
   },
 }
 

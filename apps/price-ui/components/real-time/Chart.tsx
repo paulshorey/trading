@@ -130,7 +130,9 @@ export function Chart() {
     const startIndex = Math.max(0, existing.length - recentCandles.length - 2)
     const indexByTime = new Map<number, number>()
     for (let i = startIndex; i < existing.length; i += 1) {
-      indexByTime.set(existing[i][0], i)
+      const candle = existing[i]
+      if (!candle) continue
+      indexByTime.set(candle[0], i)
     }
 
     let didUpdate = false

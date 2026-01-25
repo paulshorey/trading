@@ -63,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } catch (error: any) {
         // Log error
         await sqlLogAdd({
-          name: 'warn',
+          name: 'log',
           message: `Strength endpoint error: ${error.message}`,
           stack: {
             url: request.nextUrl.href,
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       } catch (err: any) {
         const error = err instanceof Error ? err : new Error(String(err))
         await sqlLogAdd({
-          name: 'error',
+          name: 'log',
           message: `/v1/market error "${error.message}"`,
           stack: {
             stack: error.stack,
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err))
     await sqlLogAdd({
-      name: 'error',
+      name: 'log',
       message: `/v1/market error "${error.message}" executing bodyText "${bodyText}"`,
       stack: {
         stack: error.stack,

@@ -18,6 +18,11 @@
     "./typescript/nextjs.json": "./typescript/nextjs.json",
     "./typescript/react-library.json": "./typescript/react-library.json"
   },
+  "dependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss-preset-mantine": "^1.17.0",
+    "postcss-simple-vars": "^7.0.1"
+  },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
     "@next/eslint-plugin-next": "^15.4.2",

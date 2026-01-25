@@ -80,7 +80,8 @@ export class Dydx implements DydxInterface {
       throw new Error('Could not initialize wallet. Check DYDX_MNEMONIC environment variable.')
     }
     this.address = this.wallet.address
-    // Use SubaccountClient (alias for SubaccountInfo in v3) for better type compatibility
+    // Use SubaccountClient (alias for SubaccountInfo in v3)
+    // @ts-ignore - forLocalWallet exists in v3.4.0 but Vercel CI resolves old types
     this.subaccount = SubaccountClient.forLocalWallet(this.wallet, 0)
     this.subaccountNumber = this.subaccount.subaccountNumber
   }

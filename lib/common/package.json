@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "tailwindcss": "^4.1.11",
     "@mantine/core": "7.17.8",
     "@mantine/hooks": "7.17.8",
     "@tabler/icons-react": "^2.47.0",

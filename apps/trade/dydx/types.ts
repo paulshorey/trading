@@ -1,4 +1,4 @@
-import { LocalWallet, SubaccountClient, CompositeClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
+import { LocalWallet, SubaccountInfo, CompositeClient, Network, IndexerClient } from '@dydxprotocol/v4-client-js'
 import { getOrders } from '@/dydx/methods/getOrders'
 import { getPositions } from '@/dydx/methods/getPositions'
 import { orderStop } from '@/dydx/methods/orderStop'
@@ -13,7 +13,7 @@ export interface DydxInterface {
   compositeClient?: CompositeClient
   wallet: LocalWallet
   address: string
-  subaccount: SubaccountClient
+  subaccount: SubaccountInfo
   subaccountNumber: number
   init: () => Promise<void>
   getIndexerClient: () => Promise<IndexerClient>

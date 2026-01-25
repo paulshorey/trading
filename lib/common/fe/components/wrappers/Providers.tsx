@@ -3,7 +3,7 @@
 import { MantineProvider } from '@mantine/core'
 import { theme } from '../../styles/theme'
 
-import '../../styles/tailwind.css'
+// Note: tailwind.css should be imported by each app locally for proper @source paths
 import '../../styles/global.scss'
 import '@mantine/core/styles.css'
 import '../../styles/mantine.scss'

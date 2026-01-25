@@ -1,5 +1,6 @@
 import { ErrorBoundary } from '@lib/common/fe/components/wrappers/ErrorBoundary'
 import { Providers } from '@lib/common/fe/components/wrappers/Providers'
+import '@/styles/tailwind.css'
 // import dynamic from 'next/dynamic'
 // const Providers = dynamic(
 //   () =>

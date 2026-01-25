@@ -1,5 +1,5 @@
 import { DydxInterface } from '@/dydx'
-import { Data } from '@dydxprotocol/v4-client-js/build/src/clients/types'
+import { Data } from '@dydxprotocol/v4-client-js'
 
 export async function getAccount(this: DydxInterface): Promise<Data> {
   const indexer = await this.getIndexerClient()

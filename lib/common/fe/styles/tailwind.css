@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* 
+ * App-specific @source paths should be defined in each app's local CSS file
+ * that imports this shared file. See apps/*/app/tailwind.css
+ */
 
 :root {
   --foreground-rgb: 0, 0, 0;

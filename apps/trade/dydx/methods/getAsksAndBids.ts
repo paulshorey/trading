@@ -1,5 +1,5 @@
 import { DydxInterface } from '@/dydx'
-import { Data } from '@dydxprotocol/v4-client-js/build/src/clients/types'
+import { Data } from '@dydxprotocol/v4-client-js'
 
 export async function getAsksAndBids(this: DydxInterface, ticker: string): Promise<Data> {
   const indexer = await this.getIndexerClient()

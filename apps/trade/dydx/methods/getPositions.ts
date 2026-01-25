@@ -1,5 +1,5 @@
 import { DydxInterface } from '@/dydx'
-import { Data } from '@dydxprotocol/v4-client-js/build/src/clients/types'
+import { Data } from '@dydxprotocol/v4-client-js'
 import { numberOrZero } from '@/lib/numbers'
 
 export async function getPositions(this: DydxInterface, ticker?: string, status = 'OPEN'): Promise<Data> {

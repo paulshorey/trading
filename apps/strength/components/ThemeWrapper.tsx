@@ -6,7 +6,7 @@ import { theme } from '@lib/common/fe/styles/theme'
 import { ErrorBoundary } from '@lib/common/fe/components/wrappers/ErrorBoundary'
 
 // Import all the styles that were in Providers
-import '@lib/common/fe/styles/tailwind.css'
+import '@/styles/tailwind.css'
 import '@lib/common/fe/styles/global.scss'
 import '@mantine/core/styles.css'
 import '@lib/common/fe/styles/mantine.scss'

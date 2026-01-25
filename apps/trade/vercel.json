@@ -1,3 +1,5 @@
 {
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "installCommand": "cd ../.. && pnpm install",
+  "buildCommand": "cd ../.. && pnpm --filter trade build"
 }

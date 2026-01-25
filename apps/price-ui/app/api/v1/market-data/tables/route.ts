@@ -1,32 +1,22 @@
 import { NextResponse } from 'next/server'
-import { cc } from '@lib/common/cc'
 import { getSchema } from '@/lib/market-data/schema'
-
-export const dynamic = 'force-dynamic'
-export const maxDuration = 60
-export const runtime = 'nodejs'
 
 /**
  * Database Schema
+ * Returns list of tables with their columns and data types
  */
 export async function GET() {
   try {
     const schema = await getSchema()
-    const environment =
-      process.env.VERCEL_ENV || process.env.NODE_ENV || 'local'
-
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      environment,
+      environment: process.env.RAILWAY_ENVIRONMENT_NAME || 'local',
       database: schema,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    cc.error('GET /api/v1/market-data/tables ERROR: ' + message, {
-      message,
-      stack: error instanceof Error ? error.stack : undefined,
-    })
+    console.error('Error fetching schema:', message)
     return NextResponse.json(
       {
         success: false,

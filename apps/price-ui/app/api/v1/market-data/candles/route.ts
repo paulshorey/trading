@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cc } from '@lib/common/cc'
 import { getCandles } from '@/lib/market-data/candles'
-
-export const dynamic = 'force-dynamic'
-export const maxDuration = 60
-export const runtime = 'nodejs'
 
 // Default date range: 2010-01-01 to now
 const DEFAULT_START_MS = new Date('2010-01-01').getTime()
@@ -22,7 +17,7 @@ const DEFAULT_START_MS = new Date('2010-01-01').getTime()
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl
+    const searchParams = request.nextUrl.searchParams
     const ticker = searchParams.get('ticker')
     const start = searchParams.get('start')
     const end = searchParams.get('end')
@@ -34,45 +29,40 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Use defaults if not provided
     const startMs = start ? parseInt(start, 10) : DEFAULT_START_MS
     const endMs = end ? parseInt(end, 10) : Date.now()
 
-    if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+    if (isNaN(startMs) || isNaN(endMs)) {
       return NextResponse.json(
-        {
-          error: 'Invalid timestamps: start and end must be numbers (ms)',
-        },
+        { error: 'Invalid timestamps: start and end must be numbers (ms)' },
         { status: 400 }
       )
     }
 
     if (startMs >= endMs) {
       return NextResponse.json(
-        {
-          error: 'Invalid range: start must be less than end',
-        },
+        { error: 'Invalid range: start must be less than end' },
         { status: 400 }
       )
     }
 
     const result = await getCandles(startMs, endMs, ticker)
-    const headers = new Headers()
-    headers.set('X-Timeframe', result.timeframe)
-    headers.set('X-Table', result.table)
-    headers.set('X-Count', result.count.toString())
 
-    return NextResponse.json(result.data, { headers })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    cc.error('GET /api/v1/market-data/candles ERROR: ' + message, {
-      message,
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-    return NextResponse.json(
-      {
-        error: 'Failed to fetch candle data',
-        message,
+    // Return just the data array for Highcharts compatibility
+    // Include metadata in headers for debugging
+    return NextResponse.json(result.data, {
+      headers: {
+        'X-Timeframe': result.timeframe,
+        'X-Table': result.table,
+        'X-Count': result.count.toString(),
       },
+    })
+  } catch (error) {
+    console.error('Error fetching candles:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json(
+      { error: 'Failed to fetch candle data', message },
       { status: 500 }
     )
   }

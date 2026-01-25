@@ -43,10 +43,8 @@ const darkTheme = {
   smaLine: '#f0ad4e', // Orange/gold color for the SMA line
 }
 
-// const CANDLES_URL = 'http://localhost:8080/historical/candles?ticker=ES'
-const CANDLES_URL =
-  process.env.NEXT_PUBLIC_MARKET_DATA_API_URL+'/historical/candles?ticker=ES'
-// const CANDLES_URL = 'https://demo-live-data.highcharts.com/aapl-historical.json'
+// Use internal NextJS API route instead of external server
+const CANDLES_URL = '/api/v1/market-data/candles?ticker=ES'
 const DEBOUNCE_MS = 1000 // Necessary on scroll events to prevent continous fetch() calls
 
 export function Chart() {

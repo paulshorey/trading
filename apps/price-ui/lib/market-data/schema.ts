@@ -1,4 +1,4 @@
-import { getDb } from '@lib/common/lib/db/neon'
+import { getDb } from '@/lib/db'
 
 interface ColumnInfo {
   name: string

@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cc } from '@lib/common/cc'
 import { getDateRange } from '@/lib/market-data/candles'
-
-export const dynamic = 'force-dynamic'
-export const maxDuration = 60
-export const runtime = 'nodejs'
 
 /**
  * Historical Candles - Date Range
  * Returns the available date range for a ticker
+ *
+ * Query params:
+ *   ticker - Ticker symbol (required)
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = request.nextUrl
+    const searchParams = request.nextUrl.searchParams
     const ticker = searchParams.get('ticker')
 
     if (!ticker) {
@@ -34,15 +32,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(range)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    cc.error('GET /api/v1/market-data/historical/range ERROR: ' + message, {
-      message,
-      stack: error instanceof Error ? error.stack : undefined,
-    })
+    console.error('Error fetching date range:', message)
     return NextResponse.json(
-      {
-        error: 'Failed to fetch date range',
-        message,
-      },
+      { error: 'Failed to fetch date range', message },
       { status: 500 }
     )
   }

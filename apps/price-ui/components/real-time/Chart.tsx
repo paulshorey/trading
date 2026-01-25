@@ -140,7 +140,11 @@ export function Chart() {
     for (const candle of recentCandles) {
       const existingIndex = indexByTime.get(candle[0])
       if (existingIndex !== undefined) {
-        if (!candlesEqual(existing[existingIndex], candle)) {
+        const existingCandle = existing[existingIndex]
+        if (!existingCandle) {
+          continue
+        }
+        if (!candlesEqual(existingCandle, candle)) {
           existing[existingIndex] = candle
           const point = priceSeries.data[existingIndex]
           if (point) {

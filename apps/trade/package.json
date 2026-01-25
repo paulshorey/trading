@@ -2,6 +2,7 @@
   "name": "trade",
   "version": "1.0.2",
   "private": true,
+  "packageManager": "pnpm@9.13.2",
   "scripts": {
     "dev": "scripts/dev-timed.sh",
     "build": "next build",

@@ -55,14 +55,9 @@ If I present you with a contradictory or confusing request, ask to clarify.
 
 If the solution is not obvious, search the web about best practices. Search for more information about the library or framework we're using.
 
-### Documentation
+## Workflow
 
-When working in any folder
-
-1. **Read** the AGENTS.md file in that folder (if exists) before making changes.
-2. **Update** the AGENTS.md file after completing work to document any significant architectural decisions or non-obvious patterns
-3. Keep documentation concise - only document complex concepts that aren't obvious from reading the code
-4. Remove outdated or incorrect info; consolidate redundant content
+If something definitely needs improvement, don't bother asking - just change it.
 
 ## Start of work
 
@@ -81,3 +76,15 @@ pnpm run init
 ## End of work
 
 After you "think" you've finished the task, run `npm run build` to check for errors. Fix any errors. Then run `npm run build` again! to make sure nothing else is broken. Continue running `npm run build` and fixing errors until no more problems. If there are many errors, rethink the approach. Maybe the code can be written in a better way?
+
+### Documentation
+
+**When working in any folder:**
+
+Read the AGENTS.md file in that folder (if exists) before making changes.
+
+**After finishing work:**
+
+Update the AGENTS.md file to document any significant architectural decisions or non-obvious patterns
+Keep documentation concise - only document complex concepts that aren't obvious from reading the code
+Remove outdated or incorrect info; consolidate redundant content

@@ -337,7 +337,7 @@ export function Chart({ width, height }: ChartProps) {
     })
     priceSeriesRef.current = priceSeries
 
-    // Add CVD series (left axis - separate scale)
+    // Add CVD series (left axis - separate scale, top 50%)
     const cvdSeries = chart.addSeries(LineSeries, {
       color: COLORS.cvd,
       lineWidth: 1,
@@ -345,6 +345,14 @@ export function Chart({ width, height }: ChartProps) {
       crosshairMarkerVisible: true,
       priceLineVisible: false,
       lastValueVisible: true,
+    })
+    // Position CVD at the top 50% of the chart
+    cvdSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0,
+        bottom: 0.5, // End at 50% from bottom
+      },
+      autoScale: true,
     })
     cvdSeriesRef.current = cvdSeries
 
@@ -358,10 +366,10 @@ export function Chart({ width, height }: ChartProps) {
       priceLineVisible: false,
       lastValueVisible: true,
     })
-    // Position RSI at the bottom 25% of the chart
+    // Position RSI at the bottom 50% of the chart
     rsiSeries.priceScale().applyOptions({
       scaleMargins: {
-        top: 0.75, // Start at 75% from top
+        top: 0.5, // Start at 50% from top
         bottom: 0, // End at bottom
       },
       autoScale: true,

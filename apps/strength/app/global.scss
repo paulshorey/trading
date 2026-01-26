@@ -10,6 +10,7 @@ body {
     transform-origin: top left;
     width: 200%;
     height: 200%;
+    overflow: hidden; // Prevent scrollbars from creating gaps on full-screen charts
   }
   --mantine-color-text: #C3BCDB;
   background-color: #1a1a2e;

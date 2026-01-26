@@ -52,10 +52,13 @@ export function useChartEventPatcher(
 
       e.stopPropagation()
 
-      const rect = container.getBoundingClientRect()
-      const scale = (window as any).scaleFactor || 1
+      // Use the actual target's rect for more accurate coordinate calculation
+      // This handles cases where the canvas has slight offset from container
+      const target = e.target as HTMLElement
+      const rect = target?.getBoundingClientRect() || container.getBoundingClientRect()
+      const scale = window.scaleFactor || 1
 
-      // Calculate corrected coordinates relative to the container
+      // Calculate corrected coordinates relative to the target element
       const relativeX = e.clientX - rect.left
       const relativeY = e.clientY - rect.top
 
@@ -81,7 +84,7 @@ export function useChartEventPatcher(
       })
 
       Object.defineProperty(newEvent, '_patched', { value: true })
-      e.target?.dispatchEvent(newEvent)
+      target?.dispatchEvent(newEvent)
     }
 
     events.forEach((eventName) => {

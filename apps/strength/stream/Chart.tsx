@@ -351,7 +351,7 @@ export function Chart({ width, height }: ChartProps) {
   // Match tradingview/components/Chart.tsx structure:
   // - Outer div with explicit width in px
   // - position: relative for absolute positioning of overlays
-  // - Chart container div inside
+  // - Chart container div inside with explicit dimensions for correct event patching
   return (
     <div
       style={{
@@ -360,6 +360,7 @@ export function Chart({ width, height }: ChartProps) {
       }}
     >
       {/* Chart container - lightweight-charts will render here */}
+      {/* Match tradingview container styling for consistent event patching */}
       <div ref={containerRef} className="z-10" />
 
       {/* Loading overlay */}

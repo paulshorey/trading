@@ -7,6 +7,7 @@ Financial charting app displaying price and relative strength (RSI), with real-t
 - **Left y-axis:** Strength (-100 to 100)
 - **Right y-axis:** Price
 - **X-axis:** Time (shared)
+- **Pages:** `/historical` (historical chart) and `/real-time` (live 1m chart)
 
 ## Folders
 
@@ -43,7 +44,7 @@ When the user zooms/pans, we fetch extra historical data beyond the visible rang
 ## Market data API routes
 
 Serverless routes live under `app/api/v1/market-data`:
-- `GET /api/v1/market-data/candles` (ticker required; optional start/end ms)
+- `GET /api/v1/market-data/candles` (ticker required; optional start/end ms, limit, timeframe)
 - `GET /api/v1/market-data/historical/range` (ticker required)
 - `GET /api/v1/market-data/tables`
 

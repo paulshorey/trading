@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCandles } from '@/lib/market-data/candles'
+import { getCandles, TIMEFRAMES } from '@/lib/market-data/candles'
 
 // Default date range: 2010-01-01 to now
 const DEFAULT_START_MS = new Date('2010-01-01').getTime()
@@ -11,9 +11,11 @@ const DEFAULT_START_MS = new Date('2010-01-01').getTime()
  *   ticker - Ticker symbol (required)
  *   start  - Start timestamp in ms (default: 2010-01-01)
  *   end    - End timestamp in ms (default: now)
+ *   limit  - Max number of candles to return (optional)
+ *   timeframe - Force a specific timeframe id (optional, e.g. "1m")
  *
  * Returns array of tuples: [timestamp_ms, open, high, low, close, volume]
- * Automatically selects the best timeframe based on date range.
+ * Automatically selects the best timeframe based on date range unless overridden.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -21,6 +23,8 @@ export async function GET(request: NextRequest) {
     const ticker = searchParams.get('ticker')
     const start = searchParams.get('start')
     const end = searchParams.get('end')
+    const limit = searchParams.get('limit')
+    const timeframe = searchParams.get('timeframe')
 
     if (!ticker) {
       return NextResponse.json(
@@ -32,6 +36,22 @@ export async function GET(request: NextRequest) {
     // Use defaults if not provided
     const startMs = start ? parseInt(start, 10) : DEFAULT_START_MS
     const endMs = end ? parseInt(end, 10) : Date.now()
+
+    const limitValue = limit ? parseInt(limit, 10) : undefined
+
+    if (limit && (!limitValue || limitValue <= 0)) {
+      return NextResponse.json(
+        { error: 'Invalid limit: must be a positive number' },
+        { status: 400 }
+      )
+    }
+
+    if (timeframe && !TIMEFRAMES.some((tf) => tf.id === timeframe)) {
+      return NextResponse.json(
+        { error: `Invalid timeframe: ${timeframe}` },
+        { status: 400 }
+      )
+    }
 
     if (isNaN(startMs) || isNaN(endMs)) {
       return NextResponse.json(
@@ -47,7 +67,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const result = await getCandles(startMs, endMs, ticker)
+    const result = await getCandles(startMs, endMs, ticker, {
+      limit: limitValue,
+      timeframe: timeframe ?? undefined,
+    })
 
     // Return just the data array for Highcharts compatibility
     // Include metadata in headers for debugging

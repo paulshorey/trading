@@ -26,6 +26,11 @@ export const TIMEFRAMES: Timeframe[] = [
 // Target number of candles to return (aim for good chart density)
 export const TARGET_CANDLES = 1000
 
+export interface GetCandlesOptions {
+  limit?: number
+  timeframe?: string
+}
+
 /**
  * Select the best timeframe based on requested date range
  * Returns the smallest timeframe that keeps results under target
@@ -48,6 +53,21 @@ export function selectTimeframe(startMs: number, endMs: number): Timeframe {
     throw new Error('No timeframes configured')
   }
   return fallback
+}
+
+function resolveTimeframe(
+  startMs: number,
+  endMs: number,
+  timeframeId?: string
+): Timeframe {
+  if (timeframeId) {
+    const selected = TIMEFRAMES.find((tf) => tf.id === timeframeId)
+    if (!selected) {
+      throw new Error(`Unsupported timeframe: ${timeframeId}`)
+    }
+    return selected
+  }
+  return selectTimeframe(startMs, endMs)
 }
 
 export type CandleTuple = [number, number, number, number, number, number]
@@ -84,9 +104,14 @@ async function getMaxTimeInTable(
 export async function getCandles(
   startMs: number,
   endMs: number,
-  ticker: string
+  ticker: string,
+  options: GetCandlesOptions = {}
 ): Promise<CandlesResult> {
-  const initialTimeframe = selectTimeframe(startMs, endMs)
+  const initialTimeframe = resolveTimeframe(
+    startMs,
+    endMs,
+    options.timeframe
+  )
   const initialIndex = TIMEFRAMES.findIndex(
     (tf) => tf.id === initialTimeframe.id
   )
@@ -131,14 +156,38 @@ export async function getCandles(
   const startISO = new Date(startMs).toISOString()
   const endISO = new Date(endMs).toISOString()
 
+  const normalizedLimit =
+    typeof options.limit === 'number' && options.limit > 0
+      ? Math.floor(options.limit)
+      : undefined
+
   // Build query - table name uses double quotes due to dash in "candles-1m"
-  const query = `
+  const whereParts: string[] = ['ticker = $1', 'time >= $2', 'time <= $3']
+  const params: Array<string | number> = [ticker, startISO, endISO]
+  let query = `
     SELECT time, open, high, low, close, volume
     FROM "${timeframe.table}"
-    WHERE time >= $1 AND time <= $2 AND ticker = $3
-    ORDER BY time ASC
+    WHERE ${whereParts.join(' AND ')}
   `
-  const params = [startISO, endISO, ticker]
+
+  if (normalizedLimit) {
+    params.push(normalizedLimit)
+    const limitParam = `$${params.length}`
+    query = `
+      SELECT time, open, high, low, close, volume
+      FROM (
+        ${query}
+        ORDER BY time DESC
+        LIMIT ${limitParam}
+      ) AS limited
+      ORDER BY time ASC
+    `
+  } else {
+    query = `
+      ${query}
+      ORDER BY time ASC
+    `
+  }
 
   const result = await db.query(query, params)
 

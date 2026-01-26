@@ -39,7 +39,9 @@ export function StreamChartWrapper() {
         ;(window as any).isMobile = isMobile
 
         // On mobile portrait, limit height to width to prevent chart distortion
-        const chartHeight = Math.min(window.innerHeight, window.innerWidth)
+        const isPortrait = window.innerHeight > window.innerWidth
+        const chartHeight =
+          isMobile && isPortrait ? window.innerWidth : window.innerHeight
         setDimensions({
           width: window.innerWidth * scaleFactor,
           height: chartHeight * scaleFactor,

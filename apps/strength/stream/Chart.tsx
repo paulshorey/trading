@@ -29,6 +29,12 @@ const COLORS = {
   gridLine: '#CDCCC835',
 }
 
+// Extra width to extend chart past screen edge, pushing price scale's internal padding off-screen
+// This makes the price numbers appear flush against the right edge
+// Value is in scaled pixels (at 2x scale factor, 20px = 10px visual on screen)
+// The price scale has ~5-8px internal padding, so 10px visual should fully cover it
+const PRICE_SCALE_RIGHT_OFFSET = 20
+
 // RSI period
 const RSI_PERIOD = 14
 
@@ -285,8 +291,12 @@ export function Chart({ width, height }: ChartProps) {
   useEffect(() => {
     if (!containerRef.current || hasInitialized.current) return
 
+    // Extend chart width past screen edge to push price scale's internal padding off-screen
+    // This makes the price numbers appear flush against the right edge
+    const chartWidth = width + PRICE_SCALE_RIGHT_OFFSET
+
     const chart = createChart(containerRef.current, {
-      width,
+      width: chartWidth,
       height,
       layout: {
         background: { color: COLORS.background },
@@ -443,7 +453,7 @@ export function Chart({ width, height }: ChartProps) {
   // Update chart dimensions
   useEffect(() => {
     if (!chartRef.current || !hasInitialized.current) return
-    chartRef.current.applyOptions({ width, height })
+    chartRef.current.applyOptions({ width: width + PRICE_SCALE_RIGHT_OFFSET, height })
   }, [width, height])
 
   if (error) {
@@ -473,12 +483,14 @@ export function Chart({ width, height }: ChartProps) {
   // Match tradingview/components/Chart.tsx structure:
   // - Outer div with explicit width in px
   // - position: relative for absolute positioning of overlays
+  // - overflow: hidden clips the extra chart width (price scale padding pushed off-screen)
   // - Chart container div inside with explicit dimensions for correct event patching
   return (
     <div
       style={{
         width: width + 'px',
         position: 'relative',
+        overflow: 'hidden', // Clip the extra chart width that extends past screen edge
       }}
     >
       {/* Chart container - lightweight-charts will render here */}

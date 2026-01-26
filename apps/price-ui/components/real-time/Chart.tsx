@@ -268,6 +268,7 @@ export function Chart() {
         type: 'hlc',
         backgroundColor: darkTheme.background,
         spacing: [10, 10, 0, 10],
+        animation: false,
         style: {
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
@@ -285,6 +286,9 @@ export function Chart() {
         adaptToUpdatedData: true,
         outlineColor: darkTheme.axisLine,
         maskFill: 'rgba(102, 133, 194, 0.2)',
+        xAxis: {
+          ordinal: true,
+        },
       },
 
       scrollbar: {
@@ -298,6 +302,7 @@ export function Chart() {
       },
 
       xAxis: {
+        ordinal: false, // Improves panning performance
         events: {
           afterSetExtremes: handleAfterSetExtremes,
         },
@@ -357,6 +362,11 @@ export function Chart() {
           },
         } as Highcharts.SeriesOptionsType,
       ],
+
+      tooltip: {
+        animation: false,
+        hideDelay: 0,
+      },
 
       credits: {
         enabled: false,

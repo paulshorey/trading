@@ -20,13 +20,15 @@ const INITIAL_CANDLES = 5000
 const POLL_INTERVAL_MS = 10_000
 const RECENT_CANDLES = 22
 
-// Color palette
+// Color palette - Dark theme
 const COLORS = {
   price: 'hsl(233 100% 75%)', // Blue
   cvd: 'hsl(120 100% 45%)', // Bright green
   rsi: 'hsl(30 100% 50%)', // Orange
-  background: '#ffffff',
-  gridLine: '#CDCCC835',
+  background: '#1a1a2e',
+  text: '#C3BCDB',
+  gridLine: '#333344',
+  crosshair: '#71649C',
 }
 
 // RSI period
@@ -290,7 +292,7 @@ export function Chart({ width, height }: ChartProps) {
       height,
       layout: {
         background: { color: COLORS.background },
-        textColor: '#333',
+        textColor: COLORS.text,
         attributionLogo: false,
       },
       grid: {
@@ -314,13 +316,13 @@ export function Chart({ width, height }: ChartProps) {
         mode: 0,
         vertLine: {
           visible: true,
-          color: '#758391',
+          color: COLORS.crosshair,
           width: 1,
           style: 0,
         },
         horzLine: {
           visible: true,
-          color: '#758391',
+          color: COLORS.crosshair,
           width: 1,
           style: 0,
         },
@@ -458,7 +460,7 @@ export function Chart({ width, height }: ChartProps) {
             alignItems: 'center',
             justifyContent: 'center',
             height: height + 'px',
-            color: 'red',
+            color: '#ff6b6b',
             background: COLORS.background,
           }}
         >
@@ -496,6 +498,7 @@ export function Chart({ width, height }: ChartProps) {
             alignItems: 'center',
             justifyContent: 'center',
             background: COLORS.background,
+            color: COLORS.text,
             zIndex: 10,
           }}
         >

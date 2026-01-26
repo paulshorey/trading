@@ -9,7 +9,7 @@ const StreamChartWrapper = dynamic(
 
 export default function Page() {
   return (
-    <ThemeWrapper colorScheme="light">
+    <ThemeWrapper colorScheme="dark">
       <StreamChartWrapper />
     </ThemeWrapper>
   )

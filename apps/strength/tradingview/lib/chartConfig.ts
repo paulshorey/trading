@@ -29,13 +29,13 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
     timeFormatter,
   },
   layout: {
-    background: { color: '#ffffff' },
-    textColor: '#333',
+    background: { color: COLORS.background },
+    textColor: COLORS.text,
     attributionLogo: false, // Hide TradingView logo
   },
   grid: {
     vertLines: { visible: false }, // Hide vertical grid lines to reduce clutter
-    horzLines: { color: COLORS.light_i },
+    horzLines: { color: COLORS.gridLine },
   },
   // Y-Axis - Enable both left and right scales for dual series
   rightPriceScale: {
@@ -57,13 +57,13 @@ export const getChartConfig = (height: number): DeepPartial<ChartOptions> => ({
     mode: 0, // Normal mode: we'll set Y explicitly via setCrosshairPosition
     vertLine: {
       visible: true,
-      color: '#758391',
+      color: COLORS.crosshair,
       width: 1,
       style: 0, // Solid line
     },
     horzLine: {
       visible: true,
-      color: '#758391',
+      color: COLORS.crosshair,
       width: 1,
       style: 0, // Solid line
     },

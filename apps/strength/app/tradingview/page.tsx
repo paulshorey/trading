@@ -3,7 +3,7 @@ import { ThemeWrapper } from '../../components/ThemeWrapper'
 
 export default function Page() {
   return (
-    <ThemeWrapper colorScheme="light">
+    <ThemeWrapper colorScheme="dark">
       <SyncedChartsWrapper />
     </ThemeWrapper>
   )

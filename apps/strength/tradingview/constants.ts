@@ -13,13 +13,19 @@ export const SCROLL_PAUSE_RESUME_MS = 300000 // 30 seconds
 
 export const SHOW_100_LINES = false
 
-// Color palette
+// Color palette - Dark theme
 export const COLORS = {
+  // Chart background and layout
+  background: '#1a1a2e',
+  text: '#C3BCDB',
+  gridLine: '#333344',
+  crosshair: '#71649C',
+  // Series colors
   red: 'hsl(0 75.53% 53.53%)',
   green: 'hsl(120 70.8% 44.31%)',
   purple: 'hsl(275 85% 70%)', // Purple
-  dark: '#777777',
-  neutral: '#999999',
+  dark: '#555566',
+  neutral: '#888899',
   // Indicator
   indicator: 'hsl(120 70.8% 44.31%)',
   // Strength
@@ -27,7 +33,7 @@ export const COLORS = {
   // Price
   price: 'hsl(233 100% 75%)', // Blue
   // Etc
-  light: '#B5B5B566', // Light gray
+  light: '#55556666', // Light gray (for dark theme)
 
   // Individual lines (lighter versions)
   strength_i: 'hsla(35 100% 50% / 0.55)', // Orange transparent
@@ -36,7 +42,7 @@ export const COLORS = {
 
   // price_i: 'hsla(275 85% 70% / 0.5)', // Purple transparent
   price_i: 'hsla(233 100% 75% / 0.67)', // Blue transparent
-  light_i: '#CDCCC835',
+  light_i: '#33334455',
 }
 
 // Time markers - vertical lines on the chart

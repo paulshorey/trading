@@ -23,10 +23,14 @@ const RECENT_CANDLES = 22
 // Color palette
 const COLORS = {
   price: 'hsl(233 100% 75%)', // Blue
-  cvd: 'hsl(30 100% 50%)', // Orange
+  cvd: 'hsl(120 100% 45%)', // Bright green
+  rsi: 'hsl(30 100% 50%)', // Orange
   background: '#ffffff',
   gridLine: '#CDCCC835',
 }
+
+// RSI period
+const RSI_PERIOD = 14
 
 const BASE_CANDLES_URL = `/api/v1/market-data/candles?ticker=${TICKER}&timeframe=1m`
 
@@ -55,6 +59,95 @@ function candlesToLineData(candles: CandleTuple[]): LineData[] {
   }))
 }
 
+/**
+ * Calculate RSI (Relative Strength Index) for a given period
+ * RSI = 100 - (100 / (1 + RS))
+ * RS = Average Gain / Average Loss over the period
+ */
+function calculateRSI(candles: CandleTuple[], period: number = RSI_PERIOD): LineData[] {
+  if (candles.length < period + 1) {
+    return []
+  }
+
+  const result: LineData[] = []
+
+  // Calculate price changes
+  const changes: number[] = []
+  for (let i = 1; i < candles.length; i++) {
+    const current = candles[i]
+    const previous = candles[i - 1]
+    if (current && previous) {
+      changes.push(current[4] - previous[4]) // Close price difference
+    }
+  }
+
+  // Calculate initial average gain and loss using SMA
+  let avgGain = 0
+  let avgLoss = 0
+
+  for (let i = 0; i < period; i++) {
+    const change = changes[i]
+    if (change !== undefined) {
+      if (change > 0) {
+        avgGain += change
+      } else {
+        avgLoss += Math.abs(change)
+      }
+    }
+  }
+
+  avgGain /= period
+  avgLoss /= period
+
+  // First RSI value
+  // Handle edge cases: flat market (no gains/losses) = 50, all gains = 100
+  const firstRSI =
+    avgGain === 0 && avgLoss === 0
+      ? 50 // Neutral when no price movement
+      : avgLoss === 0
+        ? 100 // All gains, no losses = extreme overbought
+        : 100 - 100 / (1 + avgGain / avgLoss)
+
+  const firstCandle = candles[period]
+  if (firstCandle) {
+    result.push({
+      time: (firstCandle[0] / 1000) as Time,
+      value: firstRSI,
+    })
+  }
+
+  // Calculate subsequent RSI values using smoothed moving average (Wilder's smoothing)
+  for (let i = period; i < changes.length; i++) {
+    const change = changes[i]
+    if (change === undefined) continue
+
+    const gain = change > 0 ? change : 0
+    const loss = change < 0 ? Math.abs(change) : 0
+
+    // Wilder's smoothing: avgGain = (prevAvgGain * (period - 1) + currentGain) / period
+    avgGain = (avgGain * (period - 1) + gain) / period
+    avgLoss = (avgLoss * (period - 1) + loss) / period
+
+    // Handle edge cases: flat market (no gains/losses) = 50, all gains = 100
+    const rsi =
+      avgGain === 0 && avgLoss === 0
+        ? 50 // Neutral when no price movement
+        : avgLoss === 0
+          ? 100 // All gains, no losses = extreme overbought
+          : 100 - 100 / (1 + avgGain / avgLoss)
+
+    const candle = candles[i + 1]
+    if (candle) {
+      result.push({
+        time: (candle[0] / 1000) as Time,
+        value: rsi,
+      })
+    }
+  }
+
+  return result
+}
+
 function timeFormatter(time: Time) {
   const date = new Date((time as number) * 1000)
   const hours = date.getHours().toString().padStart(2, '0')
@@ -74,6 +167,7 @@ export function Chart({ width, height }: ChartProps) {
   const chartRef = useRef<IChartApi | null>(null)
   const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const cvdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const dataRef = useRef<CandleTuple[]>([])
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
@@ -103,9 +197,15 @@ export function Chart({ width, height }: ChartProps) {
     // Convert candles to CVD data
     const cvdData = candlesToCvdData(candles)
 
-    // Update both series
+    // Calculate RSI data
+    const rsiData = calculateRSI(candles, RSI_PERIOD)
+
+    // Update all series
     priceSeriesRef.current.setData(priceData)
     cvdSeriesRef.current.setData(cvdData)
+    if (rsiSeriesRef.current) {
+      rsiSeriesRef.current.setData(rsiData)
+    }
   }, [])
 
   const applyRecentCandles = useCallback(
@@ -202,8 +302,7 @@ export function Chart({ width, height }: ChartProps) {
         minimumWidth: 80,
       },
       leftPriceScale: {
-        visible: true,
-        minimumWidth: 80,
+        visible: false,
       },
       timeScale: {
         visible: true,
@@ -236,7 +335,7 @@ export function Chart({ width, height }: ChartProps) {
     chartRef.current = chart
     hasInitialized.current = true
 
-    // Add price series (right axis - default)
+    // Add price series (right axis - middle 50%)
     const priceSeries = chart.addSeries(LineSeries, {
       color: COLORS.price,
       lineWidth: 2,
@@ -245,9 +344,17 @@ export function Chart({ width, height }: ChartProps) {
       priceLineVisible: false,
       lastValueVisible: true,
     })
+    // Position price in the top 75% of the chart
+    priceSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0,
+        bottom: 0.25,
+      },
+      autoScale: true,
+    })
     priceSeriesRef.current = priceSeries
 
-    // Add CVD series (left axis - separate scale)
+    // Add CVD series (left axis - separate scale, top 50%)
     const cvdSeries = chart.addSeries(LineSeries, {
       color: COLORS.cvd,
       lineWidth: 1,
@@ -256,13 +363,42 @@ export function Chart({ width, height }: ChartProps) {
       priceLineVisible: false,
       lastValueVisible: true,
     })
+    // Position CVD at the top 50% of the chart
+    cvdSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0,
+        bottom: 0.5, // End at 50% from bottom
+      },
+      autoScale: true,
+    })
     cvdSeriesRef.current = cvdSeries
+
+    // Add RSI series (overlay scale - hidden axis, positioned at bottom)
+    // Using a unique priceScaleId creates a separate overlay scale
+    const rsiSeries = chart.addSeries(LineSeries, {
+      color: COLORS.rsi,
+      lineWidth: 1,
+      priceScaleId: 'rsi', // Unique ID for overlay scale (no visible axis)
+      crosshairMarkerVisible: true,
+      priceLineVisible: false,
+      lastValueVisible: true,
+    })
+    // Position RSI at the bottom 50% of the chart
+    rsiSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.5, // Start at 50% from top
+        bottom: 0, // End at bottom
+      },
+      autoScale: true,
+    })
+    rsiSeriesRef.current = rsiSeries
 
     return () => {
       chart.remove()
       chartRef.current = null
       priceSeriesRef.current = null
       cvdSeriesRef.current = null
+      rsiSeriesRef.current = null
       hasInitialized.current = false
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

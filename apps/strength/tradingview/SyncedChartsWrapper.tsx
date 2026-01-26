@@ -35,6 +35,8 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
       if (typeof window !== 'undefined') {
         const windowWidth = window.innerWidth
         const windowHeight = window.innerHeight
+        // On mobile portrait, limit height to width to prevent chart distortion
+        const chartHeight = Math.min(windowHeight, windowWidth)
         const isMobile =
           /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
             navigator.userAgent || navigator.vendor || window.opera
@@ -46,7 +48,7 @@ export default function SyncedChartsWrapper({}: SyncedChartsWrapperProps) {
 
         setDimensions({
           availableWidth: windowWidth * window.scaleFactor,
-          availableHeight: windowHeight * window.scaleFactor,
+          availableHeight: chartHeight * window.scaleFactor,
         })
       }
     }

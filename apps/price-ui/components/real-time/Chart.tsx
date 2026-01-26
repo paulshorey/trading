@@ -263,6 +263,30 @@ export function Chart() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  useEffect(() => {
+    const chart = chartRef.current?.chart
+    if (!chart) return
+
+    chart.update(
+      {
+        chart: {
+          panning: {
+            enabled: true,
+            type: 'x',
+          },
+          zooming: {
+            type: '' as unknown as Highcharts.OptionsTypeValue,
+          },
+          zoomType: '' as unknown as Highcharts.OptionsTypeValue,
+        } as Highcharts.ChartOptions & {
+          zoomType?: Highcharts.OptionsTypeValue
+        },
+      },
+      false
+    )
+    chart.redraw()
+  }, [])
+
   const options: Highcharts.Options = useMemo(
     () => ({
       chart: {

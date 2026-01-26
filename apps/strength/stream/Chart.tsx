@@ -100,8 +100,13 @@ function calculateRSI(candles: CandleTuple[], period: number = RSI_PERIOD): Line
   avgLoss /= period
 
   // First RSI value
-  const firstRS = avgLoss === 0 ? 100 : avgGain / avgLoss
-  const firstRSI = avgLoss === 0 ? 100 : 100 - 100 / (1 + firstRS)
+  // Handle edge cases: flat market (no gains/losses) = 50, all gains = 100
+  const firstRSI =
+    avgGain === 0 && avgLoss === 0
+      ? 50 // Neutral when no price movement
+      : avgLoss === 0
+        ? 100 // All gains, no losses = extreme overbought
+        : 100 - 100 / (1 + avgGain / avgLoss)
 
   const firstCandle = candles[period]
   if (firstCandle) {
@@ -123,8 +128,13 @@ function calculateRSI(candles: CandleTuple[], period: number = RSI_PERIOD): Line
     avgGain = (avgGain * (period - 1) + gain) / period
     avgLoss = (avgLoss * (period - 1) + loss) / period
 
-    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss
-    const rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + rs)
+    // Handle edge cases: flat market (no gains/losses) = 50, all gains = 100
+    const rsi =
+      avgGain === 0 && avgLoss === 0
+        ? 50 // Neutral when no price movement
+        : avgLoss === 0
+          ? 100 // All gains, no losses = extreme overbought
+          : 100 - 100 / (1 + avgGain / avgLoss)
 
     const candle = candles[i + 1]
     if (candle) {

@@ -7,6 +7,8 @@ import {
   ISeriesApi,
   LineSeries,
   LineData,
+  BarSeries,
+  BarData,
   Time,
 } from 'lightweight-charts'
 import { useChartEventPatcher } from './useChartEventPatcher'
@@ -57,12 +59,16 @@ function candlesToCvdData(candles: CandleTuple[]): LineData[] {
 }
 
 /**
- * Convert candles to LineData format for price series
+ * Convert candles to BarData format for OHLC bars
+ * Renders as vertical bar (low to high) with open tick on left, close tick on right
  */
-function candlesToLineData(candles: CandleTuple[]): LineData[] {
+function candlesToOhlcData(candles: CandleTuple[]): BarData[] {
   return candles.map((candle) => ({
     time: (candle[0] / 1000) as Time, // Convert ms to seconds
-    value: candle[4], // Close price
+    open: candle[1],
+    high: candle[2],
+    low: candle[3],
+    close: candle[4],
   }))
 }
 
@@ -175,7 +181,7 @@ interface ChartProps {
 export function Chart({ width, height }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const priceSeriesRef = useRef<ISeriesApi<'Bar'> | null>(null)
   const cvdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const dataRef = useRef<CandleTuple[]>([])
@@ -201,8 +207,8 @@ export function Chart({ width, height }: ChartProps) {
   const updateChartData = useCallback((candles: CandleTuple[]) => {
     if (!priceSeriesRef.current || !cvdSeriesRef.current) return
 
-    // Convert candles to line data for price
-    const priceData = candlesToLineData(candles)
+    // Convert candles to OHLC data for price
+    const priceData = candlesToOhlcData(candles)
 
     // Convert candles to CVD data
     const cvdData = candlesToCvdData(candles)
@@ -372,13 +378,12 @@ export function Chart({ width, height }: ChartProps) {
     })
     cvdSeriesRef.current = cvdSeries
 
-    // Add price series (right axis - middle 50%)
-    // Added after CVD so it renders on top
-    const priceSeries = chart.addSeries(LineSeries, {
-      color: COLORS.price,
-      lineWidth: 1,
+    // Add price series as OHLC bars (right axis - middle 50%)
+    // Renders as vertical bar (low to high) with open tick on left, close tick on right
+    const priceSeries = chart.addSeries(BarSeries, {
+      upColor: COLORS.price,
+      downColor: COLORS.price,
       priceScaleId: 'right',
-      crosshairMarkerVisible: true,
       priceLineVisible: false,
       lastValueVisible: true,
     })

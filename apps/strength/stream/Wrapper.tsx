@@ -72,11 +72,11 @@ export function StreamChartWrapper() {
   }
 
   // Match the tradingview wrapper structure:
-  // - overflow-auto allows scrolling if needed
+  // - overflow-hidden prevents scrollbars from creating gaps
   // - w-full ensures full width
   // - The chart is rendered at 2x dimensions, CSS scales it down
   return (
-    <div className="overflow-auto w-full">
+    <div className="overflow-hidden w-full">
       <div className="relative w-full">
         <Chart width={dimensions.width} height={dimensions.height} />
       </div>

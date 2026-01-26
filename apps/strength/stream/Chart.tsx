@@ -300,6 +300,7 @@ export function Chart({ width, height }: ChartProps) {
       rightPriceScale: {
         visible: true,
         minimumWidth: 80,
+        borderVisible: false, // Remove border between price scale and chart area
       },
       leftPriceScale: {
         visible: false,
@@ -309,6 +310,7 @@ export function Chart({ width, height }: ChartProps) {
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: timeFormatter,
+        borderVisible: false, // Remove time scale border
       },
       crosshair: {
         mode: 0,

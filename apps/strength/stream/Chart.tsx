@@ -18,7 +18,7 @@ type CandleTuple = [number, number, number, number, number, number, number]
 
 // Configuration
 const TICKER = 'ES'
-const POLL_INTERVAL_MS = 10_000
+const POLL_INTERVAL_MS = 1000
 const RECENT_CANDLES = 22
 
 // Color palette - Dark theme
@@ -187,6 +187,7 @@ export function Chart({ width, height }: ChartProps) {
   const dataRef = useRef<CandleTuple[]>([])
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
+  const hasStartedPollingRef = useRef(false)
   const hasInitialized = useRef(false)
 
   const [isLoading, setIsLoading] = useState(true)
@@ -289,6 +290,10 @@ export function Chart({ width, height }: ChartProps) {
   }, [applyRecentCandles, fetchCandles])
 
   const startPolling = useCallback(() => {
+    // Prevent duplicate polling in React Strict Mode (dev mode runs useEffect twice)
+    if (hasStartedPollingRef.current) return
+    hasStartedPollingRef.current = true
+
     if (pollRef.current) {
       clearInterval(pollRef.current)
     }
@@ -417,11 +422,11 @@ export function Chart({ width, height }: ChartProps) {
     })
     rsiSeriesRef.current = rsiSeries
 
-    // Custom right-edge anchored zoom handler
+    // Custom zoom handler anchored on the last data bar
+    // Requires cmd (Mac) or ctrl (Windows) + scroll to zoom
     const handleWheel = (e: WheelEvent) => {
-      // Detect zoom gestures: ctrl/cmd+wheel or trackpad pinch (large deltaY with ctrlKey)
+      // Only handle zoom gestures: ctrl/cmd+wheel or trackpad pinch
       const isZoomGesture = e.ctrlKey || e.metaKey
-
       if (!isZoomGesture) return // Let lightweight-charts handle regular scroll/pan
 
       e.preventDefault()
@@ -430,6 +435,11 @@ export function Chart({ width, height }: ChartProps) {
       const timeScale = chart.timeScale()
       const visibleRange = timeScale.getVisibleLogicalRange()
       if (!visibleRange) return
+
+      // Get the last bar's logical index
+      const dataLength = dataRef.current.length
+      if (dataLength === 0) return
+      const lastBarIndex = dataLength - 1
 
       // Calculate zoom factor based on wheel delta
       // Smaller factor for smoother zoom
@@ -440,6 +450,10 @@ export function Chart({ width, height }: ChartProps) {
       const currentTo = visibleRange.to
       const currentWidth = currentTo - currentFrom
 
+      // Calculate the gap between the last bar and the visible right edge
+      // This gap should be preserved after zoom
+      const rightGap = currentTo - lastBarIndex
+
       // New width after zoom
       const newWidth = currentWidth * zoomFactor
 
@@ -448,13 +462,15 @@ export function Chart({ width, height }: ChartProps) {
       const maxBars = 50000
       if (newWidth < minBars || newWidth > maxBars) return
 
-      // Keep right edge (currentTo) fixed, adjust left edge
-      const newFrom = currentTo - newWidth
+      // Anchor on the last bar: keep lastBarIndex in the same position
+      // newTo = lastBarIndex + rightGap (preserves the gap)
+      const newTo = lastBarIndex + rightGap
+      const newFrom = newTo - newWidth
 
-      // Apply the new range with right edge anchored
+      // Apply the new range with last bar anchored
       timeScale.setVisibleLogicalRange({
         from: newFrom,
-        to: currentTo,
+        to: newTo,
       })
     }
 
@@ -507,7 +523,9 @@ export function Chart({ width, height }: ChartProps) {
       isMounted = false
       if (pollRef.current) {
         clearInterval(pollRef.current)
+        pollRef.current = null
       }
+      hasStartedPollingRef.current = false
     }
   }, [fetchCandles, updateChartData, startPolling])
 

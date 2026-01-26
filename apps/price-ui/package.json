@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.13.2",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 2222",
     "build": "next build",
     "env:pull": "node ../../scripts/fetch-infisical.mjs /m/apps/price-ui apps/price-ui/.env",
     "analyze": "ANALYZE=true next build",

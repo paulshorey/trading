@@ -101,73 +101,72 @@ export function Chart() {
     const isNearLatest = axis.max >= lastTime - CANDLE_INTERVAL_MS * 1.2
 
     if (isNearLatest && range > 0) {
-      axis.setExtremes(
-        lastTime - range,
-        lastTime,
-        false,
-        false,
-        { trigger: 'realtime' }
-      )
+      axis.setExtremes(lastTime - range, lastTime, false, false, {
+        trigger: 'realtime',
+      })
     }
   }, [])
 
-  const applyRecentCandles = useCallback((recentCandles: CandleTuple[]) => {
-    const chart = chartRef.current?.chart
-    const priceSeries = chart?.get('price-data') as
-      | Highcharts.Series
-      | undefined
+  const applyRecentCandles = useCallback(
+    (recentCandles: CandleTuple[]) => {
+      const chart = chartRef.current?.chart
+      const priceSeries = chart?.get('price-data') as
+        | Highcharts.Series
+        | undefined
 
-    if (!chart || !priceSeries) return
+      if (!chart || !priceSeries) return
 
-    const existing = dataRef.current
-    if (existing.length === 0) {
-      dataRef.current = recentCandles
-      priceSeries.setData(recentCandles, false)
-      chart.redraw()
-      return
-    }
+      const existing = dataRef.current
+      if (existing.length === 0) {
+        dataRef.current = recentCandles
+        priceSeries.setData(recentCandles, false)
+        chart.redraw()
+        return
+      }
 
-    const startIndex = Math.max(0, existing.length - recentCandles.length - 2)
-    const indexByTime = new Map<number, number>()
-    for (let i = startIndex; i < existing.length; i += 1) {
-      const candle = existing[i]
-      if (!candle) continue
-      indexByTime.set(candle[0], i)
-    }
+      const startIndex = Math.max(0, existing.length - recentCandles.length - 2)
+      const indexByTime = new Map<number, number>()
+      for (let i = startIndex; i < existing.length; i += 1) {
+        const candle = existing[i]
+        if (!candle) continue
+        indexByTime.set(candle[0], i)
+      }
 
-    let didUpdate = false
+      let didUpdate = false
 
-    for (const candle of recentCandles) {
-      const existingIndex = indexByTime.get(candle[0])
-      if (existingIndex !== undefined) {
-        const existingCandle = existing[existingIndex]
-        if (!existingCandle) {
+      for (const candle of recentCandles) {
+        const existingIndex = indexByTime.get(candle[0])
+        if (existingIndex !== undefined) {
+          const existingCandle = existing[existingIndex]
+          if (!existingCandle) {
+            continue
+          }
+          if (!candlesEqual(existingCandle, candle)) {
+            existing[existingIndex] = candle
+            const point = priceSeries.data[existingIndex]
+            if (point) {
+              point.update(candle, false)
+            }
+            didUpdate = true
+          }
           continue
         }
-        if (!candlesEqual(existingCandle, candle)) {
-          existing[existingIndex] = candle
-          const point = priceSeries.data[existingIndex]
-          if (point) {
-            point.update(candle, false)
-          }
+
+        const lastExisting = existing[existing.length - 1]
+        if (lastExisting && candle[0] > lastExisting[0]) {
+          existing.push(candle)
+          priceSeries.addPoint(candle, false, false)
           didUpdate = true
         }
-        continue
       }
 
-      const lastExisting = existing[existing.length - 1]
-      if (lastExisting && candle[0] > lastExisting[0]) {
-        existing.push(candle)
-        priceSeries.addPoint(candle, false, false)
-        didUpdate = true
+      if (didUpdate) {
+        updateVisibleRangeToLatest()
+        chart.redraw()
       }
-    }
-
-    if (didUpdate) {
-      updateVisibleRangeToLatest()
-      chart.redraw()
-    }
-  }, [updateVisibleRangeToLatest])
+    },
+    [updateVisibleRangeToLatest]
+  )
 
   const fetchCandles = useCallback(async (limit: number) => {
     const response = await fetch(buildCandlesUrl(limit))
@@ -266,15 +265,20 @@ export function Chart() {
   const options: Highcharts.Options = useMemo(
     () => ({
       chart: {
-        type: 'candlestick',
+        type: 'hlc',
         backgroundColor: darkTheme.background,
         spacing: [10, 10, 0, 10],
+        animation: false,
         style: {
           fontFamily:
             'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
         },
-        zooming: {
+        panning: {
+          enabled: true,
           type: 'x',
+        },
+        zooming: {
+          type: undefined,
         },
       },
 
@@ -282,6 +286,9 @@ export function Chart() {
         adaptToUpdatedData: true,
         outlineColor: darkTheme.axisLine,
         maskFill: 'rgba(102, 133, 194, 0.2)',
+        xAxis: {
+          ordinal: true,
+        },
       },
 
       scrollbar: {
@@ -295,6 +302,7 @@ export function Chart() {
       },
 
       xAxis: {
+        ordinal: false, // Improves panning performance
         events: {
           afterSetExtremes: handleAfterSetExtremes,
         },
@@ -334,13 +342,11 @@ export function Chart() {
       series: [
         {
           id: 'price-data',
-          type: 'candlestick',
+          type: 'hlc',
           name: TICKER,
           data: [],
           color: darkTheme.candleDown,
           upColor: darkTheme.candleUp,
-          lineColor: darkTheme.candleDown,
-          upLineColor: darkTheme.candleUp,
         },
         {
           type: 'sma',
@@ -356,6 +362,11 @@ export function Chart() {
           },
         } as Highcharts.SeriesOptionsType,
       ],
+
+      tooltip: {
+        animation: false,
+        hideDelay: 0,
+      },
 
       credits: {
         enabled: false,

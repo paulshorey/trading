@@ -53,7 +53,10 @@ export function Chart() {
   const [navigatorData, setNavigatorData] = useState<number[][]>([]) // Full dataset for navigator
   const [chartData, setChartData] = useState<number[][]>([]) // Current view data for main series
   // Track the visible range (user-selected) vs the fetched data range
-  const [visibleRange, setVisibleRange] = useState<{ min: number; max: number } | null>(null)
+  const [visibleRange, setVisibleRange] = useState<{
+    min: number
+    max: number
+  } | null>(null)
 
   // Handle window resize with reflow
   useEffect(() => {
@@ -96,7 +99,11 @@ export function Chart() {
     (e: Highcharts.AxisSetExtremesEventObject) => {
       // Only respond to user-initiated changes (navigator, range selector, zoom)
       // Ignore programmatic changes to prevent infinite loops when we set min/max in options
-      if (e.trigger !== 'navigator' && e.trigger !== 'rangeSelectorButton' && e.trigger !== 'zoom') {
+      if (
+        e.trigger !== 'navigator' &&
+        e.trigger !== 'rangeSelectorButton' &&
+        e.trigger !== 'zoom'
+      ) {
         return
       }
 
@@ -128,7 +135,10 @@ export function Chart() {
         // Extend the start time to fetch extra data for SMA calculation,
         // clamped to the earliest available data timestamp to avoid negative/invalid timestamps
         const earliestTimestamp = navigatorData[0]?.[0] ?? 0
-        const extendedStart = Math.max(earliestTimestamp, requestedMin - extraTime)
+        const extendedStart = Math.max(
+          earliestTimestamp,
+          requestedMin - extraTime
+        )
 
         fetch(`${CANDLES_URL}&start=${extendedStart}&end=${requestedMax}`)
           .then((res) => res.ok && res.json())
@@ -152,7 +162,7 @@ export function Chart() {
   const options: Highcharts.Options = useMemo(
     () => ({
       chart: {
-        type: 'candlestick',
+        type: 'hlc',
         backgroundColor: darkTheme.background,
         spacing: [10, 10, 0, 10], // top, right, bottom, left - remove bottom spacing
         style: {
@@ -264,7 +274,7 @@ export function Chart() {
       series: [
         {
           id: 'price-data',
-          type: 'candlestick',
+          type: 'hlc',
           name: 'ES',
           data: chartData,
           dataGrouping: {
@@ -272,8 +282,6 @@ export function Chart() {
           },
           color: darkTheme.candleDown,
           upColor: darkTheme.candleUp,
-          lineColor: darkTheme.candleDown,
-          upLineColor: darkTheme.candleUp,
         },
         // Type assertion required because @types/highcharts doesn't include
         // indicator series types from the 'highcharts/indicators/indicators' module.

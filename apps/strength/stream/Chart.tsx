@@ -11,20 +11,19 @@ import {
 } from 'lightweight-charts'
 import { useChartEventPatcher } from './useChartEventPatcher'
 
-// Type for candle data from API: [timestamp_ms, open, high, low, close, volume]
-type CandleTuple = [number, number, number, number, number, number]
+// Type for candle data from API: [timestamp_ms, open, high, low, close, volume, cvd]
+type CandleTuple = [number, number, number, number, number, number, number]
 
 // Configuration
 const TICKER = 'ES'
-const SMA_PERIOD = 20
 const INITIAL_CANDLES = 5000
 const POLL_INTERVAL_MS = 10_000
-const RECENT_CANDLES = SMA_PERIOD + 2
+const RECENT_CANDLES = 22
 
 // Color palette
 const COLORS = {
   price: 'hsl(233 100% 75%)', // Blue
-  indicator: 'hsl(120 70.8% 44.31%)', // Green
+  cvd: 'hsl(30 100% 50%)', // Orange
   background: '#ffffff',
   gridLine: '#CDCCC835',
 }
@@ -36,29 +35,14 @@ function buildCandlesUrl(limit: number) {
 }
 
 /**
- * Calculate Simple Moving Average (SMA)
- * Returns array of LineData with value for each point that has enough history
+ * Convert candles to LineData format for CVD series
+ * CVD is at index 6 of the tuple
  */
-function calculateSMA(candles: CandleTuple[], period: number): LineData[] {
-  if (candles.length < period) return []
-
-  const result: LineData[] = []
-
-  for (let i = period - 1; i < candles.length; i++) {
-    let sum = 0
-    for (let j = 0; j < period; j++) {
-      // Use close price (index 4)
-      sum += candles[i - j]![4]
-    }
-    const avg = sum / period
-    // Convert timestamp from ms to seconds for lightweight-charts
-    result.push({
-      time: (candles[i]![0] / 1000) as Time,
-      value: avg,
-    })
-  }
-
-  return result
+function candlesToCvdData(candles: CandleTuple[]): LineData[] {
+  return candles.map((candle) => ({
+    time: (candle[0] / 1000) as Time, // Convert ms to seconds
+    value: candle[6], // CVD value
+  }))
 }
 
 /**
@@ -89,7 +73,7 @@ export function Chart({ width, height }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const priceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const indicatorSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const cvdSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const dataRef = useRef<CandleTuple[]>([])
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
@@ -111,22 +95,22 @@ export function Chart({ width, height }: ChartProps) {
   }, [])
 
   const updateChartData = useCallback((candles: CandleTuple[]) => {
-    if (!priceSeriesRef.current || !indicatorSeriesRef.current) return
+    if (!priceSeriesRef.current || !cvdSeriesRef.current) return
 
     // Convert candles to line data for price
     const priceData = candlesToLineData(candles)
 
-    // Calculate SMA indicator
-    const smaData = calculateSMA(candles, SMA_PERIOD)
+    // Convert candles to CVD data
+    const cvdData = candlesToCvdData(candles)
 
     // Update both series
     priceSeriesRef.current.setData(priceData)
-    indicatorSeriesRef.current.setData(smaData)
+    cvdSeriesRef.current.setData(cvdData)
   }, [])
 
   const applyRecentCandles = useCallback(
     (recentCandles: CandleTuple[]) => {
-      if (!priceSeriesRef.current || !indicatorSeriesRef.current) return
+      if (!priceSeriesRef.current || !cvdSeriesRef.current) return
 
       const existing = dataRef.current
       if (existing.length === 0) {
@@ -263,22 +247,22 @@ export function Chart({ width, height }: ChartProps) {
     })
     priceSeriesRef.current = priceSeries
 
-    // Add SMA indicator series (left axis)
-    const indicatorSeries = chart.addSeries(LineSeries, {
-      color: COLORS.indicator,
+    // Add CVD series (left axis - separate scale)
+    const cvdSeries = chart.addSeries(LineSeries, {
+      color: COLORS.cvd,
       lineWidth: 1,
       priceScaleId: 'left',
       crosshairMarkerVisible: true,
       priceLineVisible: false,
       lastValueVisible: true,
     })
-    indicatorSeriesRef.current = indicatorSeries
+    cvdSeriesRef.current = cvdSeries
 
     return () => {
       chart.remove()
       chartRef.current = null
       priceSeriesRef.current = null
-      indicatorSeriesRef.current = null
+      cvdSeriesRef.current = null
       hasInitialized.current = false
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

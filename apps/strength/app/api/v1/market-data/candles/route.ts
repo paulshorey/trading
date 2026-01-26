@@ -14,7 +14,7 @@ const DEFAULT_START_MS = new Date('2010-01-01').getTime()
  *   limit  - Max number of candles to return (optional)
  *   timeframe - Force a specific timeframe id (optional, e.g. "1m")
  *
- * Returns array of tuples: [timestamp_ms, open, high, low, close, volume]
+ * Returns array of tuples: [timestamp_ms, open, high, low, close, volume, cvd]
  * Automatically selects the best timeframe based on date range unless overridden.
  */
 export async function GET(request: NextRequest) {

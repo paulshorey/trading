@@ -70,7 +70,8 @@ function resolveTimeframe(
   return selectTimeframe(startMs, endMs)
 }
 
-export type CandleTuple = [number, number, number, number, number, number]
+// [timestamp_ms, open, high, low, close, volume, cvd]
+export type CandleTuple = [number, number, number, number, number, number, number]
 
 export interface CandlesResult {
   timeframe: string
@@ -165,7 +166,7 @@ export async function getCandles(
   const whereParts: string[] = ['ticker = $1', 'time >= $2', 'time <= $3']
   const params: Array<string | number> = [ticker, startISO, endISO]
   let query = `
-    SELECT time, open, high, low, close, volume
+    SELECT time, open, high, low, close, volume, cvd
     FROM "${timeframe.table}"
     WHERE ${whereParts.join(' AND ')}
   `
@@ -174,7 +175,7 @@ export async function getCandles(
     params.push(normalizedLimit)
     const limitParam = `$${params.length}`
     query = `
-      SELECT time, open, high, low, close, volume
+      SELECT time, open, high, low, close, volume, cvd
       FROM (
         ${query}
         ORDER BY time DESC
@@ -191,7 +192,7 @@ export async function getCandles(
 
   const result = await db.query(query, params)
 
-  // Convert to Highcharts format: [timestamp_ms, open, high, low, close, volume]
+  // Convert to tuple format: [timestamp_ms, open, high, low, close, volume, cvd]
   const candles: CandleTuple[] = result.rows.map((row) => [
     new Date(row.time).getTime(), // ISO -> Unix ms
     parseFloat(row.open),
@@ -199,6 +200,7 @@ export async function getCandles(
     parseFloat(row.low),
     parseFloat(row.close),
     parseFloat(row.volume),
+    parseFloat(row.cvd ?? 0),
   ])
 
   return {

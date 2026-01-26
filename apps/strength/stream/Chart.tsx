@@ -344,10 +344,10 @@ export function Chart({ width, height }: ChartProps) {
       priceLineVisible: false,
       lastValueVisible: true,
     })
-    // Position price in the middle 50% of the chart
+    // Position price in the top 75% of the chart
     priceSeries.priceScale().applyOptions({
       scaleMargins: {
-        top: 0.25,
+        top: 0,
         bottom: 0.25,
       },
       autoScale: true,

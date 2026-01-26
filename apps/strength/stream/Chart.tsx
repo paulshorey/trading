@@ -16,10 +16,10 @@ type CandleTuple = [number, number, number, number, number, number]
 
 // Configuration
 const TICKER = 'ES'
-const SMA_PERIOD = 20
+const INDICATOR_PERIOD = 20
 const INITIAL_CANDLES = 5000
 const POLL_INTERVAL_MS = 10_000
-const RECENT_CANDLES = SMA_PERIOD + 2
+const RECENT_CANDLES = INDICATOR_PERIOD + 2
 
 // Color palette
 const COLORS = {
@@ -36,10 +36,13 @@ function buildCandlesUrl(limit: number) {
 }
 
 /**
- * Calculate Simple Moving Average (SMA)
+ * Calculate Simple Moving Average (INDICATOR)
  * Returns array of LineData with value for each point that has enough history
  */
-function calculateSMA(candles: CandleTuple[], period: number): LineData[] {
+function calculateIndicator(
+  candles: CandleTuple[],
+  period: number
+): LineData[] {
   if (candles.length < period) return []
 
   const result: LineData[] = []
@@ -116,12 +119,12 @@ export function Chart({ width, height }: ChartProps) {
     // Convert candles to line data for price
     const priceData = candlesToLineData(candles)
 
-    // Calculate SMA indicator
-    const smaData = calculateSMA(candles, SMA_PERIOD)
+    // Calculate indicator
+    const indicatorData = calculateIndicator(candles, INDICATOR_PERIOD)
 
     // Update both series
     priceSeriesRef.current.setData(priceData)
-    indicatorSeriesRef.current.setData(smaData)
+    indicatorSeriesRef.current.setData(indicatorData)
   }, [])
 
   const applyRecentCandles = useCallback(
@@ -226,6 +229,7 @@ export function Chart({ width, height }: ChartProps) {
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: timeFormatter,
+        rightBarStaysOnScroll: true, // Keep right bar visible when scrolling
       },
       crosshair: {
         mode: 0,
@@ -243,7 +247,7 @@ export function Chart({ width, height }: ChartProps) {
         },
       },
       handleScroll: true,
-      handleScale: true,
+      handleScale: false, // Disable built-in scale handling, we handle zoom ourselves
       localization: {
         timeFormatter,
       },
@@ -263,7 +267,7 @@ export function Chart({ width, height }: ChartProps) {
     })
     priceSeriesRef.current = priceSeries
 
-    // Add SMA indicator series (left axis)
+    // Add INDICATOR indicator series (left axis)
     const indicatorSeries = chart.addSeries(LineSeries, {
       color: COLORS.indicator,
       lineWidth: 1,
@@ -274,7 +278,53 @@ export function Chart({ width, height }: ChartProps) {
     })
     indicatorSeriesRef.current = indicatorSeries
 
+    // Custom right-edge anchored zoom handler
+    const handleWheel = (e: WheelEvent) => {
+      // Detect zoom gestures: ctrl/cmd+wheel or trackpad pinch (large deltaY with ctrlKey)
+      const isZoomGesture = e.ctrlKey || e.metaKey
+
+      if (!isZoomGesture) return // Let lightweight-charts handle regular scroll/pan
+
+      e.preventDefault()
+      e.stopPropagation()
+
+      const timeScale = chart.timeScale()
+      const visibleRange = timeScale.getVisibleLogicalRange()
+      if (!visibleRange) return
+
+      // Calculate zoom factor based on wheel delta
+      // Smaller factor for smoother zoom
+      const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95 // zoom out : zoom in
+
+      // Current range
+      const currentFrom = visibleRange.from
+      const currentTo = visibleRange.to
+      const currentWidth = currentTo - currentFrom
+
+      // New width after zoom
+      const newWidth = currentWidth * zoomFactor
+
+      // Minimum and maximum zoom limits
+      const minBars = 10
+      const maxBars = 50000
+      if (newWidth < minBars || newWidth > maxBars) return
+
+      // Keep right edge (currentTo) fixed, adjust left edge
+      const newFrom = currentTo - newWidth
+
+      // Apply the new range with right edge anchored
+      timeScale.setVisibleLogicalRange({
+        from: newFrom,
+        to: currentTo,
+      })
+    }
+
+    // Use capture phase to intercept before lightweight-charts
+    const container = containerRef.current
+    container.addEventListener('wheel', handleWheel, { passive: false, capture: true })
+
     return () => {
+      container.removeEventListener('wheel', handleWheel, { capture: true })
       chart.remove()
       chartRef.current = null
       priceSeriesRef.current = null

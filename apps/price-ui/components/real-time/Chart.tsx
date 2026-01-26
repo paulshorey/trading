@@ -278,7 +278,7 @@ export function Chart() {
           type: 'x',
         },
         zooming: {
-          type: undefined,
+          type: '' as unknown as Highcharts.OptionsTypeValue,
         },
       },
 

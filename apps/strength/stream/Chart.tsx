@@ -12,6 +12,7 @@ import {
   Time,
 } from 'lightweight-charts'
 import { useChartEventPatcher } from './useChartEventPatcher'
+import { VerticalLinePrimitive } from '../tradingview/lib/primitives/VerticalLinePrimitive'
 import type { CandleTuple } from '@/lib/market-data/candles'
 
 /**
@@ -74,54 +75,132 @@ const TICKER = 'ES'
 const POLL_INTERVAL_MS = 1000
 const RECENT_CANDLES = 22
 
-// Color palette - Dark theme
+// UI colors
 const COLORS = {
-  // Main series
-  price: 'hsl(221.01 100% 72.75%)', // Blue
-  cvd: 'hsla(115.87 100% 62.94% / 0.75)', // Green
-  rsi: 'hsl(30 100% 50%)', // Orange
-  // OHLC bar series
-  evr: 'hsl(280 70% 65%)', // Purple
-  smp: 'hsl(340 80% 60%)', // Pink
-  vwap: 'hsl(45 100% 50%)', // Yellow
-  vdRatio: 'hsl(180 70% 50%)', // Cyan
-  spreadBps: 'hsl(200 80% 55%)', // Light Blue
-  pricePct: 'hsl(15 90% 55%)', // Red-Orange
-  // Line series
-  bookImbalance: 'hsl(160 60% 50%)', // Teal
-  bigTrades: 'hsl(320 70% 55%)', // Magenta
-  bigVolume: 'hsl(260 60% 60%)', // Violet
-  divergence: 'hsl(95 60% 50%)', // Lime
-  vdStrength: 'hsl(50 80% 55%)', // Gold
-  // UI
   background: '#1a1a2e',
   text: '#C3BCDB',
   gridLine: '#333344',
   crosshair: '#71649C',
 }
 
-// Scale margins for each series (top/bottom as percentage of chart height)
-// Adjust these values to position series vertically on the chart
-// Series configuration: enable/disable and position each series
+// Series configuration: enabled, color, and scale margins (top/bottom)
 // Set `enabled: false` to hide a series from the chart
 const SERIES = {
   // Main series
-  price: { enabled: true, top: 0, bottom: 0.5 },
-  cvd: { enabled: true, top: 0.125, bottom: 0.625 },
-  rsi: { enabled: true, top: 0.25, bottom: 0.5 },
-  // OHLC bar series
-  evr: { enabled: true, top: 0.45, bottom: 0.5 }, // purple
-  smp: { enabled: true, top: 0.5, bottom: 0.45 }, // pink
-  vwap: { enabled: true, top: 0.55, bottom: 0.4 }, // gold -- good for detecting LH/HL trend
-  vdRatio: { enabled: true, top: 0.6, bottom: 0.35 }, // aqua
-  spreadBps: { enabled: true, top: 0.65, bottom: 0.3 }, // blue
-  pricePct: { enabled: true, top: 0.7, bottom: 0.25 }, // red-orange
-  // Line series
-  bookImbalance: { enabled: true, top: 0.75, bottom: 0.2 }, // turquoise
-  bigTrades: { enabled: true, top: 0.8, bottom: 0.15 }, // magenta
-  bigVolume: { enabled: true, top: 0.85, bottom: 0.1 }, // violet
-  divergence: { enabled: true, top: 0.9, bottom: 0.05 }, // green
-  vdStrength: { enabled: true, top: 0.95, bottom: 0 }, // yellow
+  price: {
+    // ohlc
+    // range: unbounded
+    enabled: true,
+    color: 'hsl(221.01 100% 72.75%)',
+    top: 0,
+    bottom: 0.5,
+  },
+  vwap: {
+    // ohlc
+    // range: unbounded
+    enabled: true,
+    color: 'hsl(45 100% 50%)',
+    top: 0,
+    bottom: 0.5,
+  },
+  cvd: {
+    // ohlc
+    // range: unbounded
+    enabled: true,
+    color: 'hsla(115.87 100% 62.94% / 0.75)',
+    top: 0.125,
+    bottom: 0.625,
+  },
+  rsi: {
+    // line
+    // range: 100 to 0
+    enabled: true,
+    color: 'hsl(30 100% 50%)',
+    top: 0.25,
+    bottom: 0.5,
+  },
+  evr: {
+    // ohlc
+    // range: ? recent: 2.46 to -1.9
+    enabled: true,
+    color: 'hsl(280 70% 65%)',
+    top: 0.5,
+    bottom: 0.45,
+  },
+  smp: {
+    // ohlc
+    // range: ? recent: 80 to -88
+    enabled: true,
+    color: 'hsl(340 80% 60%)',
+    top: 0.55,
+    bottom: 0.35,
+  },
+  vdRatio: {
+    // line
+    // range: 1 to -1
+    enabled: true,
+    color: 'hsl(180 70% 50%)',
+    top: 0.65,
+    bottom: 0.3,
+  },
+  pricePct: {
+    // ohlc
+    // range: ? recent: 17.17 to -25.41
+    enabled: true,
+    color: 'hsl(15 90% 55%)', // red-orange
+    top: 0.65,
+    bottom: 0.1,
+  },
+  divergence: {
+    // line
+    // range: 1 to -1
+    enabled: true,
+    color: 'hsl(95 60% 50%)', // green
+    top: 0.725,
+    bottom: 0.225,
+  },
+  // HL/LH trend
+  bookImbalance: {
+    // line
+    // range: 1 to -1
+    enabled: true,
+    color: 'hsl(160 60% 50%)',
+    top: 0.75,
+    bottom: 0.05,
+  },
+  // 0-based positive values:
+  bigTrades: {
+    // ohlc
+    // range: unbounded positive to 0
+    enabled: true,
+    color: 'hsl(320 70% 55%)', // magenta
+    top: 0.75,
+    bottom: 0,
+  },
+  bigVolume: {
+    // ohlc
+    // range: unbounded positive to 0
+    enabled: true,
+    color: 'hsl(260 60% 60%)',
+    top: 0.75,
+    bottom: 0,
+  },
+  vdStrength: {
+    // ohlc
+    // range: unbounded positive to 0
+    enabled: true,
+    color: 'hsl(50 80% 55%)',
+    top: 0.9,
+    bottom: 0,
+  },
+  spreadBps: {
+    // ohlc
+    // range: ? recent: 1.84 to - 80.25
+    enabled: true,
+    color: 'hsl(200 80% 55%)',
+    top: 0.8,
+    bottom: 0,
+  },
 }
 
 // Extra width to extend chart past screen edge, pushing price scale's internal padding off-screen
@@ -132,6 +211,17 @@ const PRICE_SCALE_RIGHT_OFFSET = 20
 
 // RSI period
 const RSI_PERIOD = 14
+
+// Absorption marker configuration
+const ABSORPTION_MARKER = {
+  color: 'hsla(50, 100%, 50%, 0.8)', // yellow
+  width: 1,
+  labelText: '',
+  labelBackgroundColor: 'hsla(50, 100%, 40%, 0.9)',
+  labelTextColor: 'white',
+  showLabel: false,
+  lineStyle: 'dotted' as const,
+}
 
 const BASE_CANDLES_URL = `/api/v1/market-data/candles?ticker=${TICKER}&timeframe=1m`
 
@@ -194,15 +284,24 @@ function candlesToSmpOhlc(candles: CandleTuple[]): BarData[] {
 
 /**
  * Convert candles to BarData format for VWAP OHLC bars
+ * Filters out candles with missing VWAP data (0 or null) to avoid skewing the scale
  */
 function candlesToVwapOhlc(candles: CandleTuple[]): BarData[] {
-  return candles.map((candle) => ({
-    time: (candle[IDX.TIMESTAMP] / 1000) as Time,
-    open: candle[IDX.VWAP_OPEN],
-    high: candle[IDX.VWAP_HIGH],
-    low: candle[IDX.VWAP_LOW],
-    close: candle[IDX.VWAP_CLOSE],
-  }))
+  return candles
+    .filter(
+      (candle) =>
+        candle[IDX.VWAP_OPEN] &&
+        candle[IDX.VWAP_HIGH] &&
+        candle[IDX.VWAP_LOW] &&
+        candle[IDX.VWAP_CLOSE]
+    )
+    .map((candle) => ({
+      time: (candle[IDX.TIMESTAMP] / 1000) as Time,
+      open: candle[IDX.VWAP_OPEN],
+      high: candle[IDX.VWAP_HIGH],
+      low: candle[IDX.VWAP_LOW],
+      close: candle[IDX.VWAP_CLOSE],
+    }))
 }
 
 /**
@@ -386,6 +485,37 @@ function calculateRSI(
   return result
 }
 
+/**
+ * Detect absorption points where all conditions are met:
+ * - divergence != 0 (price moved against aggressor)
+ * - ABS(vd_ratio_close) > 0.2 (aggressive imbalance)
+ * - spread_bps_close IS NOT NULL (spread data exists)
+ * - big_trades > 0 (institutional-size trades present)
+ *
+ * Returns timestamps of candles that meet all criteria
+ */
+function detectAbsorptionPoints(candles: CandleTuple[]): number[] {
+  const absorptionTimestamps: number[] = []
+
+  for (const candle of candles) {
+    const vdRatioClose = candle[IDX.VD_RATIO_CLOSE]
+    const spreadBpsClose = candle[IDX.SPREAD_BPS_CLOSE]
+    const divergence = candle[IDX.DIVERGENCE]
+    const bigTrades = candle[IDX.BIG_TRADES]
+
+    const hasDivergence = divergence !== 0
+    const hasImbalance = Math.abs(vdRatioClose) > 0.2
+    const hasSpreadData = spreadBpsClose != null
+    const hasBigTrades = bigTrades > 0
+
+    if (hasDivergence && hasImbalance && hasSpreadData && hasBigTrades) {
+      absorptionTimestamps.push(candle[IDX.TIMESTAMP])
+    }
+  }
+
+  return absorptionTimestamps
+}
+
 function timeFormatter(time: Time) {
   const date = new Date((time as number) * 1000)
   const hours = date.getHours().toString().padStart(2, '0')
@@ -428,6 +558,10 @@ export function Chart({ width, height }: ChartProps) {
   const bigVolumeSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const divergenceSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const vdStrengthSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+
+  // Absorption marker refs
+  const absorptionMarkersRef = useRef<VerticalLinePrimitive[]>([])
+  const absorptionTimestampsRef = useRef<Set<number>>(new Set())
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -497,6 +631,24 @@ export function Chart({ width, height }: ChartProps) {
     }
     if (vdStrengthSeriesRef.current) {
       vdStrengthSeriesRef.current.setData(candlesToVdStrengthData(candles))
+    }
+
+    // Update absorption markers
+    if (priceSeriesRef.current) {
+      const absorptionTimestamps = detectAbsorptionPoints(candles)
+
+      // Add markers for new absorption points (avoid duplicates)
+      for (const timestamp of absorptionTimestamps) {
+        if (!absorptionTimestampsRef.current.has(timestamp)) {
+          const marker = new VerticalLinePrimitive(
+            (timestamp / 1000) as Time,
+            ABSORPTION_MARKER
+          )
+          priceSeriesRef.current.attachPrimitive(marker)
+          absorptionMarkersRef.current.push(marker)
+          absorptionTimestampsRef.current.add(timestamp)
+        }
+      }
     }
   }, [])
 
@@ -648,8 +800,8 @@ export function Chart({ width, height }: ChartProps) {
     // Added first so it renders behind price
     if (SERIES.cvd.enabled) {
       const cvdSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.cvd,
-        downColor: COLORS.cvd,
+        upColor: SERIES.cvd.color,
+        downColor: SERIES.cvd.color,
         priceScaleId: 'left',
         priceLineVisible: false,
         lastValueVisible: true,
@@ -664,8 +816,8 @@ export function Chart({ width, height }: ChartProps) {
     // Add price series as OHLC bars (right axis)
     if (SERIES.price.enabled) {
       const priceSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.price,
-        downColor: COLORS.price,
+        upColor: SERIES.price.color,
+        downColor: SERIES.price.color,
         priceScaleId: 'right',
         priceLineVisible: false,
         lastValueVisible: true,
@@ -680,7 +832,7 @@ export function Chart({ width, height }: ChartProps) {
     // RSI series (overlay)
     if (SERIES.rsi.enabled) {
       const rsiSeries = chart.addSeries(LineSeries, {
-        color: COLORS.rsi,
+        color: SERIES.rsi.color,
         lineWidth: 1,
         priceScaleId: 'rsi',
         crosshairMarkerVisible: true,
@@ -699,8 +851,8 @@ export function Chart({ width, height }: ChartProps) {
     // EVR OHLC bars
     if (SERIES.evr.enabled) {
       const evrSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.evr,
-        downColor: COLORS.evr,
+        upColor: SERIES.evr.color,
+        downColor: SERIES.evr.color,
         priceScaleId: 'evr',
         priceLineVisible: false,
         lastValueVisible: false,
@@ -715,8 +867,8 @@ export function Chart({ width, height }: ChartProps) {
     // SMP OHLC bars
     if (SERIES.smp.enabled) {
       const smpSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.smp,
-        downColor: COLORS.smp,
+        upColor: SERIES.smp.color,
+        downColor: SERIES.smp.color,
         priceScaleId: 'smp',
         priceLineVisible: false,
         lastValueVisible: false,
@@ -728,18 +880,14 @@ export function Chart({ width, height }: ChartProps) {
       smpSeriesRef.current = smpSeries
     }
 
-    // VWAP OHLC bars
+    // VWAP OHLC bars (shares scale with price)
     if (SERIES.vwap.enabled) {
       const vwapSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.vwap,
-        downColor: COLORS.vwap,
-        priceScaleId: 'vwap',
+        upColor: SERIES.vwap.color,
+        downColor: SERIES.vwap.color,
+        priceScaleId: 'right', // Same scale as price
         priceLineVisible: false,
         lastValueVisible: false,
-      })
-      vwapSeries.priceScale().applyOptions({
-        scaleMargins: { top: SERIES.vwap.top, bottom: SERIES.vwap.bottom },
-        autoScale: true,
       })
       vwapSeriesRef.current = vwapSeries
     }
@@ -747,8 +895,8 @@ export function Chart({ width, height }: ChartProps) {
     // VD_RATIO OHLC bars
     if (SERIES.vdRatio.enabled) {
       const vdRatioSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.vdRatio,
-        downColor: COLORS.vdRatio,
+        upColor: SERIES.vdRatio.color,
+        downColor: SERIES.vdRatio.color,
         priceScaleId: 'vdRatio',
         priceLineVisible: false,
         lastValueVisible: false,
@@ -766,8 +914,8 @@ export function Chart({ width, height }: ChartProps) {
     // SPREAD_BPS OHLC bars
     if (SERIES.spreadBps.enabled) {
       const spreadBpsSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.spreadBps,
-        downColor: COLORS.spreadBps,
+        upColor: SERIES.spreadBps.color,
+        downColor: SERIES.spreadBps.color,
         priceScaleId: 'spreadBps',
         priceLineVisible: false,
         lastValueVisible: false,
@@ -785,8 +933,8 @@ export function Chart({ width, height }: ChartProps) {
     // PRICE_PCT OHLC bars
     if (SERIES.pricePct.enabled) {
       const pricePctSeries = chart.addSeries(BarSeries, {
-        upColor: COLORS.pricePct,
-        downColor: COLORS.pricePct,
+        upColor: SERIES.pricePct.color,
+        downColor: SERIES.pricePct.color,
         priceScaleId: 'pricePct',
         priceLineVisible: false,
         lastValueVisible: false,
@@ -806,7 +954,7 @@ export function Chart({ width, height }: ChartProps) {
     // Book Imbalance line
     if (SERIES.bookImbalance.enabled) {
       const bookImbalanceSeries = chart.addSeries(LineSeries, {
-        color: COLORS.bookImbalance,
+        color: SERIES.bookImbalance.color,
         lineWidth: 1,
         priceScaleId: 'bookImbalance',
         crosshairMarkerVisible: true,
@@ -826,7 +974,7 @@ export function Chart({ width, height }: ChartProps) {
     // Big Trades line
     if (SERIES.bigTrades.enabled) {
       const bigTradesSeries = chart.addSeries(LineSeries, {
-        color: COLORS.bigTrades,
+        color: SERIES.bigTrades.color,
         lineWidth: 1,
         priceScaleId: 'bigTrades',
         crosshairMarkerVisible: true,
@@ -846,7 +994,7 @@ export function Chart({ width, height }: ChartProps) {
     // Big Volume line
     if (SERIES.bigVolume.enabled) {
       const bigVolumeSeries = chart.addSeries(LineSeries, {
-        color: COLORS.bigVolume,
+        color: SERIES.bigVolume.color,
         lineWidth: 1,
         priceScaleId: 'bigVolume',
         crosshairMarkerVisible: true,
@@ -866,7 +1014,7 @@ export function Chart({ width, height }: ChartProps) {
     // Divergence line
     if (SERIES.divergence.enabled) {
       const divergenceSeries = chart.addSeries(LineSeries, {
-        color: COLORS.divergence,
+        color: SERIES.divergence.color,
         lineWidth: 1,
         priceScaleId: 'divergence',
         crosshairMarkerVisible: true,
@@ -886,7 +1034,7 @@ export function Chart({ width, height }: ChartProps) {
     // VD Strength line
     if (SERIES.vdStrength.enabled) {
       const vdStrengthSeries = chart.addSeries(LineSeries, {
-        color: COLORS.vdStrength,
+        color: SERIES.vdStrength.color,
         lineWidth: 1,
         priceScaleId: 'vdStrength',
         crosshairMarkerVisible: true,
@@ -983,6 +1131,9 @@ export function Chart({ width, height }: ChartProps) {
       bigVolumeSeriesRef.current = null
       divergenceSeriesRef.current = null
       vdStrengthSeriesRef.current = null
+      // Absorption markers
+      absorptionMarkersRef.current = []
+      absorptionTimestampsRef.current.clear()
       hasInitialized.current = false
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

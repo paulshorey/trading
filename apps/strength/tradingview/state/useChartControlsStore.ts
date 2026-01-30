@@ -202,7 +202,7 @@ const getInitialState = (): State => {
     priceTickers: {},
     strengthIndicator: null,
     priceIndicator: null,
-    showStrengthLine: true,
+    showStrengthLine: false,
     showStrengthIntervalLines: true,
     showPriceLine: false,
     showPriceTickerLines: true,

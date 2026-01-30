@@ -97,7 +97,7 @@ export const SERIES = {
     enabled: true,
     color: 'hsl(40 100% 50%)',
     top: 0.35,
-    bottom: 0.35,
+    bottom: 0.15,
   },
   // HL/LH trend
   bookImbalance: {
@@ -107,15 +107,15 @@ export const SERIES = {
     enabled: false,
     color: 'hsl(0 70% 60%)',
     // color: 'hsl(160 60% 50%)',
-    top: 0.4,
-    bottom: 0.3,
+    top: 0.35,
+    bottom: 0.15,
   },
 
   // 0-middle volatility:
   pricePct: {
     // ohlc
     // range: ? recent: 17.17 to -25.41
-    enabled: true,
+    enabled: false,
     color: 'hsl(15 90% 55%)', // red-orange
     top: 0.6,
     bottom: 0,
@@ -124,7 +124,7 @@ export const SERIES = {
     // ohlc
     // range: ? recent: 2.46 to -1.9 (scaled x8 in dataTransformers.ts)
     // shares scale with pricePct (priceScaleId: 'metrics')
-    enabled: true,
+    enabled: false,
     color: 'hsl(280 70% 65%)',
     top: 0.6,
     bottom: 0,

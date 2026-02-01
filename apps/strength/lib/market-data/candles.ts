@@ -71,60 +71,54 @@ function resolveTimeframe(
 }
 
 /**
- * Candle data tuple format with all metrics
- *
- * Index mapping:
- * - 0: timestamp_ms
- * - 1-4: price OHLC (open, high, low, close)
- * - 5: volume
- * - 6-9: cvd OHLC (cvd_open, cvd_high, cvd_low, cvd_close)
- * - 10-13: evr OHLC (evr_open, evr_high, evr_low, evr_close)
- * - 14-17: vwap OHLC (vwap_open, vwap_high, vwap_low, vwap_close)
- * - 18-21: spread_bps OHLC (spread_bps_open, spread_bps_high, spread_bps_low, spread_bps_close)
- * - 22-25: price_pct OHLC (price_pct_open, price_pct_high, price_pct_low, price_pct_close)
- * - 26: book_imbalance_close
- * - 27: big_trades
- * - 28: big_volume
- * - 29: vd_strength
+ * Candle data with all metrics as named properties
  */
-export type CandleTuple = [
-  number, // 0: timestamp_ms
-  number, // 1: open
-  number, // 2: high
-  number, // 3: low
-  number, // 4: close
-  number, // 5: volume
-  number, // 6: cvd_open
-  number, // 7: cvd_high
-  number, // 8: cvd_low
-  number, // 9: cvd_close
-  number, // 10: evr_open
-  number, // 11: evr_high
-  number, // 12: evr_low
-  number, // 13: evr_close
-  number, // 14: vwap_open
-  number, // 15: vwap_high
-  number, // 16: vwap_low
-  number, // 17: vwap_close
-  number, // 18: spread_bps_open
-  number, // 19: spread_bps_high
-  number, // 20: spread_bps_low
-  number, // 21: spread_bps_close
-  number, // 22: price_pct_open
-  number, // 23: price_pct_high
-  number, // 24: price_pct_low
-  number, // 25: price_pct_close
-  number, // 26: book_imbalance_close
-  number, // 27: big_trades
-  number, // 28: big_volume
-  number, // 29: vd_strength
-]
+export interface Candle {
+  // Timestamp
+  time: number
+  // Price OHLC
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  // CVD OHLC
+  cvd_open: number
+  cvd_high: number
+  cvd_low: number
+  cvd_close: number
+  // EVR OHLC
+  evr_open: number
+  evr_high: number
+  evr_low: number
+  evr_close: number
+  // VWAP OHLC
+  vwap_open: number
+  vwap_high: number
+  vwap_low: number
+  vwap_close: number
+  // Spread BPS OHLC
+  spread_bps_open: number
+  spread_bps_high: number
+  spread_bps_low: number
+  spread_bps_close: number
+  // Price PCT OHLC
+  price_pct_open: number
+  price_pct_high: number
+  price_pct_low: number
+  price_pct_close: number
+  // Line metrics
+  book_imbalance_close: number
+  big_trades: number
+  big_volume: number
+  vd_strength: number
+}
 
 export interface CandlesResult {
   timeframe: string
   table: string
   count: number
-  data: CandleTuple[]
+  data: Candle[]
 }
 
 /**
@@ -247,39 +241,39 @@ export async function getCandles(
 
   const result = await db.query(query, params)
 
-  // Convert to tuple format with all metrics (see CandleTuple type for index mapping)
-  const candles: CandleTuple[] = result.rows.map((row) => [
-    new Date(row.time).getTime(), // 0: timestamp_ms
-    parseFloat(row.open), // 1: open
-    parseFloat(row.high), // 2: high
-    parseFloat(row.low), // 3: low
-    parseFloat(row.close), // 4: close
-    parseFloat(row.volume), // 5: volume
-    parseFloat(row.cvd_open ?? 0), // 6: cvd_open
-    parseFloat(row.cvd_high ?? 0), // 7: cvd_high
-    parseFloat(row.cvd_low ?? 0), // 8: cvd_low
-    parseFloat(row.cvd_close ?? 0), // 9: cvd_close
-    parseFloat(row.evr_open ?? 0), // 10: evr_open
-    parseFloat(row.evr_high ?? 0), // 11: evr_high
-    parseFloat(row.evr_low ?? 0), // 12: evr_low
-    parseFloat(row.evr_close ?? 0), // 13: evr_close
-    parseFloat(row.vwap_open ?? 0), // 14: vwap_open
-    parseFloat(row.vwap_high ?? 0), // 15: vwap_high
-    parseFloat(row.vwap_low ?? 0), // 16: vwap_low
-    parseFloat(row.vwap_close ?? 0), // 17: vwap_close
-    parseFloat(row.spread_bps_open ?? 0), // 18: spread_bps_open
-    parseFloat(row.spread_bps_high ?? 0), // 19: spread_bps_high
-    parseFloat(row.spread_bps_low ?? 0), // 20: spread_bps_low
-    parseFloat(row.spread_bps_close ?? 0), // 21: spread_bps_close
-    parseFloat(row.price_pct_open ?? 0), // 22: price_pct_open
-    parseFloat(row.price_pct_high ?? 0), // 23: price_pct_high
-    parseFloat(row.price_pct_low ?? 0), // 24: price_pct_low
-    parseFloat(row.price_pct_close ?? 0), // 25: price_pct_close
-    parseFloat(row.book_imbalance_close ?? 0), // 26: book_imbalance_close
-    parseFloat(row.big_trades ?? 0), // 27: big_trades
-    parseFloat(row.big_volume ?? 0), // 28: big_volume
-    parseFloat(row.vd_strength ?? 0), // 29: vd_strength
-  ])
+  // Convert to object format with all metrics
+  const candles: Candle[] = result.rows.map((row) => ({
+    time: new Date(row.time).getTime(),
+    open: parseFloat(row.open),
+    high: parseFloat(row.high),
+    low: parseFloat(row.low),
+    close: parseFloat(row.close),
+    volume: parseFloat(row.volume),
+    cvd_open: parseFloat(row.cvd_open ?? 0),
+    cvd_high: parseFloat(row.cvd_high ?? 0),
+    cvd_low: parseFloat(row.cvd_low ?? 0),
+    cvd_close: parseFloat(row.cvd_close ?? 0),
+    evr_open: parseFloat(row.evr_open ?? 0),
+    evr_high: parseFloat(row.evr_high ?? 0),
+    evr_low: parseFloat(row.evr_low ?? 0),
+    evr_close: parseFloat(row.evr_close ?? 0),
+    vwap_open: parseFloat(row.vwap_open ?? 0),
+    vwap_high: parseFloat(row.vwap_high ?? 0),
+    vwap_low: parseFloat(row.vwap_low ?? 0),
+    vwap_close: parseFloat(row.vwap_close ?? 0),
+    spread_bps_open: parseFloat(row.spread_bps_open ?? 0),
+    spread_bps_high: parseFloat(row.spread_bps_high ?? 0),
+    spread_bps_low: parseFloat(row.spread_bps_low ?? 0),
+    spread_bps_close: parseFloat(row.spread_bps_close ?? 0),
+    price_pct_open: parseFloat(row.price_pct_open ?? 0),
+    price_pct_high: parseFloat(row.price_pct_high ?? 0),
+    price_pct_low: parseFloat(row.price_pct_low ?? 0),
+    price_pct_close: parseFloat(row.price_pct_close ?? 0),
+    book_imbalance_close: parseFloat(row.book_imbalance_close ?? 0),
+    big_trades: parseFloat(row.big_trades ?? 0),
+    big_volume: parseFloat(row.big_volume ?? 0),
+    vd_strength: parseFloat(row.vd_strength ?? 0),
+  }))
 
   return {
     timeframe: timeframe.id,

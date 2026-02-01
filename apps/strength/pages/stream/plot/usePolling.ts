@@ -1,24 +1,19 @@
 import { useCallback, useRef } from 'react'
-import type { CandleTuple } from '@/lib/market-data/candles'
-import {
-  IDX,
-  POLL_INTERVAL_MS,
-  RECENT_CANDLES,
-  buildCandlesUrl,
-} from './constants'
+import type { Candle } from '@/lib/market-data/candles'
+import { POLL_INTERVAL_MS, RECENT_CANDLES, buildCandlesUrl } from './constants'
 import { useUpdateData } from './useUpdateData'
 import type { SeriesRefs, AbsorptionRefs } from './useChart'
 
 interface UsePollingProps {
-  dataRef: React.MutableRefObject<CandleTuple[]>
+  dataRef: React.MutableRefObject<Candle[]>
   seriesRefs: SeriesRefs
   absorptionRefs: AbsorptionRefs
 }
 
 interface UsePollingReturn {
-  fetchCandles: (limit: number) => Promise<CandleTuple[]>
-  updateChartData: (candles: CandleTuple[]) => void
-  applyRecentCandles: (recentCandles: CandleTuple[]) => void
+  fetchCandles: (limit: number) => Promise<Candle[]>
+  updateChartData: (candles: Candle[]) => void
+  applyRecentCandles: (recentCandles: Candle[]) => void
   startPolling: () => void
   stopPolling: () => void
 }
@@ -39,11 +34,11 @@ export function usePolling({
     if (!response.ok) {
       throw new Error(`Failed to fetch candles: ${response.status}`)
     }
-    return (await response.json()) as CandleTuple[]
+    return (await response.json()) as Candle[]
   }, [])
 
   const applyRecentCandles = useCallback(
-    (recentCandles: CandleTuple[]) => {
+    (recentCandles: Candle[]) => {
       const existing = dataRef.current
       if (existing.length === 0) {
         dataRef.current = recentCandles
@@ -57,19 +52,16 @@ export function usePolling({
       for (let i = startIndex; i < existing.length; i += 1) {
         const candle = existing[i]
         if (!candle) continue
-        indexByTime.set(candle[IDX.TIMESTAMP], i)
+        indexByTime.set(candle.time, i)
       }
 
       let didUpdate = false
 
       for (const candle of recentCandles) {
-        const existingIndex = indexByTime.get(candle[IDX.TIMESTAMP])
+        const existingIndex = indexByTime.get(candle.time)
         if (existingIndex !== undefined) {
           const existingCandle = existing[existingIndex]
-          if (
-            existingCandle &&
-            existingCandle[IDX.CLOSE] !== candle[IDX.CLOSE]
-          ) {
+          if (existingCandle && existingCandle.close !== candle.close) {
             existing[existingIndex] = candle
             didUpdate = true
           }
@@ -77,10 +69,7 @@ export function usePolling({
         }
 
         const lastExisting = existing[existing.length - 1]
-        if (
-          lastExisting &&
-          candle[IDX.TIMESTAMP] > lastExisting[IDX.TIMESTAMP]
-        ) {
+        if (lastExisting && candle.time > lastExisting.time) {
           existing.push(candle)
           didUpdate = true
         }

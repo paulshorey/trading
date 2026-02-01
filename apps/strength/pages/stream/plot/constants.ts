@@ -1,46 +1,6 @@
-/**
- * Index constants for CandleTuple fields
- * See CandleTuple type in candles.ts for full documentation
- */
-export const IDX = {
-  TIMESTAMP: 0,
-  // Price OHLC
-  OPEN: 1,
-  HIGH: 2,
-  LOW: 3,
-  CLOSE: 4,
-  VOLUME: 5,
-  // CVD OHLC
-  CVD_OPEN: 6,
-  CVD_HIGH: 7,
-  CVD_LOW: 8,
-  CVD_CLOSE: 9,
-  // EVR OHLC
-  EVR_OPEN: 10,
-  EVR_HIGH: 11,
-  EVR_LOW: 12,
-  EVR_CLOSE: 13,
-  // VWAP OHLC
-  VWAP_OPEN: 14,
-  VWAP_HIGH: 15,
-  VWAP_LOW: 16,
-  VWAP_CLOSE: 17,
-  // SPREAD_BPS OHLC
-  SPREAD_BPS_OPEN: 18,
-  SPREAD_BPS_HIGH: 19,
-  SPREAD_BPS_LOW: 20,
-  SPREAD_BPS_CLOSE: 21,
-  // PRICE_PCT OHLC
-  PRICE_PCT_OPEN: 22,
-  PRICE_PCT_HIGH: 23,
-  PRICE_PCT_LOW: 24,
-  PRICE_PCT_CLOSE: 25,
-  // Line metrics
-  BOOK_IMBALANCE_CLOSE: 26,
-  BIG_TRADES: 27,
-  BIG_VOLUME: 28,
-  VD_STRENGTH: 29,
-} as const
+import { Candle } from '@/lib/market-data/candles'
+import { BarData, LineData, Time } from 'lightweight-charts'
+import { calculateRSI } from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'
@@ -66,112 +26,208 @@ export const COLORS = {
 export const SERIES = {
   // Main series
   price: {
-    // ohlc
+    seriesType: 'Bar',
     // range: unbounded
     enabled: true,
     color: 'hsl(221.01 100% 72.75%)',
     top: 0,
     bottom: 0.4,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+      }))
+    },
   },
   vwap: {
-    // ohlc
+    seriesType: 'Bar',
     // range: unbounded
     enabled: false,
     color: 'hsl(45 100% 50%)',
     top: 0,
     bottom: 0.4,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles
+        .filter(
+          (candle) =>
+            candle.vwap_open &&
+            candle.vwap_high &&
+            candle.vwap_low &&
+            candle.vwap_close
+        )
+        .map((candle) => ({
+          time: (candle.time / 1000) as Time,
+          open: candle.vwap_open,
+          high: candle.vwap_high,
+          low: candle.vwap_low,
+          close: candle.vwap_close,
+        }))
+    },
   },
   cvd: {
-    // ohlc
+    seriesType: 'Bar',
     // range: unbounded
     enabled: true,
     color: 'hsla(115.87 100% 62.94% / 0.75)',
     top: 0.125,
     bottom: 0.5,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: -candle.cvd_open,
+        high: -candle.cvd_low, // Inverted: low becomes high
+        low: -candle.cvd_high, // Inverted: high becomes low
+        close: -candle.cvd_close,
+      }))
+    },
   },
 
   // trend
   rsi: {
-    // line
+    seriesType: 'Line',
     // range: 100 to 0
     enabled: true,
     color: 'hsl(40 100% 50%)',
     top: 0.35,
     bottom: 0.15,
+    formatter: function (candles: Candle[]): LineData[] {
+      return calculateRSI(candles, RSI_PERIOD)
+    },
   },
   // HL/LH trend
   bookImbalance: {
     // invert
-    // line
+    seriesType: 'Line',
     // range: 1 to -1
     enabled: false,
     color: 'hsl(0 70% 60%)',
     // color: 'hsl(160 60% 50%)',
     top: 0.35,
     bottom: 0.15,
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.book_imbalance_close,
+      }))
+    },
   },
 
   // 0-middle volatility:
   pricePct: {
-    // ohlc
+    seriesType: 'Bar',
     // range: ? recent: 17.17 to -25.41
     enabled: false,
     color: 'hsl(15 90% 55%)', // red-orange
     top: 0.6,
     bottom: 0,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: candle.price_pct_open,
+        high: candle.price_pct_high,
+        low: candle.price_pct_low,
+        close: candle.price_pct_close,
+      }))
+    },
   },
   evr: {
-    // ohlc
+    seriesType: 'Bar',
     // range: ? recent: 2.46 to -1.9 (scaled x8 in dataTransformers.ts)
     // shares scale with pricePct (priceScaleId: 'metrics')
     enabled: false,
     color: 'hsl(280 70% 65%)',
     top: 0.6,
     bottom: 0,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: candle.evr_open * 7,
+        high: candle.evr_high * 7,
+        low: candle.evr_low * 7,
+        close: candle.evr_close * 7,
+      }))
+    },
   },
 
   // 0-floor histogram:
   volume: {
-    // line
-    // range: unbounded positive to 0
     enabled: true,
+    seriesType: 'Line',
+    // range: unbounded positive to 0
     color: 'hsl(50 100% 100%)',
-    top: 0.7,
+    top: 0.8,
     bottom: 0,
+    formatter: function (candles: Candle[]): LineData[] {
+      const rsi = calculateRSI(candles, 70, 'volume')
+      return rsi.map((candle) => ({
+        time: candle.time as Time,
+        value: candle.value,
+      }))
+    },
   },
   bigTrades: {
-    // line
+    seriesType: 'Line',
     // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(320 70% 55%)', // magenta
     top: 0.75,
     bottom: 0,
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.big_trades,
+      }))
+    },
   },
   bigVolume: {
-    // line
+    seriesType: 'Line',
     // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(260 60% 60%)',
     top: 0.75,
     bottom: 0,
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.big_volume,
+      }))
+    },
   },
   vdStrength: {
-    // line
+    seriesType: 'Line',
     // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(50 80% 55%)',
     top: 0.85,
     bottom: 0,
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.vd_strength,
+      }))
+    },
   },
 
   // not used
   spreadBps: {
-    // ohlc
+    seriesType: 'Bar',
     // range: ? recent: 1.84 to - 80.25
     enabled: false,
     color: 'hsl(200 80% 55%)',
     top: 0.8,
     bottom: 0,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: normalizeSpreadBps(candle.spread_bps_open),
+        high: normalizeSpreadBps(candle.spread_bps_high),
+        low: normalizeSpreadBps(candle.spread_bps_low),
+        close: normalizeSpreadBps(candle.spread_bps_close),
+      }))
+    },
   },
 }
 
@@ -190,4 +246,9 @@ export const BASE_CANDLES_URL = `/api/v1/market-data/candles?ticker=${TICKER}&ti
 
 export function buildCandlesUrl(limit: number) {
   return `${BASE_CANDLES_URL}&limit=${limit}`
+}
+
+// Helper function for spreadBps normalization
+function normalizeSpreadBps(spreadBps: number): number {
+  return Math.min(1, Math.max(-1, spreadBps * 10))
 }

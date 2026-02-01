@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { CandleTuple } from '@/lib/market-data/candles'
+import type { Candle } from '@/lib/market-data/candles'
 import { useEventPatcher } from './ui/useEventPatcher'
 import { useChart } from './plot/useChart'
 import { usePolling } from './plot/usePolling'
@@ -14,7 +14,7 @@ interface ChartProps {
 
 export function Chart({ width, height }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const dataRef = useRef<CandleTuple[]>([])
+  const dataRef = useRef<Candle[]>([])
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

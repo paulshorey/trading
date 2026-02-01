@@ -1,6 +1,19 @@
-import { LineData, Time } from 'lightweight-charts'
-import type { CandleTuple } from '@/lib/market-data/candles'
-import { IDX, RSI_PERIOD } from '../plot/constants'
+import { Time } from 'lightweight-charts'
+import type { Candle } from '@/lib/market-data/candles'
+import { RSI_PERIOD } from '../plot/constants'
+
+export type IndicatorOutput = { time: Time; value: number }[]
+
+/**
+ * Convert a value using power transformation for moderate compression
+ * Exponent controls compression: 1.0 = linear, 0.5 = sqrt, lower = more compression
+ * Returns 0 for values <= 0 to handle edge cases
+ */
+export function toLogScale(value: number, exponent: number = 0.5): number {
+  if (value <= 0) return 0
+  // return Math.log10(value)
+  return Math.pow(value, exponent)
+}
 
 /**
  * Calculate RSI (Relative Strength Index) for a given period
@@ -8,14 +21,15 @@ import { IDX, RSI_PERIOD } from '../plot/constants'
  * RS = Average Gain / Average Loss over the period
  */
 export function calculateRSI(
-  candles: CandleTuple[],
-  period: number = RSI_PERIOD
-): LineData[] {
+  candles: Candle[],
+  period: number = RSI_PERIOD,
+  property: keyof Candle = 'close'
+): IndicatorOutput {
   if (candles.length < period + 1) {
     return []
   }
 
-  const result: LineData[] = []
+  const result: IndicatorOutput = []
 
   // Calculate price changes
   const changes: number[] = []
@@ -23,7 +37,7 @@ export function calculateRSI(
     const current = candles[i]
     const previous = candles[i - 1]
     if (current && previous) {
-      changes.push(current[IDX.CLOSE] - previous[IDX.CLOSE]) // Close price difference
+      changes.push(current[property] - previous[property])
     }
   }
 
@@ -57,7 +71,7 @@ export function calculateRSI(
   const firstCandle = candles[period]
   if (firstCandle) {
     result.push({
-      time: (firstCandle[IDX.TIMESTAMP] / 1000) as Time,
+      time: (firstCandle.time / 1000) as Time,
       value: firstRSI,
     })
   }
@@ -85,7 +99,7 @@ export function calculateRSI(
     const candle = candles[i + 1]
     if (candle) {
       result.push({
-        time: (candle[IDX.TIMESTAMP] / 1000) as Time,
+        time: (candle.time / 1000) as Time,
         value: rsi,
       })
     }
@@ -98,24 +112,19 @@ export function calculateRSI(
  * Detect absorption points where all conditions are met:
  * Returns timestamps of candles that meet all criteria
  */
-export function detectAbsorptionPoints(candles: CandleTuple[]): number[] {
+export function detectAbsorptionPoints(candles: Candle[]): number[] {
   const absorptionTimestamps: number[] = []
 
   for (const candle of candles) {
-    const close = candle[IDX.CLOSE]
-    const open = candle[IDX.OPEN]
-    const spreadBpsClose = candle[IDX.SPREAD_BPS_CLOSE]
-    const bigTrades = candle[IDX.BIG_TRADES]
-
-    const hasSpreadData = spreadBpsClose != null
-    const hasBigTrades = bigTrades > 0
+    const hasSpreadData = candle.spread_bps_close != null
+    const hasBigTrades = candle.big_trades > 0
 
     // Price movement divergence
-    const hasPriceDivergence = Math.abs(close - open) > 0
+    const hasPriceDivergence = Math.abs(candle.close - candle.open) > 0
 
     // All conditions are met:
     if (hasPriceDivergence && hasSpreadData && hasBigTrades) {
-      absorptionTimestamps.push(candle[IDX.TIMESTAMP])
+      absorptionTimestamps.push(candle.time)
     }
   }
 

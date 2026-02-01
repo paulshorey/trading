@@ -1,20 +1,6 @@
 import { useCallback } from 'react'
-import type { CandleTuple } from '@/lib/market-data/candles'
-import { RSI_PERIOD } from './constants'
-import {
-  candlesToPriceOhlc,
-  candlesToCvdOhlc,
-  candlesToEvrOhlc,
-  candlesToVwapOhlc,
-  candlesToSpreadBpsOhlc,
-  candlesToPricePctOhlc,
-  candlesToBookImbalance,
-  candlesToVolume,
-  candlesToBigTrades,
-  candlesToBigVolume,
-  candlesToVdStrength,
-} from './formatting'
-import { calculateRSI } from '../lib/indicators'
+import type { Candle } from '@/lib/market-data/candles'
+import { SERIES } from './constants'
 import type { SeriesRefs, AbsorptionRefs } from './useChart'
 
 interface UseUpdateDataProps {
@@ -23,7 +9,7 @@ interface UseUpdateDataProps {
 }
 
 interface UseUpdateDataReturn {
-  updateChartData: (candles: CandleTuple[]) => void
+  updateChartData: (candles: Candle[]) => void
 }
 
 export function useUpdateData({
@@ -31,53 +17,61 @@ export function useUpdateData({
   absorptionRefs,
 }: UseUpdateDataProps): UseUpdateDataReturn {
   const updateChartData = useCallback(
-    (candles: CandleTuple[]) => {
+    (candles: Candle[]) => {
       // Update price series
-      if (seriesRefs.price.current) {
-        seriesRefs.price.current.setData(candlesToPriceOhlc(candles))
+      if (seriesRefs.price.current && SERIES.price.formatter) {
+        seriesRefs.price.current.setData(SERIES.price.formatter(candles))
       }
 
       // Update CVD series (OHLC bars)
-      if (seriesRefs.cvd.current) {
-        seriesRefs.cvd.current.setData(candlesToCvdOhlc(candles))
+      if (seriesRefs.cvd.current && SERIES.cvd.formatter) {
+        seriesRefs.cvd.current.setData(SERIES.cvd.formatter(candles))
       }
 
       // Update RSI
-      if (seriesRefs.rsi.current) {
-        seriesRefs.rsi.current.setData(calculateRSI(candles, RSI_PERIOD))
+      if (seriesRefs.rsi.current && SERIES.rsi.formatter) {
+        seriesRefs.rsi.current.setData(SERIES.rsi.formatter(candles))
       }
 
       // Update OHLC bar series
-      if (seriesRefs.evr.current) {
-        seriesRefs.evr.current.setData(candlesToEvrOhlc(candles))
+      if (seriesRefs.evr.current && SERIES.evr.formatter) {
+        seriesRefs.evr.current.setData(SERIES.evr.formatter(candles))
       }
-      if (seriesRefs.vwap.current) {
-        seriesRefs.vwap.current.setData(candlesToVwapOhlc(candles))
+      if (seriesRefs.vwap.current && SERIES.vwap.formatter) {
+        seriesRefs.vwap.current.setData(SERIES.vwap.formatter(candles))
       }
-      if (seriesRefs.spreadBps.current) {
-        seriesRefs.spreadBps.current.setData(candlesToSpreadBpsOhlc(candles))
+      if (seriesRefs.spreadBps.current && SERIES.spreadBps.formatter) {
+        seriesRefs.spreadBps.current.setData(
+          SERIES.spreadBps.formatter(candles)
+        )
       }
-      if (seriesRefs.pricePct.current) {
-        seriesRefs.pricePct.current.setData(candlesToPricePctOhlc(candles))
+      if (seriesRefs.pricePct.current && SERIES.pricePct.formatter) {
+        seriesRefs.pricePct.current.setData(SERIES.pricePct.formatter(candles))
       }
 
       // Update line series
-      if (seriesRefs.bookImbalance.current) {
+      if (seriesRefs.bookImbalance.current && SERIES.bookImbalance.formatter) {
         seriesRefs.bookImbalance.current.setData(
-          candlesToBookImbalance(candles)
+          SERIES.bookImbalance.formatter(candles)
         )
       }
-      if (seriesRefs.volume.current) {
-        seriesRefs.volume.current.setData(candlesToVolume(candles))
+      if (seriesRefs.volume.current && SERIES.volume.formatter) {
+        seriesRefs.volume.current.setData(SERIES.volume.formatter(candles))
       }
-      if (seriesRefs.bigTrades.current) {
-        seriesRefs.bigTrades.current.setData(candlesToBigTrades(candles))
+      if (seriesRefs.bigTrades.current && SERIES.bigTrades.formatter) {
+        seriesRefs.bigTrades.current.setData(
+          SERIES.bigTrades.formatter(candles)
+        )
       }
-      if (seriesRefs.bigVolume.current) {
-        seriesRefs.bigVolume.current.setData(candlesToBigVolume(candles))
+      if (seriesRefs.bigVolume.current && SERIES.bigVolume.formatter) {
+        seriesRefs.bigVolume.current.setData(
+          SERIES.bigVolume.formatter(candles)
+        )
       }
-      if (seriesRefs.vdStrength.current) {
-        seriesRefs.vdStrength.current.setData(candlesToVdStrength(candles))
+      if (seriesRefs.vdStrength.current && SERIES.vdStrength.formatter) {
+        seriesRefs.vdStrength.current.setData(
+          SERIES.vdStrength.formatter(candles)
+        )
       }
 
       // Temporarily disable absorption markers:

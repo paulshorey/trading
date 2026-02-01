@@ -242,27 +242,7 @@ export const useChartControlsStore = create<ChartControlsStore>()(
 
       // Configuration setters
       setHoursBack: (hours: string) => {
-        const hoursNum = parseInt(hours)
-        let interval = [...get().interval]
-        if (hoursNum === 6) {
-          interval = ['1', '3', '5', '7', '13', '29', '59', '109', '181', 'D']
-        }
-        if (hoursNum === 12) {
-          interval = ['3', '5', '7', '13', '29', '59', '109', '181', 'D']
-        }
-        if (hoursNum === 24) {
-          interval = ['5', '7', '13', '29', '59', '109', '181', 'D']
-        }
-        if (hoursNum === 48) {
-          interval = ['7', '13', '29', '59', '109', '181', 'D']
-        }
-        if (hoursNum === 96) {
-          interval = ['13', '29', '59', '109', '181', 'D']
-        }
-        if (hoursNum === 120) {
-          interval = ['29', '59', '109', '181', 'D']
-        }
-        set({ hoursBack: hours, interval })
+        set({ hoursBack: hours })
       },
 
       setInterval: (intervals: string[]) => {

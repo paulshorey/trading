@@ -823,16 +823,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           }
         }
 
-        // Check if the latest bar is visible
-        // The last bar is at logical index (data.length - 1)
-        // If logicalRange.to is greater than or equal to (data.length - 1), the latest bar is visible
-        const lastBarLogicalIndex = data.length - 1
-        // Use a buffer of 10 bars to account for slight scrolling
-        const isLatestBarVisible = logicalRange.to >= lastBarLogicalIndex - 10
+        // Check if the latest ACTUAL data bar is visible (not the future-padded bars)
+        // The data is extended 12 hours (720 bars) into the future with the last value
+        // So the actual latest data is at index (data.length - 1 - 720)
+        // We use a generous buffer to resume polling when user scrolls "near" the end
+        const FUTURE_PADDING_BARS = 720 // 12 hours * 60 minutes
+        const VISIBILITY_BUFFER = 60 // 1 hour buffer - resume polling when within 1 hour of latest data
+        const lastActualDataIndex = data.length - 1 - FUTURE_PADDING_BARS
+        const isLatestBarVisible = logicalRange.to >= lastActualDataIndex - VISIBILITY_BUFFER
 
         // Only notify if visibility changed
         if (isLatestBarVisible !== lastLatestBarVisibleRef.current) {
-          console.log(`[Chart] Latest bar visibility changed: ${isLatestBarVisible}, logicalRange.to=${logicalRange.to.toFixed(0)}, lastBarIndex=${lastBarLogicalIndex}`)
+          console.log(`[Chart] Latest bar visibility changed: ${isLatestBarVisible}, logicalRange.to=${logicalRange.to.toFixed(0)}, lastActualDataIndex=${lastActualDataIndex}`)
           lastLatestBarVisibleRef.current = isLatestBarVisible
           onLatestBarVisibilityChangeRef.current?.(isLatestBarVisible)
         }

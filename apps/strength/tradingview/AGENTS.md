@@ -76,15 +76,48 @@ When tab is in background, polling may stop. On return:
 - Dynamic window calculates missed time
 - All missing data fetched in one request
 
-### 6. Scroll-to-Pause Polling
+### 6. Smart Pause/Resume (Latest Bar Visibility)
 
-When user scrolls/pans the chart, real-time polling pauses automatically:
+Real-time polling is controlled based on whether the latest bar is visible:
 
-- Chart detects scroll via `subscribeVisibleLogicalRangeChange`
-- Polling pauses to prevent chart jumping while user explores
-- After 30 seconds of no scrolling, polling resumes
-- On resume, all missed data is fetched (using dynamic fetch window)
+- Chart subscribes to `visibleLogicalRangeChange` to detect scroll position
+- When **latest bar is visible**: polling continues, new data auto-scrolls into view
+- When **latest bar is hidden** (user scrolled back): polling pauses automatically
+- This prevents chart jumping while user explores historical data
+- When user scrolls forward to see latest bar again, polling resumes
+- On resume, all missed minutes are fetched (using dynamic fetch window)
 - Visual indicator shows "⏸ paused" in bottom-right corner
+
+### 7. Lazy Loading (Infinite History)
+
+When user scrolls to the beginning of chart data, more historical data loads automatically:
+
+**Trigger:** `barsInLogicalRange().barsBefore < LAZY_LOAD_BARS_THRESHOLD` (50 bars)
+
+**Fetch:** Loads `LAZY_LOAD_FETCH_MINUTES` (120 minutes / 2 hours) of additional history
+
+**Scroll Preservation:** When historical data is prepended, the view position is preserved:
+1. Save `visibleLogicalRange` before `setData()`
+2. After update, restore range with offset: `from + prependedBarsCount`, `to + prependedBarsCount`
+
+**Data Flow:**
+```
+User scrolls near beginning
+      ↓
+Chart.tsx: onNeedMoreHistory callback
+      ↓
+SyncedCharts: handleNeedMoreHistory
+      ↓
+useStrengthData: fetchHistoricalDataBefore(earliestDataTime, minutes)
+      ↓
+FetchStrengthData: API fetch for older data
+      ↓
+Merge with existing data (prepend)
+      ↓
+Trigger aggregation worker
+      ↓
+Chart updates with scroll position preserved
+```
 
 ## Chart Lines
 

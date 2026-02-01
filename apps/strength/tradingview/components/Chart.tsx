@@ -370,6 +370,39 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           TIME_RANGE_HIGHLIGHTS
         )
 
+        // Detect if this is a historical data prepend (new data has earlier timestamps)
+        // This happens when user scrolls back and we lazy-load more history
+        let isHistoricalPrepend = false
+        let prependedBarsCount = 0
+        let savedLogicalRange: LogicalRange | null = null
+
+        if (
+          prevData &&
+          prevData.length > 0 &&
+          currentData.length > prevData.length &&
+          chartRef.current
+        ) {
+          const prevFirstTime = prevData[0]!.time as number
+          const currentFirstTime = currentData[0]!.time as number
+
+          // If the new data has an earlier first timestamp, historical data was prepended
+          if (currentFirstTime < prevFirstTime) {
+            isHistoricalPrepend = true
+            // Count how many bars were prepended
+            // Find the index in currentData where the old first timestamp appears
+            const oldFirstIndex = currentData.findIndex(
+              (d) => (d.time as number) >= prevFirstTime
+            )
+            if (oldFirstIndex > 0) {
+              prependedBarsCount = oldFirstIndex
+            }
+            // Save the current visible logical range before updating
+            savedLogicalRange = chartRef.current
+              .timeScale()
+              .getVisibleLogicalRange()
+          }
+        }
+
         // Use efficient update strategy
         const updated = updateSeriesEfficiently(
           strengthAverageSeriesRef.current,
@@ -410,6 +443,35 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               ])
             }
           }
+
+          // Restore scroll position after historical data prepend
+          // When historical data is prepended, the logical indices shift
+          // We need to adjust the visible range by the number of prepended bars
+          if (
+            isHistoricalPrepend &&
+            savedLogicalRange &&
+            prependedBarsCount > 0 &&
+            chartRef.current
+          ) {
+            // Use requestAnimationFrame to ensure the chart has processed setData
+            requestAnimationFrame(() => {
+              if (chartRef.current && savedLogicalRange) {
+                try {
+                  // Offset the logical range by the number of prepended bars
+                  // This keeps the same data points visible on screen
+                  chartRef.current.timeScale().setVisibleLogicalRange({
+                    from: savedLogicalRange.from + prependedBarsCount,
+                    to: savedLogicalRange.to + prependedBarsCount,
+                  })
+                } catch (error) {
+                  console.warn(
+                    'Failed to restore scroll position after historical load:',
+                    error
+                  )
+                }
+              }
+            })
+          }
         }
 
         // Create time markers on first data load
@@ -419,6 +481,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
         // Apply time range on first data load (when we had no previous data)
         // Only do this if we have actual data to display
+        // Skip if this was a historical prepend (we already handled scroll position above)
         if (
           updated &&
           !prevData &&

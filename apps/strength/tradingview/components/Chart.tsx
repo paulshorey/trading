@@ -13,6 +13,7 @@ import {
   LineSeries,
   ISeriesApi,
   Time,
+  LogicalRange,
 } from 'lightweight-charts'
 import { getChartConfig, getLineSeriesConfig } from '../lib/chartConfig'
 import { updateSeriesEfficiently } from '../lib/chartUtils'
@@ -22,7 +23,7 @@ import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
 import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
-import { TIME_RANGE_HIGHLIGHTS, SHOW_100_LINES } from '../constants'
+import { TIME_RANGE_HIGHLIGHTS, SHOW_100_LINES, LAZY_LOAD_BARS_THRESHOLD, LAZY_LOAD_COOLDOWN_MS, FUTURE_PADDING_BARS } from '../constants'
 import {
   strengthIntervalsAll as STRENGTH_INTERVALS,
   StrengthIntervalsData,
@@ -46,6 +47,12 @@ interface ChartProps {
   timeRange?: { from: Time; to: Time } | null
   /** Called when user scrolls/pans the chart (visible time range changes) */
   onUserScroll?: () => void
+  /** Called when user scrolls near the beginning of data and needs more historical data */
+  onNeedMoreHistory?: () => void
+  /** Called when the visibility of the latest bar changes (true = latest bar is visible, false = scrolled away) */
+  onLatestBarVisibilityChange?: (isVisible: boolean) => void
+  /** Whether historical data is currently being loaded (to prevent duplicate requests) */
+  isLoadingHistorical?: boolean
 }
 
 export interface ChartRef {
@@ -73,6 +80,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       height,
       timeRange,
       onUserScroll,
+      onNeedMoreHistory,
+      onLatestBarVisibilityChange,
+      isLoadingHistorical = false,
     },
     ref
   ) => {
@@ -107,6 +117,27 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const lastPriceTickersRef = useRef<PriceTickersData>({})
     const lastStrengthIndicatorRef = useRef<LineData[] | null>(null)
     const lastPriceIndicatorRef = useRef<LineData[] | null>(null)
+    
+    // Refs for lazy loading and visibility tracking
+    const lastLatestBarVisibleRef = useRef<boolean>(true)
+    const isLoadingHistoricalRef = useRef<boolean>(false)
+    const lastLazyLoadTimeRef = useRef<number>(0)
+    // Flag to skip timeRange application after scroll position restoration
+    const skipTimeRangeUpdateRef = useRef<boolean>(false)
+    // Keep refs to callbacks to avoid stale closures
+    const onNeedMoreHistoryRef = useRef(onNeedMoreHistory)
+    const onLatestBarVisibilityChangeRef = useRef(onLatestBarVisibilityChange)
+    
+    // Update callback refs when they change
+    useEffect(() => {
+      onNeedMoreHistoryRef.current = onNeedMoreHistory
+      onLatestBarVisibilityChangeRef.current = onLatestBarVisibilityChange
+    }, [onNeedMoreHistory, onLatestBarVisibilityChange])
+    
+    // Update loading ref when prop changes
+    useEffect(() => {
+      isLoadingHistoricalRef.current = isLoadingHistorical
+    }, [isLoadingHistorical])
 
     // Use extracted hooks
     const { createTimeMarkers, markersInitialized } = useTimeMarkers()
@@ -342,6 +373,39 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           TIME_RANGE_HIGHLIGHTS
         )
 
+        // Detect if this is a historical data prepend (new data has earlier timestamps)
+        // This happens when user scrolls back and we lazy-load more history
+        let isHistoricalPrepend = false
+        let prependedBarsCount = 0
+        let savedLogicalRange: LogicalRange | null = null
+
+        if (
+          prevData &&
+          prevData.length > 0 &&
+          currentData.length > prevData.length &&
+          chartRef.current
+        ) {
+          const prevFirstTime = prevData[0]!.time as number
+          const currentFirstTime = currentData[0]!.time as number
+
+          // If the new data has an earlier first timestamp, historical data was prepended
+          if (currentFirstTime < prevFirstTime) {
+            isHistoricalPrepend = true
+            // Count how many bars were prepended
+            // Find the index in currentData where the old first timestamp appears
+            const oldFirstIndex = currentData.findIndex(
+              (d) => (d.time as number) >= prevFirstTime
+            )
+            if (oldFirstIndex > 0) {
+              prependedBarsCount = oldFirstIndex
+            }
+            // Save the current visible logical range before updating
+            savedLogicalRange = chartRef.current
+              .timeScale()
+              .getVisibleLogicalRange()
+          }
+        }
+
         // Use efficient update strategy
         const updated = updateSeriesEfficiently(
           strengthAverageSeriesRef.current,
@@ -382,6 +446,40 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
               ])
             }
           }
+
+          // Restore scroll position after historical data prepend
+          // When historical data is prepended, the logical indices shift
+          // We need to adjust the visible range by the number of prepended bars
+          if (
+            isHistoricalPrepend &&
+            savedLogicalRange &&
+            prependedBarsCount > 0 &&
+            chartRef.current
+          ) {
+            // Set flag to prevent timeRange effect from overriding our scroll restoration
+            skipTimeRangeUpdateRef.current = true
+            
+            // Use requestAnimationFrame to ensure the chart has processed setData
+            requestAnimationFrame(() => {
+              if (chartRef.current && savedLogicalRange) {
+                try {
+                  // Offset the logical range by the number of prepended bars
+                  // This keeps the same data points visible on screen
+                  chartRef.current.timeScale().setVisibleLogicalRange({
+                    from: savedLogicalRange.from + prependedBarsCount,
+                    to: savedLogicalRange.to + prependedBarsCount,
+                  })
+                } catch {
+                  // Scroll position restoration failed - not critical, chart will show default view
+                }
+              }
+              
+              // Clear the flag after a short delay to allow for any pending effects
+              setTimeout(() => {
+                skipTimeRangeUpdateRef.current = false
+              }, 100)
+            })
+          }
         }
 
         // Create time markers on first data load
@@ -391,6 +489,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
         // Apply time range on first data load (when we had no previous data)
         // Only do this if we have actual data to display
+        // Skip if this was a historical prepend (we already handled scroll position above)
         if (
           updated &&
           !prevData &&
@@ -675,9 +774,85 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       })
     }, [width, height])
 
+    // Subscribe to visible range changes for lazy loading and pause/resume control
+    useEffect(() => {
+      if (!chartRef.current || !hasInitialized.current) return
+      if (!strengthAverageSeriesRef.current) return
+
+      const chart = chartRef.current
+      const series = strengthAverageSeriesRef.current
+
+      /**
+       * Handle visible logical range changes
+       * - Detects when user scrolls near the beginning to trigger lazy loading
+       * - Detects when the latest bar is visible/hidden to control polling
+       */
+      const handleVisibleLogicalRangeChange = (
+        logicalRange: LogicalRange | null
+      ) => {
+        if (!logicalRange) return
+
+        const data = lastStrengthAverageRef.current
+        if (!data || data.length === 0) return
+
+        // Get bars info for the visible range
+        const barsInfo = series.barsInLogicalRange(logicalRange)
+        if (!barsInfo) return
+
+        // Check if we need to load more historical data
+        // barsBefore tells us how many bars exist before the visible area
+        const now = Date.now()
+        const timeSinceLastLoad = now - lastLazyLoadTimeRef.current
+        
+        if (barsInfo.barsBefore !== null && barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD) {
+          // Check why we might not load
+          if (isLoadingHistoricalRef.current) {
+            // Already loading - this is expected, don't log spam
+          } else if (timeSinceLastLoad <= LAZY_LOAD_COOLDOWN_MS) {
+            // Cooldown active - don't log spam
+          } else {
+            // All conditions met - request more history
+            lastLazyLoadTimeRef.current = now
+            onNeedMoreHistoryRef.current?.()
+          }
+        }
+
+        // Check if the latest ACTUAL data bar is visible (not the future-padded bars)
+        // The data is extended into the future with the last value (FUTURE_PADDING_BARS)
+        // So the actual latest data is at index (data.length - 1 - FUTURE_PADDING_BARS)
+        // We use a generous buffer to resume polling when user scrolls "near" the end
+        const VISIBILITY_BUFFER = 60 // 1 hour buffer - resume polling when within 1 hour of latest data
+        const lastActualDataIndex = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
+        const isLatestBarVisible = logicalRange.to >= lastActualDataIndex - VISIBILITY_BUFFER
+
+        // Only notify if visibility changed
+        if (isLatestBarVisible !== lastLatestBarVisibleRef.current) {
+          lastLatestBarVisibleRef.current = isLatestBarVisible
+          onLatestBarVisibilityChangeRef.current?.(isLatestBarVisible)
+        }
+      }
+
+      // Subscribe to visible range changes
+      chart
+        .timeScale()
+        .subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange)
+
+      return () => {
+        chart
+          .timeScale()
+          .unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange)
+      }
+    }, []) // Empty deps - uses refs for callbacks to avoid re-subscribing
+
     // Update time range when it changes
     useEffect(() => {
       if (!chartRef.current || !timeRange || !hasInitialized.current) return
+
+      // Skip if we just restored scroll position after historical prepend
+      // This prevents the timeRange from overriding our scroll restoration
+      if (skipTimeRangeUpdateRef.current) {
+        return
+      }
 
       // Validate time range before setting
       if (timeRange.from >= timeRange.to) {

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const ticker = searchParams.get('ticker')
     const timenow_gt = searchParams.get('timenow_gt')
+    const timenow_lt = searchParams.get('timenow_lt')
     const server_name = searchParams.get('server_name')
     const app_name = searchParams.get('app_name')
     const node_env = searchParams.get('node_env')
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     const where: any = {}
     if (ticker) where.ticker = ticker
     if (timenow_gt) where.timenow_gt = timenow_gt
+    if (timenow_lt) where.timenow_lt = timenow_lt
     if (server_name) where.server_name = server_name
     if (app_name) where.app_name = app_name
     if (node_env) where.node_env = node_env

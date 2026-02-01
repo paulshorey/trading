@@ -71,3 +71,37 @@ const MIN_FETCH_MINUTES = 4    // Minimum window
 const MAX_FETCH_MINUTES = 120  // Maximum window (2 hours)
 updateIntervalMs: 10000        // 10 seconds polling
 ```
+
+## Lazy Loading (Infinite History)
+
+The hook supports loading older historical data on demand:
+
+### New Return Values
+
+```typescript
+{
+  earliestDataTime: Date | null,    // Timestamp of first data point
+  latestDataTime: Date | null,      // Timestamp of last data point  
+  fetchHistoricalDataBefore: (beforeDate: Date, minutes: number) => Promise<void>,
+  isLoadingHistorical: boolean,     // Loading state for historical fetch
+}
+```
+
+### fetchHistoricalDataBefore
+
+Fetches data BEFORE the current earliest timestamp, used for lazy loading:
+
+```typescript
+// Fetch 120 minutes of data before the earliest point
+fetchHistoricalDataBefore(earliestDataTime, 120)
+```
+
+**Process:**
+1. Fetch from API: `fromDate = beforeDate - minutes`, `toDate = beforeDate`
+2. Merge with existing data (prepend to beginning)
+3. Update `earliestDataTimestampRef` and `earliestDataTime` state
+4. Triggers re-aggregation with the new historical data
+
+**Safeguards:**
+- Prevents duplicate concurrent fetches via `isFetchingHistoricalRef`
+- Exposes `isLoadingHistorical` for UI feedback and debouncing

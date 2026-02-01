@@ -7,7 +7,7 @@ import { Chart, ChartRef } from './components/Chart'
 import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
-import { COLORS, FETCH_DATA_HOURS_BACK } from './constants'
+import { COLORS, FETCH_DATA_HOURS_BACK, LAZY_LOAD_FETCH_HOURS } from './constants'
 import {
   useAggregationWorker,
   AggregationResult,
@@ -115,6 +115,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const [pollingPaused, setPollingPaused] = useState(false)
   const scrollResumeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Track if initial time range has been set - prevents resetting zoom on real-time updates
+  const initialTimeRangeSetRef = useRef(false)
+  const lastHoursBackRef = useRef<string | null>(null)
+
   // Zustand store
   const {
     hoursBack,
@@ -158,9 +162,31 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const pendingAggregationRef = useRef<NodeJS.Timeout | null>(null)
 
   /**
-   * Handle user scroll/pan on chart
-   * Pauses real-time polling while user is interacting with the chart.
-   * After 30 seconds of no scrolling, polling resumes automatically.
+   * Controlled data fetching hook
+   * Handles ticker changes, loading state, and real-time updates
+   * Paused when user is scrolling/panning the chart (latest bar not visible)
+   */
+  const {
+    rawData,
+    dataState,
+    error,
+    lastUpdateTime,
+    dataVersion,
+    earliestDataTime,
+    latestDataTime,
+    fetchHistoricalDataBefore,
+    isLoadingHistorical,
+  } = useStrengthData({
+    tickers: chartTickers,
+    enabled: chartTickers.length > 0,
+    maxDataHours: FETCH_DATA_HOURS_BACK,
+    updateIntervalMs: 10000,
+    paused: pollingPaused,
+  })
+
+  /**
+   * Handle user scroll/pan on chart (legacy - kept for general scroll detection)
+   * The smart pause/resume is now handled by onLatestBarVisibilityChange
    */
   const handleUserScroll = useCallback(() => {
     // Clear any existing resume timer
@@ -168,19 +194,54 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       clearTimeout(scrollResumeTimerRef.current)
     }
 
-    // Pause polling if not already paused
-    if (!pollingPaused) {
-      setPollingPaused(true)
-      console.log('[SyncedCharts] User scrolling - polling paused')
-    }
-
-    // Set timer to resume polling after inactivity
+    // Set a fallback timer to resume polling after long inactivity
+    // This is a safety net in case onLatestBarVisibilityChange doesn't fire
     scrollResumeTimerRef.current = setTimeout(() => {
-      console.log('[SyncedCharts] Scroll inactivity - resuming polling')
       setPollingPaused(false)
       scrollResumeTimerRef.current = null
     }, SCROLL_PAUSE_RESUME_MS)
+  }, [])
+
+  /**
+   * Handle visibility change of the latest bar
+   * When the latest bar is visible, we should poll for new data (auto-scroll behavior)
+   * When the latest bar is NOT visible (user scrolled back), pause polling
+   */
+  const handleLatestBarVisibilityChange = useCallback((isVisible: boolean) => {
+    // Clear any pending scroll resume timer
+    if (scrollResumeTimerRef.current) {
+      clearTimeout(scrollResumeTimerRef.current)
+      scrollResumeTimerRef.current = null
+    }
+
+    if (isVisible) {
+      // Latest bar is visible - resume real-time updates
+      if (pollingPaused) {
+        setPollingPaused(false)
+      }
+    } else {
+      // Latest bar is NOT visible - pause real-time updates
+      // This prevents the chart from jumping to the latest data while user explores history
+      if (!pollingPaused) {
+        setPollingPaused(true)
+      }
+    }
   }, [pollingPaused])
+
+  /**
+   * Handle request for more historical data (lazy loading)
+   * Called when user scrolls near the beginning of the chart data
+   */
+  const handleNeedMoreHistory = useCallback(() => {
+    if (!earliestDataTime || isLoadingHistorical) {
+      return
+    }
+
+    const fetchMinutes = LAZY_LOAD_FETCH_HOURS * 60 // Convert hours to minutes
+
+    // Fetch more historical data before the earliest data point
+    fetchHistoricalDataBefore(earliestDataTime, fetchMinutes)
+  }, [earliestDataTime, isLoadingHistorical, fetchHistoricalDataBefore])
 
   // Cleanup scroll timer on unmount
   useEffect(() => {
@@ -192,20 +253,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   }, [])
 
   /**
-   * Controlled data fetching hook
-   * Handles ticker changes, loading state, and real-time updates
-   * Paused when user is scrolling/panning the chart
-   */
-  const { rawData, dataState, error, lastUpdateTime, dataVersion } =
-    useStrengthData({
-      tickers: chartTickers,
-      enabled: chartTickers.length > 0,
-      maxDataHours: FETCH_DATA_HOURS_BACK,
-      updateIntervalMs: 10000,
-      paused: pollingPaused,
-    })
-
-  /**
    * Handle aggregation results from the Web Worker
    * Only accepts results where dataVersion matches current
    * Caches results for instant ticker switching
@@ -213,7 +260,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const handleAggregationResult = useCallback(
     (
       result: AggregationResult,
-      processingTimeMs: number,
+      _processingTimeMs: number,
       resultDataVersion: number
     ) => {
       // Mark processing as complete (use ref to avoid re-triggering effects)
@@ -278,14 +325,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       setPriceTickers(result.priceTickers)
       setStrengthIndicator(strengthIndicator)
       setPriceIndicator(priceIndicator)
-
-      if (processingTimeMs > 100) {
-        console.log(
-          `[Worker] Aggregation v${resultDataVersion} completed in ${processingTimeMs.toFixed(
-            1
-          )}ms`
-        )
-      }
     },
     [
       chartTickers,
@@ -338,6 +377,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
     // Reset debounce timer so initial load is fast
     lastAggregationTimeRef.current = 0
+
+    // Reset time range initialization flag so new ticker gets proper initial time range
+    initialTimeRangeSetRef.current = false
 
     // Clear chart data immediately when version changes
     // This prevents showing old data while new data loads
@@ -490,16 +532,44 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
 
   /**
    * Effect: Calculate time range when data is ready
+   * 
+   * IMPORTANT: Do NOT update timeRange when:
+   * - Polling is paused (user is viewing historical data)
+   * - Historical data was just loaded (would cause chart to jump)
+   * 
+   * Only update timeRange when:
+   * - Initial data load (first time we have data)
+   * - User changes hoursBack setting
+   * 
+   * We do NOT reset time range on real-time updates to preserve user's zoom level.
    */
   useEffect(() => {
     if (!chartData.strengthAverage || chartData.strengthAverage.length === 0)
       return
 
-    const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
-    if (newRange && newRange.from < newRange.to) {
-      setTimeRange(newRange)
+    // Don't recalculate time range when polling is paused
+    // This prevents the chart from jumping when historical data is loaded
+    if (pollingPaused) {
+      return
     }
-  }, [hoursBack, rawData, chartData.strengthAverage, setTimeRange])
+
+    // Check if hoursBack changed (user action)
+    const hoursBackChanged = lastHoursBackRef.current !== null && lastHoursBackRef.current !== hoursBack
+    lastHoursBackRef.current = hoursBack
+
+    // Only set time range on:
+    // 1. Initial load (initialTimeRangeSetRef.current is false)
+    // 2. User changed hoursBack
+    if (!initialTimeRangeSetRef.current || hoursBackChanged) {
+      const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
+      if (newRange && newRange.from < newRange.to) {
+        setTimeRange(newRange)
+        initialTimeRangeSetRef.current = true
+      }
+    }
+    // Real-time data updates (rawData changes) do NOT reset time range
+    // This preserves user's zoom level
+  }, [hoursBack, rawData, chartData.strengthAverage, setTimeRange, pollingPaused])
 
   /**
    * Determine what to render based on state
@@ -568,7 +638,26 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           height={availableHeight}
           timeRange={chartTimeRange}
           onUserScroll={handleUserScroll}
+          onNeedMoreHistory={handleNeedMoreHistory}
+          onLatestBarVisibilityChange={handleLatestBarVisibilityChange}
+          isLoadingHistorical={isLoadingHistorical}
         />
+      )}
+
+      {/* Loading overlay - shown while fetching additional historical data */}
+      {isLoadingHistorical && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-[1px]"
+          style={{ cursor: 'wait' }}
+        >
+          <div className="flex flex-col items-center gap-3">
+            {/* Spinner */}
+            <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+            <span className="text-sm text-gray-300 bg-black/50 px-3 py-1 rounded">
+              Loading history...
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Last updated time (shows paused indicator when user is scrolling) */}

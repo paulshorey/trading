@@ -63,6 +63,19 @@ export default function Page() {
             >
               Streaming chart
             </Link>
+            <Link
+              href="/historical"
+              style={{
+                padding: '14px 18px',
+                borderRadius: '10px',
+                background: '#5a4a8a',
+                color: '#ffffff',
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Historical chart (lazy loading demo)
+            </Link>
           </div>
         </div>
       </main>

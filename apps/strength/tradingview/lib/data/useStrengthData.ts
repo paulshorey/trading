@@ -46,6 +46,14 @@ export interface UseStrengthDataResult {
   lastUpdateTime: Date | null
   /** Key that changes when tickers change - use for chart reset */
   dataVersion: number
+  /** Timestamp of the earliest data point (for lazy loading detection) */
+  earliestDataTime: Date | null
+  /** Timestamp of the latest data point (for detecting if latest is visible) */
+  latestDataTime: Date | null
+  /** Fetch historical data going further back in time (for lazy loading) */
+  fetchHistoricalDataBefore: (beforeDate: Date, minutes: number) => Promise<void>
+  /** Whether historical data is currently being loaded */
+  isLoadingHistorical: boolean
 }
 
 /**
@@ -146,18 +154,23 @@ export function useStrengthData({
   const [error, setError] = useState<string | null>(null)
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
   const [dataVersion, setDataVersion] = useState(0)
+  const [earliestDataTime, setEarliestDataTime] = useState<Date | null>(null)
+  const [latestDataTime, setLatestDataTime] = useState<Date | null>(null)
+  const [isLoadingHistorical, setIsLoadingHistorical] = useState(false)
 
   // Refs for tracking state
   const isMountedRef = useRef(true)
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const currentTickersRef = useRef<string[]>([])
   const lastDataTimestampRef = useRef<Date | null>(null)
+  const earliestDataTimestampRef = useRef<Date | null>(null)
 
   // Track last successful fetch time for calculating dynamic window
   const lastSuccessfulFetchRef = useRef<Date | null>(null)
 
   // Track if we're currently fetching to prevent duplicate requests
   const isFetchingRef = useRef(false)
+  const isFetchingHistoricalRef = useRef(false)
 
   /**
    * Stop real-time updates
@@ -194,6 +207,110 @@ export function useStrengthData({
   }, [])
 
   /**
+   * Fetch historical data going further back in time (for lazy loading)
+   * This fetches data BEFORE the current earliest data point
+   *
+   * @param beforeDate - Fetch data before this date
+   * @param minutes - Number of minutes of data to fetch
+   */
+  const fetchHistoricalDataBefore = useCallback(
+    async (beforeDate: Date, minutes: number) => {
+      if (!isMountedRef.current || currentTickersRef.current.length === 0) {
+        return
+      }
+
+      // Prevent duplicate concurrent fetches
+      if (isFetchingHistoricalRef.current) {
+        return
+      }
+
+      isFetchingHistoricalRef.current = true
+      setIsLoadingHistorical(true)
+
+      try {
+        // Calculate the time range to fetch
+        const toDate = new Date(beforeDate.getTime())
+        const fromDate = new Date(toDate.getTime() - minutes * 60 * 1000)
+
+        const historicalTickerData =
+          await FetchStrengthData.fetchMultipleTickersData(
+            currentTickersRef.current,
+            fromDate,
+            toDate
+          )
+
+        if (!isMountedRef.current) {
+          isFetchingHistoricalRef.current = false
+          setIsLoadingHistorical(false)
+          return
+        }
+
+        // Check if we actually got any data
+        const totalRows = historicalTickerData.reduce((sum, data) => sum + (data?.length || 0), 0)
+        if (totalRows === 0) {
+          return
+        }
+
+        // Merge historical data with existing data (prepend to beginning)
+        setRawData((prevData) => {
+          let newEarliestTimestamp = earliestDataTimestampRef.current
+
+          const mergedData = prevData.map((existingData, idx) => {
+            const historicalData = historicalTickerData[idx]
+            
+            if (!historicalData || historicalData.length === 0) {
+              return existingData
+            }
+
+            // Sort historical data
+            const sortedHistorical = [...historicalData].sort(
+              (a, b) => a.timenow.getTime() - b.timenow.getTime()
+            )
+
+            // Merge with existing data
+            if (!existingData) {
+              return sortedHistorical
+            }
+
+            const merged = FetchStrengthData.mergeData(
+              sortedHistorical,
+              existingData
+            )
+
+            // Track new earliest timestamp
+            if (merged.length > 0) {
+              const first = merged[0]
+              if (
+                first &&
+                (!newEarliestTimestamp || first.timenow < newEarliestTimestamp)
+              ) {
+                newEarliestTimestamp = first.timenow
+              }
+            }
+
+            return merged
+          })
+
+          // Update earliest timestamp
+          earliestDataTimestampRef.current = newEarliestTimestamp
+          if (newEarliestTimestamp) {
+            setEarliestDataTime(newEarliestTimestamp)
+          }
+
+          return mergedData
+        })
+      } catch (err) {
+        console.error('[useStrengthData] Error fetching historical data:', err)
+        // Don't set error state - keep showing existing data
+      } finally {
+        isFetchingHistoricalRef.current = false
+        setIsLoadingHistorical(false)
+      }
+    },
+    []
+  )
+
+  /**
    * Fetch real-time update with dynamic window based on time since last fetch
    * Also handles forward-filling from existing historical data
    */
@@ -211,13 +328,6 @@ export function useStrengthData({
       const fetchMinutes = calculateFetchWindow()
       const fromDate = new Date(now.getTime() - fetchMinutes * 60 * 1000)
       const toDate = now
-
-      // Log if we're fetching more than the minimum (indicates background tab recovery)
-      if (fetchMinutes > MIN_FETCH_MINUTES) {
-        console.log(
-          `[useStrengthData] Fetching ${fetchMinutes} minutes of data (background tab recovery)`
-        )
-      }
 
       const newTickerData = await FetchStrengthData.fetchMultipleTickersData(
         currentTickersRef.current,
@@ -291,6 +401,10 @@ export function useStrengthData({
         })
 
         lastDataTimestampRef.current = newLatestTimestamp
+        // Update the latest data time state for external consumers
+        if (newLatestTimestamp) {
+          setLatestDataTime(newLatestTimestamp)
+        }
         return mergedData
       })
 
@@ -329,9 +443,6 @@ export function useStrengthData({
         !paused
       ) {
         // Tab became visible - fetch immediately to fill any gaps
-        console.log(
-          '[useStrengthData] Tab visible - triggering immediate fetch'
-        )
         fetchRealtimeUpdate()
       }
     }
@@ -353,10 +464,8 @@ export function useStrengthData({
     if (paused) {
       // Stop polling while paused
       stopRealtimeUpdates()
-      console.log('[useStrengthData] Polling paused (user interaction)')
     } else {
       // Resume polling - fetch immediately to fill any gaps
-      console.log('[useStrengthData] Polling resumed - fetching missed data')
       fetchRealtimeUpdate()
       startRealtimeUpdates()
     }
@@ -412,11 +521,16 @@ export function useStrengthData({
           return
         }
 
-        // Find latest timestamp
+        // Find earliest and latest timestamps
         let latestTimestamp: Date | null = null
+        let earliestTimestamp: Date | null = null
         allTickerData.forEach((tickerData) => {
           if (tickerData && tickerData.length > 0) {
+            const first = tickerData[0]
             const last = tickerData[tickerData.length - 1]
+            if (first && (!earliestTimestamp || first.timenow < earliestTimestamp)) {
+              earliestTimestamp = first.timenow
+            }
             if (last && (!latestTimestamp || last.timenow > latestTimestamp)) {
               latestTimestamp = last.timenow
             }
@@ -425,8 +539,11 @@ export function useStrengthData({
 
         setRawData(allTickerData)
         lastDataTimestampRef.current = latestTimestamp
+        earliestDataTimestampRef.current = earliestTimestamp
         lastSuccessfulFetchRef.current = new Date()
         setLastUpdateTime(new Date())
+        setEarliestDataTime(earliestTimestamp)
+        setLatestDataTime(latestTimestamp)
         setDataState('ready')
 
         // Start real-time updates
@@ -486,5 +603,9 @@ export function useStrengthData({
     error,
     lastUpdateTime,
     dataVersion,
+    earliestDataTime,
+    latestDataTime,
+    fetchHistoricalDataBefore,
+    isLoadingHistorical,
   }
 }

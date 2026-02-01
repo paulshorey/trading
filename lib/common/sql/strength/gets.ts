@@ -24,6 +24,7 @@ type Props = {
     node_env?: string;
     limit?: number;
     timenow_gt?: Date | string; // Greater than or equal to (on or after)
+    timenow_lt?: Date | string; // Less than (before)
   };
 };
 
@@ -31,7 +32,8 @@ type Props = {
  * This utility function fetches data from the strength_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
  *
  * Supports date range filtering on timenow column:
- * - timenow_gt: Get records on or after this date
+ * - timenow_gt: Get records on or after this date (>=)
+ * - timenow_lt: Get records before this date (<) - used for lazy loading historical data
  *
  * Date parameters accept Date objects or ISO string timestamps.
  */
@@ -65,10 +67,16 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       whereClauses.push(`node_env = $${params.length}`);
     }
 
-    // Starting time
+    // Starting time (on or after)
     if (where?.timenow_gt) {
       params.push(where.timenow_gt);
       whereClauses.push(`timenow >= $${params.length}`);
+    }
+    
+    // Ending time (before) - used for lazy loading historical data
+    if (where?.timenow_lt) {
+      params.push(where.timenow_lt);
+      whereClauses.push(`timenow < $${params.length}`);
     }
 
     if (whereClauses.length > 0) {

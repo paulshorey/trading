@@ -827,10 +827,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // The last bar is at logical index (data.length - 1)
         // If logicalRange.to is greater than or equal to (data.length - 1), the latest bar is visible
         const lastBarLogicalIndex = data.length - 1
-        const isLatestBarVisible = logicalRange.to >= lastBarLogicalIndex - 1 // -1 for some buffer
+        // Use a buffer of 10 bars to account for slight scrolling
+        const isLatestBarVisible = logicalRange.to >= lastBarLogicalIndex - 10
 
         // Only notify if visibility changed
         if (isLatestBarVisible !== lastLatestBarVisibleRef.current) {
+          console.log(`[Chart] Latest bar visibility changed: ${isLatestBarVisible}, logicalRange.to=${logicalRange.to.toFixed(0)}, lastBarIndex=${lastBarLogicalIndex}`)
           lastLatestBarVisibleRef.current = isLatestBarVisible
           onLatestBarVisibilityChangeRef.current?.(isLatestBarVisible)
         }

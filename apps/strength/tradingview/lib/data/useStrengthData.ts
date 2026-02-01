@@ -46,6 +46,8 @@ export interface UseStrengthDataResult {
   lastUpdateTime: Date | null
   /** Key that changes when tickers change - use for chart reset */
   dataVersion: number
+  /** Prepend older historical data to existing data (for scroll-left loading) */
+  prependHistoricalData: (olderData: (StrengthRowGet[] | null)[]) => void
 }
 
 /**
@@ -480,11 +482,75 @@ export function useStrengthData({
     }
   }, [stopRealtimeUpdates])
 
+  /**
+   * Prepend older historical data to existing data
+   * Called by useHistoricalDataLoader when user scrolls left
+   */
+  const prependHistoricalData = useCallback(
+    (olderData: (StrengthRowGet[] | null)[]) => {
+      if (olderData.length !== currentTickersRef.current.length) {
+        console.warn(
+          '[useStrengthData] prependHistoricalData: data length mismatch',
+          {
+            olderDataLength: olderData.length,
+            tickersLength: currentTickersRef.current.length,
+          }
+        )
+        return
+      }
+
+      setRawData((prevData) => {
+        let newEarliestTimestamp = lastDataTimestampRef.current
+
+        const mergedData = prevData.map((existingData, idx) => {
+          const newOlderData = olderData[idx]
+
+          // No new data for this ticker
+          if (!newOlderData || newOlderData.length === 0) {
+            return existingData
+          }
+
+          // No existing data - just use the older data
+          if (!existingData || existingData.length === 0) {
+            return newOlderData
+          }
+
+          // Merge: older data comes first, then existing data
+          // Use FetchStrengthData.mergeData which handles deduplication by timestamp
+          const merged = FetchStrengthData.mergeData(newOlderData, existingData)
+
+          // Track earliest timestamp
+          if (merged.length > 0) {
+            const first = merged[0]
+            if (
+              first &&
+              (!newEarliestTimestamp || first.timenow < newEarliestTimestamp)
+            ) {
+              newEarliestTimestamp = first.timenow
+            }
+          }
+
+          return merged
+        })
+
+        console.log('[useStrengthData] Historical data prepended', {
+          previousLengths: prevData.map((d) => d?.length || 0),
+          newLengths: mergedData.map((d) => d?.length || 0),
+          olderDataLengths: olderData.map((d) => d?.length || 0),
+        })
+
+        return mergedData
+      })
+    },
+    []
+  )
+
   return {
     rawData,
     dataState,
     error,
     lastUpdateTime,
     dataVersion,
+    prependHistoricalData,
   }
 }

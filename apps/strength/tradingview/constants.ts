@@ -11,6 +11,16 @@ export const FETCH_DATA_ROWS = 7250
 // Time in ms to wait after user stops scrolling before resuming polling
 export const SCROLL_PAUSE_RESUME_MS = 300000 // 30 seconds
 
+// Historical data loading on scroll-left
+// When user scrolls to within this many bars of the start, load more data
+export const HISTORICAL_LOAD_THRESHOLD = 50
+// How many hours of data to fetch each time user scrolls to the beginning
+export const HISTORICAL_LOAD_HOURS = 48
+// Minimum time between historical data fetches (debounce)
+export const HISTORICAL_LOAD_DEBOUNCE_MS = 2000
+// Maximum total historical data to load (in hours from now)
+export const HISTORICAL_LOAD_MAX_HOURS_BACK = 720 // 30 days
+
 export const SHOW_100_LINES = false
 
 // Color palette - Dark theme

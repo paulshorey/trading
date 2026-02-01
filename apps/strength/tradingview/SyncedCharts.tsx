@@ -8,11 +8,12 @@ import { LoadingState, ErrorState } from './components/ChartStates'
 import { UpdatedTime } from './components/UpdatedTime'
 import { useChartControlsStore } from './state/useChartControlsStore'
 import { COLORS, FETCH_DATA_HOURS_BACK } from './constants'
+import { useHistoricalDataLoader } from './lib/data/useHistoricalDataLoader'
 import {
   useAggregationWorker,
   AggregationResult,
 } from './lib/workers/useAggregationWorker'
-import { LineData, Time } from 'lightweight-charts'
+import { IChartApi, LineData, Time } from 'lightweight-charts'
 import { SCROLL_PAUSE_RESUME_MS } from './constants'
 import { computeStrengthIndicator } from './lib/computeStrengthIndicator'
 import { computePriceIndicator } from './lib/computePriceIndicator'
@@ -111,6 +112,10 @@ const CACHE_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes cache validity
 export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const chartRef = useRef<ChartRef | null>(null)
 
+  // Track chart instance for historical data loading
+  // (Using state instead of ref to trigger re-render when chart becomes available)
+  const [chartInstance, setChartInstance] = useState<IChartApi | null>(null)
+
   // Polling pause state - paused when user is scrolling/panning the chart
   const [pollingPaused, setPollingPaused] = useState(false)
   const scrollResumeTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -158,6 +163,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const pendingAggregationRef = useRef<NodeJS.Timeout | null>(null)
 
   /**
+   * Handle chart ready - called when Chart component creates the chart
+   */
+  const handleChartReady = useCallback((chart: IChartApi) => {
+    setChartInstance(chart)
+  }, [])
+
+  /**
    * Handle user scroll/pan on chart
    * Pauses real-time polling while user is interacting with the chart.
    * After 30 seconds of no scrolling, polling resumes automatically.
@@ -196,13 +208,31 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * Handles ticker changes, loading state, and real-time updates
    * Paused when user is scrolling/panning the chart
    */
-  const { rawData, dataState, error, lastUpdateTime, dataVersion } =
-    useStrengthData({
+  const {
+    rawData,
+    dataState,
+    error,
+    lastUpdateTime,
+    dataVersion,
+    prependHistoricalData,
+  } = useStrengthData({
+    tickers: chartTickers,
+    enabled: chartTickers.length > 0,
+    maxDataHours: FETCH_DATA_HOURS_BACK,
+    updateIntervalMs: 10000,
+    paused: pollingPaused,
+  })
+
+  /**
+   * Historical data loader - loads more data when user scrolls left
+   */
+  const { isLoadingHistory, totalHistoryHours, reachedMaxHistory } =
+    useHistoricalDataLoader({
+      chart: chartInstance,
       tickers: chartTickers,
-      enabled: chartTickers.length > 0,
-      maxDataHours: FETCH_DATA_HOURS_BACK,
-      updateIntervalMs: 10000,
-      paused: pollingPaused,
+      rawData,
+      onHistoricalDataLoaded: prependHistoricalData,
+      enabled: dataState === 'ready',
     })
 
   /**
@@ -320,6 +350,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * and update the valid version so old worker results are ignored.
    */
   useEffect(() => {
+    // Clear chart instance since the chart will be recreated
+    setChartInstance(null)
+
     // Set the valid version - any results with older version will be ignored
     setValidDataVersion(dataVersion)
 
@@ -526,6 +559,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           ref={(el) => {
             chartRef.current = el
           }}
+          onChartReady={handleChartReady}
           name="Strength & Price"
           heading={
             <span
@@ -569,6 +603,13 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
           timeRange={chartTimeRange}
           onUserScroll={handleUserScroll}
         />
+      )}
+
+      {/* Loading indicator for historical data */}
+      {isLoadingHistory && (
+        <div className="absolute top-[40px] left-[10px] bg-gray-800/80 text-white text-xs px-2 py-1 rounded">
+          Loading more history...
+        </div>
       )}
 
       {/* Last updated time (shows paused indicator when user is scrolling) */}

@@ -46,6 +46,8 @@ interface ChartProps {
   timeRange?: { from: Time; to: Time } | null
   /** Called when user scrolls/pans the chart (visible time range changes) */
   onUserScroll?: () => void
+  /** Called when chart is created and ready */
+  onChartReady?: (chart: IChartApi) => void
 }
 
 export interface ChartRef {
@@ -73,6 +75,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       height,
       timeRange,
       onUserScroll,
+      onChartReady,
     },
     ref
   ) => {
@@ -129,6 +132,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       const chart = createChart(containerRef.current, getChartConfig(height))
       chartRef.current = chart
       hasInitialized.current = true
+
+      // Notify parent that chart is ready
+      if (onChartReady) {
+        onChartReady(chart)
+      }
 
       // Add dedicated horizontal line series (always visible, independent of other series)
       // These ensure the reference lines are always shown regardless of which strength lines are displayed

@@ -41,26 +41,26 @@ export interface AbsorptionRefs {
   timestamps: MutableRefObject<Set<number>>
 }
 
-interface UseChartProps {
+interface UseInitChartProps {
   containerRef: MutableRefObject<HTMLDivElement | null>
   dataRef: MutableRefObject<Candle[]>
   width: number
   height: number
 }
 
-interface UseChartReturn {
+interface UseInitChartReturn {
   chartRef: MutableRefObject<IChartApi | null>
   seriesRefs: SeriesRefs
   absorptionRefs: AbsorptionRefs
   hasInitialized: MutableRefObject<boolean>
 }
 
-export function useChart({
+export function useInitChart({
   containerRef,
   dataRef,
   width,
   height,
-}: UseChartProps): UseChartReturn {
+}: UseInitChartProps): UseInitChartReturn {
   const chartRef = useRef<IChartApi | null>(null)
   const hasInitialized = useRef(false)
 

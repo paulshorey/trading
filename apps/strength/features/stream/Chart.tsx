@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import type { Candle } from '@/lib/market-data/candles'
 import { useEventPatcher } from './ui/useEventPatcher'
-import { useChart } from './plot/useChart'
+import { useInitChart } from './plot/useInitChart'
 import { usePollData } from './plot/usePollData'
-import { COLORS, PRICE_SCALE_RIGHT_OFFSET } from './plot/constants'
+import { COLORS } from './plot/constants'
 
 interface ChartProps {
   width: number
@@ -16,69 +16,25 @@ export function Chart({ width, height }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dataRef = useRef<Candle[]>([])
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
   // Patch mouse events to handle 2x scale factor
   useEventPatcher(containerRef)
 
   // Initialize chart and series
-  const { chartRef, seriesRefs, absorptionRefs } = useChart({
+  const { chartRef, seriesRefs, absorptionRefs } = useInitChart({
     containerRef,
     dataRef,
     width,
     height,
   })
 
-  // Data fetching and polling
-  const { fetchCandles, plotChartData, startPolling, stopPolling } =
-    usePollData({
-      dataRef,
-      seriesRefs,
-      absorptionRefs,
-    })
-
-  // Load initial data
-  useEffect(() => {
-    let isMounted = true
-    const SCREEN_CANDLES = 2 * (width - PRICE_SCALE_RIGHT_OFFSET - 80)
-
-    fetchCandles(SCREEN_CANDLES)
-      .then((initialCandles) => {
-        if (!isMounted) return
-        if (initialCandles.length > 0) {
-          dataRef.current = initialCandles
-          plotChartData(initialCandles)
-
-          // Show ~50% of the data, zoomed in with the latest candle visible
-          if (chartRef.current) {
-            const totalBars = initialCandles.length
-            const barsToShow = Math.floor(totalBars * 0.5)
-            const lastBarIndex = totalBars - 1
-            const fromIndex = lastBarIndex - barsToShow
-
-            chartRef.current.timeScale().setVisibleLogicalRange({
-              from: fromIndex,
-              to: lastBarIndex + 2,
-            })
-          }
-        }
-        setIsLoading(false)
-        startPolling()
-      })
-      .catch((err) => {
-        console.error('Error loading initial candles:', err)
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Failed to load data')
-          setIsLoading(false)
-        }
-      })
-
-    return () => {
-      isMounted = false
-      stopPolling()
-    }
-  }, [fetchCandles, plotChartData, startPolling, stopPolling, chartRef, width])
+  // Data fetching y polling - handles initial load and continuous updates
+  const { isLoading, error } = usePollData({
+    chartRef,
+    dataRef,
+    seriesRefs,
+    absorptionRefs,
+    width,
+  })
 
   if (error) {
     return (

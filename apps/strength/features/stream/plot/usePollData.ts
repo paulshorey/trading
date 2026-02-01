@@ -1,31 +1,47 @@
-import { useCallback, useRef } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  MutableRefObject,
+} from 'react'
+import type { IChartApi } from 'lightweight-charts'
 import type { Candle } from '@/lib/market-data/candles'
-import { POLL_INTERVAL_MS, RECENT_CANDLES, buildCandlesUrl } from './constants'
+import {
+  POLL_INTERVAL_MS,
+  RECENT_CANDLES,
+  PRICE_SCALE_RIGHT_OFFSET,
+  buildCandlesUrl,
+} from './constants'
 import { usePlotData } from './usePlotData'
-import type { SeriesRefs, AbsorptionRefs } from './useChart'
+import type { SeriesRefs, AbsorptionRefs } from './useInitChart'
 
 interface UsePollDataProps {
-  dataRef: React.MutableRefObject<Candle[]>
+  chartRef: MutableRefObject<IChartApi | null>
+  dataRef: MutableRefObject<Candle[]>
   seriesRefs: SeriesRefs
   absorptionRefs: AbsorptionRefs
+  width: number
 }
 
 interface UsePollDataReturn {
-  fetchCandles: (limit: number) => Promise<Candle[]>
-  plotChartData: (candles: Candle[]) => void
-  applyRecentCandles: (recentCandles: Candle[]) => void
-  startPolling: () => void
-  stopPolling: () => void
+  isLoading: boolean
+  error: string | null
 }
 
 export function usePollData({
+  chartRef,
   dataRef,
   seriesRefs,
   absorptionRefs,
+  width,
 }: UsePollDataProps): UsePollDataReturn {
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
   const hasStartedPollingRef = useRef(false)
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const { plotChartData } = usePlotData({ seriesRefs, absorptionRefs })
 
@@ -117,11 +133,58 @@ export function usePollData({
     hasStartedPollingRef.current = false
   }, [])
 
-  return {
+  // Load initial data and start polling
+  useEffect(() => {
+    let isMounted = true
+    const SCREEN_CANDLES = 2 * (width - PRICE_SCALE_RIGHT_OFFSET - 80)
+
+    fetchCandles(SCREEN_CANDLES)
+      .then((initialCandles) => {
+        if (!isMounted) return
+        if (initialCandles.length > 0) {
+          dataRef.current = initialCandles
+          plotChartData(initialCandles)
+
+          // Show ~50% of the data, zoomed in with the latest candle visible
+          if (chartRef.current) {
+            const totalBars = initialCandles.length
+            const barsToShow = Math.floor(totalBars * 0.5)
+            const lastBarIndex = totalBars - 1
+            const fromIndex = lastBarIndex - barsToShow
+
+            chartRef.current.timeScale().setVisibleLogicalRange({
+              from: fromIndex,
+              to: lastBarIndex + 2,
+            })
+          }
+        }
+        setIsLoading(false)
+        startPolling()
+      })
+      .catch((err) => {
+        console.error('Error loading initial candles:', err)
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load data')
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+      stopPolling()
+    }
+  }, [
     fetchCandles,
     plotChartData,
-    applyRecentCandles,
     startPolling,
     stopPolling,
+    chartRef,
+    dataRef,
+    width,
+  ])
+
+  return {
+    isLoading,
+    error,
   }
 }

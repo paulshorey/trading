@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { Candle } from '@/lib/market-data/candles'
 import { SERIES } from './constants'
-import type { SeriesRefs, AbsorptionRefs } from './useChart'
+import type { SeriesRefs, AbsorptionRefs } from './useInitChart'
 
 interface UsePlotDataProps {
   seriesRefs: SeriesRefs

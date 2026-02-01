@@ -250,34 +250,64 @@ export function useStrengthData({
             toDate
           )
 
+        // Log what we received
+        console.log(`[useStrengthData] Received historical data for ${historicalTickerData.length} tickers:`, 
+          historicalTickerData.map((data, i) => ({
+            ticker: currentTickersRef.current[i],
+            rows: data?.length || 0,
+            firstTime: data?.[0]?.timenow?.toISOString(),
+            lastTime: data?.[data?.length - 1]?.timenow?.toISOString(),
+          }))
+        )
+
         if (!isMountedRef.current) {
           isFetchingHistoricalRef.current = false
           setIsLoadingHistorical(false)
           return
         }
 
+        // Check if we actually got any data
+        const totalRows = historicalTickerData.reduce((sum, data) => sum + (data?.length || 0), 0)
+        if (totalRows === 0) {
+          console.log('[useStrengthData] No historical data returned from API')
+          return
+        }
+
         // Merge historical data with existing data (prepend to beginning)
         setRawData((prevData) => {
           let newEarliestTimestamp = earliestDataTimestampRef.current
+          
+          console.log(`[useStrengthData] Merging: prevData has ${prevData.length} tickers, earliest was ${earliestDataTimestampRef.current?.toISOString()}`)
 
           const mergedData = prevData.map((existingData, idx) => {
             const historicalData = historicalTickerData[idx]
-            if (!historicalData || historicalData.length === 0) return existingData
+            
+            if (!historicalData || historicalData.length === 0) {
+              console.log(`[useStrengthData] Ticker ${idx}: No historical data to merge`)
+              return existingData
+            }
 
             // Sort historical data
             const sortedHistorical = [...historicalData].sort(
               (a, b) => a.timenow.getTime() - b.timenow.getTime()
             )
+            
+            console.log(`[useStrengthData] Ticker ${idx}: Historical data range: ${sortedHistorical[0]?.timenow?.toISOString()} to ${sortedHistorical[sortedHistorical.length-1]?.timenow?.toISOString()} (${sortedHistorical.length} rows)`)
 
             // Merge with existing data
             if (!existingData) {
+              console.log(`[useStrengthData] Ticker ${idx}: No existing data, using historical only`)
               return sortedHistorical
             }
+            
+            console.log(`[useStrengthData] Ticker ${idx}: Existing data range: ${existingData[0]?.timenow?.toISOString()} to ${existingData[existingData.length-1]?.timenow?.toISOString()} (${existingData.length} rows)`)
 
             const merged = FetchStrengthData.mergeData(
               sortedHistorical,
               existingData
             )
+            
+            console.log(`[useStrengthData] Ticker ${idx}: After merge: ${merged[0]?.timenow?.toISOString()} to ${merged[merged.length-1]?.timenow?.toISOString()} (${merged.length} rows)`)
 
             // Track new earliest timestamp
             if (merged.length > 0) {
@@ -294,6 +324,7 @@ export function useStrengthData({
           })
 
           // Update earliest timestamp
+          console.log(`[useStrengthData] Updating earliest from ${earliestDataTimestampRef.current?.toISOString()} to ${newEarliestTimestamp?.toISOString()}`)
           earliestDataTimestampRef.current = newEarliestTimestamp
           if (newEarliestTimestamp) {
             setEarliestDataTime(newEarliestTimestamp)

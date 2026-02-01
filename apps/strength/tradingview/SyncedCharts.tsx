@@ -197,7 +197,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     // Set a fallback timer to resume polling after long inactivity
     // This is a safety net in case onLatestBarVisibilityChange doesn't fire
     scrollResumeTimerRef.current = setTimeout(() => {
-      console.log('[SyncedCharts] Scroll inactivity fallback - resuming polling')
       setPollingPaused(false)
       scrollResumeTimerRef.current = null
     }, SCROLL_PAUSE_RESUME_MS)
@@ -218,14 +217,12 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     if (isVisible) {
       // Latest bar is visible - resume real-time updates
       if (pollingPaused) {
-        console.log('[SyncedCharts] Latest bar visible - resuming polling')
         setPollingPaused(false)
       }
     } else {
       // Latest bar is NOT visible - pause real-time updates
       // This prevents the chart from jumping to the latest data while user explores history
       if (!pollingPaused) {
-        console.log('[SyncedCharts] Latest bar hidden - pausing polling')
         setPollingPaused(true)
       }
     }
@@ -236,20 +233,11 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * Called when user scrolls near the beginning of the chart data
    */
   const handleNeedMoreHistory = useCallback(() => {
-    if (!earliestDataTime) {
-      console.log('[SyncedCharts] No earliest data time yet, skipping')
-      return
-    }
-    
-    if (isLoadingHistorical) {
-      console.log('[SyncedCharts] Already loading historical data, skipping')
+    if (!earliestDataTime || isLoadingHistorical) {
       return
     }
 
     const fetchMinutes = LAZY_LOAD_FETCH_HOURS * 60 // Convert hours to minutes
-    console.log(
-      `[SyncedCharts] Need more history - fetching ${LAZY_LOAD_FETCH_HOURS} hours (${fetchMinutes} minutes) before ${earliestDataTime.toISOString()}`
-    )
 
     // Fetch more historical data before the earliest data point
     fetchHistoricalDataBefore(earliestDataTime, fetchMinutes)
@@ -272,7 +260,7 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const handleAggregationResult = useCallback(
     (
       result: AggregationResult,
-      processingTimeMs: number,
+      _processingTimeMs: number,
       resultDataVersion: number
     ) => {
       // Mark processing as complete (use ref to avoid re-triggering effects)
@@ -337,14 +325,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       setPriceTickers(result.priceTickers)
       setStrengthIndicator(strengthIndicator)
       setPriceIndicator(priceIndicator)
-
-      if (processingTimeMs > 100) {
-        console.log(
-          `[Worker] Aggregation v${resultDataVersion} completed in ${processingTimeMs.toFixed(
-            1
-          )}ms`
-        )
-      }
     },
     [
       chartTickers,
@@ -583,7 +563,6 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     if (!initialTimeRangeSetRef.current || hoursBackChanged) {
       const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
       if (newRange && newRange.from < newRange.to) {
-        console.log(`[SyncedCharts] Setting time range (initial=${!initialTimeRangeSetRef.current}, hoursBackChanged=${hoursBackChanged})`)
         setTimeRange(newRange)
         initialTimeRangeSetRef.current = true
       }

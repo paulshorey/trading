@@ -18,6 +18,13 @@ export const LAZY_LOAD_BARS_THRESHOLD = 30
 // Number of hours of historical data to fetch when lazy loading
 // Should match FETCH_DATA_HOURS_BACK for consistent chunk sizes
 export const LAZY_LOAD_FETCH_HOURS = FETCH_DATA_HOURS_BACK // 240 hours = 10 days per load
+// Cooldown between lazy load requests (in ms)
+export const LAZY_LOAD_COOLDOWN_MS = 2000
+
+// Future padding - extend chart data into the future for visualization
+// This allows users to scroll into "future" time to see where the current trend might go
+export const FUTURE_PADDING_HOURS = 12
+export const FUTURE_PADDING_BARS = FUTURE_PADDING_HOURS * 60 // Convert to minutes (bars)
 
 export const SHOW_100_LINES = false
 

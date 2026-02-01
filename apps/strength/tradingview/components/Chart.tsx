@@ -23,7 +23,7 @@ import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
 import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
-import { TIME_RANGE_HIGHLIGHTS, SHOW_100_LINES, LAZY_LOAD_BARS_THRESHOLD } from '../constants'
+import { TIME_RANGE_HIGHLIGHTS, SHOW_100_LINES, LAZY_LOAD_BARS_THRESHOLD, LAZY_LOAD_COOLDOWN_MS, FUTURE_PADDING_BARS } from '../constants'
 import {
   strengthIntervalsAll as STRENGTH_INTERVALS,
   StrengthIntervalsData,
@@ -469,12 +469,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
                     from: savedLogicalRange.from + prependedBarsCount,
                     to: savedLogicalRange.to + prependedBarsCount,
                   })
-                  console.log(`[Chart] Restored scroll position: prepended ${prependedBarsCount} bars, new range ${savedLogicalRange.from + prependedBarsCount} to ${savedLogicalRange.to + prependedBarsCount}`)
-                } catch (error) {
-                  console.warn(
-                    'Failed to restore scroll position after historical load:',
-                    error
-                  )
+                } catch {
+                  // Scroll position restoration failed - not critical, chart will show default view
                 }
               }
               
@@ -807,7 +803,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // barsBefore tells us how many bars exist before the visible area
         const now = Date.now()
         const timeSinceLastLoad = now - lastLazyLoadTimeRef.current
-        const LAZY_LOAD_COOLDOWN_MS = 2000 // 2 second cooldown between loads
         
         if (barsInfo.barsBefore !== null && barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD) {
           // Check why we might not load
@@ -817,24 +812,21 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
             // Cooldown active - don't log spam
           } else {
             // All conditions met - request more history
-            console.log(`[Chart] Triggering lazy load: barsBefore=${barsInfo.barsBefore}, threshold=${LAZY_LOAD_BARS_THRESHOLD}`)
             lastLazyLoadTimeRef.current = now
             onNeedMoreHistoryRef.current?.()
           }
         }
 
         // Check if the latest ACTUAL data bar is visible (not the future-padded bars)
-        // The data is extended 12 hours (720 bars) into the future with the last value
-        // So the actual latest data is at index (data.length - 1 - 720)
+        // The data is extended into the future with the last value (FUTURE_PADDING_BARS)
+        // So the actual latest data is at index (data.length - 1 - FUTURE_PADDING_BARS)
         // We use a generous buffer to resume polling when user scrolls "near" the end
-        const FUTURE_PADDING_BARS = 720 // 12 hours * 60 minutes
         const VISIBILITY_BUFFER = 60 // 1 hour buffer - resume polling when within 1 hour of latest data
-        const lastActualDataIndex = data.length - 1 - FUTURE_PADDING_BARS
+        const lastActualDataIndex = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
         const isLatestBarVisible = logicalRange.to >= lastActualDataIndex - VISIBILITY_BUFFER
 
         // Only notify if visibility changed
         if (isLatestBarVisible !== lastLatestBarVisibleRef.current) {
-          console.log(`[Chart] Latest bar visibility changed: ${isLatestBarVisible}, logicalRange.to=${logicalRange.to.toFixed(0)}, lastActualDataIndex=${lastActualDataIndex}`)
           lastLatestBarVisibleRef.current = isLatestBarVisible
           onLatestBarVisibilityChangeRef.current?.(isLatestBarVisible)
         }
@@ -859,7 +851,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Skip if we just restored scroll position after historical prepend
       // This prevents the timeRange from overriding our scroll restoration
       if (skipTimeRangeUpdateRef.current) {
-        console.log('[Chart] Skipping timeRange update - scroll position was just restored')
         return
       }
 

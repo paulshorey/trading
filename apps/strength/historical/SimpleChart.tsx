@@ -94,14 +94,11 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
       const toDate = new Date()
       const fromDate = new Date(toDate.getTime() - INITIAL_FETCH_HOURS * 60 * 60 * 1000)
       
-      console.log(`[SimpleChart] Loading initial data: ${fromDate.toISOString()} to ${toDate.toISOString()}`)
-      
       const initialData = await fetchData(fromDate, toDate)
       
       if (initialData.length > 0) {
         earliestTimeRef.current = initialData[0]!.time as number
         setData(initialData)
-        console.log(`[SimpleChart] Loaded ${initialData.length} data points`)
       } else {
         setError('No data available for this ticker')
       }
@@ -127,8 +124,6 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
     try {
       const toDate = new Date(earliestTimeRef.current * 1000)
       const fromDate = new Date(toDate.getTime() - LAZY_LOAD_FETCH_MINUTES * 60 * 1000)
-      
-      console.log(`[SimpleChart] Loading more history: ${fromDate.toISOString()} to ${toDate.toISOString()}`)
       
       const historicalData = await fetchData(fromDate, toDate)
       
@@ -156,12 +151,8 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
             (a, b) => (a.time as number) - (b.time as number)
           )
           
-          console.log(`[SimpleChart] Merged data: ${historicalData.length} new + ${prevData.length} existing = ${merged.length} total`)
-          
           return merged
         })
-      } else {
-        console.log('[SimpleChart] No more historical data available')
       }
     } catch (err) {
       console.error('[SimpleChart] Error loading more history:', err)
@@ -260,7 +251,6 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
         }
       }
       
-      console.log(`[SimpleChart] Lazy load: saved range`, savedLogicalRange, `prepended ${prependedCount} bars`)
     }
     
     // Update the series data
@@ -281,11 +271,9 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
               to: savedLogicalRange.to + prependedCount,
             }
             
-            console.log(`[SimpleChart] Restoring range: from ${savedLogicalRange.from}-${savedLogicalRange.to} to ${newRange.from}-${newRange.to}`)
-            
             chartRef.current.timeScale().setVisibleLogicalRange(newRange)
-          } catch (err) {
-            console.warn('[SimpleChart] Failed to restore scroll position:', err)
+          } catch {
+            // Scroll position restoration failed - not critical
           }
         }
         
@@ -318,7 +306,6 @@ export function SimpleChart({ ticker }: SimpleChartProps) {
       
       // If fewer than threshold bars before visible area, load more
       if (barsInfo.barsBefore !== null && barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD) {
-        console.log(`[SimpleChart] Near beginning: ${barsInfo.barsBefore} bars before visible area`)
         loadMoreHistory()
       }
     }

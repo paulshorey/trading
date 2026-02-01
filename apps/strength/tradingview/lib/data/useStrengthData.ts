@@ -215,19 +215,12 @@ export function useStrengthData({
    */
   const fetchHistoricalDataBefore = useCallback(
     async (beforeDate: Date, minutes: number) => {
-      if (!isMountedRef.current) {
-        console.log('[useStrengthData] Component unmounted, skipping historical fetch')
-        return
-      }
-      
-      if (currentTickersRef.current.length === 0) {
-        console.log('[useStrengthData] No tickers selected, skipping historical fetch')
+      if (!isMountedRef.current || currentTickersRef.current.length === 0) {
         return
       }
 
       // Prevent duplicate concurrent fetches
       if (isFetchingHistoricalRef.current) {
-        console.log('[useStrengthData] Already fetching historical data, skipping')
         return
       }
 
@@ -239,26 +232,12 @@ export function useStrengthData({
         const toDate = new Date(beforeDate.getTime())
         const fromDate = new Date(toDate.getTime() - minutes * 60 * 1000)
 
-        console.log(
-          `[useStrengthData] Fetching historical data: ${fromDate.toISOString()} to ${toDate.toISOString()} (${minutes} minutes / ${Math.round(minutes/60)} hours)`
-        )
-
         const historicalTickerData =
           await FetchStrengthData.fetchMultipleTickersData(
             currentTickersRef.current,
             fromDate,
             toDate
           )
-
-        // Log what we received
-        console.log(`[useStrengthData] Received historical data for ${historicalTickerData.length} tickers:`, 
-          historicalTickerData.map((data, i) => ({
-            ticker: currentTickersRef.current[i],
-            rows: data?.length || 0,
-            firstTime: data?.[0]?.timenow?.toISOString(),
-            lastTime: data?.[data?.length - 1]?.timenow?.toISOString(),
-          }))
-        )
 
         if (!isMountedRef.current) {
           isFetchingHistoricalRef.current = false
@@ -269,21 +248,17 @@ export function useStrengthData({
         // Check if we actually got any data
         const totalRows = historicalTickerData.reduce((sum, data) => sum + (data?.length || 0), 0)
         if (totalRows === 0) {
-          console.log('[useStrengthData] No historical data returned from API')
           return
         }
 
         // Merge historical data with existing data (prepend to beginning)
         setRawData((prevData) => {
           let newEarliestTimestamp = earliestDataTimestampRef.current
-          
-          console.log(`[useStrengthData] Merging: prevData has ${prevData.length} tickers, earliest was ${earliestDataTimestampRef.current?.toISOString()}`)
 
           const mergedData = prevData.map((existingData, idx) => {
             const historicalData = historicalTickerData[idx]
             
             if (!historicalData || historicalData.length === 0) {
-              console.log(`[useStrengthData] Ticker ${idx}: No historical data to merge`)
               return existingData
             }
 
@@ -291,23 +266,16 @@ export function useStrengthData({
             const sortedHistorical = [...historicalData].sort(
               (a, b) => a.timenow.getTime() - b.timenow.getTime()
             )
-            
-            console.log(`[useStrengthData] Ticker ${idx}: Historical data range: ${sortedHistorical[0]?.timenow?.toISOString()} to ${sortedHistorical[sortedHistorical.length-1]?.timenow?.toISOString()} (${sortedHistorical.length} rows)`)
 
             // Merge with existing data
             if (!existingData) {
-              console.log(`[useStrengthData] Ticker ${idx}: No existing data, using historical only`)
               return sortedHistorical
             }
-            
-            console.log(`[useStrengthData] Ticker ${idx}: Existing data range: ${existingData[0]?.timenow?.toISOString()} to ${existingData[existingData.length-1]?.timenow?.toISOString()} (${existingData.length} rows)`)
 
             const merged = FetchStrengthData.mergeData(
               sortedHistorical,
               existingData
             )
-            
-            console.log(`[useStrengthData] Ticker ${idx}: After merge: ${merged[0]?.timenow?.toISOString()} to ${merged[merged.length-1]?.timenow?.toISOString()} (${merged.length} rows)`)
 
             // Track new earliest timestamp
             if (merged.length > 0) {
@@ -324,7 +292,6 @@ export function useStrengthData({
           })
 
           // Update earliest timestamp
-          console.log(`[useStrengthData] Updating earliest from ${earliestDataTimestampRef.current?.toISOString()} to ${newEarliestTimestamp?.toISOString()}`)
           earliestDataTimestampRef.current = newEarliestTimestamp
           if (newEarliestTimestamp) {
             setEarliestDataTime(newEarliestTimestamp)
@@ -332,15 +299,10 @@ export function useStrengthData({
 
           return mergedData
         })
-
-        console.log(
-          `[useStrengthData] Historical data fetched and merged. New earliest: ${earliestDataTimestampRef.current?.toISOString() || 'unknown'}`
-        )
       } catch (err) {
         console.error('[useStrengthData] Error fetching historical data:', err)
         // Don't set error state - keep showing existing data
       } finally {
-        console.log('[useStrengthData] Historical fetch complete, resetting loading state')
         isFetchingHistoricalRef.current = false
         setIsLoadingHistorical(false)
       }
@@ -366,13 +328,6 @@ export function useStrengthData({
       const fetchMinutes = calculateFetchWindow()
       const fromDate = new Date(now.getTime() - fetchMinutes * 60 * 1000)
       const toDate = now
-
-      // Log if we're fetching more than the minimum (indicates background tab recovery)
-      if (fetchMinutes > MIN_FETCH_MINUTES) {
-        console.log(
-          `[useStrengthData] Fetching ${fetchMinutes} minutes of data (background tab recovery)`
-        )
-      }
 
       const newTickerData = await FetchStrengthData.fetchMultipleTickersData(
         currentTickersRef.current,
@@ -488,9 +443,6 @@ export function useStrengthData({
         !paused
       ) {
         // Tab became visible - fetch immediately to fill any gaps
-        console.log(
-          '[useStrengthData] Tab visible - triggering immediate fetch'
-        )
         fetchRealtimeUpdate()
       }
     }
@@ -512,10 +464,8 @@ export function useStrengthData({
     if (paused) {
       // Stop polling while paused
       stopRealtimeUpdates()
-      console.log('[useStrengthData] Polling paused (user interaction)')
     } else {
       // Resume polling - fetch immediately to fill any gaps
-      console.log('[useStrengthData] Polling resumed - fetching missed data')
       fetchRealtimeUpdate()
       startRealtimeUpdates()
     }

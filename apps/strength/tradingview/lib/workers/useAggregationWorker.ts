@@ -168,9 +168,6 @@ export function useAggregationWorker(
 
         // Check if this result is stale (from an older data version)
         if (dataVersion < validDataVersionRef.current) {
-          console.log(
-            `[Worker] Ignoring stale result (dataVersion: ${dataVersion}, valid: ${validDataVersionRef.current})`
-          )
           return
         }
 

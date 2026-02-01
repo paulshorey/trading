@@ -1,33 +1,33 @@
 import { useCallback, useRef } from 'react'
 import type { Candle } from '@/lib/market-data/candles'
 import { POLL_INTERVAL_MS, RECENT_CANDLES, buildCandlesUrl } from './constants'
-import { useUpdateData } from './useUpdateData'
+import { usePlotData } from './usePlotData'
 import type { SeriesRefs, AbsorptionRefs } from './useChart'
 
-interface UsePollingProps {
+interface UsePollDataProps {
   dataRef: React.MutableRefObject<Candle[]>
   seriesRefs: SeriesRefs
   absorptionRefs: AbsorptionRefs
 }
 
-interface UsePollingReturn {
+interface UsePollDataReturn {
   fetchCandles: (limit: number) => Promise<Candle[]>
-  updateChartData: (candles: Candle[]) => void
+  plotChartData: (candles: Candle[]) => void
   applyRecentCandles: (recentCandles: Candle[]) => void
   startPolling: () => void
   stopPolling: () => void
 }
 
-export function usePolling({
+export function usePollData({
   dataRef,
   seriesRefs,
   absorptionRefs,
-}: UsePollingProps): UsePollingReturn {
+}: UsePollDataProps): UsePollDataReturn {
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
   const hasStartedPollingRef = useRef(false)
 
-  const { updateChartData } = useUpdateData({ seriesRefs, absorptionRefs })
+  const { plotChartData } = usePlotData({ seriesRefs, absorptionRefs })
 
   const fetchCandles = useCallback(async (limit: number) => {
     const response = await fetch(buildCandlesUrl(limit))
@@ -42,7 +42,7 @@ export function usePolling({
       const existing = dataRef.current
       if (existing.length === 0) {
         dataRef.current = recentCandles
-        updateChartData(recentCandles)
+        plotChartData(recentCandles)
         return
       }
 
@@ -76,10 +76,10 @@ export function usePolling({
       }
 
       if (didUpdate) {
-        updateChartData(existing)
+        plotChartData(existing)
       }
     },
-    [dataRef, updateChartData]
+    [dataRef, plotChartData]
   )
 
   const pollLatest = useCallback(async () => {
@@ -119,7 +119,7 @@ export function usePolling({
 
   return {
     fetchCandles,
-    updateChartData,
+    plotChartData,
     applyRecentCandles,
     startPolling,
     stopPolling,

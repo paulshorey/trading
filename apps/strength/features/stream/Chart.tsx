@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Candle } from '@/lib/market-data/candles'
 import { useEventPatcher } from './ui/useEventPatcher'
 import { useChart } from './plot/useChart'
-import { usePolling } from './plot/usePolling'
+import { usePollData } from './plot/usePollData'
 import { COLORS, PRICE_SCALE_RIGHT_OFFSET } from './plot/constants'
 
 interface ChartProps {
@@ -23,7 +23,7 @@ export function Chart({ width, height }: ChartProps) {
   useEventPatcher(containerRef)
 
   // Initialize chart and series
-  const { chartRef, seriesRefs, absorptionRefs, hasInitialized } = useChart({
+  const { chartRef, seriesRefs, absorptionRefs } = useChart({
     containerRef,
     dataRef,
     width,
@@ -31,8 +31,8 @@ export function Chart({ width, height }: ChartProps) {
   })
 
   // Data fetching and polling
-  const { fetchCandles, updateChartData, startPolling, stopPolling } =
-    usePolling({
+  const { fetchCandles, plotChartData, startPolling, stopPolling } =
+    usePollData({
       dataRef,
       seriesRefs,
       absorptionRefs,
@@ -48,7 +48,7 @@ export function Chart({ width, height }: ChartProps) {
         if (!isMounted) return
         if (initialCandles.length > 0) {
           dataRef.current = initialCandles
-          updateChartData(initialCandles)
+          plotChartData(initialCandles)
 
           // Show ~50% of the data, zoomed in with the latest candle visible
           if (chartRef.current) {
@@ -78,14 +78,7 @@ export function Chart({ width, height }: ChartProps) {
       isMounted = false
       stopPolling()
     }
-  }, [
-    fetchCandles,
-    updateChartData,
-    startPolling,
-    stopPolling,
-    chartRef,
-    width,
-  ])
+  }, [fetchCandles, plotChartData, startPolling, stopPolling, chartRef, width])
 
   if (error) {
     return (

@@ -121,6 +121,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     // Refs for lazy loading and visibility tracking
     const lastLatestBarVisibleRef = useRef<boolean>(true)
     const isLoadingHistoricalRef = useRef<boolean>(false)
+    const lastLazyLoadTimeRef = useRef<number>(0)
     // Keep refs to callbacks to avoid stale closures
     const onNeedMoreHistoryRef = useRef(onNeedMoreHistory)
     const onLatestBarVisibilityChangeRef = useRef(onLatestBarVisibilityChange)
@@ -793,12 +794,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
         // Check if we need to load more historical data
         // barsBefore tells us how many bars exist before the visible area
+        const now = Date.now()
+        const timeSinceLastLoad = now - lastLazyLoadTimeRef.current
+        const LAZY_LOAD_COOLDOWN_MS = 3000 // 3 second cooldown between loads
+        
         if (
           barsInfo.barsBefore !== null &&
           barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD &&
-          !isLoadingHistoricalRef.current
+          !isLoadingHistoricalRef.current &&
+          timeSinceLastLoad > LAZY_LOAD_COOLDOWN_MS
         ) {
           // User scrolled near the beginning - request more history
+          lastLazyLoadTimeRef.current = now
           onNeedMoreHistoryRef.current?.()
         }
 

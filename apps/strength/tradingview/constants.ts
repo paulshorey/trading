@@ -14,9 +14,10 @@ export const SCROLL_PAUSE_RESUME_MS = 300000 // 5 minutes (fallback)
 
 // Lazy loading thresholds
 // Number of bars before visible area that triggers loading more historical data
-export const LAZY_LOAD_BARS_THRESHOLD = 50
+export const LAZY_LOAD_BARS_THRESHOLD = 30
 // Number of minutes of historical data to fetch when lazy loading
-export const LAZY_LOAD_FETCH_MINUTES = 120 // 2 hours of data per load
+// At 1-minute intervals, 720 minutes = 720 data points = 12 hours of data
+export const LAZY_LOAD_FETCH_MINUTES = 720 // 12 hours of data per load
 
 export const SHOW_100_LINES = false
 

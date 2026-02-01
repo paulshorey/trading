@@ -115,6 +115,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
   const [pollingPaused, setPollingPaused] = useState(false)
   const scrollResumeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Track if initial time range has been set - prevents resetting zoom on real-time updates
+  const initialTimeRangeSetRef = useRef(false)
+  const lastHoursBackRef = useRef<string | null>(null)
+
   // Zustand store
   const {
     hoursBack,
@@ -394,6 +398,9 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
     // Reset debounce timer so initial load is fast
     lastAggregationTimeRef.current = 0
 
+    // Reset time range initialization flag so new ticker gets proper initial time range
+    initialTimeRangeSetRef.current = false
+
     // Clear chart data immediately when version changes
     // This prevents showing old data while new data loads
     if (chartDataVersionRef.current !== dataVersion) {
@@ -551,9 +558,10 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
    * - Historical data was just loaded (would cause chart to jump)
    * 
    * Only update timeRange when:
-   * - Initial data load (timeRange is null)
+   * - Initial data load (first time we have data)
    * - User changes hoursBack setting
-   * - Real-time data arrives (polling is active)
+   * 
+   * We do NOT reset time range on real-time updates to preserve user's zoom level.
    */
   useEffect(() => {
     if (!chartData.strengthAverage || chartData.strengthAverage.length === 0)
@@ -565,10 +573,23 @@ export function SyncedCharts({ availableHeight }: SyncedChartsProps) {
       return
     }
 
-    const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
-    if (newRange && newRange.from < newRange.to) {
-      setTimeRange(newRange)
+    // Check if hoursBack changed (user action)
+    const hoursBackChanged = lastHoursBackRef.current !== null && lastHoursBackRef.current !== hoursBack
+    lastHoursBackRef.current = hoursBack
+
+    // Only set time range on:
+    // 1. Initial load (initialTimeRangeSetRef.current is false)
+    // 2. User changed hoursBack
+    if (!initialTimeRangeSetRef.current || hoursBackChanged) {
+      const newRange = calculateTimeRange(rawData, parseInt(hoursBack))
+      if (newRange && newRange.from < newRange.to) {
+        console.log(`[SyncedCharts] Setting time range (initial=${!initialTimeRangeSetRef.current}, hoursBackChanged=${hoursBackChanged})`)
+        setTimeRange(newRange)
+        initialTimeRangeSetRef.current = true
+      }
     }
+    // Real-time data updates (rawData changes) do NOT reset time range
+    // This preserves user's zoom level
   }, [hoursBack, rawData, chartData.strengthAverage, setTimeRange, pollingPaused])
 
   /**

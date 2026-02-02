@@ -396,6 +396,20 @@ export function useChart({
       vdStrengthSeriesRef.current = vdStrengthSeries
     }
 
+    // Track mouse position for zoom anchor (wheel event clientX/Y is unreliable for trackpad pinch)
+    let lastMouseX: number | null = null
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const containerRect = containerRef.current?.getBoundingClientRect()
+      if (containerRect) {
+        lastMouseX = e.clientX - containerRect.left
+      }
+    }
+
+    const handleMouseLeave = () => {
+      lastMouseX = null
+    }
+
     // Custom zoom handler anchored at cursor position
     const handleWheel = (e: WheelEvent) => {
       const isZoomGesture = e.ctrlKey || e.metaKey
@@ -408,10 +422,12 @@ export function useChart({
       const visibleRange = timeScale.getVisibleLogicalRange()
       if (!visibleRange) return
 
-      // Get cursor position relative to container
+      // Use tracked mouse position (more reliable than wheel event clientX for trackpad)
       const containerRect = containerRef.current?.getBoundingClientRect()
       if (!containerRect) return
-      const cursorX = e.clientX - containerRect.left
+
+      // Fall back to wheel event position if mouse tracking hasn't captured position yet
+      const cursorX = lastMouseX ?? e.clientX - containerRect.left
 
       // Convert cursor X to logical index
       const cursorLogical = timeScale.coordinateToLogical(cursorX)
@@ -521,6 +537,10 @@ export function useChart({
     }
 
     const container = containerRef.current
+    container.addEventListener('mousemove', handleMouseMove, { passive: true })
+    container.addEventListener('mouseleave', handleMouseLeave, {
+      passive: true,
+    })
     container.addEventListener('wheel', handleWheel, {
       passive: false,
       capture: true,
@@ -539,6 +559,8 @@ export function useChart({
     })
 
     return () => {
+      container.removeEventListener('mousemove', handleMouseMove)
+      container.removeEventListener('mouseleave', handleMouseLeave)
       container.removeEventListener('wheel', handleWheel, { capture: true })
       container.removeEventListener('touchstart', handleTouchStart, {
         capture: true,

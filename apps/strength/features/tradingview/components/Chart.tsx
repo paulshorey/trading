@@ -23,7 +23,13 @@ import ChartTitle from './ChartTitle'
 import { NoDataState } from './ChartStates'
 import classes from '../classes.module.scss'
 import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
-import { TIME_RANGE_HIGHLIGHTS, SHOW_100_LINES, LAZY_LOAD_BARS_THRESHOLD, LAZY_LOAD_COOLDOWN_MS, FUTURE_PADDING_BARS } from '../constants'
+import {
+  TIME_RANGE_HIGHLIGHTS,
+  SHOW_100_LINES,
+  LAZY_LOAD_BARS_THRESHOLD,
+  LAZY_LOAD_COOLDOWN_MS,
+  FUTURE_PADDING_BARS,
+} from '../constants'
 import {
   strengthIntervalsAll as STRENGTH_INTERVALS,
   StrengthIntervalsData,
@@ -93,7 +99,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       showPriceTickerLines,
       showStrengthIndicatorLine,
       showPriceIndicatorLine,
-      hoursBack,
       interval: selectedIntervals, // Which intervals are selected (for visibility)
     } = useChartControlsStore()
 
@@ -117,7 +122,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     const lastPriceTickersRef = useRef<PriceTickersData>({})
     const lastStrengthIndicatorRef = useRef<LineData[] | null>(null)
     const lastPriceIndicatorRef = useRef<LineData[] | null>(null)
-    
+
     // Refs for lazy loading and visibility tracking
     const lastLatestBarVisibleRef = useRef<boolean>(true)
     const isLoadingHistoricalRef = useRef<boolean>(false)
@@ -127,13 +132,13 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
     // Keep refs to callbacks to avoid stale closures
     const onNeedMoreHistoryRef = useRef(onNeedMoreHistory)
     const onLatestBarVisibilityChangeRef = useRef(onLatestBarVisibilityChange)
-    
+
     // Update callback refs when they change
     useEffect(() => {
       onNeedMoreHistoryRef.current = onNeedMoreHistory
       onLatestBarVisibilityChangeRef.current = onLatestBarVisibilityChange
     }, [onNeedMoreHistory, onLatestBarVisibilityChange])
-    
+
     // Update loading ref when prop changes
     useEffect(() => {
       isLoadingHistoricalRef.current = isLoadingHistorical
@@ -278,6 +283,20 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // setVisibleRange fails if the series has no data
       // Time range is applied after data is set in the useEffect hooks below
 
+      // Track mouse position for zoom anchor (wheel event clientX/Y is unreliable for trackpad pinch)
+      let lastMouseX: number | null = null
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const containerRect = containerRef.current?.getBoundingClientRect()
+        if (containerRect) {
+          lastMouseX = e.clientX - containerRect.left
+        }
+      }
+
+      const handleMouseLeave = () => {
+        lastMouseX = null
+      }
+
       // Custom zoom handler anchored at cursor position
       // Requires cmd (Mac) or ctrl (Windows) + scroll to zoom
       const handleWheel = (e: WheelEvent) => {
@@ -292,10 +311,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
 
-        // Get cursor position relative to container
+        // Use tracked mouse position (more reliable than wheel event clientX for trackpad)
         const containerRect = containerRef.current?.getBoundingClientRect()
         if (!containerRect) return
-        const cursorX = e.clientX - containerRect.left
+
+        // Fall back to wheel event position if mouse tracking hasn't captured position yet
+        const cursorX = lastMouseX ?? e.clientX - containerRect.left
 
         // Convert cursor X to logical index
         const cursorLogical = timeScale.coordinateToLogical(cursorX)
@@ -350,7 +371,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
 
       const handleTouchMove = (e: TouchEvent) => {
-        if (e.touches.length !== 2 || lastPinchDistance === null || lastPinchMidpointX === null) return
+        if (
+          e.touches.length !== 2 ||
+          lastPinchDistance === null ||
+          lastPinchMidpointX === null
+        )
+          return
 
         const touch0 = e.touches[0]
         const touch1 = e.touches[1]
@@ -420,6 +446,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Use capture phase to intercept before lightweight-charts
       const container = containerRef.current
+      container.addEventListener('mousemove', handleMouseMove, {
+        passive: true,
+      })
+      container.addEventListener('mouseleave', handleMouseLeave, {
+        passive: true,
+      })
       container.addEventListener('wheel', handleWheel, {
         passive: false,
         capture: true,
@@ -439,10 +471,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Cleanup
       return () => {
+        container.removeEventListener('mousemove', handleMouseMove)
+        container.removeEventListener('mouseleave', handleMouseLeave)
         container.removeEventListener('wheel', handleWheel, { capture: true })
-        container.removeEventListener('touchstart', handleTouchStart, { capture: true })
-        container.removeEventListener('touchmove', handleTouchMove, { capture: true })
-        container.removeEventListener('touchend', handleTouchEnd, { capture: true })
+        container.removeEventListener('touchstart', handleTouchStart, {
+          capture: true,
+        })
+        container.removeEventListener('touchmove', handleTouchMove, {
+          capture: true,
+        })
+        container.removeEventListener('touchend', handleTouchEnd, {
+          capture: true,
+        })
         chart.remove()
         chartRef.current = null
         strengthAverageSeriesRef.current = null
@@ -561,7 +601,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           ) {
             // Set flag to prevent timeRange effect from overriding our scroll restoration
             skipTimeRangeUpdateRef.current = true
-            
+
             // Use requestAnimationFrame to ensure the chart has processed setData
             requestAnimationFrame(() => {
               if (chartRef.current && savedLogicalRange) {
@@ -576,7 +616,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
                   // Scroll position restoration failed - not critical, chart will show default view
                 }
               }
-              
+
               // Clear the flag after a short delay to allow for any pending effects
               setTimeout(() => {
                 skipTimeRangeUpdateRef.current = false
@@ -906,8 +946,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // barsBefore tells us how many bars exist before the visible area
         const now = Date.now()
         const timeSinceLastLoad = now - lastLazyLoadTimeRef.current
-        
-        if (barsInfo.barsBefore !== null && barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD) {
+
+        if (
+          barsInfo.barsBefore !== null &&
+          barsInfo.barsBefore < LAZY_LOAD_BARS_THRESHOLD
+        ) {
           // Check why we might not load
           if (isLoadingHistoricalRef.current) {
             // Already loading - this is expected, don't log spam
@@ -925,8 +968,12 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         // So the actual latest data is at index (data.length - 1 - FUTURE_PADDING_BARS)
         // We use a generous buffer to resume polling when user scrolls "near" the end
         const VISIBILITY_BUFFER = 60 // 1 hour buffer - resume polling when within 1 hour of latest data
-        const lastActualDataIndex = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
-        const isLatestBarVisible = logicalRange.to >= lastActualDataIndex - VISIBILITY_BUFFER
+        const lastActualDataIndex = Math.max(
+          0,
+          data.length - 1 - FUTURE_PADDING_BARS
+        )
+        const isLatestBarVisible =
+          logicalRange.to >= lastActualDataIndex - VISIBILITY_BUFFER
 
         // Only notify if visibility changed
         if (isLatestBarVisible !== lastLatestBarVisibleRef.current) {

@@ -389,12 +389,23 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const dy = touch1.clientY - touch0.clientY
         const currentDistance = Math.sqrt(dx * dx + dy * dy)
 
-        // Calculate current midpoint
+        // Calculate current midpoint (in screen coordinates)
         const currentMidpointX = (touch0.clientX + touch1.clientX) / 2
 
         const timeScale = chart.timeScale()
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
+
+        // Get midpoint position relative to container, scaled for 2x zoom
+        const containerRect = containerRef.current?.getBoundingClientRect()
+        if (!containerRect) return
+        const scale = window.scaleFactor || 1
+        const relativeX = currentMidpointX - containerRect.left
+        const anchorX = relativeX * scale // Scale the touch position for the 2x chart
+
+        // Convert anchor X to logical index
+        const anchorLogical = timeScale.coordinateToLogical(anchorX)
+        if (anchorLogical === null) return
 
         // Calculate zoom factor from pinch distance change
         // Inverted: spreading fingers apart (larger distance) = zoom in (smaller factor)
@@ -403,14 +414,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const currentFrom = visibleRange.from
         const currentTo = visibleRange.to
         const currentWidth = currentTo - currentFrom
-
-        // On mobile, anchor zoom at the last actual data point (right edge of real data)
-        // This is data.length - 1 - FUTURE_PADDING_BARS (not the future-padded empty time)
-        const data = lastStrengthAverageRef.current
-        const lastActualDataIndex = data
-          ? Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
-          : currentTo // Fallback to visible range end if no data
-        const anchorLogical = lastActualDataIndex
 
         // Calculate anchor position as fraction of visible range
         const anchorFraction = (anchorLogical - currentFrom) / currentWidth
@@ -422,7 +425,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const maxBars = 50000
         if (newWidth < minBars || newWidth > maxBars) return
 
-        // Anchor at the last actual data point (right edge)
+        // Anchor at the scaled midpoint between fingers
         const newFrom = anchorLogical - anchorFraction * newWidth
         const newTo = newFrom + newWidth
 

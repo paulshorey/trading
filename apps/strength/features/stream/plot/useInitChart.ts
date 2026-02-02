@@ -14,7 +14,7 @@ import {
   PRICE_SCALE_RIGHT_OFFSET,
   SeriesKey,
 } from './constants'
-import { timeFormatter } from '../lib/indicators'
+import { timeFormatter } from '../lib/time'
 
 // Map seriesType string to Series class
 const SERIES_TYPE_MAP = {

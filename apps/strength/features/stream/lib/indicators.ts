@@ -109,29 +109,6 @@ export function calculateRSI(
 }
 
 /**
- * Detect absorption points where all conditions are met:
- * Returns timestamps of candles that meet all criteria
- */
-export function detectAbsorptionPoints(candles: Candle[]): number[] {
-  const absorptionTimestamps: number[] = []
-
-  for (const candle of candles) {
-    const hasSpreadData = candle.spread_bps_close != null
-    const hasBigTrades = candle.big_trades > 0
-
-    // Price movement divergence
-    const hasPriceDivergence = Math.abs(candle.close - candle.open) > 0
-
-    // All conditions are met:
-    if (hasPriceDivergence && hasSpreadData && hasBigTrades) {
-      absorptionTimestamps.push(candle.time)
-    }
-  }
-
-  return absorptionTimestamps
-}
-
-/**
  * Calculate True Range for a single candle
  * TR = max(High - Low, |High - PreviousClose|, |Low - PreviousClose|)
  * Simplified: TR = max(High, PreviousClose) - min(Low, PreviousClose)
@@ -236,16 +213,4 @@ export function calculateATR(
   }
 
   return result
-}
-
-/**
- * Format time for chart display
- */
-export function timeFormatter(time: Time) {
-  const date = new Date((time as number) * 1000)
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const month = (date.getMonth() + 1).toString()
-  const day = date.getDate().toString()
-  return `${month}/${day} ${hours}:${minutes}`
 }

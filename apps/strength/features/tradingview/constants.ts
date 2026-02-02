@@ -2,7 +2,7 @@ import { TimeMarkerConfig } from './lib/primitives/timeMarkers'
 import { TimeRangeConfig } from './lib/primitives/TimeRangeHighlight'
 
 export const SCALE_FACTOR_DESKTOP = 2
-export const SCALE_FACTOR_MOBILE = 1
+export const SCALE_FACTOR_MOBILE = 2
 
 // Fetch this much data from the database (enough for all hoursBack values)
 export const FETCH_DATA_HOURS_BACK = 240

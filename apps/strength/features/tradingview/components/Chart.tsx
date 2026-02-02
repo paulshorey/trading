@@ -208,7 +208,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Always create the series, even if data doesn't exist yet
       const priceAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: !window.isMobile && showPriceTickerLines ? 2 : 1,
+        lineWidth: showPriceTickerLines ? 2 : 1,
         color: COLORS.price,
         priceScaleId: 'right',
       })
@@ -226,7 +226,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength average - uses 'left' scale
       const strengthAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: !window.isMobile && showStrengthIntervalLines ? 2 : 1,
+        lineWidth: showStrengthIntervalLines ? 2 : 1,
         color: COLORS.strength,
         priceScaleId: 'left',
       })

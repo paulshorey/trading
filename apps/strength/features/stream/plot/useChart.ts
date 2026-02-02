@@ -5,12 +5,10 @@ import {
   ISeriesApi,
   LineSeries,
   BarSeries,
-  SeriesType,
 } from 'lightweight-charts'
 import { VerticalLinePrimitive } from '../../tradingview/lib/primitives/VerticalLinePrimitive'
-import type { Candle } from '@/lib/market-data/candles'
 import { COLORS, SERIES, PRICE_SCALE_RIGHT_OFFSET } from './constants'
-import { timeFormatter } from '../lib/indicators'
+import { timeFormatter } from '../lib/time'
 
 // Map seriesType string to Series class
 const SERIES_TYPE_MAP = {
@@ -43,7 +41,6 @@ export interface AbsorptionRefs {
 
 interface UseChartProps {
   containerRef: MutableRefObject<HTMLDivElement | null>
-  dataRef: MutableRefObject<Candle[]>
   width: number
   height: number
 }
@@ -57,7 +54,6 @@ interface UseChartReturn {
 
 export function useChart({
   containerRef,
-  dataRef,
   width,
   height,
 }: UseChartProps): UseChartReturn {
@@ -147,7 +143,7 @@ export function useChart({
 
     // ========== MAIN SERIES ==========
 
-    if (SERIES.cvd.enabled) {
+    if (SERIES?.cvd?.enabled) {
       const cvdSeries = chart.addSeries(
         SERIES_TYPE_MAP[SERIES.cvd.seriesType as keyof typeof SERIES_TYPE_MAP],
         {
@@ -165,7 +161,7 @@ export function useChart({
       cvdSeriesRef.current = cvdSeries
     }
 
-    if (SERIES.price.enabled) {
+    if (SERIES?.price?.enabled) {
       const priceSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.price.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -185,7 +181,7 @@ export function useChart({
       priceSeriesRef.current = priceSeries
     }
 
-    if (SERIES.rsi.enabled) {
+    if (SERIES?.rsi?.enabled) {
       const rsiSeries = chart.addSeries(
         SERIES_TYPE_MAP[SERIES.rsi.seriesType as keyof typeof SERIES_TYPE_MAP],
         {
@@ -206,7 +202,7 @@ export function useChart({
 
     // ========== ADDITIONAL OHLC BAR SERIES ==========
 
-    if (SERIES.pricePct.enabled) {
+    if (SERIES?.pricePct?.enabled) {
       const pricePctSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.pricePct.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -228,7 +224,7 @@ export function useChart({
       })
       pricePctSeriesRef.current = pricePctSeries
     }
-    if (SERIES.evr.enabled) {
+    if (SERIES?.evr?.enabled) {
       const evrSeries = chart.addSeries(
         SERIES_TYPE_MAP[SERIES.evr.seriesType as keyof typeof SERIES_TYPE_MAP],
         {
@@ -241,7 +237,7 @@ export function useChart({
       ) as ISeriesApi<'Bar'>
       evrSeriesRef.current = evrSeries
     }
-    if (SERIES.vwap.enabled) {
+    if (SERIES?.vwap?.enabled) {
       const vwapSeries = chart.addSeries(
         SERIES_TYPE_MAP[SERIES.vwap.seriesType as keyof typeof SERIES_TYPE_MAP],
         {
@@ -255,7 +251,7 @@ export function useChart({
       vwapSeriesRef.current = vwapSeries
     }
 
-    if (SERIES.spreadBps.enabled) {
+    if (SERIES?.spreadBps?.enabled) {
       const spreadBpsSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.spreadBps.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -280,7 +276,7 @@ export function useChart({
 
     // ========== LINE SERIES ==========
 
-    if (SERIES.bookImbalance.enabled) {
+    if (SERIES?.bookImbalance?.enabled) {
       const bookImbalanceSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.bookImbalance.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -304,7 +300,7 @@ export function useChart({
       bookImbalanceSeriesRef.current = bookImbalanceSeries
     }
 
-    if (SERIES.volume.enabled) {
+    if (SERIES?.volume?.enabled) {
       const volumeSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.volume.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -328,7 +324,7 @@ export function useChart({
       volumeSeriesRef.current = volumeSeries
     }
 
-    if (SERIES.bigTrades.enabled) {
+    if (SERIES?.bigTrades?.enabled) {
       const bigTradesSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.bigTrades.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -352,7 +348,7 @@ export function useChart({
       bigTradesSeriesRef.current = bigTradesSeries
     }
 
-    if (SERIES.bigVolume.enabled) {
+    if (SERIES?.bigVolume?.enabled) {
       const bigVolumeSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.bigVolume.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -376,7 +372,7 @@ export function useChart({
       bigVolumeSeriesRef.current = bigVolumeSeries
     }
 
-    if (SERIES.vdStrength.enabled) {
+    if (SERIES?.vdStrength?.enabled) {
       const vdStrengthSeries = chart.addSeries(
         SERIES_TYPE_MAP[
           SERIES.vdStrength.seriesType as keyof typeof SERIES_TYPE_MAP
@@ -462,7 +458,12 @@ export function useChart({
     }
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || lastPinchDistance === null || lastPinchMidpointX === null) return
+      if (
+        e.touches.length !== 2 ||
+        lastPinchDistance === null ||
+        lastPinchMidpointX === null
+      )
+        return
 
       const touch0 = e.touches[0]
       const touch1 = e.touches[1]
@@ -539,9 +540,15 @@ export function useChart({
 
     return () => {
       container.removeEventListener('wheel', handleWheel, { capture: true })
-      container.removeEventListener('touchstart', handleTouchStart, { capture: true })
-      container.removeEventListener('touchmove', handleTouchMove, { capture: true })
-      container.removeEventListener('touchend', handleTouchEnd, { capture: true })
+      container.removeEventListener('touchstart', handleTouchStart, {
+        capture: true,
+      })
+      container.removeEventListener('touchmove', handleTouchMove, {
+        capture: true,
+      })
+      container.removeEventListener('touchend', handleTouchEnd, {
+        capture: true,
+      })
       chart.remove()
       chartRef.current = null
       // Main series

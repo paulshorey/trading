@@ -208,7 +208,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Always create the series, even if data doesn't exist yet
       const priceAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: !window.isMobile && showPriceTickerLines ? 2 : 1,
+        lineWidth: showPriceTickerLines ? 2 : 1,
         color: COLORS.price,
         priceScaleId: 'right',
       })
@@ -226,7 +226,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // Strength average - uses 'left' scale
       const strengthAverageSeries = chart.addSeries(LineSeries, {
         ...getLineSeriesConfig(),
-        lineWidth: !window.isMobile && showStrengthIntervalLines ? 2 : 1,
+        lineWidth: showStrengthIntervalLines ? 2 : 1,
         color: COLORS.strength,
         priceScaleId: 'left',
       })
@@ -389,17 +389,19 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const dy = touch1.clientY - touch0.clientY
         const currentDistance = Math.sqrt(dx * dx + dy * dy)
 
-        // Calculate current midpoint
+        // Calculate current midpoint (in screen coordinates)
         const currentMidpointX = (touch0.clientX + touch1.clientX) / 2
 
         const timeScale = chart.timeScale()
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
 
-        // Get midpoint position relative to container
+        // Get midpoint position relative to container, scaled for 2x zoom
         const containerRect = containerRef.current?.getBoundingClientRect()
         if (!containerRect) return
-        const anchorX = currentMidpointX - containerRect.left
+        const scale = window.scaleFactor || 1
+        const relativeX = currentMidpointX - containerRect.left
+        const anchorX = relativeX * scale // Scale the touch position for the 2x chart
 
         // Convert anchor X to logical index
         const anchorLogical = timeScale.coordinateToLogical(anchorX)
@@ -423,7 +425,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const maxBars = 50000
         if (newWidth < minBars || newWidth > maxBars) return
 
-        // Anchor at midpoint between fingers
+        // Anchor at the scaled midpoint between fingers
         const newFrom = anchorLogical - anchorFraction * newWidth
         const newTo = newFrom + newWidth
 

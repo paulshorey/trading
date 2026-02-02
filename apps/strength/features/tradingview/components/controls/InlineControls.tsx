@@ -2,7 +2,6 @@
 
 import React from 'react'
 import IntervalControl from './IntervalControl'
-import TimeControl from './TimeControl'
 // import { ControlsDropdown } from './ControlsDropdown'
 import { COLORS } from '../../constants'
 import { useChartControlsStore } from '@/features/tradingview/state/useChartControlsStore'
@@ -37,9 +36,6 @@ export default function InlineControls({
         <div dir="ltr" className="flex flex-row">
           <span className="flex flex-row">
             <IntervalControl showLabel={false} />
-          </span>
-          <span className="flex flex-row">
-            <TimeControl showLabel={false} />
           </span>
         </div>
       </div>

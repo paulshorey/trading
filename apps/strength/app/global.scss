@@ -5,21 +5,17 @@
 } */
 
 body {
-  @media (pointer: fine) {
-    transform: scale(0.5);
-    transform-origin: top left;
-    width: 200%;
-    height: 200%;
-    overflow: hidden; // Prevent scrollbars from creating gaps on full-screen charts
-  }
+  transform: scale(0.5);
+  transform-origin: top left;
+  width: 200%;
+  height: 200%;
+  overflow: hidden; // Prevent scrollbars from creating gaps on full-screen charts
   --mantine-color-text: #C3BCDB;
   background-color: #1a1a2e;
 }
 .scale2x {
-  @media (pointer: fine) {
-    transform: scale(2);
-    transform-origin: top left;
-  }
+  transform: scale(2);
+  transform-origin: top left;
 }
 .mantine-MultiSelect-options {
   @media (pointer: fine) {

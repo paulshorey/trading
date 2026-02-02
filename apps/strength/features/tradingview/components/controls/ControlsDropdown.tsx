@@ -1,7 +1,6 @@
 import { Popover } from '@mantine/core'
 import { IconAdjustmentsHorizontal } from '@tabler/icons-react'
 import IntervalControl from './IntervalControl'
-import TimeControl from './TimeControl'
 
 export function ControlsDropdown() {
   return (
@@ -11,11 +10,6 @@ export function ControlsDropdown() {
         <IconAdjustmentsHorizontal size={28} className="pt-1 mr-[-5px]" />
       </Popover.Target>
       <Popover.Dropdown style={{ zIndex: 10000000 }}>
-        {/* Time range selector */}
-        <div className="pb-2">
-          <TimeControl />
-        </div>
-
         {/* Interval selector */}
         <div className="pb-2">
           <IntervalControl />

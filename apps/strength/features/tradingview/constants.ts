@@ -2,11 +2,14 @@ import { TimeMarkerConfig } from './lib/primitives/timeMarkers'
 import { TimeRangeConfig } from './lib/primitives/TimeRangeHighlight'
 
 export const SCALE_FACTOR_DESKTOP = 2
-export const SCALE_FACTOR_MOBILE = 1
+export const SCALE_FACTOR_MOBILE = 2
 
-// Fetch this much data from the database (enough for all hoursBack values)
+// Fetch this much data from the database (supports lazy loading of historical data)
 export const FETCH_DATA_HOURS_BACK = 240
 export const FETCH_DATA_ROWS = 7250
+
+// Initial visible range in hours (users can zoom in/out from this)
+export const INITIAL_VISIBLE_HOURS = 24
 
 // Time in ms to wait after user stops scrolling before resuming polling
 // Note: This is now less important as we use smart pause/resume based on visible range

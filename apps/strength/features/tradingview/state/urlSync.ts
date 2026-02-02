@@ -5,7 +5,7 @@
  * and URL query parameters, enabling:
  *
  * 1. **URL → Store**: On page load, query parameters are read and used as
- *    initial values for the store (e.g., ?hoursBack=24&controlTickers=["ETHUSD"])
+ *    initial values for the store (e.g., ?interval=["3","7"]&tickers=["ETHUSD"])
  *
  * 2. **Store → URL**: When store values change, the URL is automatically
  *    updated using history.replaceState() to reflect the new state
@@ -21,7 +21,7 @@
  * - The URL updates don't cause page reloads (uses replaceState)
  *
  * Example URL with synced parameters:
- * /charts?hoursBack=24&controlInterval=["3","7"]&controlTickers=["ETHUSD","BTCUSD"]
+ * /charts?interval=["3","7"]&tickers=["ETHUSD","BTCUSD"]
  */
 
 import { StateStorage } from 'zustand/middleware'

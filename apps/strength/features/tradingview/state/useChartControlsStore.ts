@@ -18,12 +18,6 @@ const getDefaultIntervals = (intervals: readonly string[]): string[] => {
 }
 
 /**
- * Available time range options for historical data
- */
-export const hoursBackOptions = ['120h', '96h', '48h', '24h', '12h', '6h']
-export const hoursBackInitial = hoursBackOptions[0]!
-
-/**
  * Market categories and their ticker options
  * This defines what tickers are available for selection
  */
@@ -79,9 +73,6 @@ export type PriceTickersData = Record<string, LineData[] | null>
  * Simplified: Single chartTickers for both data fetching and display
  */
 type State = {
-  // Time range configuration
-  hoursBack: string
-
   // Interval selection for strength data aggregation
   interval: string[]
 
@@ -136,7 +127,6 @@ type State = {
  */
 type Actions = {
   // Configuration setters
-  setHoursBack: (hours: string) => void
   setInterval: (intervals: string[]) => void
 
   // Single ticker setter for all purposes
@@ -177,7 +167,7 @@ export type ChartControlsStore = State & Actions
  * Keys to sync with URL query parameters
  * Simplified URL structure
  */
-const URL_SYNC_KEYS = ['hoursBack', 'interval', 'tickers']
+const URL_SYNC_KEYS = ['interval', 'tickers']
 
 // ============================================================================
 // INITIALIZATION LOGIC
@@ -191,7 +181,6 @@ const getInitialState = (): State => {
   const defaultTickers = tickersByMarket[0]!.tickers[0]!.value
 
   const defaultState: State = {
-    hoursBack: hoursBackInitial,
     interval: getDefaultIntervals(strengthIntervalsAll),
     chartTickers: defaultTickers,
     timeRange: null,
@@ -215,10 +204,6 @@ const getInitialState = (): State => {
   if (typeof window !== 'undefined') {
     const urlParams = getQueryParams()
 
-    if (urlParams.hoursBack !== undefined) {
-      defaultState.hoursBack = urlParams.hoursBack
-    }
-
     if (urlParams.interval !== undefined) {
       defaultState.interval = urlParams.interval
     }
@@ -241,10 +226,6 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       ...getInitialState(),
 
       // Configuration setters
-      setHoursBack: (hours: string) => {
-        set({ hoursBack: hours })
-      },
-
       setInterval: (intervals: string[]) => {
         // Ensure new array reference for React effect triggering
         set({ interval: [...intervals] })
@@ -329,7 +310,6 @@ export const useChartControlsStore = create<ChartControlsStore>()(
       partialize: (state) => {
         // Direct mapping - no legacy names needed
         return {
-          hoursBack: state.hoursBack,
           interval: state.interval,
           tickers: state.chartTickers,
         }

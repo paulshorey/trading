@@ -37,7 +37,7 @@ export function useChartEventPatcher(
       passive: true,
     })
 
-    const events = [
+    const mouseEvents = [
       'mousemove',
       'mouseenter',
       'mouseleave',
@@ -47,7 +47,7 @@ export function useChartEventPatcher(
       'dblclick',
     ]
 
-    const eventHandler = (e: MouseEvent) => {
+    const mouseEventHandler = (e: MouseEvent) => {
       if ((e as any)._patched) return
 
       e.stopPropagation()
@@ -84,8 +84,81 @@ export function useChartEventPatcher(
       e.target?.dispatchEvent(newEvent)
     }
 
-    events.forEach((eventName) => {
-      container.addEventListener(eventName, eventHandler as any, {
+    mouseEvents.forEach((eventName) => {
+      container.addEventListener(eventName, mouseEventHandler as any, {
+        capture: true,
+      })
+    })
+
+    // Touch event patching for mobile crosshair (single-finger touch)
+    const touchEvents = ['touchstart', 'touchmove', 'touchend', 'touchcancel']
+
+    const touchEventHandler = (e: TouchEvent) => {
+      if ((e as any)._patched) return
+      // Only patch single-finger touch (for crosshair), not multi-touch (pinch zoom)
+      if (e.touches.length > 1) return
+
+      e.stopPropagation()
+
+      const rect = container.getBoundingClientRect()
+      const scale = window.scaleFactor || 1
+
+      // Create new Touch objects with scaled coordinates
+      const scaledTouches: Touch[] = []
+      const scaledTargetTouches: Touch[] = []
+      const scaledChangedTouches: Touch[] = []
+
+      const scaleTouch = (touch: Touch): Touch => {
+        const relativeX = touch.clientX - rect.left
+        const relativeY = touch.clientY - rect.top
+        const newClientX = rect.left + relativeX * scale
+        const newClientY = rect.top + relativeY * scale
+
+        return new Touch({
+          identifier: touch.identifier,
+          target: touch.target,
+          clientX: newClientX,
+          clientY: newClientY,
+          screenX: touch.screenX,
+          screenY: touch.screenY,
+          pageX: touch.pageX,
+          pageY: touch.pageY,
+          radiusX: touch.radiusX,
+          radiusY: touch.radiusY,
+          rotationAngle: touch.rotationAngle,
+          force: touch.force,
+        })
+      }
+
+      for (let i = 0; i < e.touches.length; i++) {
+        scaledTouches.push(scaleTouch(e.touches[i]!))
+      }
+      for (let i = 0; i < e.targetTouches.length; i++) {
+        scaledTargetTouches.push(scaleTouch(e.targetTouches[i]!))
+      }
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        scaledChangedTouches.push(scaleTouch(e.changedTouches[i]!))
+      }
+
+      const newEvent = new TouchEvent(e.type, {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        touches: scaledTouches,
+        targetTouches: scaledTargetTouches,
+        changedTouches: scaledChangedTouches,
+        ctrlKey: e.ctrlKey,
+        altKey: e.altKey,
+        shiftKey: e.shiftKey,
+        metaKey: e.metaKey,
+      })
+
+      Object.defineProperty(newEvent, '_patched', { value: true })
+      e.target?.dispatchEvent(newEvent)
+    }
+
+    touchEvents.forEach((eventName) => {
+      container.addEventListener(eventName, touchEventHandler as any, {
         capture: true,
       })
     })
@@ -93,8 +166,13 @@ export function useChartEventPatcher(
     return () => {
       container.removeEventListener('wheel', handleUserInteraction)
       container.removeEventListener('touchmove', handleUserInteraction)
-      events.forEach((eventName) => {
-        container.removeEventListener(eventName, eventHandler as any, {
+      mouseEvents.forEach((eventName) => {
+        container.removeEventListener(eventName, mouseEventHandler as any, {
+          capture: true,
+        })
+      })
+      touchEvents.forEach((eventName) => {
+        container.removeEventListener(eventName, touchEventHandler as any, {
           capture: true,
         })
       })

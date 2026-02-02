@@ -1,12 +1,13 @@
 import { Candle } from '@/lib/market-data/candles'
 import { BarData, LineData, Time } from 'lightweight-charts'
-import { calculateRSI } from '../lib/indicators'
+import { calculateRSI, calculateATR } from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'
 export const POLL_INTERVAL_MS = 1000
-export const RECENT_CANDLES = 22
+export const RECENT_CANDLES = 22 // I guess it needs to be enough to calculate indicators
 export const RSI_PERIOD = 14
+export const ATR_PERIOD = 5
 
 // Extra width to extend chart past screen edge, pushing price scale's internal padding off-screen
 // This makes the price numbers appear flush against the right edge
@@ -21,17 +22,32 @@ export const COLORS = {
   crosshair: '#71649C',
 }
 
-// Series configuration: enabled, color, and scale margins (top/bottom)
+// Series configuration type
+export interface SeriesConfig {
+  seriesType: 'Bar' | 'Line'
+  enabled: boolean
+  color: string
+  top: number
+  bottom: number
+  priceScaleId: string
+  lastValueVisible?: boolean
+  applyScaleMargins?: boolean
+  formatter: (candles: Candle[]) => BarData[] | LineData[]
+}
+
+// Series configuration: enabled, color, scale margins (top/bottom), and chart options
 // Set `enabled: false` to hide a series from the chart
-export const SERIES = {
+export const SERIES: Record<string, SeriesConfig> = {
   // Main series
   price: {
     seriesType: 'Bar',
-    // range: unbounded
     enabled: true,
     color: 'hsl(221.01 100% 72.75%)',
     top: 0,
     bottom: 0.4,
+    // Chart options
+    priceScaleId: 'right',
+    lastValueVisible: true,
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -44,11 +60,13 @@ export const SERIES = {
   },
   vwap: {
     seriesType: 'Bar',
-    // range: unbounded
     enabled: false,
     color: 'hsl(45 100% 50%)',
     top: 0,
     bottom: 0.4,
+    // Chart options
+    priceScaleId: 'right',
+    applyScaleMargins: false, // shares scale with price
     formatter: function (candles: Candle[]): BarData[] {
       return candles
         .filter(
@@ -69,11 +87,13 @@ export const SERIES = {
   },
   cvd: {
     seriesType: 'Bar',
-    // range: unbounded
     enabled: true,
     color: 'hsla(115.87 100% 62.94% / 0.75)',
     top: 0.125,
     bottom: 0.5,
+    // Chart options
+    priceScaleId: 'left',
+    lastValueVisible: true,
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -85,28 +105,41 @@ export const SERIES = {
     },
   },
 
-  // trend
+  // relative strength
   rsi: {
     seriesType: 'Line',
-    // range: 100 to 0
     enabled: true,
     color: 'hsl(40 100% 50%)',
     top: 0.35,
     bottom: 0.15,
+    // Chart options
+    priceScaleId: 'rsi',
     formatter: function (candles: Candle[]): LineData[] {
       return calculateRSI(candles, RSI_PERIOD)
     },
   },
+  // volatility (average true range)
+  atr: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(180 70% 50%)', // cyan
+    top: 0.65,
+    bottom: 0,
+    // Chart options
+    priceScaleId: 'atr',
+    formatter: function (candles: Candle[]): LineData[] {
+      return calculateATR(candles, ATR_PERIOD)
+    },
+  },
   // HL/LH trend
   bookImbalance: {
-    // invert
     seriesType: 'Line',
-    // range: 1 to -1
     enabled: false,
     color: 'hsl(0 70% 60%)',
-    // color: 'hsl(160 60% 50%)',
     top: 0.35,
     bottom: 0.15,
+    // Chart options
+    priceScaleId: 'bookImbalance',
     formatter: function (candles: Candle[]): LineData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -118,11 +151,12 @@ export const SERIES = {
   // 0-middle volatility:
   pricePct: {
     seriesType: 'Bar',
-    // range: ? recent: 17.17 to -25.41
     enabled: false,
     color: 'hsl(15 90% 55%)', // red-orange
     top: 0.6,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'metrics',
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -135,12 +169,13 @@ export const SERIES = {
   },
   evr: {
     seriesType: 'Bar',
-    // range: ? recent: 2.46 to -1.9 (scaled x8 in dataTransformers.ts)
-    // shares scale with pricePct (priceScaleId: 'metrics')
     enabled: false,
     color: 'hsl(280 70% 65%)',
     top: 0.6,
     bottom: 0,
+    // Chart options (shares scale with pricePct)
+    priceScaleId: 'metrics',
+    applyScaleMargins: false,
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -154,12 +189,13 @@ export const SERIES = {
 
   // 0-floor histogram:
   volume: {
-    enabled: true,
     seriesType: 'Line',
-    // range: unbounded positive to 0
+    enabled: true,
     color: 'hsl(50 100% 100%)',
     top: 0.8,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'volume',
     formatter: function (candles: Candle[]): LineData[] {
       const rsi = calculateRSI(candles, 70, 'volume')
       return rsi.map((candle) => ({
@@ -170,11 +206,12 @@ export const SERIES = {
   },
   bigTrades: {
     seriesType: 'Line',
-    // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(320 70% 55%)', // magenta
     top: 0.75,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'bigTrades',
     formatter: function (candles: Candle[]): LineData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -184,11 +221,12 @@ export const SERIES = {
   },
   bigVolume: {
     seriesType: 'Line',
-    // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(260 60% 60%)',
     top: 0.75,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'bigVolume',
     formatter: function (candles: Candle[]): LineData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -198,11 +236,12 @@ export const SERIES = {
   },
   vdStrength: {
     seriesType: 'Line',
-    // range: unbounded positive to 0
     enabled: true,
     color: 'hsl(50 80% 55%)',
     top: 0.85,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'vdStrength',
     formatter: function (candles: Candle[]): LineData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -214,11 +253,12 @@ export const SERIES = {
   // not used
   spreadBps: {
     seriesType: 'Bar',
-    // range: ? recent: 1.84 to - 80.25
     enabled: false,
     color: 'hsl(200 80% 55%)',
     top: 0.8,
     bottom: 0,
+    // Chart options
+    priceScaleId: 'spreadBps',
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -230,6 +270,12 @@ export const SERIES = {
     },
   },
 }
+
+// Export type for series keys
+export type SeriesKey = keyof typeof SERIES
+
+// Helper to get series keys as array
+export const SERIES_KEYS = Object.keys(SERIES) as SeriesKey[]
 
 // Absorption marker configuration
 export const ABSORPTION_MARKER = {

@@ -109,36 +109,108 @@ export function calculateRSI(
 }
 
 /**
- * Detect absorption points where all conditions are met:
- * Returns timestamps of candles that meet all criteria
+ * Calculate True Range for a single candle
+ * TR = max(High - Low, |High - PreviousClose|, |Low - PreviousClose|)
+ * Simplified: TR = max(High, PreviousClose) - min(Low, PreviousClose)
+ *
+ * True Range captures volatility including gaps from previous close.
+ * Developed by J. Welles Wilder Jr.
  */
-export function detectAbsorptionPoints(candles: Candle[]): number[] {
-  const absorptionTimestamps: number[] = []
+export function calculateTR(
+  current: Candle,
+  previousClose: number | null
+): number {
+  const highLow = current.high - current.low
 
-  for (const candle of candles) {
-    const hasSpreadData = candle.spread_bps_close != null
-    const hasBigTrades = candle.big_trades > 0
-
-    // Price movement divergence
-    const hasPriceDivergence = Math.abs(candle.close - candle.open) > 0
-
-    // All conditions are met:
-    if (hasPriceDivergence && hasSpreadData && hasBigTrades) {
-      absorptionTimestamps.push(candle.time)
-    }
+  if (previousClose === null) {
+    // First candle: just use high - low
+    return highLow
   }
 
-  return absorptionTimestamps
+  const highPrevClose = Math.abs(current.high - previousClose)
+  const lowPrevClose = Math.abs(current.low - previousClose)
+
+  return Math.max(highLow, highPrevClose, lowPrevClose)
 }
 
 /**
- * Format time for chart display
+ * Calculate Exponential Moving Average for a series of values
+ * EMA_t = (Value_t × α) + (EMA_(t-1) × (1 - α))
+ * where α = 2 / (period + 1)
+ *
+ * First EMA value is initialized with Simple Moving Average of first N values.
  */
-export function timeFormatter(time: Time) {
-  const date = new Date((time as number) * 1000)
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const month = (date.getMonth() + 1).toString()
-  const day = date.getDate().toString()
-  return `${month}/${day} ${hours}:${minutes}`
+export function calculateEMA(values: number[], period: number): number[] {
+  if (values.length < period) {
+    return []
+  }
+
+  const result: number[] = []
+  const alpha = 2 / (period + 1)
+
+  // Calculate initial SMA for the first EMA value
+  let sum = 0
+  for (let i = 0; i < period; i++) {
+    sum += values[i] ?? 0
+  }
+  let ema = sum / period
+
+  // First EMA value at index (period - 1)
+  result.push(ema)
+
+  // Calculate subsequent EMA values
+  for (let i = period; i < values.length; i++) {
+    const value = values[i] ?? 0
+    ema = value * alpha + ema * (1 - alpha)
+    result.push(ema)
+  }
+
+  return result
+}
+
+/**
+ * Calculate Average True Range (ATR) using EMA smoothing
+ * ATR is the exponential moving average of True Range values.
+ *
+ * @param candles - Array of candle data
+ * @param period - EMA period (default 14, standard for ATR)
+ * @returns Array of time/value pairs for charting
+ */
+export function calculateATR(
+  candles: Candle[],
+  period: number = 14
+): IndicatorOutput {
+  if (candles.length < period + 1) {
+    return []
+  }
+
+  // Calculate True Range for each candle
+  const trValues: number[] = []
+  for (let i = 0; i < candles.length; i++) {
+    const current = candles[i]
+    const previous = candles[i - 1]
+    if (current) {
+      const tr = calculateTR(current, previous?.close ?? null)
+      trValues.push(tr)
+    }
+  }
+
+  // Apply EMA to True Range values
+  const atrValues = calculateEMA(trValues, period)
+
+  // Map to output format (offset by period since EMA starts at index period-1)
+  const result: IndicatorOutput = []
+  for (let i = 0; i < atrValues.length; i++) {
+    const candleIndex = i + period - 1
+    const candle = candles[candleIndex]
+    const atr = atrValues[i]
+    if (candle && atr !== undefined) {
+      result.push({
+        time: (candle.time / 1000) as Time,
+        value: atr,
+      })
+    }
+  }
+
+  return result
 }

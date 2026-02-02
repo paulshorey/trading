@@ -1,33 +1,49 @@
-import { useCallback, useRef } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  MutableRefObject,
+} from 'react'
+import type { IChartApi } from 'lightweight-charts'
 import type { Candle } from '@/lib/market-data/candles'
-import { POLL_INTERVAL_MS, RECENT_CANDLES, buildCandlesUrl } from './constants'
-import { useUpdateData } from './useUpdateData'
-import type { SeriesRefs, AbsorptionRefs } from './useChart'
+import {
+  POLL_INTERVAL_MS,
+  RECENT_CANDLES,
+  PRICE_SCALE_RIGHT_OFFSET,
+  buildCandlesUrl,
+} from './constants'
+import { usePlotData } from './usePlotData'
+import type { SeriesRefs, AbsorptionRefs } from './useInitChart'
 
-interface UsePollingProps {
-  dataRef: React.MutableRefObject<Candle[]>
+interface UsePollDataProps {
+  chartRef: MutableRefObject<IChartApi | null>
+  dataRef: MutableRefObject<Candle[]>
   seriesRefs: SeriesRefs
   absorptionRefs: AbsorptionRefs
+  width: number
 }
 
-interface UsePollingReturn {
-  fetchCandles: (limit: number) => Promise<Candle[]>
-  updateChartData: (candles: Candle[]) => void
-  applyRecentCandles: (recentCandles: Candle[]) => void
-  startPolling: () => void
-  stopPolling: () => void
+interface UsePollDataReturn {
+  isLoading: boolean
+  error: string | null
 }
 
-export function usePolling({
+export function usePollData({
+  chartRef,
   dataRef,
   seriesRefs,
   absorptionRefs,
-}: UsePollingProps): UsePollingReturn {
+  width,
+}: UsePollDataProps): UsePollDataReturn {
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const isPollingRef = useRef(false)
   const hasStartedPollingRef = useRef(false)
 
-  const { updateChartData } = useUpdateData({ seriesRefs, absorptionRefs })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const { plotChartData } = usePlotData({ seriesRefs, absorptionRefs })
 
   const fetchCandles = useCallback(async (limit: number) => {
     const response = await fetch(buildCandlesUrl(limit))
@@ -42,7 +58,7 @@ export function usePolling({
       const existing = dataRef.current
       if (existing.length === 0) {
         dataRef.current = recentCandles
-        updateChartData(recentCandles)
+        plotChartData(recentCandles)
         return
       }
 
@@ -76,10 +92,10 @@ export function usePolling({
       }
 
       if (didUpdate) {
-        updateChartData(existing)
+        plotChartData(existing)
       }
     },
-    [dataRef, updateChartData]
+    [dataRef, plotChartData]
   )
 
   const pollLatest = useCallback(async () => {
@@ -117,11 +133,58 @@ export function usePolling({
     hasStartedPollingRef.current = false
   }, [])
 
-  return {
+  // Load initial data and start polling
+  useEffect(() => {
+    let isMounted = true
+    const SCREEN_CANDLES = 2 * (width - PRICE_SCALE_RIGHT_OFFSET - 80)
+
+    fetchCandles(SCREEN_CANDLES)
+      .then((initialCandles) => {
+        if (!isMounted) return
+        if (initialCandles.length > 0) {
+          dataRef.current = initialCandles
+          plotChartData(initialCandles)
+
+          // Show ~50% of the data, zoomed in with the latest candle visible
+          if (chartRef.current) {
+            const totalBars = initialCandles.length
+            const barsToShow = Math.floor(totalBars * 0.5)
+            const lastBarIndex = totalBars - 1
+            const fromIndex = lastBarIndex - barsToShow
+
+            chartRef.current.timeScale().setVisibleLogicalRange({
+              from: fromIndex,
+              to: lastBarIndex + 2,
+            })
+          }
+        }
+        setIsLoading(false)
+        startPolling()
+      })
+      .catch((err) => {
+        console.error('Error loading initial candles:', err)
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load data')
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+      stopPolling()
+    }
+  }, [
     fetchCandles,
-    updateChartData,
-    applyRecentCandles,
+    plotChartData,
     startPolling,
     stopPolling,
+    chartRef,
+    dataRef,
+    width,
+  ])
+
+  return {
+    isLoading,
+    error,
   }
 }

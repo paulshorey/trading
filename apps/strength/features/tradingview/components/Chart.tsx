@@ -278,7 +278,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       // setVisibleRange fails if the series has no data
       // Time range is applied after data is set in the useEffect hooks below
 
-      // Custom zoom handler anchored on the last data bar
+      // Custom zoom handler anchored at cursor position
       // Requires cmd (Mac) or ctrl (Windows) + scroll to zoom
       const handleWheel = (e: WheelEvent) => {
         // Only handle zoom gestures: ctrl/cmd+wheel or trackpad pinch
@@ -292,10 +292,14 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
 
-        // Get the last bar's logical index from strength data
-        const data = lastStrengthAverageRef.current
-        if (!data || data.length === 0) return
-        const lastBarIndex = data.length - 1
+        // Get cursor position relative to container
+        const containerRect = containerRef.current?.getBoundingClientRect()
+        if (!containerRect) return
+        const cursorX = e.clientX - containerRect.left
+
+        // Convert cursor X to logical index
+        const cursorLogical = timeScale.coordinateToLogical(cursorX)
+        if (cursorLogical === null) return
 
         // Calculate zoom factor based on wheel delta
         // Smaller factor for smoother zoom
@@ -306,9 +310,8 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const currentTo = visibleRange.to
         const currentWidth = currentTo - currentFrom
 
-        // Calculate the gap between the last bar and the visible right edge
-        // This gap should be preserved after zoom
-        const rightGap = currentTo - lastBarIndex
+        // Calculate cursor position as fraction of visible range (0 = left, 1 = right)
+        const cursorFraction = (cursorLogical - currentFrom) / currentWidth
 
         // New width after zoom
         const newWidth = currentWidth * zoomFactor
@@ -318,12 +321,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const maxBars = 50000
         if (newWidth < minBars || newWidth > maxBars) return
 
-        // Anchor on the last bar: keep lastBarIndex in the same position
-        // newTo = lastBarIndex + rightGap (preserves the gap)
-        const newTo = lastBarIndex + rightGap
-        const newFrom = newTo - newWidth
+        // Anchor at cursor: keep cursorLogical at the same screen position
+        const newFrom = cursorLogical - cursorFraction * newWidth
+        const newTo = newFrom + newWidth
 
-        // Apply the new range with last bar anchored
+        // Apply the new range with cursor anchored
         timeScale.setVisibleLogicalRange({
           from: newFrom,
           to: newTo,

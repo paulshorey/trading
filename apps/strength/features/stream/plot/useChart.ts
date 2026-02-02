@@ -400,7 +400,7 @@ export function useChart({
       vdStrengthSeriesRef.current = vdStrengthSeries
     }
 
-    // Custom zoom handler anchored on the last data bar
+    // Custom zoom handler anchored at cursor position
     const handleWheel = (e: WheelEvent) => {
       const isZoomGesture = e.ctrlKey || e.metaKey
       if (!isZoomGesture) return
@@ -412,24 +412,33 @@ export function useChart({
       const visibleRange = timeScale.getVisibleLogicalRange()
       if (!visibleRange) return
 
-      const dataLength = dataRef.current.length
-      if (dataLength === 0) return
-      const lastBarIndex = dataLength - 1
+      // Get cursor position relative to container
+      const containerRect = containerRef.current?.getBoundingClientRect()
+      if (!containerRect) return
+      const cursorX = e.clientX - containerRect.left
+
+      // Convert cursor X to logical index
+      const cursorLogical = timeScale.coordinateToLogical(cursorX)
+      if (cursorLogical === null) return
 
       const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95
 
       const currentFrom = visibleRange.from
       const currentTo = visibleRange.to
       const currentWidth = currentTo - currentFrom
-      const rightGap = currentTo - lastBarIndex
+
+      // Calculate cursor position as fraction of visible range (0 = left, 1 = right)
+      const cursorFraction = (cursorLogical - currentFrom) / currentWidth
+
       const newWidth = currentWidth * zoomFactor
 
       const minBars = 10
       const maxBars = 50000
       if (newWidth < minBars || newWidth > maxBars) return
 
-      const newTo = lastBarIndex + rightGap
-      const newFrom = newTo - newWidth
+      // Anchor at cursor: keep cursorLogical at the same screen position
+      const newFrom = cursorLogical - cursorFraction * newWidth
+      const newTo = newFrom + newWidth
 
       timeScale.setVisibleLogicalRange({
         from: newFrom,

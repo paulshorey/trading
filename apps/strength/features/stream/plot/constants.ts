@@ -1,11 +1,6 @@
 import { Candle } from '@/lib/market-data/candles'
 import { BarData, LineData, Time } from 'lightweight-charts'
-import {
-  calculateRSI,
-  calculateATR,
-  detectPivotPoints,
-  pivotPoints,
-} from '../lib/indicators'
+import { calculateRSI, calculateATR, pivotPoints } from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'

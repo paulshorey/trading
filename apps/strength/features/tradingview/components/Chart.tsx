@@ -252,10 +252,6 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
           ...getLineSeriesConfig(),
           lineWidth: interval === '181' && !showStrengthLine ? 2 : 1,
           color: COLORS.strength_i,
-          // Optionally make one line stand out:
-          // interval === '181' && !showStrengthLine
-          //   ? COLORS.strength
-          //   : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as strength average
         })
         strengthIntervalSeriesRef.current[interval] = intervalSeries
@@ -822,8 +818,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
           series.applyOptions({
             visible: showStrengthIntervalLines && isSelected,
-            lineWidth: isHighlightedInterval ? 2 : 1,
-            color: isHighlightedInterval ? COLORS.strength : COLORS.strength_i,
+            lineWidth: 1,
+            color: isHighlightedInterval
+              ? COLORS.strength
+              : COLORS[`strength_${interval}` as keyof typeof COLORS] ||
+                COLORS.strength_i,
           })
         })
       } catch (error) {

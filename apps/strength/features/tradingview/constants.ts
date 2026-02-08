@@ -48,17 +48,7 @@ export const COLORS = {
   // Indicator
   indicator: 'hsl(120 70.8% 44.31%)',
   // Strength
-  strength_1: 'hsl(35 100% 5%)', // Orange
-  strength_3: 'hsl(35 100% 10%)', // Orange
-  strength_5: 'hsl(35 100% 15%)', // Orange
-  strength_7: 'hsl(35 100% 20%)', // Orange
-  strength_13: 'hsl(35 100% 25%)', // Orange
-  strength_29: 'hsl(35 100% 30%)', // Orange
-  strength_59: 'hsl(35 100% 35%)', // Orange
-  strength_109: 'hsl(35 100% 40%)', // Orange
-  strength_181: 'hsl(35 100% 45%)', // Orange
   strength: 'hsl(35 100% 50%)', // Orange
-  strength_1d: 'hsl(35 100% 60%)', // Orange
   // Price
   price: 'hsl(233 100% 75%)', // Blue
   // Etc
@@ -68,6 +58,18 @@ export const COLORS = {
   strength_i: 'hsla(35 100% 50% / 0.55)', // Orange transparent
   strength_ii: 'hsla(35 100% 50% / 0.44)', // Orange transparent
   strength_iii: 'hsla(35 100% 50% / 0.22)', // Orange transparent
+
+  strength_1: 'hsla(35 100% 50% / 0.25)', // Orange
+  strength_3: 'hsla(35 100% 50% / 0.3)', // Orange
+  strength_5: 'hsla(35 100% 50% / 0.35)', // Orange
+  strength_7: 'hsla(35 100% 50% / 0.4)', // Orange
+  strength_13: 'hsla(35 100% 50% / 0.45)', // Orange
+  strength_29: 'hsla(35 100% 50% / 0.5)', // Orange
+  strength_59: 'hsla(35 100% 50% / 0.6)', // Orange
+  strength_109: 'hsla(35 100% 50% / 0.7)', // Orange
+  strength_181: 'hsla(35 100% 50% / 0.8)', // Orange
+  strength_D: 'hsla(35 100% 50% / 0.5)', // Orange
+  strength_W: 'hsla(35 100% 50% / 0.5)', // Orange
 
   // price_i: 'hsla(275 85% 70% / 0.5)', // Purple transparent
   price_i: 'hsla(233 100% 75% / 0.67)', // Blue transparent

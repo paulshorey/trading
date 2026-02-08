@@ -48,7 +48,17 @@ export const COLORS = {
   // Indicator
   indicator: 'hsl(120 70.8% 44.31%)',
   // Strength
+  strength_1: 'hsl(35 100% 5%)', // Orange
+  strength_3: 'hsl(35 100% 10%)', // Orange
+  strength_5: 'hsl(35 100% 15%)', // Orange
+  strength_7: 'hsl(35 100% 20%)', // Orange
+  strength_13: 'hsl(35 100% 25%)', // Orange
+  strength_29: 'hsl(35 100% 30%)', // Orange
+  strength_59: 'hsl(35 100% 35%)', // Orange
+  strength_109: 'hsl(35 100% 40%)', // Orange
+  strength_181: 'hsl(35 100% 45%)', // Orange
   strength: 'hsl(35 100% 50%)', // Orange
+  strength_1d: 'hsl(35 100% 60%)', // Orange
   // Price
   price: 'hsl(233 100% 75%)', // Blue
   // Etc

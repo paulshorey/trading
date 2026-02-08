@@ -1,4 +1,4 @@
-import { Time } from 'lightweight-charts'
+import { LineData, Time } from 'lightweight-charts'
 import type { Candle } from '@/lib/market-data/candles'
 import { RSI_PERIOD } from '../plot/constants'
 
@@ -27,7 +27,7 @@ export function toLogScale(value: number, exponent: number = 0.5): number {
  * RSI = 100 - (100 / (1 + RS))
  * RS = Average Gain / Average Loss over the period
  */
-export function calculateRSI(
+export function indicatorRSI(
   candles: Candle[],
   period: number = RSI_PERIOD,
   property: keyof Candle = 'close'
@@ -119,14 +119,14 @@ export function calculateRSI(
  * Calculate RSI as OHLC bars by computing RSI independently for each price component.
  * Each bar's high/low are the max/min of all four RSI values to ensure valid OHLC structure.
  */
-export function calculateRSI_OHLC(
+export function indicatorRSI_OHLC(
   candles: Candle[],
   period: number = RSI_PERIOD
 ): IndicatorOHLCOutput {
-  const rsiOpen = calculateRSI(candles, period, 'open')
-  const rsiHigh = calculateRSI(candles, period, 'high')
-  const rsiLow = calculateRSI(candles, period, 'low')
-  const rsiClose = calculateRSI(candles, period, 'close')
+  const rsiOpen = indicatorRSI(candles, period, 'open')
+  const rsiHigh = indicatorRSI(candles, period, 'high')
+  const rsiLow = indicatorRSI(candles, period, 'low')
+  const rsiClose = indicatorRSI(candles, period, 'close')
 
   const result: IndicatorOHLCOutput = []
   for (let i = 0; i < rsiClose.length; i++) {
@@ -156,10 +156,7 @@ export function calculateRSI_OHLC(
  * True Range captures volatility including gaps from previous close.
  * Developed by J. Welles Wilder Jr.
  */
-export function calculateTR(
-  current: Candle,
-  previousClose: number | null
-): number {
+function _tr(current: Candle, previousClose: number | null): number {
   const highLow = current.high - current.low
 
   if (previousClose === null) {
@@ -173,6 +170,37 @@ export function calculateTR(
   return Math.max(highLow, highPrevClose, lowPrevClose)
 }
 
+export function _trs(candles: Candle[]): number[] {
+  // Calculate True Range for each candle
+  const trValues: number[] = []
+  for (let i = 0; i < candles.length; i++) {
+    const current = candles[i]
+    const previous = candles[i - 1]
+    if (current) {
+      const tr = _tr(current, previous?.close ?? null)
+      trValues.push(tr)
+    }
+  }
+  return trValues
+}
+
+export function indicatorTR(candles: Candle[]): LineData[] {
+  // Calculate True Range for each candle
+  const trValues: LineData[] = []
+  for (let i = 0; i < candles.length; i++) {
+    const current = candles[i]
+    const previous = candles[i - 1]
+    if (current) {
+      const tr = _tr(current, previous?.close ?? null)
+      trValues.push({
+        time: (candles[i].time / 1000) as Time,
+        value: tr,
+      })
+    }
+  }
+  return trValues
+}
+
 /**
  * Calculate Exponential Moving Average for a series of values
  * EMA_t = (Value_t × α) + (EMA_(t-1) × (1 - α))
@@ -180,7 +208,7 @@ export function calculateTR(
  *
  * First EMA value is initialized with Simple Moving Average of first N values.
  */
-export function calculateEMA(values: number[], period: number): number[] {
+export function indicatorEMA(values: number[], period: number): number[] {
   if (values.length < period) {
     return []
   }
@@ -216,7 +244,7 @@ export function calculateEMA(values: number[], period: number): number[] {
  * @param period - EMA period (default 14, standard for ATR)
  * @returns Array of time/value pairs for charting
  */
-export function calculateATR(
+export function indicatorATR(
   candles: Candle[],
   period: number = 14
 ): IndicatorOutput {
@@ -225,18 +253,10 @@ export function calculateATR(
   }
 
   // Calculate True Range for each candle
-  const trValues: number[] = []
-  for (let i = 0; i < candles.length; i++) {
-    const current = candles[i]
-    const previous = candles[i - 1]
-    if (current) {
-      const tr = calculateTR(current, previous?.close ?? null)
-      trValues.push(tr)
-    }
-  }
+  const trValues = _trs(candles)
 
   // Apply EMA to True Range values
-  const atrValues = calculateEMA(trValues, period)
+  const atrValues = indicatorEMA(trValues, period)
 
   // Map to output format (offset by period since EMA starts at index period-1)
   const result: IndicatorOutput = []

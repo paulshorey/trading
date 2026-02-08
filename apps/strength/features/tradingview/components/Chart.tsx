@@ -286,6 +286,10 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Track mouse position for zoom anchor (wheel event clientX/Y is unreliable for trackpad pinch)
       let lastMouseX: number | null = null
+      // Track when the last zoom gesture occurred, to suppress momentum scroll events
+      // that follow a zoom gesture (macOS trackpad momentum events lose the modifier key)
+      let lastZoomTime = 0
+      const ZOOM_COOLDOWN_MS = 400
 
       const handleMouseMove = (e: MouseEvent) => {
         const containerRect = containerRef.current?.getBoundingClientRect()
@@ -299,13 +303,25 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
       }
 
       // Custom zoom handler with adaptive anchor point
-      // - If latest data bar is visible (real-time mode): anchor at last actual data candle
+      // - If latest data bar is visible (real-time mode): anchor at right edge of visible range
       // - If scrolled back (historical mode): anchor at cursor position
       // Requires cmd (Mac) or ctrl (Windows) + scroll to zoom
       const handleWheel = (e: WheelEvent) => {
         // Only handle zoom gestures: ctrl/cmd+wheel or trackpad pinch
         const isZoomGesture = e.ctrlKey || e.metaKey
-        if (!isZoomGesture) return // Let lightweight-charts handle regular scroll/pan
+
+        if (isZoomGesture) {
+          lastZoomTime = Date.now()
+        } else if (Date.now() - lastZoomTime < ZOOM_COOLDOWN_MS) {
+          // Suppress momentum scroll events that follow a zoom gesture.
+          // On macOS, trackpad momentum events may lose the modifier key,
+          // which would cause lightweight-charts to interpret them as pan.
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        } else {
+          return // Regular scroll, let lightweight-charts handle scroll/pan
+        }
 
         e.preventDefault()
         e.stopPropagation()
@@ -327,8 +343,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const data = lastStrengthAverageRef.current
 
         if (lastLatestBarVisibleRef.current && data && data.length > 0) {
-          // Real-time mode: anchor at the last actual data candle (ignore future padding)
-          anchorLogical = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
+          // Real-time mode: anchor at the right edge of the visible range.
+          // This prevents the chart from drifting into future empty space
+          // during zoom-out. All expansion/contraction happens on the left
+          // side (history), keeping the last candle approximately fixed.
+          anchorLogical = currentTo
         } else {
           // Historical mode: anchor at cursor position
           const cursorX = lastMouseX ?? e.clientX - containerRect.left
@@ -353,8 +372,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         if (newWidth < minBars || newWidth > maxBars) return
 
         // Anchor zoom: keep anchorLogical at the same screen position
-        const newFrom = anchorLogical - anchorFraction * newWidth
-        const newTo = newFrom + newWidth
+        let newFrom = anchorLogical - anchorFraction * newWidth
+        let newTo = newFrom + newWidth
+
+        // In real-time mode, clamp the right edge to prevent extending
+        // beyond the data range (including future padding)
+        if (lastLatestBarVisibleRef.current && data && data.length > 0) {
+          const maxTo = data.length - 1
+          if (newTo > maxTo) {
+            newTo = maxTo
+            newFrom = newTo - newWidth
+          }
+        }
 
         // Apply the new range
         timeScale.setVisibleLogicalRange({
@@ -418,8 +447,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const data = lastStrengthAverageRef.current
 
         if (lastLatestBarVisibleRef.current && data && data.length > 0) {
-          // Real-time mode: anchor at the last actual data candle (ignore future padding)
-          anchorLogical = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
+          // Real-time mode: anchor at the right edge of the visible range.
+          // This prevents the chart from drifting into future empty space
+          // during zoom-out. All expansion/contraction happens on the left
+          // side (history), keeping the last candle approximately fixed.
+          anchorLogical = currentTo
         } else {
           // Historical mode: anchor at pinch midpoint
           const scale = window.scaleFactor || 1
@@ -446,8 +478,18 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         if (newWidth < minBars || newWidth > maxBars) return
 
         // Anchor zoom: keep anchorLogical at the same screen position
-        const newFrom = anchorLogical - anchorFraction * newWidth
-        const newTo = newFrom + newWidth
+        let newFrom = anchorLogical - anchorFraction * newWidth
+        let newTo = newFrom + newWidth
+
+        // In real-time mode, clamp the right edge to prevent extending
+        // beyond the data range (including future padding)
+        if (lastLatestBarVisibleRef.current && data && data.length > 0) {
+          const maxTo = data.length - 1
+          if (newTo > maxTo) {
+            newTo = maxTo
+            newFrom = newTo - newWidth
+          }
+        }
 
         timeScale.setVisibleLogicalRange({
           from: newFrom,

@@ -1,16 +1,17 @@
 import { Candle } from '@/lib/market-data/candles'
 import { BarData, LineData, Time } from 'lightweight-charts'
 import {
-  calculateRSI,
-  calculateRSI_OHLC,
-  calculateATR,
+  indicatorRSI,
+  indicatorRSI_OHLC,
+  indicatorATR,
   pivotPoints,
+  indicatorTR,
 } from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'
 export const POLL_INTERVAL_MS = 1000
-export const RECENT_CANDLES = 22 // I guess it needs to be enough to calculate indicators
+export const RECENT_CANDLES = 22 // I guess it needs to be enough to indicator indicators
 export const RSI_PERIOD = 14
 export const ATR_PERIOD = 5
 
@@ -89,7 +90,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     priceScaleId: 'rsi',
     lastValueVisible: true,
     formatter: function (candles: Candle[]): BarData[] {
-      return calculateRSI_OHLC(candles, RSI_PERIOD)
+      return indicatorRSI_OHLC(candles, RSI_PERIOD)
     },
   },
 
@@ -103,7 +104,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     priceScaleId: 'rsi',
     lastValueVisible: true,
     formatter: function (candles: Candle[]): LineData[] {
-      return calculateRSI(candles, RSI_PERIOD)
+      return indicatorRSI(candles, RSI_PERIOD)
     },
   },
   // pivot points
@@ -129,7 +130,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     bottom: 0,
     priceScaleId: 'atr',
     formatter: function (candles: Candle[]): LineData[] {
-      return calculateATR(candles, ATR_PERIOD)
+      return indicatorTR(candles)
     },
   },
   // 0-floor histogram:
@@ -141,7 +142,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     bottom: 0,
     priceScaleId: 'volume',
     formatter: function (candles: Candle[]): LineData[] {
-      const rsi = calculateRSI(candles, 70, 'volume')
+      const rsi = indicatorRSI(candles, 70, 'volume')
       return rsi.map((candle) => ({
         time: candle.time as Time,
         value: candle.value,

@@ -12,20 +12,13 @@ export function detectAbsorptionPoints(candles: Candle[]): number[] {
   for (const candle of candles) {
     const book_imbalance = candle.book_imbalance != null
     const big_volume = candle.big_volume > 0
-    const vd_strength = candle.vd_strength > 0
     const big_trades = candle.big_trades > 0
 
     // Price movement divergence
     const hasPriceDivergence = Math.abs(candle.close - candle.open) > 0
 
     // All conditions are met:
-    if (
-      hasPriceDivergence &&
-      book_imbalance &&
-      big_trades &&
-      big_volume &&
-      vd_strength
-    ) {
+    if (hasPriceDivergence && book_imbalance && big_trades && big_volume) {
       absorptionTimestamps.push(candle.time)
     }
   }

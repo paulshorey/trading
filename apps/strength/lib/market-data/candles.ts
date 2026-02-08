@@ -91,7 +91,6 @@ export interface Candle {
   book_imbalance: number
   big_trades: number
   big_volume: number
-  vd_strength: number
 }
 
 export interface CandlesResult {
@@ -187,7 +186,7 @@ export async function getCandles(
   const columns = `
     time, open, high, low, close, volume,
     cvd_open, cvd_high, cvd_low, cvd_close,
-    book_imbalance, big_trades, big_volume, vd_strength
+    book_imbalance, big_trades, big_volume
   `
 
   let query = `
@@ -232,7 +231,6 @@ export async function getCandles(
     book_imbalance: parseFloat(row.book_imbalance ?? 0),
     big_trades: parseFloat(row.big_trades ?? 0),
     big_volume: parseFloat(row.big_volume ?? 0),
-    vd_strength: parseFloat(row.vd_strength ?? 0),
   }))
 
   return {

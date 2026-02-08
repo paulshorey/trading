@@ -16,9 +16,9 @@ export const ATR_PERIOD = 5
 
 // Lazy loading thresholds
 // Number of bars before visible area that triggers loading more historical data
-export const LAZY_LOAD_BARS_THRESHOLD = 30
+export const LAZY_LOAD_BARS_THRESHOLD = 1
 // Number of hours of historical data to fetch per lazy load request
-export const LAZY_LOAD_FETCH_HOURS = 4 // 4 hours = 240 candles at 1m
+export const LAZY_LOAD_FETCH_HOURS = 24
 // Cooldown between lazy load requests (in ms)
 export const LAZY_LOAD_COOLDOWN_MS = 2000
 
@@ -114,7 +114,6 @@ export const SERIES: Record<string, SeriesConfig> = {
       return indicatorRSI(candles, RSI_PERIOD)
     },
   },
-  // pivot points
   pivots: {
     seriesType: 'Line',
     enabled: true,
@@ -128,7 +127,6 @@ export const SERIES: Record<string, SeriesConfig> = {
   },
 
   // LINE ALONG THE BOTTOM EDGE (0-based, upwards unbounded)
-  // volatility (average true range)
   atr: {
     seriesType: 'Line',
     enabled: true,
@@ -140,7 +138,6 @@ export const SERIES: Record<string, SeriesConfig> = {
       return indicatorTR(candles)
     },
   },
-  // 0-floor histogram:
   volume: {
     seriesType: 'Line',
     enabled: true,
@@ -172,7 +169,7 @@ export const SERIES: Record<string, SeriesConfig> = {
   },
   bigVolume: {
     seriesType: 'Line',
-    enabled: true,
+    enabled: false,
     color: 'hsl(260 60% 60%)',
     top: 0.8,
     bottom: 0,
@@ -181,20 +178,6 @@ export const SERIES: Record<string, SeriesConfig> = {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
         value: candle.big_volume,
-      }))
-    },
-  },
-  vdStrength: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(50 80% 55%)',
-    top: 0.8,
-    bottom: 0,
-    priceScaleId: 'vdStrength',
-    formatter: function (candles: Candle[]): LineData[] {
-      return candles.map((candle) => ({
-        time: (candle.time / 1000) as Time,
-        value: candle.vd_strength,
       }))
     },
   },

@@ -4,13 +4,13 @@ let pool: Pool
 
 /**
  * Get database connection pool
- * Uses DATABASE_URL environment variable for Railway PostgreSQL
+ * Uses TIMESCALE_DB_URL environment variable for Railway PostgreSQL
  */
 export const getDb = () => {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL
+    const connectionString = process.env.TIMESCALE_DB_URL
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable not set')
+      throw new Error('TIMESCALE_DB_URL environment variable not set')
     }
 
     pool = new Pool({

@@ -1,6 +1,11 @@
 import { Candle } from '@/lib/market-data/candles'
 import { BarData, LineData, Time } from 'lightweight-charts'
-import { calculateRSI, calculateATR, pivotPoints } from '../lib/indicators'
+import {
+  calculateRSI,
+  calculateRSI_OHLC,
+  calculateATR,
+  pivotPoints,
+} from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'
@@ -38,7 +43,7 @@ export interface SeriesConfig {
 // Series configuration: enabled, color, scale margins (top/bottom), and chart options
 // Set `enabled: false` to hide a series from the chart
 export const SERIES: Record<string, SeriesConfig> = {
-  // Main series
+  // OHLC
   price: {
     seriesType: 'Bar',
     enabled: true,
@@ -104,8 +109,35 @@ export const SERIES: Record<string, SeriesConfig> = {
       }))
     },
   },
+  rsi_ohlc: {
+    seriesType: 'Bar',
+    enabled: true,
+    color: 'hsla(40 100% 50% / 0.5)',
+    top: 0.35,
+    bottom: 0.15,
+    // Chart options
+    priceScaleId: 'rsi',
+    lastValueVisible: true,
+    formatter: function (candles: Candle[]): BarData[] {
+      return calculateRSI_OHLC(candles, RSI_PERIOD)
+    },
+  },
 
-  // pivot points (uses left price scale - visible on left side of chart)
+  // LINE
+  rsi: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsla(40 100% 50% / 0.75)',
+    top: 0.35,
+    bottom: 0.15,
+    // Chart options
+    priceScaleId: 'rsi',
+    lastValueVisible: true,
+    formatter: function (candles: Candle[]): LineData[] {
+      return calculateRSI(candles, RSI_PERIOD)
+    },
+  },
+  // pivot points
   pivots: {
     seriesType: 'Line',
     enabled: true,
@@ -115,22 +147,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     // Chart options - 'left' makes scale visible on left; overlay scales are always hidden
     priceScaleId: 'pivots',
     formatter: function (candles: Candle[]): LineData[] {
-      return pivotPoints(candles, 10)
-    },
-  },
-
-  // relative strength
-  rsi: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(40 100% 50%)',
-    top: 0.35,
-    bottom: 0.15,
-    // Chart options
-    priceScaleId: 'rsi',
-    lastValueVisible: true,
-    formatter: function (candles: Candle[]): LineData[] {
-      return calculateRSI(candles, RSI_PERIOD)
+      return pivotPoints(candles, 20)
     },
   },
   // volatility (average true range)

@@ -20,7 +20,7 @@ export interface SeriesRefs {
   // Main series
   price: MutableRefObject<ISeriesApi<'Bar'> | null>
   cvd: MutableRefObject<ISeriesApi<'Bar'> | null>
-  rsi: MutableRefObject<ISeriesApi<'Line'> | null>
+  rsi: MutableRefObject<ISeriesApi<'Bar'> | null>
   // OHLC bar series
   evr: MutableRefObject<ISeriesApi<'Bar'> | null>
   vwap: MutableRefObject<ISeriesApi<'Bar'> | null>
@@ -63,7 +63,7 @@ export function useChart({
   // Main series refs
   const priceSeriesRef = useRef<ISeriesApi<'Bar'> | null>(null)
   const cvdSeriesRef = useRef<ISeriesApi<'Bar'> | null>(null)
-  const rsiSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const rsiSeriesRef = useRef<ISeriesApi<'Bar'> | null>(null)
 
   // OHLC bar series refs
   const evrSeriesRef = useRef<ISeriesApi<'Bar'> | null>(null)
@@ -185,14 +185,13 @@ export function useChart({
       const rsiSeries = chart.addSeries(
         SERIES_TYPE_MAP[SERIES.rsi.seriesType as keyof typeof SERIES_TYPE_MAP],
         {
-          color: SERIES.rsi.color,
-          lineWidth: 1,
+          upColor: SERIES.rsi.color,
+          downColor: SERIES.rsi.color,
           priceScaleId: 'rsi',
-          crosshairMarkerVisible: true,
           priceLineVisible: false,
-          lastValueVisible: false,
+          lastValueVisible: SERIES.rsi.lastValueVisible ?? false,
         }
-      ) as ISeriesApi<'Line'>
+      ) as ISeriesApi<'Bar'>
       rsiSeries.priceScale().applyOptions({
         scaleMargins: { top: SERIES.rsi.top, bottom: SERIES.rsi.bottom },
         autoScale: true,

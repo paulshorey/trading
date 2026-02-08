@@ -3,6 +3,13 @@ import type { Candle } from '@/lib/market-data/candles'
 import { RSI_PERIOD } from '../plot/constants'
 
 export type IndicatorOutput = { time: Time; value: number }[]
+export type IndicatorOHLCOutput = {
+  time: Time
+  open: number
+  high: number
+  low: number
+  close: number
+}[]
 
 /**
  * Convert a value using power transformation for moderate compression
@@ -103,6 +110,39 @@ export function calculateRSI(
         value: rsi,
       })
     }
+  }
+
+  return result
+}
+
+/**
+ * Calculate RSI as OHLC bars by computing RSI independently for each price component.
+ * Each bar's high/low are the max/min of all four RSI values to ensure valid OHLC structure.
+ */
+export function calculateRSI_OHLC(
+  candles: Candle[],
+  period: number = RSI_PERIOD
+): IndicatorOHLCOutput {
+  const rsiOpen = calculateRSI(candles, period, 'open')
+  const rsiHigh = calculateRSI(candles, period, 'high')
+  const rsiLow = calculateRSI(candles, period, 'low')
+  const rsiClose = calculateRSI(candles, period, 'close')
+
+  const result: IndicatorOHLCOutput = []
+  for (let i = 0; i < rsiClose.length; i++) {
+    const o = rsiOpen[i]
+    const h = rsiHigh[i]
+    const l = rsiLow[i]
+    const c = rsiClose[i]
+    if (!o || !h || !l || !c) continue
+
+    result.push({
+      time: c.time,
+      open: o.value,
+      high: Math.max(o.value, h.value, l.value, c.value),
+      low: Math.min(o.value, h.value, l.value, c.value),
+      close: c.value,
+    })
   }
 
   return result

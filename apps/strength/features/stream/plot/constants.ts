@@ -50,7 +50,6 @@ export const SERIES: Record<string, SeriesConfig> = {
     color: 'hsl(221.01 100% 72.75%)',
     top: 0.05,
     bottom: 0.25,
-    // Chart options
     priceScaleId: 'right',
     lastValueVisible: true,
     formatter: function (candles: Candle[]): BarData[] {
@@ -63,13 +62,142 @@ export const SERIES: Record<string, SeriesConfig> = {
       }))
     },
   },
+  cvd: {
+    seriesType: 'Bar',
+    enabled: true,
+    color: 'hsla(115.87 100% 62.94% / 0.75)',
+    top: 0.125,
+    bottom: 0.5,
+    priceScaleId: 'cvd',
+    lastValueVisible: false,
+    formatter: function (candles: Candle[]): BarData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        open: -candle.cvd_open,
+        high: -candle.cvd_low, // Inverted: low becomes high
+        low: -candle.cvd_high, // Inverted: high becomes low
+        close: -candle.cvd_close,
+      }))
+    },
+  },
+  rsi_ohlc: {
+    seriesType: 'Bar',
+    enabled: true,
+    color: 'hsla(40 100% 50% / 0.5)',
+    top: 0.35,
+    bottom: 0.15,
+    priceScaleId: 'rsi',
+    lastValueVisible: true,
+    formatter: function (candles: Candle[]): BarData[] {
+      return calculateRSI_OHLC(candles, RSI_PERIOD)
+    },
+  },
+
+  // LINE
+  rsi: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsla(40 100% 50% / 0.75)',
+    top: 0.35,
+    bottom: 0.15,
+    priceScaleId: 'rsi',
+    lastValueVisible: true,
+    formatter: function (candles: Candle[]): LineData[] {
+      return calculateRSI(candles, RSI_PERIOD)
+    },
+  },
+  // pivot points
+  pivots: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(60 100% 70%)',
+    top: 0,
+    bottom: 0.95,
+    priceScaleId: 'pivots',
+    formatter: function (candles: Candle[]): LineData[] {
+      return pivotPoints(candles, 20)
+    },
+  },
+
+  // LINE ALONG THE BOTTOM EDGE (0-based, upwards unbounded)
+  // volatility (average true range)
+  atr: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(180 70% 50%)',
+    top: 0.8,
+    bottom: 0,
+    priceScaleId: 'atr',
+    formatter: function (candles: Candle[]): LineData[] {
+      return calculateATR(candles, ATR_PERIOD)
+    },
+  },
+  // 0-floor histogram:
+  volume: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(50 100% 100%)',
+    top: 0.8,
+    bottom: 0,
+    priceScaleId: 'volume',
+    formatter: function (candles: Candle[]): LineData[] {
+      const rsi = calculateRSI(candles, 70, 'volume')
+      return rsi.map((candle) => ({
+        time: candle.time as Time,
+        value: candle.value,
+      }))
+    },
+  },
+  bigTrades: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(320 70% 55%)',
+    top: 0.8,
+    bottom: 0,
+    priceScaleId: 'bigTrades',
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.big_trades,
+      }))
+    },
+  },
+  bigVolume: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(260 60% 60%)',
+    top: 0.8,
+    bottom: 0,
+    priceScaleId: 'bigVolume',
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.big_volume,
+      }))
+    },
+  },
+  vdStrength: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(50 80% 55%)',
+    top: 0.8,
+    bottom: 0,
+    priceScaleId: 'vdStrength',
+    formatter: function (candles: Candle[]): LineData[] {
+      return candles.map((candle) => ({
+        time: (candle.time / 1000) as Time,
+        value: candle.vd_strength,
+      }))
+    },
+  },
+
+  // DISABLED:
   vwap: {
     seriesType: 'Bar',
     enabled: false,
     color: 'hsl(45 100% 50%)',
     top: 0,
     bottom: 0.4,
-    // Chart options
     priceScaleId: 'right',
     applyScaleMargins: false, // shares scale with price
     formatter: function (candles: Candle[]): BarData[] {
@@ -90,79 +218,6 @@ export const SERIES: Record<string, SeriesConfig> = {
         }))
     },
   },
-  cvd: {
-    seriesType: 'Bar',
-    enabled: true,
-    color: 'hsla(115.87 100% 62.94% / 0.75)',
-    top: 0.125,
-    bottom: 0.5,
-    // Chart options - overlay scale (hidden) so pivots can use left scale
-    priceScaleId: 'cvd',
-    lastValueVisible: false,
-    formatter: function (candles: Candle[]): BarData[] {
-      return candles.map((candle) => ({
-        time: (candle.time / 1000) as Time,
-        open: -candle.cvd_open,
-        high: -candle.cvd_low, // Inverted: low becomes high
-        low: -candle.cvd_high, // Inverted: high becomes low
-        close: -candle.cvd_close,
-      }))
-    },
-  },
-  rsi_ohlc: {
-    seriesType: 'Bar',
-    enabled: true,
-    color: 'hsla(40 100% 50% / 0.5)',
-    top: 0.35,
-    bottom: 0.15,
-    // Chart options
-    priceScaleId: 'rsi',
-    lastValueVisible: true,
-    formatter: function (candles: Candle[]): BarData[] {
-      return calculateRSI_OHLC(candles, RSI_PERIOD)
-    },
-  },
-
-  // LINE
-  rsi: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsla(40 100% 50% / 0.75)',
-    top: 0.35,
-    bottom: 0.15,
-    // Chart options
-    priceScaleId: 'rsi',
-    lastValueVisible: true,
-    formatter: function (candles: Candle[]): LineData[] {
-      return calculateRSI(candles, RSI_PERIOD)
-    },
-  },
-  // pivot points
-  pivots: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(60 100% 70%)',
-    top: 0,
-    bottom: 0.95,
-    // Chart options - 'left' makes scale visible on left; overlay scales are always hidden
-    priceScaleId: 'pivots',
-    formatter: function (candles: Candle[]): LineData[] {
-      return pivotPoints(candles, 20)
-    },
-  },
-  // volatility (average true range)
-  atr: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(180 70% 50%)', // cyan
-    top: 0.65,
-    bottom: 0,
-    // Chart options
-    priceScaleId: 'atr',
-    formatter: function (candles: Candle[]): LineData[] {
-      return calculateATR(candles, ATR_PERIOD)
-    },
-  },
   // HL/LH trend
   bookImbalance: {
     seriesType: 'Line',
@@ -170,7 +225,6 @@ export const SERIES: Record<string, SeriesConfig> = {
     color: 'hsl(0 70% 60%)',
     top: 0.35,
     bottom: 0.15,
-    // Chart options
     priceScaleId: 'bookImbalance',
     formatter: function (candles: Candle[]): LineData[] {
       return candles.map((candle) => ({
@@ -179,15 +233,13 @@ export const SERIES: Record<string, SeriesConfig> = {
       }))
     },
   },
-
   // 0-middle volatility:
   pricePct: {
     seriesType: 'Bar',
     enabled: false,
-    color: 'hsl(15 90% 55%)', // red-orange
+    color: 'hsl(15 90% 55%)',
     top: 0.6,
     bottom: 0,
-    // Chart options
     priceScaleId: 'metrics',
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
@@ -205,7 +257,6 @@ export const SERIES: Record<string, SeriesConfig> = {
     color: 'hsl(280 70% 65%)',
     top: 0.6,
     bottom: 0,
-    // Chart options (shares scale with pricePct)
     priceScaleId: 'metrics',
     applyScaleMargins: false,
     formatter: function (candles: Candle[]): BarData[] {
@@ -218,70 +269,6 @@ export const SERIES: Record<string, SeriesConfig> = {
       }))
     },
   },
-
-  // 0-floor histogram:
-  volume: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(50 100% 100%)',
-    top: 0.8,
-    bottom: 0,
-    // Chart options
-    priceScaleId: 'volume',
-    formatter: function (candles: Candle[]): LineData[] {
-      const rsi = calculateRSI(candles, 70, 'volume')
-      return rsi.map((candle) => ({
-        time: candle.time as Time,
-        value: candle.value,
-      }))
-    },
-  },
-  bigTrades: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(320 70% 55%)', // magenta
-    top: 0.75,
-    bottom: 0,
-    // Chart options
-    priceScaleId: 'bigTrades',
-    formatter: function (candles: Candle[]): LineData[] {
-      return candles.map((candle) => ({
-        time: (candle.time / 1000) as Time,
-        value: candle.big_trades,
-      }))
-    },
-  },
-  bigVolume: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(260 60% 60%)',
-    top: 0.75,
-    bottom: 0,
-    // Chart options
-    priceScaleId: 'bigVolume',
-    formatter: function (candles: Candle[]): LineData[] {
-      return candles.map((candle) => ({
-        time: (candle.time / 1000) as Time,
-        value: candle.big_volume,
-      }))
-    },
-  },
-  vdStrength: {
-    seriesType: 'Line',
-    enabled: true,
-    color: 'hsl(50 80% 55%)',
-    top: 0.85,
-    bottom: 0,
-    // Chart options
-    priceScaleId: 'vdStrength',
-    formatter: function (candles: Candle[]): LineData[] {
-      return candles.map((candle) => ({
-        time: (candle.time / 1000) as Time,
-        value: candle.vd_strength,
-      }))
-    },
-  },
-
   // not used
   spreadBps: {
     seriesType: 'Bar',
@@ -289,7 +276,6 @@ export const SERIES: Record<string, SeriesConfig> = {
     color: 'hsl(200 80% 55%)',
     top: 0.8,
     bottom: 0,
-    // Chart options
     priceScaleId: 'spreadBps',
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
@@ -311,7 +297,7 @@ export const SERIES_KEYS = Object.keys(SERIES) as SeriesKey[]
 
 // Absorption marker configuration
 export const ABSORPTION_MARKER = {
-  color: 'hsla(50, 100%, 50%, 0.8)', // yellow
+  color: 'hsla(50, 100%, 50%, 0.8)',
   width: 1,
   labelText: '',
   labelBackgroundColor: 'hsla(50, 100%, 40%, 0.9)',

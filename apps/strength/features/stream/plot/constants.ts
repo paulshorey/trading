@@ -91,9 +91,9 @@ export const SERIES: Record<string, SeriesConfig> = {
     color: 'hsla(115.87 100% 62.94% / 0.75)',
     top: 0.125,
     bottom: 0.5,
-    // Chart options
-    priceScaleId: 'left',
-    lastValueVisible: true,
+    // Chart options - overlay scale (hidden) so pivots can use left scale
+    priceScaleId: 'cvd',
+    lastValueVisible: false,
     formatter: function (candles: Candle[]): BarData[] {
       return candles.map((candle) => ({
         time: (candle.time / 1000) as Time,
@@ -105,14 +105,14 @@ export const SERIES: Record<string, SeriesConfig> = {
     },
   },
 
-  // relative strength
+  // pivot points (uses left price scale - visible on left side of chart)
   pivots: {
     seriesType: 'Line',
     enabled: true,
     color: 'hsl(60 100% 70%)',
     top: 0,
     bottom: 0.95,
-    // Chart options
+    // Chart options - 'left' makes scale visible on left; overlay scales are always hidden
     priceScaleId: 'pivots',
     formatter: function (candles: Candle[]): LineData[] {
       return pivotPoints(candles, 10)
@@ -128,6 +128,7 @@ export const SERIES: Record<string, SeriesConfig> = {
     bottom: 0.15,
     // Chart options
     priceScaleId: 'rsi',
+    lastValueVisible: true,
     formatter: function (candles: Candle[]): LineData[] {
       return calculateRSI(candles, RSI_PERIOD)
     },

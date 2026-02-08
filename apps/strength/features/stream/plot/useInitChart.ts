@@ -90,6 +90,8 @@ export function useInitChart({
       },
       leftPriceScale: {
         visible: false,
+        minimumWidth: 50,
+        borderVisible: false,
       },
       timeScale: {
         visible: true,

@@ -271,6 +271,6 @@ export function pivotPoints(
   // Convert to output format
   return candles.map((candle, i) => ({
     time: (candle.time / 1000) as Time,
-    value: scores[i] ?? 0,
+    value: !scores[i] || Math.abs(scores[i]) !== windowSize ? 0 : scores[i],
   }))
 }

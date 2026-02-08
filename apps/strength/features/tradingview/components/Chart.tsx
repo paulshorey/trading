@@ -298,7 +298,9 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         lastMouseX = null
       }
 
-      // Custom zoom handler anchored at cursor position
+      // Custom zoom handler with adaptive anchor point
+      // - If latest data bar is visible (real-time mode): anchor at last actual data candle
+      // - If scrolled back (historical mode): anchor at cursor position
       // Requires cmd (Mac) or ctrl (Windows) + scroll to zoom
       const handleWheel = (e: WheelEvent) => {
         // Only handle zoom gestures: ctrl/cmd+wheel or trackpad pinch
@@ -312,28 +314,35 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
 
-        // Use tracked mouse position (more reliable than wheel event clientX for trackpad)
         const containerRect = containerRef.current?.getBoundingClientRect()
         if (!containerRect) return
-
-        // Fall back to wheel event position if mouse tracking hasn't captured position yet
-        const cursorX = lastMouseX ?? e.clientX - containerRect.left
-
-        // Convert cursor X to logical index
-        const cursorLogical = timeScale.coordinateToLogical(cursorX)
-        if (cursorLogical === null) return
-
-        // Calculate zoom factor based on wheel delta
-        // Smaller factor for smoother zoom
-        const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95 // zoom out : zoom in
 
         // Current range
         const currentFrom = visibleRange.from
         const currentTo = visibleRange.to
         const currentWidth = currentTo - currentFrom
 
-        // Calculate cursor position as fraction of visible range (0 = left, 1 = right)
-        const cursorFraction = (cursorLogical - currentFrom) / currentWidth
+        // Determine anchor point based on whether latest bar is visible
+        let anchorLogical: number
+        const data = lastStrengthAverageRef.current
+
+        if (lastLatestBarVisibleRef.current && data && data.length > 0) {
+          // Real-time mode: anchor at the last actual data candle (ignore future padding)
+          anchorLogical = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
+        } else {
+          // Historical mode: anchor at cursor position
+          const cursorX = lastMouseX ?? e.clientX - containerRect.left
+          const cursorLogicalVal = timeScale.coordinateToLogical(cursorX)
+          if (cursorLogicalVal === null) return
+          anchorLogical = cursorLogicalVal
+        }
+
+        // Calculate anchor position as fraction of visible range (0 = left, 1 = right)
+        const anchorFraction = (anchorLogical - currentFrom) / currentWidth
+
+        // Calculate zoom factor based on wheel delta
+        // Smaller factor for smoother zoom
+        const zoomFactor = e.deltaY > 0 ? 1.05 : 0.95 // zoom out : zoom in
 
         // New width after zoom
         const newWidth = currentWidth * zoomFactor
@@ -343,11 +352,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const maxBars = 50000
         if (newWidth < minBars || newWidth > maxBars) return
 
-        // Anchor at cursor: keep cursorLogical at the same screen position
-        const newFrom = cursorLogical - cursorFraction * newWidth
+        // Anchor zoom: keep anchorLogical at the same screen position
+        const newFrom = anchorLogical - anchorFraction * newWidth
         const newTo = newFrom + newWidth
 
-        // Apply the new range with cursor anchored
+        // Apply the new range
         timeScale.setVisibleLogicalRange({
           from: newFrom,
           to: newTo,
@@ -397,27 +406,37 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const visibleRange = timeScale.getVisibleLogicalRange()
         if (!visibleRange) return
 
-        // Get midpoint position relative to container, scaled for 2x zoom
         const containerRect = containerRef.current?.getBoundingClientRect()
         if (!containerRect) return
-        const scale = window.scaleFactor || 1
-        const relativeX = currentMidpointX - containerRect.left
-        const anchorX = relativeX * scale // Scale the touch position for the 2x chart
-
-        // Convert anchor X to logical index
-        const anchorLogical = timeScale.coordinateToLogical(anchorX)
-        if (anchorLogical === null) return
-
-        // Calculate zoom factor from pinch distance change
-        // Inverted: spreading fingers apart (larger distance) = zoom in (smaller factor)
-        const zoomFactor = lastPinchDistance / currentDistance
 
         const currentFrom = visibleRange.from
         const currentTo = visibleRange.to
         const currentWidth = currentTo - currentFrom
 
+        // Determine anchor point based on whether latest bar is visible
+        let anchorLogical: number
+        const data = lastStrengthAverageRef.current
+
+        if (lastLatestBarVisibleRef.current && data && data.length > 0) {
+          // Real-time mode: anchor at the last actual data candle (ignore future padding)
+          anchorLogical = Math.max(0, data.length - 1 - FUTURE_PADDING_BARS)
+        } else {
+          // Historical mode: anchor at pinch midpoint
+          const scale = window.scaleFactor || 1
+          const relativeX = currentMidpointX - containerRect.left
+          const anchorX = relativeX * scale // Scale the touch position for the 2x chart
+
+          const anchorLogicalVal = timeScale.coordinateToLogical(anchorX)
+          if (anchorLogicalVal === null) return
+          anchorLogical = anchorLogicalVal
+        }
+
         // Calculate anchor position as fraction of visible range
         const anchorFraction = (anchorLogical - currentFrom) / currentWidth
+
+        // Calculate zoom factor from pinch distance change
+        // Inverted: spreading fingers apart (larger distance) = zoom in (smaller factor)
+        const zoomFactor = lastPinchDistance / currentDistance
 
         const newWidth = currentWidth * zoomFactor
 
@@ -426,7 +445,7 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const maxBars = 50000
         if (newWidth < minBars || newWidth > maxBars) return
 
-        // Anchor at the scaled midpoint between fingers
+        // Anchor zoom: keep anchorLogical at the same screen position
         const newFrom = anchorLogical - anchorFraction * newWidth
         const newTo = newFrom + newWidth
 

@@ -25,6 +25,7 @@ import classes from '../classes.module.scss'
 import { prepareDataWithRequiredTimestamps } from '../lib/primitives/forwardFillData'
 import {
   TIME_RANGE_HIGHLIGHTS,
+  SHOW_0_LINE,
   SHOW_100_LINES,
   LAZY_LOAD_BARS_THRESHOLD,
   LAZY_LOAD_COOLDOWN_MS,
@@ -168,16 +169,19 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
 
       // Add dedicated horizontal line series (always visible, independent of other series)
       // These ensure the reference lines are always shown regardless of which strength lines are displayed
-      const zeroLineSeries = chart.addSeries(LineSeries, {
-        color: COLORS.green,
-        lineWidth: 2,
-        lineStyle: 1, // Solid: 0, Dotted: 1, Dashed: 2
-        priceScaleId: 'left', // Same scale as strength series
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-      })
-      zeroLineSeriesRef.current = zeroLineSeries
+      // Zero line (y=0) - only if enabled
+      if (SHOW_0_LINE) {
+        const zeroLineSeries = chart.addSeries(LineSeries, {
+          color: COLORS.green,
+          lineWidth: 2,
+          lineStyle: 1, // Solid: 0, Dotted: 1, Dashed: 2
+          priceScaleId: 'left', // Same scale as strength series
+          crosshairMarkerVisible: false,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        zeroLineSeriesRef.current = zeroLineSeries
+      }
 
       // +100 and -100 lines (upper/lower bounds) - only if enabled
       if (SHOW_100_LINES) {
@@ -247,10 +251,11 @@ export const Chart = forwardRef<ChartRef, ChartProps>(
         const intervalSeries = chart.addSeries(LineSeries, {
           ...getLineSeriesConfig(),
           lineWidth: interval === '181' && !showStrengthLine ? 2 : 1,
-          color:
-            interval === '181' && !showStrengthLine
-              ? COLORS.strength
-              : COLORS.strength_i,
+          color: COLORS.strength_i,
+          // Optionally make one line stand out:
+          // interval === '181' && !showStrengthLine
+          //   ? COLORS.strength
+          //   : COLORS.strength_i,
           priceScaleId: 'left', // Use same scale as strength average
         })
         strengthIntervalSeriesRef.current[interval] = intervalSeries

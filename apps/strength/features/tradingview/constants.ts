@@ -29,6 +29,7 @@ export const LAZY_LOAD_COOLDOWN_MS = 2000
 export const FUTURE_PADDING_HOURS = 12
 export const FUTURE_PADDING_BARS = FUTURE_PADDING_HOURS * 60 // Convert to minutes (bars)
 
+export const SHOW_0_LINE = false
 export const SHOW_100_LINES = false
 
 // Color palette - Dark theme

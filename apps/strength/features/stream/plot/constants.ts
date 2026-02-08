@@ -1,6 +1,11 @@
 import { Candle } from '@/lib/market-data/candles'
 import { BarData, LineData, Time } from 'lightweight-charts'
-import { calculateRSI, calculateATR } from '../lib/indicators'
+import {
+  calculateRSI,
+  calculateATR,
+  detectPivotPoints,
+  pivotPoints,
+} from '../lib/indicators'
 
 // API Configuration
 export const TICKER = 'ES'
@@ -43,8 +48,8 @@ export const SERIES: Record<string, SeriesConfig> = {
     seriesType: 'Bar',
     enabled: true,
     color: 'hsl(221.01 100% 72.75%)',
-    top: 0,
-    bottom: 0.4,
+    top: 0.05,
+    bottom: 0.25,
     // Chart options
     priceScaleId: 'right',
     lastValueVisible: true,
@@ -102,6 +107,20 @@ export const SERIES: Record<string, SeriesConfig> = {
         low: -candle.cvd_high, // Inverted: high becomes low
         close: -candle.cvd_close,
       }))
+    },
+  },
+
+  // relative strength
+  pivots: {
+    seriesType: 'Line',
+    enabled: true,
+    color: 'hsl(60 100% 70%)',
+    top: 0,
+    bottom: 0.95,
+    // Chart options
+    priceScaleId: 'pivots',
+    formatter: function (candles: Candle[]): LineData[] {
+      return pivotPoints(candles, 10)
     },
   },
 

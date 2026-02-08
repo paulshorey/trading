@@ -214,3 +214,63 @@ export function calculateATR(
 
   return result
 }
+
+/**
+ * Detects pivot points by scoring candles based on how often they represent
+ * the highest high (+1) or lowest low (-1) within a sliding window.
+ *
+ * @param candles - Array of OHLCV candles sorted chronologically
+ * @param windowSize - Number of candles to analyze (default: 10)
+ * @param requireFullWindow - If true, only start scoring when we have a full window
+ * @returns Array of { time, value } where value is the accumulated pivot score
+ */
+export function pivotPoints(
+  candles: Candle[],
+  windowSize: number = 10,
+  requireFullWindow: boolean = false
+): IndicatorOutput {
+  if (!candles?.length) return []
+
+  // Initialize scores for each candle
+  const scores: number[] = new Array(candles.length).fill(0)
+
+  // Determine starting index based on whether we require a full window
+  const startIdx = requireFullWindow ? windowSize - 1 : 0
+
+  // Iterate through each candle position (simulating "each new minute")
+  for (let i = startIdx; i < candles.length; i++) {
+    // Define window boundaries: last `windowSize` candles including current
+    const windowStart = Math.max(0, i - windowSize + 1)
+
+    // Find indices of candle with highest high and lowest low in window
+    let maxHighIdx = windowStart
+    let minLowIdx = windowStart
+
+    for (let j = windowStart + 1; j <= i; j++) {
+      const candleJ = candles[j]
+      const candleMaxHigh = candles[maxHighIdx]
+      const candleMinLow = candles[minLowIdx]
+      if (!candleJ || !candleMaxHigh || !candleMinLow) continue
+
+      // Use > to select the earliest candle in case of ties
+      if (candleJ.high > candleMaxHigh.high) {
+        maxHighIdx = j
+      }
+      if (candleJ.low < candleMinLow.low) {
+        minLowIdx = j
+      }
+    }
+
+    // Score the pivot candles
+    const scoreHigh = scores[maxHighIdx]
+    const scoreLow = scores[minLowIdx]
+    if (scoreHigh !== undefined) scores[maxHighIdx] = scoreHigh + 1 // +1 for highest high
+    if (scoreLow !== undefined) scores[minLowIdx] = scoreLow - 1 // -1 for lowest low
+  }
+
+  // Convert to output format
+  return candles.map((candle, i) => ({
+    time: (candle.time / 1000) as Time,
+    value: scores[i] ?? 0,
+  }))
+}

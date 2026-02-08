@@ -178,7 +178,7 @@ const URL_SYNC_KEYS = ['interval', 'tickers']
  */
 const getInitialState = (): State => {
   // Default to CX (Crypto Index) ticker
-  const defaultTickers = tickersByMarket[0]!.tickers[0]!.value
+  const defaultTickers = tickersByMarket[0]!.tickers[2]!.value
 
   const defaultState: State = {
     interval: getDefaultIntervals(strengthIntervalsAll),
@@ -191,7 +191,7 @@ const getInitialState = (): State => {
     priceTickers: {},
     strengthIndicator: null,
     priceIndicator: null,
-    showStrengthLine: false,
+    showStrengthLine: true,
     showStrengthIntervalLines: true,
     showPriceLine: false,
     showPriceTickerLines: true,

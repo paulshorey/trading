@@ -3,7 +3,7 @@ import { parseStrengthText } from "../../lib/strength/parse-text.js";
 import { strengthAdd } from "../../lib/strength/add.js";
 
 /**
- * POST /v1/strength
+ * POST /v1/tradingview
  *
  * Accepts TradingView webhook text body with strength data and saves to database.
  * Migrated from apps/trade/app/api/v1/market/route.ts (strength section).
@@ -29,7 +29,7 @@ export async function strengthHandler(req: Request, res: Response): Promise<void
 
     // Validate parsed data
     if (strengthData.strength === null || strengthData.interval === null || strengthData.ticker === null) {
-      console.error("/v1/strength invalid strengthData", { bodyText });
+      console.error("/v1/tradingview invalid strengthData", { bodyText });
       res.status(400).json({
         ok: false,
         error: "Invalid strengthData",
@@ -48,7 +48,7 @@ export async function strengthHandler(req: Request, res: Response): Promise<void
     });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
-    console.error(`POST /v1/strength error: ${err.message}`, err.stack);
+    console.error(`POST /v1/tradingview error: ${err.message}`, err.stack);
     res.status(400).json({
       ok: false,
       error: err.message,

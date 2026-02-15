@@ -23,7 +23,7 @@ app.get("/health", healthHandler);
 app.get("/tables", tablesHandler);
 app.get("/historical/candles", candlesHandler);
 app.get("/historical/range", rangeHandler);
-app.post("/v1/strength", strengthHandler);
+app.post("/v1/tradingview", strengthHandler);
 
 /**
  * Start Server

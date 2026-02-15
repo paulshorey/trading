@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       rows: filteredRows || [],
     })
   } catch (error: any) {
-    cc.error(`GET /api/v1/strength CATCH ERROR: ` + error.message, error)
+    cc.error(`GET /api/v1/tradingview CATCH ERROR: ` + error.message, error)
     return formatResponse(
       {
         ok: false,

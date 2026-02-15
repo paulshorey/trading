@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     cc.error(
-      `GET /api/v1/strength-screenshot CATCH ERROR: ` + error.message,
+      `GET /api/v1/tradingview-screenshot CATCH ERROR: ` + error.message,
       error
     )
     return formatResponse(

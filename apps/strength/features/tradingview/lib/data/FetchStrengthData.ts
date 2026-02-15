@@ -16,7 +16,7 @@ export interface FetchStrengthDataResult {
  * Service for fetching strength data from the API
  */
 export class FetchStrengthData {
-  private static baseUrl = '/api/v1/strength'
+  private static baseUrl = '/api/v1/tradingview'
 
   /**
    * Fetch strength data for a single ticker

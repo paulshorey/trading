@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/v1/strength-screenshot",
+      "path": "/api/v1/tradingview-screenshot",
       "schedule": "55 * * * *"
     }
   ]

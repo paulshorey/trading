@@ -13,8 +13,9 @@ export const strengthIntervalsAll = NEW_INTERVALS
  * Filter out intervals that are too noisy or not useful for default display
  */
 const getDefaultIntervals = (intervals: readonly string[]): string[] => {
-  const excludedIntervals = ['1', 'D', 'W']
-  return intervals.filter((i) => !excludedIntervals.includes(i))
+  // const excludedIntervals = ['1', 'D', 'W']
+  // return intervals.filter((i) => !excludedIntervals.includes(i))
+  return ['3', '181']
 }
 
 /**
@@ -191,7 +192,7 @@ const getInitialState = (): State => {
     priceTickers: {},
     strengthIndicator: null,
     priceIndicator: null,
-    showStrengthLine: true,
+    showStrengthLine: false,
     showStrengthIntervalLines: true,
     showPriceLine: false,
     showPriceTickerLines: true,

@@ -5,8 +5,6 @@ import { parseOrdersText } from '@/dydx/lib/parseOrdersText'
 import { sqlLogAdd } from '@lib/common/sql/log/add'
 import { MarketOrderOutput } from '@/dydx/types'
 import { sendToMyselfSMS } from '@lib/common/twillio/sendToMyselfSMS'
-import { parseStrengthText } from '@/dydx/lib/parseStrengthText'
-import { strengthAdd } from '@lib/common/sql/strength'
 
 export const maxDuration = 60
 
@@ -25,66 +23,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       bodyText = await request.text()
     }
 
-    /**
-     * 1. Save strength
-     * DEPRECATED - WILL BE REMOVED SOON
-     */
-    const strengthData = parseStrengthText(bodyText)
-    // Check if we have both strength and interval values
-    if (strengthData?.strength !== undefined && strengthData?.interval !== undefined && strengthData?.ticker !== undefined) {
-      // Validate parsed data
-      if (strengthData.strength === null || strengthData.interval === null || strengthData.ticker === null) {
-        await sqlLogAdd({
-          name: 'log',
-          message: `/v1/market invalid strengthData`,
-          stack: {
-            bodyText,
-          },
-        })
-        return formatResponse(
-          {
-            ok: false,
-            error: `Invalid strengthData`,
-          },
-          400
-        )
-      }
-
-      try {
-        // Save to database
-        const result = await strengthAdd(strengthData)
-
-        return formatResponse({
-          ok: true,
-          message: 'Strength data saved successfully',
-          resultId: result?.id,
-          data: strengthData,
-        })
-      } catch (error: any) {
-        // Log error
-        await sqlLogAdd({
-          name: 'log',
-          message: `Strength endpoint error: ${error.message}`,
-          stack: {
-            url: request.nextUrl.href,
-            bodyText: bodyText,
-            method: request.method,
-            stack: error.stack,
-          },
-        })
-        // Done
-        return formatResponse(
-          {
-            ok: false,
-            error: error.message,
-          },
-          400
-        )
-      }
-    }
-
     /*
-     * 2. Market order
+     * 1. Market order
      */
     const parsedOrders = parseOrdersText(bodyText)
     if (parsedOrders?.[0]?.ticker && parsedOrders?.[0]?.position !== undefined) {
@@ -131,7 +71,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     /**
-     * 3. Log message
+     * 2. Log message
      */
     sendToMyselfSMS(bodyText)
     await sqlLogAdd({
@@ -153,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     )
 
     /**
-     * 4. Something went wrong
+     * 3. Something went wrong
      */
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err))

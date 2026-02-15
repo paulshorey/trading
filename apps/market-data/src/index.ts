@@ -9,18 +9,21 @@ import { healthHandler } from "./api/health/v1.js";
 import { tablesHandler } from "./api/tables/v1.js";
 import { candlesHandler } from "./api/historical/candles/v1.js";
 import { rangeHandler } from "./api/historical/range/v1.js";
+import { strengthHandler } from "./api/strength/v1.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 8080;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.text());
 
 // Routes
 app.get("/health", healthHandler);
 app.get("/tables", tablesHandler);
 app.get("/historical/candles", candlesHandler);
 app.get("/historical/range", rangeHandler);
+app.post("/v1/strength", strengthHandler);
 
 /**
  * Start Server

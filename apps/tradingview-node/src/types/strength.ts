@@ -29,5 +29,4 @@ export type StrengthRowGet = {
   app_name: string;
   node_env: string;
   average: number | null;
-  created_at: Date;
 } & Record<StrengthInterval, number | null>;

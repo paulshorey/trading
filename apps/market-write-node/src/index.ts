@@ -15,9 +15,6 @@ app.use(express.text());
 app.get("/health", (_req, res) => {
   res.json(true);
 });
-app.get("/live", (_req, res) => {
-  res.json(true);
-});
 
 /**
  * Start Server

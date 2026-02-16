@@ -23,6 +23,7 @@ export function createApp(options?: {
   app.get("/health", (_req, res) => {
     formatResponse(res, { ok: true });
   });
+
   const tradingViewRouter = Router();
   tradingViewRouter.get("/", createGetTradingView({ getStrengthRows: getStrengthRowsFn }));
   tradingViewRouter.post("/", createPostTradingView({ strengthAdd: strengthAddFn, ...(sqlLogAddFn && { sqlLogAdd: sqlLogAddFn }) }));

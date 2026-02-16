@@ -43,8 +43,8 @@ async function run() {
       ROUND(price_pct::numeric, 2) as price_pct,
       big_trades,
       big_volume
-    FROM "candles-1m"
-    WHERE ticker = $1
+    FROM "candles_1m_1s"
+    WHERE ticker = $1 AND second_index = 0
       AND divergence = -1                      -- Price DOWN despite buying
       AND vd_ratio > 0.15                      -- Meaningful buy pressure
       AND book_imbalance IS NOT NULL           -- Has book data
@@ -90,8 +90,8 @@ async function run() {
       ROUND(price_pct::numeric, 2) as price_pct,
       big_trades,
       big_volume
-    FROM "candles-1m"
-    WHERE ticker = $1
+    FROM "candles_1m_1s"
+    WHERE ticker = $1 AND second_index = 0
       AND divergence = 1                       -- Price UP despite selling
       AND vd_ratio < -0.15                     -- Meaningful sell pressure
       AND book_imbalance IS NOT NULL           -- Has book data
@@ -136,8 +136,8 @@ async function run() {
       ROUND(book_imbalance::numeric, 3) as book_imb,
       ROUND(price_pct::numeric, 2) as price_pct,
       big_trades
-    FROM "candles-1m"
-    WHERE ticker = $1
+    FROM "candles_1m_1s"
+    WHERE ticker = $1 AND second_index = 0
       AND divergence = 0                       -- Price following aggressor (clean move)
       AND vd_ratio > 0.15                      -- Buy pressure
       AND price_pct > 0.5                      -- Price moving up
@@ -183,8 +183,8 @@ async function run() {
       ROUND(book_imbalance::numeric, 3) as book_imb,
       ROUND(price_pct::numeric, 2) as price_pct,
       big_trades
-    FROM "candles-1m"
-    WHERE ticker = $1
+    FROM "candles_1m_1s"
+    WHERE ticker = $1 AND second_index = 0
       AND divergence = 0                       -- Price following aggressor (clean move)
       AND vd_ratio < -0.15                     -- Sell pressure
       AND price_pct < -0.5                     -- Price moving down
@@ -226,8 +226,8 @@ async function run() {
       COUNT(CASE WHEN divergence = 0 AND vd_ratio < -0.15 AND price_pct < -0.5 THEN 1 END) as bearish_momentum,
       -- Total candles with book data
       COUNT(CASE WHEN book_imbalance IS NOT NULL THEN 1 END) as total_with_book_data
-    FROM "candles-1m"
-    WHERE ticker = $1
+    FROM "candles_1m_1s"
+    WHERE ticker = $1 AND second_index = 0
   `,
     [ticker],
   );

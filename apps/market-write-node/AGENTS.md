@@ -20,20 +20,20 @@ Standard platforms calculate a 60-minute candle once per hour. This platform cal
 **Example**: To get RSI-14 on 60m data at 10:31 (minute_index=31), query 14 rows where `minute_index=31` ordered by timestamp DESC. Each row is 60 minutes apart (9:31, 8:31, 7:31...).
 
 ```sql
-SELECT close FROM candles_60m
-WHERE symbol = 'ES' AND minute_index = 31
+SELECT close FROM candles_60m_1m
+WHERE symbol = 'ES' AND minute_index = 31 -- IMPORTANT: when querying from higher-timeframe tables, minute_index should always be set!
 ORDER BY ts DESC LIMIT 14;
 ```
 
 **Example**: To get RSI-14 on 1m data at 10:31:47 (second_index:47), query 14 rows where `second_index:47` ordered by timestamp DESC. Each row is 60 seconds apart (10:30:47, 10:29:47, 10:28:47...).
 
 ```sql
-SELECT close FROM candles_1m
-WHERE symbol = 'ES' AND minute_index = 31
+SELECT close FROM candles_1m_1s
+WHERE symbol = 'ES' AND second_index = 47 -- IMPORTANT: when querying from 1m_1s table, second_index should always be set!
 ORDER BY ts DESC LIMIT 14;
 ```
 
-Same indicator calculation as in a typical system, only here the current candle is always fully closed.
+Same indicator calculation as in a typical system except here the current candle is always fully closed. A new candle is always written every second (for candles_1m_1s) and every minute (for higher timeframes).
 
 ## Tech Stack
 

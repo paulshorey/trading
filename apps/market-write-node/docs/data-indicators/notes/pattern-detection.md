@@ -4,12 +4,12 @@ This document details the 4 core pattern detection queries for identifying tradi
 
 ## Pattern Summary
 
-| # | Pattern | Signal | When to Trade |
-|---|---------|--------|---------------|
-| 1 | Bearish Absorption | SELL | Reversal from uptrend |
-| 2 | Bullish Absorption | BUY | Reversal from downtrend |
-| 3 | Bullish Momentum | LONG | Trend continuation up |
-| 4 | Bearish Momentum | SHORT | Trend continuation down |
+| #   | Pattern            | Signal | When to Trade           |
+| --- | ------------------ | ------ | ----------------------- |
+| 1   | Bearish Absorption | SELL   | Reversal from uptrend   |
+| 2   | Bullish Absorption | BUY    | Reversal from downtrend |
+| 3   | Bullish Momentum   | LONG   | Trend continuation up   |
+| 4   | Bearish Momentum   | SHORT  | Trend continuation down |
 
 ---
 
@@ -32,7 +32,7 @@ Buyers aggressive (vd_ratio > 0)  +  Price goes DOWN (divergence = -1)
 ### Query
 
 ```sql
-SELECT 
+SELECT
   time,
   close,
   ROUND(vd_ratio_close::numeric, 3) as vd_ratio,
@@ -42,12 +42,13 @@ SELECT
   big_trades,
   big_volume,
   ROUND(smp_close::numeric, 0) as smp
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence = -1                      -- Price DOWN despite buying
   AND vd_ratio_close > 0.15                -- Meaningful buy pressure
   AND book_imbalance_close IS NOT NULL     -- Has book data
-ORDER BY 
+ORDER BY
   big_trades DESC,                         -- Prioritize institutional signals
   ABS(vd_ratio_close) DESC                 -- Then by imbalance strength
 LIMIT 15;
@@ -55,13 +56,13 @@ LIMIT 15;
 
 ### Interpreting Results
 
-| Column | Good Signal | Meaning |
-|--------|-------------|---------|
-| `vd_ratio` | > 0.2 | Strong buying pressure |
-| `book_imb` | < 0 | Sellers in book (resistance above) |
-| `evr` | < 0 or small | High effort, low result |
-| `big_trades` | > 0 | Institutional involvement |
-| `smp` | Positive but small | Buying pressure not translating |
+| Column       | Good Signal        | Meaning                            |
+| ------------ | ------------------ | ---------------------------------- |
+| `vd_ratio`   | > 0.2              | Strong buying pressure             |
+| `book_imb`   | < 0                | Sellers in book (resistance above) |
+| `evr`        | < 0 or small       | High effort, low result            |
+| `big_trades` | > 0                | Institutional involvement          |
+| `smp`        | Positive but small | Buying pressure not translating    |
 
 ### Trading Application
 
@@ -91,7 +92,7 @@ Sellers aggressive (vd_ratio < 0)  +  Price goes UP (divergence = 1)
 ### Query
 
 ```sql
-SELECT 
+SELECT
   time,
   close,
   ROUND(vd_ratio_close::numeric, 3) as vd_ratio,
@@ -101,12 +102,13 @@ SELECT
   big_trades,
   big_volume,
   ROUND(smp_close::numeric, 0) as smp
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence = 1                       -- Price UP despite selling
   AND vd_ratio_close < -0.15               -- Meaningful sell pressure
   AND book_imbalance_close IS NOT NULL     -- Has book data
-ORDER BY 
+ORDER BY
   big_trades DESC,                         -- Prioritize institutional signals
   ABS(vd_ratio_close) DESC                 -- Then by imbalance strength
 LIMIT 15;
@@ -114,13 +116,13 @@ LIMIT 15;
 
 ### Interpreting Results
 
-| Column | Good Signal | Meaning |
-|--------|-------------|---------|
-| `vd_ratio` | < -0.2 | Strong selling pressure |
-| `book_imb` | > 0 | Buyers in book (support below) |
-| `evr` | Small positive | High effort, low result |
-| `big_trades` | > 0 | Institutional involvement |
-| `smp` | Negative but small | Selling pressure not translating |
+| Column       | Good Signal        | Meaning                          |
+| ------------ | ------------------ | -------------------------------- |
+| `vd_ratio`   | < -0.2             | Strong selling pressure          |
+| `book_imb`   | > 0                | Buyers in book (support below)   |
+| `evr`        | Small positive     | High effort, low result          |
+| `big_trades` | > 0                | Institutional involvement        |
+| `smp`        | Negative but small | Selling pressure not translating |
 
 ### Trading Application
 
@@ -150,7 +152,7 @@ Buyers aggressive (vd_ratio > 0)  +  Price goes UP (price_pct > 0)  +  No diverg
 ### Query
 
 ```sql
-SELECT 
+SELECT
   time,
   close,
   ROUND(vd_ratio_close::numeric, 3) as vd_ratio,
@@ -160,29 +162,30 @@ SELECT
   big_trades,
   ROUND(smp_close::numeric, 0) as smp,
   ROUND(vd_strength::numeric, 2) as vd_str
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence = 0                       -- Price following aggressor (clean move)
   AND vd_ratio_close > 0.15                -- Buy pressure
   AND price_pct_close > 0.5                -- Price moving up
   AND evr_close > 0                        -- Positive efficiency
   AND smp_close > 0                        -- Positive institutional pressure
   AND book_imbalance_close IS NOT NULL
-ORDER BY 
+ORDER BY
   (vd_ratio_close * price_pct_close) DESC  -- Combined momentum score
 LIMIT 15;
 ```
 
 ### Interpreting Results
 
-| Column | Good Signal | Meaning |
-|--------|-------------|---------|
-| `vd_ratio` | > 0.2 | Strong buying pressure |
-| `price_pct` | > 1 | Significant price increase |
-| `evr` | > 0.1 | Efficient price movement |
-| `book_imb` | > 0 | Support below (buyers in book) |
-| `vd_str` | > 1.2 | Accelerating momentum |
-| `smp` | > 20 | Strong bullish pressure |
+| Column      | Good Signal | Meaning                        |
+| ----------- | ----------- | ------------------------------ |
+| `vd_ratio`  | > 0.2       | Strong buying pressure         |
+| `price_pct` | > 1         | Significant price increase     |
+| `evr`       | > 0.1       | Efficient price movement       |
+| `book_imb`  | > 0         | Support below (buyers in book) |
+| `vd_str`    | > 1.2       | Accelerating momentum          |
+| `smp`       | > 20        | Strong bullish pressure        |
 
 ### Trading Application
 
@@ -212,7 +215,7 @@ Sellers aggressive (vd_ratio < 0)  +  Price goes DOWN (price_pct < 0)  +  No div
 ### Query
 
 ```sql
-SELECT 
+SELECT
   time,
   close,
   ROUND(vd_ratio_close::numeric, 3) as vd_ratio,
@@ -222,29 +225,30 @@ SELECT
   big_trades,
   ROUND(smp_close::numeric, 0) as smp,
   ROUND(vd_strength::numeric, 2) as vd_str
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence = 0                       -- Price following aggressor (clean move)
   AND vd_ratio_close < -0.15               -- Sell pressure
   AND price_pct_close < -0.5               -- Price moving down
   AND evr_close > 0                        -- Positive efficiency
   AND smp_close < 0                        -- Negative institutional pressure
   AND book_imbalance_close IS NOT NULL
-ORDER BY 
+ORDER BY
   (ABS(vd_ratio_close) * ABS(price_pct_close)) DESC
 LIMIT 15;
 ```
 
 ### Interpreting Results
 
-| Column | Good Signal | Meaning |
-|--------|-------------|---------|
-| `vd_ratio` | < -0.2 | Strong selling pressure |
-| `price_pct` | < -1 | Significant price decrease |
-| `evr` | > 0.1 | Efficient price movement |
-| `book_imb` | < 0 | Resistance above (sellers in book) |
-| `vd_str` | > 1.2 | Accelerating momentum |
-| `smp` | < -20 | Strong bearish pressure |
+| Column      | Good Signal | Meaning                            |
+| ----------- | ----------- | ---------------------------------- |
+| `vd_ratio`  | < -0.2      | Strong selling pressure            |
+| `price_pct` | < -1        | Significant price decrease         |
+| `evr`       | > 0.1       | Efficient price movement           |
+| `book_imb`  | < 0         | Resistance above (sellers in book) |
+| `vd_str`    | > 1.2       | Accelerating momentum              |
+| `smp`       | < -20       | Strong bearish pressure            |
 
 ### Trading Application
 
@@ -260,11 +264,13 @@ LIMIT 15;
 ### Ideal Trade Setups
 
 **Best Reversal Setup:**
+
 1. Strong momentum in one direction (pattern 3 or 4)
 2. Followed by absorption signal (pattern 1 or 2)
 3. With `big_trades > 0` (institutional confirmation)
 
 **Best Continuation Setup:**
+
 1. Absorption signal (reversal detected)
 2. Followed by clean momentum in new direction
 3. With `book_imbalance` confirming direction
@@ -273,12 +279,12 @@ LIMIT 15;
 
 Score each signal 1-5 based on:
 
-| Factor | Points |
-|--------|--------|
-| `big_trades > 0` | +2 |
-| `book_imbalance` confirms direction | +1 |
-| `vd_ratio` > 0.3 (or < -0.3) | +1 |
-| `spread_bps` normal (< 0.5 for ES) | +1 |
+| Factor                              | Points |
+| ----------------------------------- | ------ |
+| `big_trades > 0`                    | +2     |
+| `book_imbalance` confirms direction | +1     |
+| `vd_ratio` > 0.3 (or < -0.3)        | +1     |
+| `spread_bps` normal (< 0.5 for ES)  | +1     |
 
 **4-5 points = High quality signal**
 **2-3 points = Moderate signal, wait for confirmation**

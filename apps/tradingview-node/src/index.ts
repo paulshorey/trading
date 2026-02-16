@@ -4,11 +4,17 @@ import express from "express";
 import { formatResponse } from "./lib/http.js";
 import { Router } from "express";
 import { createGetTradingView } from "./api/v1/tradingview/getTradingView.js";
-import { postTradingView } from "./api/v1/tradingview/postTradingView.js";
-import { getStrengthRows } from "./lib/strength.js";
+import { createPostTradingView } from "./api/v1/tradingview/postTradingView.js";
+import { getStrengthRows, strengthAdd } from "./lib/strength.js";
 
-export function createApp(options?: { getStrengthRows?: typeof getStrengthRows }) {
+export function createApp(options?: {
+  getStrengthRows?: typeof getStrengthRows;
+  strengthAdd?: typeof strengthAdd;
+  sqlLogAdd?: typeof import("@lib/common/sql/log/add").sqlLogAdd;
+}) {
   const getStrengthRowsFn = options?.getStrengthRows ?? getStrengthRows;
+  const strengthAddFn = options?.strengthAdd ?? strengthAdd;
+  const sqlLogAddFn = options?.sqlLogAdd;
   const app = express();
   app.use(cors());
   app.use(express.json());
@@ -19,7 +25,10 @@ export function createApp(options?: { getStrengthRows?: typeof getStrengthRows }
   });
   const tradingViewRouter = Router();
   tradingViewRouter.get("/", createGetTradingView({ getStrengthRows: getStrengthRowsFn }));
-  tradingViewRouter.post("/", postTradingView);
+  tradingViewRouter.post(
+    "/",
+    createPostTradingView({ strengthAdd: strengthAddFn, ...(sqlLogAddFn && { sqlLogAdd: sqlLogAddFn }) }),
+  );
   app.use("/api/v1/tradingview", tradingViewRouter);
 
   return app;

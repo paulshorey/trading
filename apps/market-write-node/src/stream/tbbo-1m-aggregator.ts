@@ -2,7 +2,7 @@
  * TBBO Rolling 1-Minute Aggregator
  *
  * Aggregates real-time TBBO (trade) data into rolling 1-minute candles
- * at 1-second resolution and writes them to the candles_1m table.
+ * at 1-second resolution and writes them to the candles_1m_1s table.
  *
  * Each output row represents the trailing 60-second window of trade data.
  * This gives 1-minute candles at 1-second resolution — up to 60 rows per
@@ -13,7 +13,7 @@
  *   2. Each completed 1-second bucket is stored as a SecondSummary
  *   3. A sliding window of the last 60 SecondSummaries is maintained per ticker
  *   4. Each second, the window is aggregated into a single 1-minute candle
- *   5. The 1-minute candle is written to candles_1m
+ *   5. The 1-minute candle is written to candles_1m_1s
  *
  * Warmup: No output is written for a ticker until its sliding window spans
  * a full 60 seconds. This means the first ~59 seconds after startup produce
@@ -30,15 +30,7 @@
 import { pool } from "../lib/db.js";
 
 // Types
-import type {
-  TbboRecord,
-  CandleState,
-  CandleForDb,
-  AggregatorStats,
-  NormalizedTrade,
-  MetricCalculationContext,
-  CvdContext,
-} from "../lib/trade/index.js";
+import type { TbboRecord, CandleState, CandleForDb, AggregatorStats, NormalizedTrade, MetricCalculationContext, CvdContext } from "../lib/trade/index.js";
 
 // Trade processing utilities
 import {
@@ -147,7 +139,7 @@ interface TickerRollingState {
 // ============================================================================
 
 /** Target database table */
-const TARGET_TABLE = "candles_1m";
+const TARGET_TABLE = "candles_1m_1s";
 
 /** Max candles per INSERT query (prevents oversized queries on batch accumulation) */
 const WRITE_BATCH_SIZE = 500;
@@ -168,7 +160,7 @@ const WINDOW_SPAN_MS = (WINDOW_SECONDS - 1) * 1000;
 
 /**
  * Aggregates TBBO records into rolling 1-minute candles at 1-second resolution.
- * Writes to the candles_1m table.
+ * Writes to the candles_1m_1s table.
  */
 export class Tbbo1mAggregator {
   // -------------------------------------------------------------------------
@@ -211,7 +203,7 @@ export class Tbbo1mAggregator {
   }
 
   /**
-   * Initialize the aggregator by loading last CVD values from candles_1m.
+   * Initialize the aggregator by loading last CVD values from candles_1m_1s.
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
@@ -308,19 +300,13 @@ export class Tbbo1mAggregator {
     }
 
     // Determine trade side using Lee-Ready algorithm as fallback
-    const { isAsk, isBid } = determineTradeSide(
-      record.side,
-      record.price,
-      record.bidPrice,
-      record.askPrice,
-    );
+    const { isAsk, isBid } = determineTradeSide(record.side, record.price, record.bidPrice, record.askPrice);
 
     if (!isAsk && !isBid) {
       this.stats.unknownSideTrades++;
       if (this.stats.unknownSideTrades <= 5 || this.stats.unknownSideTrades % 1000 === 0) {
         console.log(
-          `📊 Unknown side trade #${this.stats.unknownSideTrades}: ` +
-            `${record.symbol} @ ${record.price} (bid: ${record.bidPrice}, ask: ${record.askPrice})`,
+          `📊 Unknown side trade #${this.stats.unknownSideTrades}: ` + `${record.symbol} @ ${record.price} (bid: ${record.bidPrice}, ask: ${record.askPrice})`,
         );
       }
     }
@@ -429,9 +415,7 @@ export class Tbbo1mAggregator {
         if (success) {
           written += batch.length;
         } else {
-          console.error(
-            `❌ Failed to flush ${batch.length + this.pendingCandles.length} candles on shutdown - data may be lost`,
-          );
+          console.error(`❌ Failed to flush ${batch.length + this.pendingCandles.length} candles on shutdown - data may be lost`);
           return;
         }
       }
@@ -646,10 +630,7 @@ export class Tbbo1mAggregator {
         return;
       }
       state.warmupDone = true;
-      console.log(
-        `🔥 Warmup complete for ${ticker} at ${summary.time} ` +
-          `(${state.ring.length} seconds in buffer)`,
-      );
+      console.log(`🔥 Warmup complete for ${ticker} at ${summary.time} ` + `(${state.ring.length} seconds in buffer)`);
     }
 
     // 6. Aggregate the ring buffer into a 1-minute candle and queue for DB write
@@ -677,11 +658,7 @@ export class Tbbo1mAggregator {
     const currentSecond = now.toISOString();
 
     for (const [ticker, state] of this.tickerStates) {
-      if (
-        state.currentCandle &&
-        state.currentSecondBucket &&
-        state.currentSecondBucket < currentSecond
-      ) {
+      if (state.currentCandle && state.currentSecondBucket && state.currentSecondBucket < currentSecond) {
         this.onSecondComplete(ticker, state);
       }
     }
@@ -716,10 +693,7 @@ export class Tbbo1mAggregator {
    */
   private maybeLogStatus(): void {
     if (Date.now() - this.lastLogTime > 30000) {
-      const unknownPct =
-        this.recordsProcessed > 0
-          ? ((this.stats.unknownSideTrades / this.recordsProcessed) * 100).toFixed(1)
-          : "0";
+      const unknownPct = this.recordsProcessed > 0 ? ((this.stats.unknownSideTrades / this.recordsProcessed) * 100).toFixed(1) : "0";
 
       const warmupTickers: string[] = [];
       const activeTickers: string[] = [];

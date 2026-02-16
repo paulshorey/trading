@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Candles Schema Setup (TimescaleDB)
 --
--- Source of truth: candles_1m (1-minute hypertable, written at 1-second resolution)
+-- Source of truth: candles_1m_1s (1-minute hypertable, written at 1-second resolution)
 -- Higher timeframes: continuous aggregates (auto-updated materialized views)
 --
 -- The application writes rolling 1-minute candles every second. Each row
@@ -19,10 +19,10 @@
 DROP MATERIALIZED VIEW IF EXISTS candles_60m CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS candles_15m CASCADE;
 DROP MATERIALIZED VIEW IF EXISTS candles_5m CASCADE;
-DROP TABLE IF EXISTS candles_1m CASCADE;
+DROP TABLE IF EXISTS candles_1m_1s CASCADE;
 
 -- Create base table
-CREATE TABLE candles_1m (
+CREATE TABLE candles_1m_1s (
   time           TIMESTAMPTZ      NOT NULL,
   ticker         TEXT             NOT NULL,
   symbol         TEXT,
@@ -55,25 +55,25 @@ CREATE TABLE candles_1m (
 );
 
 -- Convert to hypertable (1-week chunks)
-SELECT create_hypertable('candles_1m', by_range('time', INTERVAL '1 week'));
+SELECT create_hypertable('candles_1m_1s', by_range('time', INTERVAL '1 week'));
 
--- If candles_1m already exists as a regular PostgreSQL table with data:
--- SELECT create_hypertable('candles_1m', by_range('time', INTERVAL '1 week'),
+-- If candles_1m_1s already exists as a regular PostgreSQL table with data:
+-- SELECT create_hypertable('candles_1m_1s', by_range('time', INTERVAL '1 week'),
 --   migrate_data => true
 -- );
 
 
 -- ── 2. Indexes ───────────────────────────────────────────────
-CREATE INDEX idx_candles_1m_time ON candles_1m (time DESC);
+CREATE INDEX idx_candles_1m_time ON candles_1m_1s (time DESC);
 
 
 -- ── 3. Compression ───────────────────────────────────────────
-ALTER TABLE candles_1m SET (
+ALTER TABLE candles_1m_1s SET (
   timescaledb.compress,
   timescaledb.compress_segmentby = 'ticker',
   timescaledb.compress_orderby = 'time DESC'
 );
-SELECT add_compression_policy('candles_1m', INTERVAL '1 week');
+SELECT add_compression_policy('candles_1m_1s', INTERVAL '1 week');
 
 -- Check compression status
 SELECT
@@ -81,11 +81,11 @@ SELECT
   before_compression_total_bytes,
   after_compression_total_bytes,
   compression_ratio
-FROM chunk_compression_stats('candles_1m')
+FROM chunk_compression_stats('candles_1m_1s')
 ORDER BY chunk_name;
 
 -- List all chunks
-SELECT show_chunks('candles_1m');
+SELECT show_chunks('candles_1m_1s');
 
 -- Compress one
 SELECT compress_chunk('_timescaledb_internal._hyper_1_1_chunk');
@@ -96,7 +96,7 @@ SELECT decompress_chunk('_timescaledb_internal._hyper_1_1_chunk');
 
 -- ── 4. Higher-timeframe continuous aggregates ──────────────────
 --
--- These aggregate from candles_1m (the base hypertable).
+-- These aggregate from candles_1m_1s (the base hypertable).
 -- Derived metrics (vd_ratio, book_imbalance, vwap, price_pct, divergence)
 -- are recomputed from raw accumulators — NEVER averaged from lower TF ratios.
 --
@@ -137,7 +137,7 @@ SELECT
   max(max_trade_size) AS max_trade_size,
   sum(big_trades) AS big_trades,
   sum(big_volume) AS big_volume
-FROM candles_1m
+FROM candles_1m_1s
 GROUP BY time_bucket('5 minutes', time), ticker
 WITH NO DATA;
 

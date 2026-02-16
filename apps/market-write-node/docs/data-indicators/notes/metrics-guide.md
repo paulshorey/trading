@@ -417,29 +417,33 @@ Each metric is stored with 4 OHLC variants:
 ```sql
 -- Absorption with institutional confirmation
 SELECT time, close, vd_ratio_close, evr_close, divergence, big_trades
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence != 0
   AND big_trades > 0
 ORDER BY time DESC;
 
 -- Strong institutional pressure
-SELECT * FROM "candles-1m"
-WHERE ticker = 'ES' AND ABS(smp_close) > 50
+SELECT * FROM "candles_1m_1s"
+WHERE ticker = 'ES'
+  AND second_index = 0 AND ABS(smp_close) > 50
 ORDER BY time DESC;
 
 -- Exhaustion setup
 SELECT time, close, vd_ratio_close, vd_strength, smp_close
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND ABS(vd_ratio_close) > 0.3
   AND vd_strength < 0.7
 ORDER BY time DESC;
 
 -- Clean momentum
 SELECT time, close, vd_ratio_close, price_pct_close, evr_close
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence = 0
   AND ABS(vd_ratio_close) > 0.2
   AND SIGN(vd_ratio_close) = SIGN(price_pct_close)

@@ -3,6 +3,7 @@
 A file like this will be processed by `scripts/ingest/tbbo-1m-1s.ts`.
 The real file will be very very large. It will need to be read in chunks.
 Notice this is not a valid JSON file. It is a text list of JSON objects.
+Each object is a trade. It tells the side (aggressor), volume, and price.
 
 ```
 {"ts_recv":"2025-11-30T23:00:00.039353882Z","hd":{"ts_event":"2025-11-30T23:00:00.000000000Z","rtype":1,"publisher_id":1,"instrument_id":42140878},"action":"T","side":"N","depth":0,"price":"6913.500000000","size":1,"flags":0,"ts_in_delta":13803,"sequence":3353,"levels":[{"bid_px":"6915.750000000","ask_px":"6913.000000000","bid_sz":1,"ask_sz":1,"bid_ct":1,"ask_ct":1}],"symbol":"ESH6"}

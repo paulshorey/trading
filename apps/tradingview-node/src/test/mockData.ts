@@ -1,4 +1,23 @@
-import type { StrengthRowGet } from "../types/strength.js";
+import type { StrengthDataAdd, StrengthRowGet } from "../types/strength.js";
+
+/** Invalid POST body: raw TradingView template keys ({{ticker}}, etc.) not replaced */
+export const mockInvalidPostBody =
+  'ticker={{ticker}} interval={{interval}} strength={{plot("strength")}} price={{close}} volume={{volume}} low={{low}} high={{high}}';
+
+/** Valid POST body: plain text key=value pairs */
+export const mockValidPostBody = "ticker=ZB interval=30 strength=20 volume=10 low=40 price=30 high=60";
+
+/** Expected parsed data from mockValidPostBody (low/high are ignored by parser) */
+export const mockValidStrengthData: StrengthDataAdd = {
+  ticker: "ZB",
+  interval: "30",
+  strength: 20,
+  volume: 10,
+  price: 30,
+};
+
+/** Mock result from strengthAdd for success case */
+export const mockStrengthAddResult = { id: 39163053 };
 
 /**
  * Mock strength rows for unit tests.

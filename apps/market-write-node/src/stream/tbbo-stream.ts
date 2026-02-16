@@ -27,13 +27,13 @@ const INITIAL_RECONNECT_DELAY = 1000;
 
 /**
  * Check if futures market is currently open
- * 
+ *
  * Futures market closed hours (all times in UTC):
  * - All days: 22:00 - 22:59 (daily maintenance window)
  * - Friday: 22:00 - 24:00 (weekend close starts)
  * - Saturday: all day (closed)
  * - Sunday: 0:00 - 22:59 (closed until market opens at 23:00)
- * 
+ *
  * @returns true if market is open, false if closed
  */
 function isFuturesMarketOpen(): boolean {
@@ -406,7 +406,7 @@ function handleData(data: Buffer): void {
         // Log periodic summary every 30 seconds
         if (Date.now() - lastMessageLogTime > 30000) {
           console.log(
-            `📊 Stream: ${messageCount.toLocaleString()} trades | ` + `${skippedControlMessages} control msgs | ` + `${skippedNoPrice} no-price events`
+            `📊 Stream: ${messageCount.toLocaleString()} trades | ` + `${skippedControlMessages} control msgs | ` + `${skippedNoPrice} no-price events`,
           );
           lastMessageLogTime = Date.now();
         }
@@ -567,7 +567,7 @@ export async function startDatabentoStream(): Promise<void> {
   console.log(`   API Key: ${apiKeyPreview}`);
   console.log("═".repeat(50));
 
-  // Initialize the rolling 1-minute aggregator (writes candles to candles_1m)
+  // Initialize the rolling 1-minute aggregator (writes candles to candles_1m_1s)
   // This loads the last CVD values from the database to ensure continuity
   state.aggregator = new Tbbo1mAggregator();
   await state.aggregator.initialize();

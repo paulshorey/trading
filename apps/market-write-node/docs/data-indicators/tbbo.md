@@ -4,7 +4,7 @@ The server streams TBBO (Trade-By-Order) data from Databento for futures contrac
 
 ## Database Schema
 
-### Table: `candles-1m`
+### Table: `candles_1m_1s`
 
 **Meta columns:**
 | Column | Type | Description |
@@ -191,22 +191,24 @@ Based on CME block trade minimums:
 ```sql
 -- Recent absorption signals with institutional involvement
 SELECT time, close, vd_ratio_close, divergence, big_trades, smp_close
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND divergence != 0
   AND big_trades > 0
 ORDER BY time DESC
 LIMIT 20;
 
 -- Strong institutional buying
-SELECT * FROM "candles-1m"
-WHERE ticker = 'ES' AND smp_close > 50
+SELECT * FROM "candles_1m_1s"
+WHERE ticker = 'ES' AND smp_close > 50 AND second_index = 0
 ORDER BY time DESC LIMIT 20;
 
 -- Momentum exhaustion setup
 SELECT time, close, vd_ratio_close, vd_strength, smp_close
-FROM "candles-1m"
+FROM "candles_1m_1s"
 WHERE ticker = 'ES'
+  AND second_index = 0
   AND ABS(vd_ratio_close) > 0.3
   AND vd_strength < 0.7
 ORDER BY time DESC;

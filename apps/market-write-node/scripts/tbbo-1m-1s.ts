@@ -23,16 +23,16 @@
  *   npx tsx scripts/ingest/tbbo-1m-1s.ts <file1.json> [file2.json] ...
  *   npx tsx scripts/ingest/tbbo-1m-1s.ts ./data/*.json
  *
- * Requires the candles_1m hypertable (see docs/data-storage/1s-base-1m-aggregate.sql).
+ * Requires the candles_1m_1s hypertable (see docs/data-storage/1s-base-1m-aggregate.sql).
  */
 
 import "dotenv/config";
 import { createReadStream } from "fs";
 import { createInterface } from "readline";
-import { pool } from "../../src/lib/db.js";
+import { pool } from "../src/lib/db.js";
 
 // Types
-import type { CandleState, CandleForDb, NormalizedTrade, MetricCalculationContext, CvdContext } from "../../src/lib/trade/index.js";
+import type { CandleState, CandleForDb, NormalizedTrade, MetricCalculationContext, CvdContext } from "../src/lib/trade/index.js";
 
 // Trade processing utilities
 import {
@@ -44,7 +44,7 @@ import {
   buildCandleInsertQuery,
   buildCandleInsertParams,
   FrontMonthTracker,
-} from "../../src/lib/trade/index.js";
+} from "../src/lib/trade/index.js";
 
 // ============================================================================
 // Types
@@ -207,7 +207,7 @@ function toMinuteBucketFromSecond(secondBucket: string): string {
 // ============================================================================
 
 /** Target database table for 1-minute rolling candles */
-const TARGET_TABLE = "candles_1m";
+const TARGET_TABLE = "candles_1m_1s";
 
 /** Number of candles to batch before writing to database */
 const BATCH_SIZE = 1000;
@@ -256,7 +256,7 @@ const stats = {
 // ============================================================================
 
 /**
- * Load last CVD values from candles_1m for continuity.
+ * Load last CVD values from candles_1m_1s for continuity.
  */
 async function loadCvdFromDatabase(): Promise<void> {
   try {
@@ -556,10 +556,7 @@ function onSecondComplete(ticker: string, state: TickerRollingState): void {
       return;
     }
     state.warmupDone = true;
-    console.log(
-      `🔥 Warmup complete for ${ticker} at ${summary.time} ` +
-        `(${state.ring.length} seconds in buffer)`,
-    );
+    console.log(`🔥 Warmup complete for ${ticker} at ${summary.time} ` + `(${state.ring.length} seconds in buffer)`);
   }
 
   // 6. Aggregate the ring buffer into a 1-minute candle and queue for DB write

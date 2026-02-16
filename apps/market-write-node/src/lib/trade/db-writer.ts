@@ -36,7 +36,7 @@ export function buildPlaceholder(offset: number, count: number): string {
 
 /**
  * Build the INSERT query for candles
- * @param tableName - Target table name (e.g., "candles_1m")
+ * @param tableName - Target table name (e.g., "candles_1m_1s")
  * @param placeholders - Array of placeholder strings from buildPlaceholder
  */
 export function buildCandleInsertQuery(tableName: string, placeholders: string[]): string {
@@ -97,12 +97,7 @@ function calculateDerivedMetrics(candle: CandleState) {
  * Build values array for a single candle row (fallback when no metricsOHLC)
  * Used when a candle doesn't have OHLC tracking (shouldn't normally happen)
  */
-export function buildFallbackRowValues(
-  time: string,
-  ticker: string,
-  candle: CandleState,
-  cvd: number
-): (string | number | null)[] {
+export function buildFallbackRowValues(time: string, ticker: string, candle: CandleState, cvd: number): (string | number | null)[] {
   const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
 
   return [
@@ -144,11 +139,7 @@ export function buildFallbackRowValues(
 /**
  * Build values array for a single candle row with metricsOHLC
  */
-export function buildOhlcRowValues(
-  time: string,
-  ticker: string,
-  candle: CandleState
-): (string | number | null)[] {
+export function buildOhlcRowValues(time: string, ticker: string, candle: CandleState): (string | number | null)[] {
   const m = candle.metricsOHLC!;
   const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
 
@@ -207,7 +198,7 @@ export interface CvdContext {
  */
 export function buildCandleInsertParams(
   candles: CandleForDb[],
-  cvdContext: CvdContext
+  cvdContext: CvdContext,
 ): {
   values: (string | number | null)[];
   placeholders: string[];

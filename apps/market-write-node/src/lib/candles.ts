@@ -8,11 +8,11 @@ interface Timeframe {
 
 /**
  * Timeframe configurations
- * candles_1m is the base hypertable (written at 1-second resolution).
+ * candles_1m_1s is the base hypertable (written at 1-second resolution).
  * Higher timeframes are TimescaleDB continuous aggregates.
  */
 export const TIMEFRAMES: Timeframe[] = [
-  { id: "1m", table: "candles_1m", ms: 60 * 1000 },
+  { id: "1m", table: "candles_1m_1s", ms: 60 * 1000 },
   { id: "5m", table: "candles_5m", ms: 5 * 60 * 1000 },
   { id: "15m", table: "candles_15m", ms: 15 * 60 * 1000 },
   { id: "1h", table: "candles_1h", ms: 60 * 60 * 1000 },
@@ -54,14 +54,8 @@ interface CandlesResult {
 /**
  * Get the max time available in a table for a ticker
  */
-async function getMaxTimeInTable(
-  table: string,
-  ticker: string
-): Promise<number | null> {
-  const result = await pool.query(
-    `SELECT MAX(time) as max_time FROM ${table} WHERE ticker = $1`,
-    [ticker]
-  );
+async function getMaxTimeInTable(table: string, ticker: string): Promise<number | null> {
+  const result = await pool.query(`SELECT MAX(time) as max_time FROM ${table} WHERE ticker = $1`, [ticker]);
   if (!result.rows[0]?.max_time) {
     return null;
   }
@@ -72,15 +66,9 @@ async function getMaxTimeInTable(
  * Query candles from the appropriate table.
  * Falls back to smaller timeframes if the selected one doesn't have recent data.
  */
-export async function getCandles(
-  startMs: number,
-  endMs: number,
-  ticker: string
-): Promise<CandlesResult> {
+export async function getCandles(startMs: number, endMs: number, ticker: string): Promise<CandlesResult> {
   const initialTimeframe = selectTimeframe(startMs, endMs);
-  const initialIndex = TIMEFRAMES.findIndex(
-    (tf) => tf.id === initialTimeframe.id
-  );
+  const initialIndex = TIMEFRAMES.findIndex((tf) => tf.id === initialTimeframe.id);
 
   // Try the selected timeframe, then fall back to smaller ones if needed
   // We check if the table has data close to the requested end time
@@ -151,16 +139,16 @@ interface DateRange {
 
 /**
  * Get the date range available for a ticker
- * Queries the candles_1m base table (written at 1-second resolution)
+ * Queries the candles_1m_1s base table (written at 1-second resolution)
  */
 export async function getDateRange(ticker: string): Promise<DateRange | null> {
   const result = await pool.query(
     `
     SELECT MIN(time) as min_time, MAX(time) as max_time
-    FROM candles_1m
+    FROM candles_1m_1s
     WHERE ticker = $1
   `,
-    [ticker]
+    [ticker],
   );
 
   if (!result.rows[0]?.min_time) {

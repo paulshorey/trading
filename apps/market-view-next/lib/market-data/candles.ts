@@ -8,10 +8,10 @@ interface Timeframe {
 
 /**
  * Timeframe configurations
- * Note: "candles-1m" uses dash, others use underscore
+ * Note: "candles_1m_1s" uses dash, others use underscore
  */
 export const TIMEFRAMES: Timeframe[] = [
-  { id: '1m', table: 'candles-1m', ms: 60 * 1000 },
+  { id: '1m_1s', table: 'candles_1m_1s', ms: 60 * 1000 },
   { id: '3m', table: 'candles_3m', ms: 3 * 60 * 1000 },
   { id: '7m', table: 'candles_7m', ms: 7 * 60 * 1000 },
   { id: '19m', table: 'candles_19m', ms: 19 * 60 * 1000 },
@@ -178,8 +178,11 @@ export async function getCandles(
       ? Math.floor(options.limit)
       : undefined
 
-  // Build query - table name uses double quotes due to dash in "candles-1m"
+  // Build query - table name uses double quotes due to dash in "candles_1m_1s"
   const whereParts: string[] = ['ticker = $1', 'time >= $2', 'time <= $3']
+  if (timeframe.id.includes('1m_1s')) {
+    whereParts.push('second_index = 0')
+  }
   const params: Array<string | number> = [ticker, startISO, endISO]
 
   // Select all metrics columns
@@ -257,7 +260,7 @@ export async function getDateRange(ticker: string): Promise<DateRange | null> {
   const result = await db.query(
     `
     SELECT MIN(time) as min_time, MAX(time) as max_time
-    FROM "candles-1m"
+    FROM "candles_1m_1s"
     WHERE ticker = $1
   `,
     [ticker]

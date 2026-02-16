@@ -1,9 +1,15 @@
 import type { Request, Response } from "express";
-import { sqlLogAdd } from "@lib/common/sql/log/add";
+import { sqlLogAdd as sqlLogAddReal } from "@lib/common/sql/log/add";
 import { formatResponse } from "../../../lib/http.js";
-import { parseStrengthText, strengthAdd } from "../../../lib/strength.js";
+import { parseStrengthText } from "../../../lib/strength.js";
+import type { StrengthDataAdd } from "../../../types/strength.js";
 
-export const postTradingView = async (req: Request, res: Response) => {
+type StrengthAdd = (data: StrengthDataAdd) => Promise<{ id: number }>;
+type SqlLogAdd = typeof sqlLogAddReal;
+
+export const createPostTradingView = (deps: { strengthAdd: StrengthAdd; sqlLogAdd?: SqlLogAdd }) => {
+  const { strengthAdd, sqlLogAdd = sqlLogAddReal } = deps;
+  return async (req: Request, res: Response) => {
   try {
     const bodyText = typeof req.body === "string" ? req.body : "";
     const strengthData = parseStrengthText(bodyText);
@@ -92,4 +98,5 @@ export const postTradingView = async (req: Request, res: Response) => {
       400,
     );
   }
+  };
 };

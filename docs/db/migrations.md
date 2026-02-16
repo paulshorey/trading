@@ -1,3 +1,31 @@
+# Migration
+
+After creating the new table from old schema, I still had to do this:
+
+```sql
+-- Add unique constraint (required for ON CONFLICT)
+-- Run this only if there are no duplicate (ticker, timenow) rows
+ALTER TABLE strength_v1
+ADD CONSTRAINT strength_v1_ticker_timenow_unique UNIQUE (ticker, timenow);
+
+-- 1. Create a sequence for the id column
+CREATE SEQUENCE strength_v1_id_seq;
+
+-- 2. Set the sequence's current value to avoid conflicts with existing rows
+SELECT setval('strength_v1_id_seq', COALESCE((SELECT MAX(id) FROM strength_v1), 0) + 1);
+-- or this one is more explicit and avoids any potential issues with the sequence name
+SELECT setval(pg_get_serial_sequence('public.strength_v1', 'id'), COALESCE((SELECT MAX(id) FROM public.strength_v1), 0) + 1);
+
+-- 3. Set id's default to use the sequence
+ALTER TABLE strength_v1 ALTER COLUMN id SET DEFAULT nextval('strength_v1_id_seq');
+
+-- 4. Optionally: attach the sequence to the column so it behaves like SERIAL
+ALTER SEQUENCE strength_v1_id_seq OWNED BY strength_v1.id;
+
+-- I manually renamed a column in the new table, must update it if restoring the schema:
+ALTER TABLE strength_v1 RENAME COLUMN created_at TO updated_at;
+```
+
 ## Migrating table to new database
 
 Use connection URLs (host, port, user, password, and SSL options are parsed from the URL). Replace `OLD_DATABASE_URL`, `NEW_DATABASE_URL`, and `TABLE_NAME` with real values.

@@ -26,9 +26,7 @@ export default function Page() {
         >
           <div>
             <h1 style={{ marginBottom: '8px', fontSize: '28px' }}>Strength</h1>
-            <p style={{ margin: 0, color: '#a0a0b0' }}>
-              Choose a chart view
-            </p>
+            <p style={{ margin: 0, color: '#a0a0b0' }}>Choose a chart view</p>
           </div>
           <div
             style={{
@@ -48,7 +46,7 @@ export default function Page() {
                 fontWeight: 600,
               }}
             >
-              TradingView chart
+              TradingView
             </Link>
             <Link
               href="/stream"
@@ -61,20 +59,7 @@ export default function Page() {
                 fontWeight: 600,
               }}
             >
-              Streaming chart
-            </Link>
-            <Link
-              href="/historical"
-              style={{
-                padding: '14px 18px',
-                borderRadius: '10px',
-                background: '#5a4a8a',
-                color: '#ffffff',
-                textDecoration: 'none',
-                fontWeight: 600,
-              }}
-            >
-              Historical chart (lazy loading demo)
+              Streaming
             </Link>
           </div>
         </div>

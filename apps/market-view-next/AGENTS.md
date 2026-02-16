@@ -12,6 +12,11 @@ Financial charting app displaying price and relative strength, with real-time up
 
 Current working directory is `apps/strength`
 
+Main code is inside:
+
+- apps/market-view-next/features/stream
+- apps/market-view-next/features/tradingview
+
 Inside:
 
 - api - NextJS api
@@ -20,7 +25,6 @@ Inside:
 - components - React components for the new
 - features - client-only chart code, moved out of /pages to avoid Next.js treating helper files as routes
   - stream - real-time data streaming
-  - historical - historical data fetching
   - tradingview - TradingView/lightweight-charts integration
 
 ## Configuration

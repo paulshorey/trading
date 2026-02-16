@@ -6,7 +6,7 @@ import { cc } from "../../cc";
 import { ALL_INTERVALS, FORWARD_FILL_DEPTH, calculateAverage, StrengthRow, StrengthInterval } from "./utils";
 
 /**
- * Adds strength record to `strength_v1` table.
+ * Adds strength record to `tradingview_v1` table.
  *
  * This function consolidates multiple interval strength values into the same table row
  * for each 1-minute period. It creates exactly one row per minute and updates it with
@@ -81,7 +81,7 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
       data.strength,
       data.price ?? null,
       data.volume ?? null,
-      recentRows
+      recentRows,
     );
 
     return updatedRow;
@@ -103,7 +103,7 @@ export const strengthAdd = async function (data: StrengthDataAdd) {
  */
 async function preCreateRows(client: any, ticker: string, currentTime: Date, futureTime: Date): Promise<void> {
   const insertQuery = `
-    INSERT INTO strength_v1("ticker", "timenow")
+    INSERT INTO tradingview_v1("ticker", "timenow")
     VALUES($1, $2)
     ON CONFLICT (ticker, timenow) DO NOTHING
   `;
@@ -128,7 +128,7 @@ async function preCreateRows(client: any, ticker: string, currentTime: Date, fut
 async function fetchRecentRows(client: any, ticker: string, currentTime: Date, limit: number): Promise<StrengthRow[]> {
   const query = `
     SELECT *
-    FROM strength_v1
+    FROM tradingview_v1
     WHERE ticker = $1 AND timenow <= $2
     ORDER BY timenow DESC
     LIMIT $3
@@ -150,7 +150,7 @@ async function updateRowWithForwardFill(
   strengthValue: number,
   price: number | null,
   volume: number | null,
-  recentRows: StrengthRow[]
+  recentRows: StrengthRow[],
 ): Promise<any> {
   // Get the current row (should be first in recentRows, or create empty object)
   const currentRowIndex = recentRows.findIndex((row) => row.timenow.getTime() === timenow.getTime());
@@ -224,7 +224,7 @@ async function updateRowWithForwardFill(
   }
 
   const updateQuery = `
-    UPDATE strength_v1
+    UPDATE tradingview_v1
     SET ${setClauses.join(", ")}
     WHERE ticker = $1 AND timenow = $2
     RETURNING *

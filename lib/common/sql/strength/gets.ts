@@ -29,7 +29,7 @@ type Props = {
 };
 
 /**
- * This utility function fetches data from the strength_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
+ * This utility function fetches data from the tradingview_v1 table, allowing the component calling it to specify parameters for WHERE to filter the results.
  *
  * Supports date range filtering on timenow column:
  * - timenow_gt: Get records on or after this date (>=)
@@ -46,7 +46,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
 
   const client = await getDb().connect();
   try {
-    let queryText = "SELECT * FROM strength_v1";
+    let queryText = "SELECT * FROM tradingview_v1";
     const params: any[] = [];
     const whereClauses: string[] = [];
 
@@ -72,7 +72,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       params.push(where.timenow_gt);
       whereClauses.push(`timenow >= $${params.length}`);
     }
-    
+
     // Ending time (before) - used for lazy loading historical data
     if (where?.timenow_lt) {
       params.push(where.timenow_lt);

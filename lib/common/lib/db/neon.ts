@@ -4,9 +4,9 @@ let pool: Pool;
 
 export const getDb = () => {
   if (!pool) {
-    const connectionString = process.env.NEON_DATABASE_URL;
+    const connectionString = process.env.POSTGRES_URL;
     if (!connectionString) {
-      throw new Error("NEON_DATABASE_URL environment variable not set");
+      throw new Error("POSTGRES_URL environment variable not set");
     }
 
     pool = new Pool({

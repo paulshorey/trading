@@ -1,9 +1,9 @@
 import { Pool } from "pg";
 
-const connectionString = process.env.NEON_DATABASE_URL;
+const connectionString = process.env.POSTGRES_URL;
 
 if (!connectionString) {
-  throw new Error("NEON_DATABASE_URL environment variable not set");
+  throw new Error("POSTGRES_URL environment variable not set");
 }
 
 export const pool = new Pool({ connectionString });

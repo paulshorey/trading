@@ -54,7 +54,7 @@ const calculateAverage = (values: Record<StrengthInterval, number | null>): numb
 
 const preCreateRows = async (client: PoolClient, ticker: string, currentTime: Date, futureTime: Date): Promise<void> => {
   const insertQuery = `
-    INSERT INTO strength_v1("ticker", "timenow")
+    INSERT INTO tradingview_v1("ticker", "timenow")
     VALUES($1, $2)
     ON CONFLICT (ticker, timenow) DO NOTHING
   `;
@@ -65,7 +65,7 @@ const preCreateRows = async (client: PoolClient, ticker: string, currentTime: Da
 const fetchRecentRows = async (client: PoolClient, ticker: string, currentTime: Date, limit: number): Promise<StrengthRow[]> => {
   const query = `
     SELECT *
-    FROM strength_v1
+    FROM tradingview_v1
     WHERE ticker = $1 AND timenow <= $2
     ORDER BY timenow DESC
     LIMIT $3
@@ -143,7 +143,7 @@ const updateRowWithForwardFill = async (
   }
 
   const updateQuery = `
-    UPDATE strength_v1
+    UPDATE tradingview_v1
     SET ${setClauses.join(", ")}
     WHERE ticker = $1 AND timenow = $2
     RETURNING *
@@ -189,7 +189,7 @@ export const strengthAdd = async (data: StrengthDataAdd) => {
 export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRowGet[]> => {
   const client = await pool.connect();
   try {
-    let queryText = "SELECT * FROM strength_v1";
+    let queryText = "SELECT * FROM tradingview_v1";
     const params: Array<string | number> = [];
     const whereClauses: string[] = [];
 

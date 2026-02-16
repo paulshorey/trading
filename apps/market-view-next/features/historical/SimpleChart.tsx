@@ -16,8 +16,9 @@ const LAZY_LOAD_BARS_THRESHOLD = 50 // Load more when fewer than 50 bars before 
 const LAZY_LOAD_FETCH_MINUTES = 120 // Fetch 2 hours of data per load
 const INITIAL_FETCH_HOURS = 24 // Initial load: 24 hours of data
 const TRADINGVIEW_API_URL =
+  process.env.NEXT_PUBLIC_TRADINGVIEW_URL ||
   process.env.NEXT_PUBLIC_TRADINGVIEW_API_URL ||
-  'http://localhost:3000/api/v1/tradingview'
+  'http://localhost:8080/api/v1/tradingview'
 
 interface SimpleChartProps {
   ticker: string

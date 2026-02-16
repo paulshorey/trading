@@ -16,6 +16,15 @@ Express service that owns the TradingView strength API previously hosted in `mar
 - **Mock data**: `src/test/mockData.ts` exports `mockStrengthRows` (GET), `mockInvalidPostBody`, `mockValidPostBody`, `mockValidStrengthData`, `mockStrengthAddResult` (POST). Uses types from `src/types/strength.ts`.
 - **Testability**: `createApp(options?)` accepts `getStrengthRows`, `strengthAdd`, `sqlLogAdd` overrides. `createGetTradingView(deps)` and `createPostTradingView(deps)` receive injected deps. POST tests use `noOpSqlLogAdd` to avoid DB/SMS during validation-error paths.
 
+## Railway Deployment
+
+Deploy as a **shared monorepo** (do not set Root Directory—the service depends on `@lib/common`):
+
+1. **Root Directory**: Leave empty (deploy from repo root). If set to `apps/tradingview-node`, pnpm workspace filters fail with "No projects matched the filters".
+2. **Host binding**: Server must listen on `0.0.0.0` (Railway routing requires it; `::` or localhost will cause 502).
+3. **Config**: `railway.json` in this directory defines build/start commands. In Railway service settings, set "Config path" to `apps/tradingview-node/railway.json` if it isn't auto-detected.
+4. **Install**: Default Railpack Node install (`pnpm install`) works when deploying from repo root. Remove `RAILPACK_INSTALL_COMMAND` (or use `RAILPACK_INSTALL_CMD` if you need a custom install).
+
 ## Notes
 
 - Keep route behavior compatible with prior Next.js API contract (`ok`, `status`, `rows`, `error`).

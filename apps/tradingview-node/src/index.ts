@@ -35,7 +35,7 @@ export function createApp(options?: {
 if (process.env.NODE_ENV !== "test") {
   const app = createApp();
   const port = Number(process.env.PORT) || 3000;
-  app.listen(port, "::", () => {
+  app.listen(port, "0.0.0.0", () => {
     console.log(`TradingView API server running on port ${port}`);
   });
 }

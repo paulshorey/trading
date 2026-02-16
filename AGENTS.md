@@ -1,16 +1,13 @@
-This project is a monorepo of multiple NextJS apps. It uses Vercel's TurboRepo to build, test, and deploy.
+This project is a monorepo of multiple apps. It uses TurboRepo to build, test, and deploy.
 
 ### Folder structure
 
 **Apps:**
 
-- market-view-ts - ./apps/market-view-ts - TypeScript app to display financial charts and data analysis visualizations
-- market-view-next - ./apps/market-view-next - Next.js UI for charting and data visualization
-- market-write-ts - ./apps/market-write-ts - TypeScript server that connects to data providers, ingests price and volume data per trade, calculates indicators, aggregates candles and higher timeframes for backtestsing
-- market-write-node - ./apps/market-write-node - Node.js/Express market data ingestion service
+- market-view-next - ./apps/market-view-next - TypeScript app to display financial charts and data analysis visualizations
+- market-write-node - ./apps/market-write-node - TypeScript server that connects to data providers, ingests price and volume data per trade, calculates indicators, aggregates candles and higher timeframes for backtestsing
 - tradingview-node - ./apps/tradingview-node - Node.js/Express API for TradingView webhook ingest and strength reads
 - log - ./apps/log - logging and observability dashboard
-- trade ./apps/trade - trades, orders, and position management
 
 **Shared Libraries:**
 

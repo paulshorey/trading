@@ -17,8 +17,9 @@ export interface FetchStrengthDataResult {
  */
 export class FetchStrengthData {
   private static baseUrl =
+    process.env.NEXT_PUBLIC_TRADINGVIEW_URL ||
     process.env.NEXT_PUBLIC_TRADINGVIEW_API_URL ||
-    'http://localhost:3000/api/v1/tradingview'
+    'http://localhost:8080/api/v1/tradingview'
 
   /**
    * Fetch strength data for a single ticker

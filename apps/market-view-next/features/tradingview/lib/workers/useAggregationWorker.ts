@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { LineData, Time } from 'lightweight-charts'
-import { StrengthRowGet } from '@lib/common/sql/strength'
+import { StrengthRowGet } from '@lib/db-postgres/sql/strength'
 import type {
   WorkerStrengthRow,
   WorkerLineData,

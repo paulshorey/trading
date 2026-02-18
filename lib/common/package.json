@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@lib/db-postgres": "workspace:*",
     "tailwindcss": "^4.1.11",
     "@mantine/core": "7.17.8",
     "@mantine/hooks": "7.17.8",

@@ -1,11 +1,6 @@
-import { Pool } from "pg";
+import { getTimescaleDb } from "@lib/db-timescale/lib/db/timescale";
 
-export const pool = new Pool({
-  connectionString: process.env.TIMESCALE_URL,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
+export const pool = getTimescaleDb();
 
 // Log which database URL is being used (without password)
 const dbUrl = process.env.TIMESCALE_URL || "";

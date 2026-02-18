@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { strengthGets } from '@lib/common/sql/strength/gets'
-import { orderGets } from '@lib/common/sql/order/gets'
+import { strengthGets } from '@lib/db-postgres/sql/strength/gets'
+import { orderGets } from '@lib/db-postgres/sql/order/gets'
 import { Json } from '@lib/common/fe/components/blocks/Json'
 import { AccordionItem } from '@/components/list/accordion/AccordionItem'
 import { Header } from '../nav/Header'
 import { FilterBadge } from '../accordion/FilterBadge'
 import { FilterBadgeTime } from '../accordion/FilterBadgeTime'
-import { logGets } from '@lib/common/sql/log/gets'
+import { logGets } from '@lib/db-postgres/sql/log/gets'
 
 type RowGet = Record<string, any>
 

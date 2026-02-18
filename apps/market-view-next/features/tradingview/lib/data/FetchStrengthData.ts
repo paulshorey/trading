@@ -1,4 +1,4 @@
-import { StrengthRowGet } from '@lib/common/sql/strength'
+import { StrengthRowGet } from '@lib/db-postgres/sql/strength'
 import { FETCH_DATA_HOURS_BACK } from '../../constants'
 
 export interface FetchStrengthDataParams {

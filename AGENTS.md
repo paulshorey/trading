@@ -12,12 +12,14 @@ This project is a monorepo of multiple apps. It uses TurboRepo to build, test, a
 **Shared Libraries:**
 
 - common - ./lib/common - shared utilities imported by all apps
-  - ./lib/common/sql - database functions to get/add/edit each data type
   - ./lib/common/twillio - Twilio integration for SMS alerts
   - ./lib/common/fe - client-side React components, hooks, and utility functions
   - ./lib/common/cc - cloud console logging
   - ./lib/common/lib/db/postgres.ts - PostgreSQL database connection
   - ./lib/common/lib/nextjs - Next.js utility functions
+
+- db-postgres - ./lib/db-postgres - database-first source of truth package for POSTGRES_URL (migrations, schema snapshots, SQL query contracts, TS adapter)
+- db-timescale - ./lib/db-timescale - database-first source of truth package for TIMESCALE_URL (migrations, schema snapshots, SQL query contracts, TS adapter)
 
 - ./lib/config - build configuration and tooling (eslint, typescript, tailwind, postcss)
 
@@ -36,6 +38,7 @@ Always use `pnpm` instead of `npm`.
 
 - Use `@/path/to/file` for imports within the same app
 - Use `@lib/common/...` to import from `../../lib/common/...`
+- Use `@lib/db-postgres/...` and `@lib/db-timescale/...` for database helpers/contracts
 - Examples: `import { cc } from '@lib/common/cc'` or `import { getDb } from '@lib/common/lib/db/postgres'`
 
 **Within `@lib` (shared library):**

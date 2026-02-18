@@ -28,7 +28,7 @@ charts/
 
 ## Database
 
-See `@lib/common/sql/strength/` for data types and queries.
+See `@lib/db-postgres/sql/strength/` for data types and queries.
 
 ## Data Flow
 

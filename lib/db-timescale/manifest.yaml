@@ -1,0 +1,18 @@
+database: timescale
+env_var: TIMESCALE_URL
+owners:
+  - apps/market-write-node
+source_of_truth:
+  migrations: ./migrations
+  schema_snapshot: ./schema/current.sql
+  query_contracts: ./queries
+generated_artifacts:
+  - ./generated/typescript
+  - ./generated/python
+  - ./generated/csharp
+  - ./generated/r
+compatibility:
+  policy: additive-first
+  breaking_changes_require:
+    - deprecation_window
+    - migration_plan

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@lib/common": "workspace:*",
+    "@lib/db-postgres": "workspace:*",
     "@mantine/core": "8.2.5",
     "@mantine/hooks": "8.2.5",
     "@tabler/icons-react": "^2.47.0",

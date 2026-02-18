@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { StrengthRowGet } from '@lib/common/sql/strength'
+import { StrengthRowGet } from '@lib/db-postgres/sql/strength'
 import { FetchStrengthData } from './FetchStrengthData'
 import { FETCH_DATA_HOURS_BACK } from '../../constants'
 import { strengthIntervalsAll } from '../../state/useChartControlsStore'

@@ -1,0 +1,7 @@
+-- Canonical schema snapshot for POSTGRES_URL.
+-- Regenerate this file from migrations in CI to prevent drift.
+--
+-- The current apps rely on at least:
+-- - public.log_v1
+-- - public.order_v1
+-- - public.strength_v1

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { sqlLogAdd as sqlLogAddReal } from "@lib/common/sql/log/add";
+import { sqlLogAdd as sqlLogAddReal } from "@lib/db-postgres/sql/log/add";
 import { formatResponse } from "../../../lib/http.js";
 import { parseStrengthText } from "../../../lib/strength.js";
 import type { StrengthDataAdd } from "../../../types/strength.js";

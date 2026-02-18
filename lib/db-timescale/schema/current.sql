@@ -1,0 +1,7 @@
+-- Canonical schema snapshot for TIMESCALE_URL.
+-- Regenerate this file from migrations in CI to prevent drift.
+--
+-- Current app usage includes candle tables such as:
+-- - candles_1m_1s
+-- - candles_15m_1m
+-- - candles_60m_1m

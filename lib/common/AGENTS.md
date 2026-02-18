@@ -12,12 +12,6 @@ This package contains reusable utilities used by all apps in the monorepo.
 - `./lib` - Core utilities:
   - `./lib/db/postgres.ts` - PostgreSQL database connection utility
   - `./lib/nextjs` - Next.js utilities (formatResponse, getCurrentIpAddress)
-- `./sql` - Database functions for each table:
-  - `./sql/log` - Log data management
-  - `./sql/order` - Trading order management
-  - `./sql/strength` - Financial strength data management
-    - `./sql/strength/utils` - Forward-fill and average calculation utilities
-  - `./sql/types.ts` - Shared SQL types
 - `./twillio` - Twilio integration for sending SMS alerts
 
 ## Import Paths
@@ -27,7 +21,6 @@ All apps import from `@lib/common` using specific subpaths:
 ```typescript
 import { cc } from "@lib/common/cc";
 import { getDb } from "@lib/common/lib/db/postgres";
-import { strengthGets } from "@lib/common/sql/strength/gets";
 import { ErrorBoundary } from "@lib/common/fe/components/wrappers/ErrorBoundary";
 import { theme } from "@lib/common/fe/styles/theme";
 ```
@@ -37,3 +30,5 @@ import { theme } from "@lib/common/fe/styles/theme";
 - All imports within this package use relative paths (e.g., `../../lib/db/postgres`)
 - This is a workspace package, not published to npm
 - Used by: apps/trade, apps/log, apps/strength, apps/facts, apps/price-ui
+- New database-first workspace packages exist at `@lib/db-postgres` and `@lib/db-timescale`.
+- SQL helpers now live in `@lib/db-postgres/sql/*`.

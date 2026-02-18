@@ -31,5 +31,5 @@ Deploy as a **shared monorepo** (do not set Root Directory—the service depends
 - Route handlers are split into `src/handlers/tradingview/` and mounted from `src/routes/tradingview.ts`.
 - Strength parsing/read/write logic is centralized in `src/services/strength.ts`.
 - Shared types and utilities are in `src/types/strength.ts` and `src/lib/*`.
-- Invalid TradingView payloads and runtime handler failures should be logged via `sqlLogAdd` (`@lib/common/sql/log/add`) for observability.
-- Import shared logging directly from `@lib/common/sql/log/add`; `@lib/common` is now ESM to support named exports in Node services.
+- Invalid TradingView payloads and runtime handler failures should be logged via `sqlLogAdd` (`@lib/db-postgres/sql/log/add`) for observability.
+- Import shared logging directly from `@lib/db-postgres/sql/log/add`.

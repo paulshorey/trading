@@ -1,0 +1,3 @@
+-- name: upsert_candles_batch
+-- Canonical upsert contract for candle rows.
+-- Keep column contract aligned with the table schema migrations.

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { Time, LineData } from 'lightweight-charts'
 import { createURLStorage, getQueryParams } from './urlSync'
-import { NEW_INTERVALS } from '@lib/common/sql/strength/constants'
+import { NEW_INTERVALS } from '@lib/db-postgres/sql/strength/constants'
 
 // ============================================================================
 // CONFIGURATION CONSTANTS

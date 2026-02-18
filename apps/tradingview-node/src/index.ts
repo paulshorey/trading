@@ -10,7 +10,7 @@ import { getStrengthRows, strengthAdd } from "./lib/strength.js";
 export function createApp(options?: {
   getStrengthRows?: typeof getStrengthRows;
   strengthAdd?: typeof strengthAdd;
-  sqlLogAdd?: typeof import("@lib/common/sql/log/add").sqlLogAdd;
+  sqlLogAdd?: typeof import("@lib/db-postgres/sql/log/add").sqlLogAdd;
 }) {
   const getStrengthRowsFn = options?.getStrengthRows ?? getStrengthRows;
   const strengthAddFn = options?.strengthAdd ?? strengthAdd;

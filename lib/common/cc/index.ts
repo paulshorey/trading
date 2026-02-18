@@ -1,4 +1,4 @@
-import { sqlLogAdd } from "../sql/log/add";
+import { sqlLogAdd } from "@lib/db-postgres/sql/log/add";
 import { consoleAction } from "./lib/consoleAction";
 
 /**

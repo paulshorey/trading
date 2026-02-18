@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { sqlLogAdd } from "@lib/common/sql/log/add";
+import { sqlLogAdd } from "@lib/db-postgres/sql/log/add";
 import { formatResponse, getQueryString } from "../../../lib/http.js";
 import type { StrengthWhere } from "../../../types/strength.js";
 import type { StrengthRowGet } from "../../../types/strength.js";

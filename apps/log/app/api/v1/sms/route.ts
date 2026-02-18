@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { formatResponse } from '@lib/common/lib/nextjs/formatResponse'
-import { sqlLogAdd } from '@lib/common/sql/log/add'
+import { sqlLogAdd } from '@lib/db-postgres/sql/log/add'
 import { sendToMyselfSMS } from '@lib/common/twillio/sendToMyselfSMS'
 
 export const maxDuration = 60

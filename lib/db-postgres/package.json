@@ -1,0 +1,13 @@
+{
+  "name": "@lib/db-postgres",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "next": "^14.2.5",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  }
+}

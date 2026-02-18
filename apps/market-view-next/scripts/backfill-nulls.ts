@@ -11,8 +11,8 @@ import { Pool } from 'pg'
 import {
   ALL_INTERVALS,
   extractIntervalValues,
-} from '@lib/common/sql/strength/constants'
-import { calculateAverage } from '@lib/common/sql/strength/utils/average'
+} from '@lib/db-postgres/sql/strength/constants'
+import { calculateAverage } from '@lib/db-postgres/sql/strength/utils/average'
 
 // Load .env file from apps/strength directory
 function loadEnv() {

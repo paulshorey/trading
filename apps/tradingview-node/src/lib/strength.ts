@@ -165,6 +165,11 @@ export const strengthAdd = async (data: StrengthDataAdd) => {
   }
 
   const client = await pool.connect();
+  const onClientError = (err: Error) => {
+    console.error("Postgres client error:", err);
+  };
+  client.on("error", onClientError);
+  let destroyClient = false;
   try {
     const normalizedTimenow = new Date();
     normalizedTimenow.setSeconds(0, 0);
@@ -185,13 +190,22 @@ export const strengthAdd = async (data: StrengthDataAdd) => {
       data.volume ?? null,
       recentRows,
     );
+  } catch (error) {
+    destroyClient = true;
+    throw error;
   } finally {
-    client.release();
+    client.off("error", onClientError);
+    client.release(destroyClient);
   }
 };
 
 export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRowGet[]> => {
   const client = await pool.connect();
+  const onClientError = (err: Error) => {
+    console.error("Postgres client error:", err);
+  };
+  client.on("error", onClientError);
+  let destroyClient = false;
   try {
     let queryText = "SELECT * FROM strength_v1";
     const params: Array<string | number> = [];
@@ -244,7 +258,11 @@ export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRow
       average: row.average !== null ? Number(row.average) : null,
       ...extractIntervalValues(row),
     }));
+  } catch (error) {
+    destroyClient = true;
+    throw error;
   } finally {
-    client.release();
+    client.off("error", onClientError);
+    client.release(destroyClient);
   }
 };

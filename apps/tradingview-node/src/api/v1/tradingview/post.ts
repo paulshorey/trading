@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { sqlLogAdd as sqlLogAddReal } from "@lib/db-postgres/sql/log/add";
-import { formatResponse } from "../../../lib/http.js";
-import { logRequestEvent } from "../../../lib/logging.js";
-import { parseStrengthText } from "../../../lib/strength.js";
-import type { StrengthDataAdd } from "../../../types/strength.js";
+import { formatResponse } from "@/src/lib/http.js";
+import { logRequestEvent } from "@/src/lib/logging.js";
+import { parseStrengthText } from "@/src/lib/strength.js";
+import type { StrengthDataAdd } from "@/src/types/strength.js";
 
 type StrengthAdd = (data: StrengthDataAdd) => Promise<{ id: number }>;
 type SqlLogAdd = typeof sqlLogAddReal;

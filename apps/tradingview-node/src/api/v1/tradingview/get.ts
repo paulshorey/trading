@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { sqlLogAdd } from "@lib/db-postgres/sql/log/add";
-import { formatResponse, getQueryString } from "../../../lib/http.js";
-import { logRequestEvent } from "../../../lib/logging.js";
-import type { StrengthWhere } from "../../../types/strength.js";
-import type { StrengthRowGet } from "../../../types/strength.js";
+import { formatResponse, getQueryString } from "@/src/lib/http.js";
+import { logRequestEvent } from "@/src/lib/logging.js";
+import type { StrengthWhere } from "@/src/types/strength.js";
+import type { StrengthRowGet } from "@/src/types/strength.js";
 
 type GetStrengthRows = (where: StrengthWhere) => Promise<StrengthRowGet[]>;
 

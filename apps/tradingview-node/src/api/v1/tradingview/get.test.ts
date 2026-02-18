@@ -1,8 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import request from "supertest";
-import { createApp } from "../../../index.js";
-import { mockStrengthRows } from "../../../test/mockData.js";
+import { createApp } from "@/src/index.js";
+import { mockStrengthRows } from "@/src/test/mockData.js";
 
 describe("GET /api/v1/tradingview", () => {
   it("returns ok: true and rows array with expected structure", async () => {

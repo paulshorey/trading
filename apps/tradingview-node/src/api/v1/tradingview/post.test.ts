@@ -1,13 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
 import request from "supertest";
-import { createApp } from "../../../index.js";
+import { createApp } from "@/src/index.js";
 import {
   mockInvalidPostBody,
   mockValidPostBody,
   mockValidStrengthData,
   mockStrengthAddResult,
-} from "../../../test/mockData.js";
+} from "@/src/test/mockData.js";
 
 const noOpSqlLogAdd = async (): Promise<null | undefined> => null;
 

@@ -35,3 +35,4 @@ Deploy as a **shared monorepo** (do not set Root Directory—the service depends
 - Route handlers should enrich log `stack` with request metadata (including IP context) before calling `sqlLogAdd`.
 - Alerting behavior (SMS for warn/error paths) is application logic and should be handled in handlers, not in `@lib/db-postgres`.
 - Reusable request-aware logging glue for Express handlers lives in `src/lib/logging.ts` (`logRequestEvent`).
+- In-app imports should use the `@` alias (configured as `@/* -> ./*` in `tsconfig.json`) instead of deep relative paths like `../../` and `../../../`.

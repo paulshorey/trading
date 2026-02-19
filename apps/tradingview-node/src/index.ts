@@ -105,6 +105,6 @@ if (process.env.NODE_ENV !== "test") {
   });
   process.on("unhandledRejection", (reason) => {
     console.error("unhandledRejection:", reason);
-    void shutdown("unhandledRejection", 1);
+    // Keep the API alive on transient async failures (e.g. temporary DB outage).
   });
 }

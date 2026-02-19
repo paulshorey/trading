@@ -144,9 +144,6 @@ const TARGET_TABLE = "candles_1m_1s";
 /** Max candles per INSERT query (prevents oversized queries on batch accumulation) */
 const WRITE_BATCH_SIZE = 500;
 
-/** Max pending candles before oldest are dropped (prevents unbounded memory growth) */
-const MAX_PENDING_CANDLES = 5000;
-
 /** Number of seconds in the rolling window */
 const WINDOW_SECONDS = 60;
 
@@ -360,35 +357,27 @@ export class Tbbo1mAggregator {
     // Finalize stale seconds across all tickers
     this.finalizeStaleSeconds();
 
-    // Cap pending queue to prevent unbounded growth during prolonged DB outages
-    if (this.pendingCandles.length > MAX_PENDING_CANDLES) {
-      const dropped = this.pendingCandles.length - MAX_PENDING_CANDLES;
-      this.pendingCandles = this.pendingCandles.slice(dropped);
-      console.warn(`⚠️ Dropped ${dropped} oldest pending candles (queue exceeded ${MAX_PENDING_CANDLES})`);
-    }
-
     // Write pending candles in batches
     if (this.pendingCandles.length > 0) {
       let totalWritten = 0;
-      let failed = false;
+      let totalDropped = 0;
 
-      while (this.pendingCandles.length > 0 && !failed) {
+      while (this.pendingCandles.length > 0) {
         const batch = this.pendingCandles.splice(0, WRITE_BATCH_SIZE);
         const success = await this.writeBatch(batch);
         if (success) {
           totalWritten += batch.length;
         } else {
-          // Put the failed batch back at the front for retry next flush
-          this.pendingCandles.unshift(...batch);
-          failed = true;
+          // No retry queue: failed writes are dropped so stream processing keeps moving.
+          totalDropped += batch.length;
         }
       }
 
       if (totalWritten > 0) {
         console.log(`✅ Flushed ${totalWritten} rolling 1m candle(s) to ${TARGET_TABLE}`);
       }
-      if (failed) {
-        console.warn(`⚠️ DB write failed, ${this.pendingCandles.length} candle(s) queued for retry`);
+      if (totalDropped > 0) {
+        console.warn(`⚠️ Dropped ${totalDropped} rolling 1m candle(s) due to DB write failures`);
       }
     }
   }
@@ -409,17 +398,22 @@ export class Tbbo1mAggregator {
     const total = this.pendingCandles.length;
     if (total > 0) {
       let written = 0;
+      let dropped = 0;
       while (this.pendingCandles.length > 0) {
         const batch = this.pendingCandles.splice(0, WRITE_BATCH_SIZE);
         const success = await this.writeBatch(batch);
         if (success) {
           written += batch.length;
         } else {
-          console.error(`❌ Failed to flush ${batch.length + this.pendingCandles.length} candles on shutdown - data may be lost`);
-          return;
+          dropped += batch.length;
         }
       }
-      console.log(`🔄 Flushed all ${written} pending rolling 1m candles`);
+      if (written > 0) {
+        console.log(`🔄 Flushed ${written} pending rolling 1m candle(s) on shutdown`);
+      }
+      if (dropped > 0) {
+        console.warn(`⚠️ Dropped ${dropped} pending rolling 1m candle(s) on shutdown due to DB write failures`);
+      }
     }
   }
 

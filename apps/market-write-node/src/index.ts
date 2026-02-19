@@ -19,13 +19,25 @@ app.get("/health", (_req, res) => {
 /**
  * Start Server
  */
-app.listen(port, "::", async () => {
+const startStreamWithRetry = async () => {
+  try {
+    await startDatabentoStream();
+  } catch (error) {
+    console.error("Failed to start Databento stream, retrying in 5s:", error);
+    const retryTimer = setTimeout(() => {
+      void startStreamWithRetry();
+    }, 60_000); // Don't reconnect more than once per minute.
+    retryTimer.unref();
+  }
+};
+
+app.listen(port, "::", () => {
   console.log(`🚀 Market Data API server running on port ${port}`);
   console.log(`   Environment: ${process.env.RAILWAY_ENVIRONMENT_NAME || "local"}`);
 
   // Start the Databento live stream after API server is ready
   // This loads CVD from database before processing any trades
-  await startDatabentoStream();
+  void startStreamWithRetry();
 });
 
 // Graceful shutdown
@@ -41,4 +53,8 @@ process.on("SIGINT", async () => {
   stopDatabentoStream(); // Stop stream and flush pending candles
   await pool.end();
   process.exit(0);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection:", reason);
 });

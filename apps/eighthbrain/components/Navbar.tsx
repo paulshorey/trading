@@ -24,10 +24,11 @@ export function Navbar({ onNavClick }: NavbarProps) {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         <a
           href="/"
-          className="flex items-center gap-2 text-xl font-bold tracking-tight"
+          className="flex items-center gap-0 text-xl font-bold tracking-tight"
           onClick={(e) => handleNavClick(e, 'Home')}
         >
-          <span className="gradient-text">Eighth Brain</span>
+          <span className="text-indigo-400">Eighth</span>
+          <span className="gradient-text">Brain</span>
           <span className="text-indigo-400">.ai</span>
         </a>
 

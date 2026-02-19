@@ -31,9 +31,9 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min)
 
 // Generate a denser "knowledge cosmos" with clustered constellations and sporadic outliers.
 function generateKnowledgeGraph() {
-  const coreColors = ['#dbeafe', '#c4b5fd', '#bfdbfe', '#f5d0fe']
-  const planetColors = ['#818cf8', '#7dd3fc', '#a78bfa', '#60a5fa', '#22d3ee']
-  const rogueColors = ['#fde68a', '#f9a8d4', '#c7d2fe']
+  const coreColors = ['#f59e0b', '#fbbf24', '#84cc16', '#22c55e']
+  const planetColors = ['#f97316', '#fb923c', '#facc15', '#a3e635', '#4ade80']
+  const rogueColors = ['#fde047', '#facc15', '#bef264']
 
   const nodes: SpaceNode[] = []
   const links: SpaceLink[] = []
@@ -50,7 +50,7 @@ function generateKnowledgeGraph() {
     links.push({
       source,
       target,
-      color: config?.color ?? '#5b6ea8',
+      color: config?.color ?? 'rgba(163, 230, 53, 0.28)',
       width: config?.width ?? rand(0.4, 1.3),
       curvature: config?.curvature ?? rand(-0.2, 0.2),
       particles: config?.particles ?? (Math.random() > 0.6 ? 2 : 1),
@@ -61,10 +61,10 @@ function generateKnowledgeGraph() {
   const clusterCount = 8
   for (let c = 0; c < clusterCount; c++) {
     const armAngle = (c / clusterCount) * Math.PI * 2 + rand(-0.25, 0.25)
-    const armRadius = rand(120, 230)
+    const armRadius = rand(190, 360)
     const center = {
       x: Math.cos(armAngle) * armRadius,
-      y: rand(-90, 90),
+      y: rand(-120, 120),
       z: Math.sin(armAngle) * armRadius,
     }
 
@@ -85,7 +85,7 @@ function generateKnowledgeGraph() {
     for (let i = 0; i < satellites; i++) {
       const nodeId = `cluster-${c}-${i}`
       clusterNodeIds[c]?.push(nodeId)
-      const orbit = rand(25, 90)
+      const orbit = rand(60, 170)
       const theta = rand(0, Math.PI * 2)
       const phi = rand(0.2, Math.PI - 0.2)
       const x = center.x + orbit * Math.sin(phi) * Math.cos(theta)
@@ -105,7 +105,7 @@ function generateKnowledgeGraph() {
       })
 
       addLink(coreId, nodeId, {
-        color: 'rgba(125, 211, 252, 0.42)',
+        color: 'rgba(251, 191, 36, 0.44)',
         width: rand(0.6, 1.6),
         particles: 2,
         speed: rand(0.004, 0.013),
@@ -113,7 +113,7 @@ function generateKnowledgeGraph() {
 
       if (i > 1 && Math.random() > 0.35) {
         addLink(`cluster-${c}-${Math.floor(Math.random() * i)}`, nodeId, {
-          color: 'rgba(167, 139, 250, 0.28)',
+          color: 'rgba(249, 115, 22, 0.3)',
           width: rand(0.3, 0.95),
           particles: 1,
         })
@@ -121,7 +121,7 @@ function generateKnowledgeGraph() {
 
       if (i > 2 && Math.random() > 0.7) {
         addLink(`cluster-${c}-${i - 1}`, nodeId, {
-          color: 'rgba(56, 189, 248, 0.32)',
+          color: 'rgba(163, 230, 53, 0.34)',
           width: rand(0.4, 1.1),
           particles: 2,
           speed: rand(0.005, 0.016),
@@ -136,7 +136,7 @@ function generateKnowledgeGraph() {
     if (!next || !current) continue
 
     addLink(current, next, {
-      color: 'rgba(244, 114, 182, 0.34)',
+      color: 'rgba(253, 224, 71, 0.36)',
       width: rand(1.2, 2.1),
       curvature: rand(-0.33, 0.33),
       particles: 3,
@@ -147,7 +147,7 @@ function generateKnowledgeGraph() {
       const skip = coreNodeIds[(i + 2) % coreNodeIds.length]
       if (skip) {
         addLink(current, skip, {
-          color: 'rgba(99, 102, 241, 0.28)',
+          color: 'rgba(34, 197, 94, 0.3)',
           width: rand(0.6, 1.3),
           curvature: rand(-0.45, 0.45),
           particles: 2,
@@ -166,9 +166,9 @@ function generateKnowledgeGraph() {
       color: rogueColors[i % rogueColors.length] ?? '#fde68a',
       cluster: -1,
       kind: 'rogue',
-      x: rand(-340, 340),
-      y: rand(-220, 220),
-      z: rand(-340, 340),
+      x: rand(-460, 460),
+      y: rand(-280, 280),
+      z: rand(-460, 460),
     })
 
     const anchorCluster = Math.floor(rand(0, clusterCount))
@@ -177,7 +177,7 @@ function generateKnowledgeGraph() {
       const anchor = anchorNodes[Math.floor(Math.random() * anchorNodes.length)]
       if (anchor) {
         addLink(rogueId, anchor, {
-          color: 'rgba(253, 224, 71, 0.25)',
+          color: 'rgba(132, 204, 22, 0.28)',
           width: rand(0.25, 0.9),
           curvature: rand(-0.55, 0.55),
           particles: 1,
@@ -211,7 +211,7 @@ export function KnowledgeGraph() {
 
     const animateCamera = () => {
       frame += 0.0014
-      const distance = 460 + Math.sin(frame * 2.1) * 32
+      const distance = 600 + Math.sin(frame * 2.1) * 40
       graphRef.current?.cameraPosition(
         {
           x: Math.cos(frame) * distance,
@@ -273,16 +273,16 @@ export function KnowledgeGraph() {
           backgroundColor="rgba(0,0,0,0)"
           nodeColor={(node: unknown) => {
             const c = (node as { color?: string }).color
-            return typeof c === 'string' && c.startsWith('#') ? c : '#818cf8'
+            return typeof c === 'string' && c.startsWith('#') ? c : '#f59e0b'
           }}
           linkColor={(link: unknown) => {
             const c = (link as { color?: string }).color
-            return typeof c === 'string' ? c : 'rgba(129, 140, 248, 0.32)'
+            return typeof c === 'string' ? c : 'rgba(250, 204, 21, 0.3)'
           }}
           linkWidth={(link: unknown) => (link as SpaceLink).width ?? 0.8}
           linkCurvature={(link: unknown) => (link as SpaceLink).curvature ?? 0.12}
           linkDirectionalParticles={(link: unknown) => (link as SpaceLink).particles ?? 1}
-          linkDirectionalParticleColor={(link: unknown) => (link as SpaceLink).color ?? '#93c5fd'}
+          linkDirectionalParticleColor={(link: unknown) => (link as SpaceLink).color ?? '#bef264'}
           linkDirectionalParticleWidth={(link: unknown) => {
             const width = (link as SpaceLink).width ?? 1
             return Math.max(0.6, width * 0.85)

@@ -194,6 +194,7 @@ export function KnowledgeGraph() {
   const [mounted, setMounted] = useState(false)
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 })
   const graphRef = useRef<any>()
+  const zoomLayerRef = useRef<HTMLDivElement | null>(null)
   const graphData = useMemo(generateKnowledgeGraph, [])
 
   useEffect(() => {
@@ -205,32 +206,41 @@ export function KnowledgeGraph() {
   }, [])
 
   useEffect(() => {
-    if (!mounted || !graphRef.current) return
-    let frame = 0
-    let rafId = 0
+    if (!mounted) return
+    const zoomLayer = zoomLayerRef.current
+    if (!zoomLayer) return
 
-    const animateCamera = () => {
-      frame += 0.0014
-      const distance = 600 + Math.sin(frame * 2.1) * 40
-      graphRef.current?.cameraPosition(
+    let zoomAnimation: Animation | null = null
+    const startScale = 0.1
+    const endScale = 3.4
+    const zoomDurationMs = 28000
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    // Let the browser compositor own the zoom tween for smoother long-running animation.
+    zoomLayer.style.willChange = 'transform'
+    zoomLayer.style.transform = `scale(${startScale})`
+
+    if (prefersReducedMotion) {
+      zoomLayer.style.transform = `scale(${endScale})`
+    } else if (typeof zoomLayer.animate === 'function') {
+      zoomAnimation = zoomLayer.animate(
+        [{ transform: `scale(${startScale})` }, { transform: `scale(${endScale})` }],
         {
-          x: Math.cos(frame) * distance,
-          y: Math.sin(frame * 0.8) * 90,
-          z: Math.sin(frame) * distance,
-        },
-        { x: 0, y: 0, z: 0 },
-        0
+          delay: 1200,
+          duration: zoomDurationMs,
+          easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+          fill: 'forwards',
+        }
       )
-      rafId = window.requestAnimationFrame(animateCamera)
+    } else {
+      zoomLayer.style.transition = `transform ${zoomDurationMs}ms cubic-bezier(0.16, 1, 0.3, 1) 1200ms`
+      zoomLayer.style.transform = `scale(${endScale})`
     }
 
-    const startId = window.setTimeout(() => {
-      animateCamera()
-    }, 900)
-
     return () => {
-      window.clearTimeout(startId)
-      window.cancelAnimationFrame(rafId)
+      if (zoomAnimation) zoomAnimation.cancel()
+      zoomLayer.style.transition = ''
+      zoomLayer.style.willChange = 'auto'
     }
   }, [mounted])
 
@@ -265,11 +275,15 @@ export function KnowledgeGraph() {
       <div className="absolute bottom-[14%] left-[8%] h-56 w-56 rounded-full bg-fuchsia-500/18 blur-3xl" />
       <div className="absolute top-[42%] left-[40%] h-36 w-36 rounded-full bg-cyan-500/16 blur-3xl" />
 
-      <div className="absolute inset-0 opacity-[0.58]">
+      <div
+        ref={zoomLayerRef}
+        className="pointer-events-none absolute inset-0 opacity-[0.58]"
+        style={{ transform: 'scale(0.1)', transformOrigin: '50% 50%', backfaceVisibility: 'hidden' }}
+      >
         <ForceGraph3D
           ref={graphRef}
           graphData={graphData}
-          rendererConfig={{ antialias: true, alpha: true }}
+          rendererConfig={{ antialias: false, alpha: true, powerPreference: 'high-performance' }}
           backgroundColor="rgba(0,0,0,0)"
           nodeColor={(node: unknown) => {
             const c = (node as { color?: string }).color
@@ -289,11 +303,15 @@ export function KnowledgeGraph() {
           }}
           linkDirectionalParticleSpeed={(link: unknown) => (link as SpaceLink).speed ?? 0.008}
           nodeOpacity={0.93}
-          nodeResolution={10}
-          d3AlphaDecay={0.026}
+          nodeResolution={8}
+          d3AlphaDecay={0.04}
           d3VelocityDecay={0.21}
           warmupTicks={120}
+          cooldownTicks={180}
+          cooldownTime={8000}
+          linkDirectionalParticleResolution={2}
           enableNodeDrag={false}
+          enableNavigationControls={false}
           enablePointerInteraction={false}
           showNavInfo={false}
           width={dimensions.width}

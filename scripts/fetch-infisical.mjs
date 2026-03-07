@@ -12,6 +12,7 @@
  *
  * Usage:
  *   node scripts/fetch-infisical.mjs /m/apps/log apps/log/.env
+ *   node scripts/fetch-infisical.mjs --app market-write-node
  *   node scripts/fetch-infisical.mjs --all
  *   pnpm run env:pull -- /m/apps/log apps/log/.env
  *   pnpm run env:pull:all
@@ -25,13 +26,37 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-// App configurations: Infisical path -> local .env path
-const APPS = {
-  '/m/apps/log': 'apps/log/.env',
-  '/m/apps/price-ui': 'apps/price-ui/.env',
-  '/m/apps/strength': 'apps/strength/.env',
-  '/m/apps/trade': 'apps/trade/.env',
-};
+// App configurations: logical app name -> candidate Infisical paths + local .env path.
+// Candidate paths let us migrate app names without breaking existing secret mounts.
+const APPS = [
+  {
+    name: 'log',
+    outputFile: 'apps/log/.env',
+    infisicalPaths: ['/m/apps/log'],
+  },
+  {
+    name: 'market-view-next',
+    outputFile: 'apps/market-view-next/.env',
+    infisicalPaths: [
+      '/m/apps/market-view-next',
+      '/m/apps/market-view-ts',
+      '/m/apps/strength',
+      '/m/apps/price-ui',
+    ],
+  },
+  {
+    name: 'market-write-node',
+    outputFile: 'apps/market-write-node/.env',
+    infisicalPaths: ['/m/apps/market-write-node', '/m/apps/trade'],
+  },
+  {
+    name: 'tradingview-node',
+    outputFile: 'apps/tradingview-node/.env',
+    infisicalPaths: ['/m/apps/tradingview-node'],
+  },
+];
+
+const APPS_BY_NAME = new Map(APPS.map((app) => [app.name, app]));
 
 async function fetchSecrets(infisicalPath, outputFile, options) {
   const { token, projectId, env, siteUrl } = options;
@@ -67,6 +92,21 @@ async function fetchSecrets(infisicalPath, outputFile, options) {
   console.log(`✓ ${infisicalPath} → ${outputFile} (${secrets.secrets.length} secrets)`);
 }
 
+async function fetchAppSecrets(app, options) {
+  const errors = [];
+
+  for (const infisicalPath of app.infisicalPaths) {
+    try {
+      await fetchSecrets(infisicalPath, app.outputFile, options);
+      return;
+    } catch (error) {
+      errors.push(`${infisicalPath}: ${error.message}`);
+    }
+  }
+
+  throw new Error(errors.join(' | '));
+}
+
 async function main() {
   const token = process.env.INFISICAL_TOKEN;
   const projectId = process.env.INFISICAL_PROJECT_ID;
@@ -88,14 +128,35 @@ async function main() {
   const args = process.argv.slice(2);
   const options = { token, projectId, env, siteUrl };
 
+  const appFlagIndex = args.indexOf('--app');
+  const appName = appFlagIndex === -1 ? undefined : args[appFlagIndex + 1];
+
+  if (appFlagIndex !== -1) {
+    if (!appName) {
+      console.error('Usage: fetch-infisical.mjs --app <app-name>');
+      console.error(`Known apps: ${APPS.map((app) => app.name).join(', ')}`);
+      process.exit(1);
+    }
+
+    const app = APPS_BY_NAME.get(appName);
+    if (!app) {
+      console.error(`Unknown app "${appName}".`);
+      console.error(`Known apps: ${APPS.map((knownApp) => knownApp.name).join(', ')}`);
+      process.exit(1);
+    }
+
+    await fetchAppSecrets(app, options);
+    return;
+  }
+
   // Handle --all flag to fetch all apps
   if (args.includes('--all') || args.length === 0) {
     console.log(`Fetching secrets for all apps (env: ${env})...\n`);
-    for (const [infisicalPath, outputFile] of Object.entries(APPS)) {
+    for (const app of APPS) {
       try {
-        await fetchSecrets(infisicalPath, outputFile, options);
+        await fetchAppSecrets(app, options);
       } catch (error) {
-        console.error(`✗ ${infisicalPath}: ${error.message}`);
+        console.error(`✗ ${app.name}: ${error.message}`);
       }
     }
   } else {
@@ -103,6 +164,7 @@ async function main() {
     const [infisicalPath, outputFile] = args;
     if (!infisicalPath || !outputFile) {
       console.error('Usage: fetch-infisical.mjs <infisical-path> <output-file>');
+      console.error('       fetch-infisical.mjs --app <app-name>');
       console.error('       fetch-infisical.mjs --all');
       console.error('Example: fetch-infisical.mjs /m/apps/log apps/log/.env');
       process.exit(1);

@@ -1,4 +1,4 @@
-# Strength app (apps/strength/)
+# Market View Next app (apps/market-view-next/)
 
 Financial charting app displaying price and relative strength, with real-time updates.
 
@@ -10,7 +10,7 @@ Financial charting app displaying price and relative strength, with real-time up
 
 ## Folders
 
-Current working directory is `apps/strength`
+Current working directory is `apps/market-view-next`
 
 Main code is inside:
 

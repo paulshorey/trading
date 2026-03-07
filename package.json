@@ -4,11 +4,15 @@
   "packageManager": "pnpm@10.28.1",
   "scripts": {
     "build": "turbo run build",
+    "build:market-write-node": "turbo run build --filter=market-write-node...",
     "test": "turbo run test",
     "dev": "turbo run dev",
+    "dev:market-write-node": "pnpm --filter market-write-node dev",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "init": "node scripts/fetch-infisical.mjs --all",
+    "cloud:install": "bash scripts/cloud-agent-install.sh",
+    "cloud:start": "bash scripts/cloud-agent-start.sh",
     "create:next-app": "node scripts/create-next-app.js"
   },
   "devDependencies": {

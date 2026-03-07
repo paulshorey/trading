@@ -2,7 +2,7 @@
   "name": "__APP_NAME__",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@9.13.2",
+  "packageManager": "pnpm@10.28.1",
   "scripts": {
     "dev": "next dev --port __DEV_PORT__",
     "build": "next build",

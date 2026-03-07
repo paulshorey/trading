@@ -7,7 +7,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "env:pull": "node ../../scripts/fetch-infisical.mjs --app market-write-node"
   },
   "author": "",
   "license": "MIT",

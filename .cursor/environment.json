@@ -1,0 +1,16 @@
+{
+  "baseImage": "ghcr.io/cursor-images/node-20:latest",
+  "install": "pnpm run cloud:install",
+  "start": "pnpm run cloud:start",
+  "persistedDirectories": [
+    "/workspace/.pnpm-store",
+    "/workspace/.turbo"
+  ],
+  "env": {
+    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+    "HUSKY": "0",
+    "PNPM_HOME": "/home/ubuntu/.local/share/pnpm",
+    "PNPM_STORE_DIR": "/workspace/.pnpm-store",
+    "TURBO_TELEMETRY_DISABLED": "1"
+  }
+}

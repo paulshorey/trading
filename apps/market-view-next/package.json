@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3333",
     "build": "next build",
-    "env:pull": "node ../../scripts/fetch-infisical.mjs /m/apps/market-view-ts apps/market-view-ts/.env",
+    "env:pull": "node ../../scripts/fetch-infisical.mjs --app market-view-next",
     "analyze": "ANALYZE=true next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",

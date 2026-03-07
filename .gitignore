@@ -17,6 +17,7 @@ coverage
 
 # Tools
 .turbo
+.pnpm-store
 .vercel
 ._vscode
 

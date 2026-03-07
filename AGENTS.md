@@ -56,6 +56,8 @@ Install any dependencies you need (like tsc).
 
 - `pnpm install`
 - `pnpm run init` if envs are missing (first-session setup)
+- Cloud agents should use `.cursor/environment.json`, which runs `pnpm run cloud:install` at install time and `pnpm run cloud:start` on boot.
+- Prefer `pnpm dev:market-write-node` for focused service work instead of the root `pnpm dev` fanout.
 
 ## Finish task:
 

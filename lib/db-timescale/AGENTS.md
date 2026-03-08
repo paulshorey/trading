@@ -16,3 +16,14 @@ Database-first package for the `TIMESCALE_URL` database.
 
 Contract artifacts under this package should support future generated bindings
 for TypeScript, Python, C#, and R.
+
+## Notes
+
+- Fresh empty DB: run `pnpm --filter @lib/db-timescale db:migrate`, then `db:verify`.
+- Existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`, then `db:verify`.
+- The migration runner creates `timescaledb` if needed; the DB role must have permission to create extensions.
+- Never manually create or alter tables outside migrations.
+- Migration files are forward-only SQL; do not add `BEGIN` / `COMMIT`.
+- For populated tables, migrations must explicitly backfill data and explicitly convert types with `USING` where needed.
+- Write Timescale operations idempotently when possible (`IF NOT EXISTS`, `if_not_exists => TRUE`).
+- After schema changes, keep `migrations/`, `schema/current.sql`, generated artifacts, queries, and app consumers in sync.

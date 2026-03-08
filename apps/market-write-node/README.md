@@ -28,6 +28,65 @@ It should:
 
 It should not own downstream feature engineering or ML workflows.
 
+## Database ownership and setup
+
+This app does not own database migrations directly.
+
+- `@lib/db-timescale` owns the `TIMESCALE_URL` schema contract
+- `market-write-node` depends on that package for canonical candle tables
+
+### Fresh empty Timescale database
+
+Use this path for a new environment with no existing tables:
+
+```bash
+export TIMESCALE_URL="postgres://..."
+pnpm --filter @lib/db-timescale db:migrate
+pnpm --filter @lib/db-timescale db:verify
+```
+
+What this does:
+
+- creates the baseline candle tables
+- applies forward migrations such as:
+  - `candles_1h_1m`
+  - `candles_1m_1s` contract cleanup
+  - Timescale hypertable/compression setup
+- verifies that `schema/current.sql` and generated DB artifacts still match the
+  migrated database
+
+### Existing database that already has the baseline schema
+
+Use this path only if the database already contains the baseline tables from a
+manual or legacy setup:
+
+```bash
+export TIMESCALE_URL="postgres://..."
+pnpm --filter @lib/db-timescale db:migrate:baseline
+pnpm --filter @lib/db-timescale db:migrate
+pnpm --filter @lib/db-timescale db:verify
+```
+
+Do **not** use `db:migrate:baseline` for a fresh empty database.
+
+### Existing populated tables with schema changes
+
+The migration runner supports in-place upgrades, but the migration SQL must
+define how existing data is handled.
+
+Examples:
+
+- new column on populated table:
+  1. add nullable column or safe default
+  2. backfill with `UPDATE`
+  3. add `NOT NULL` or other strict constraint
+- type change:
+  - use `ALTER COLUMN ... TYPE ... USING ...` so existing rows are converted
+
+If a future migration cannot safely transform existing data by SQL alone, the
+migration file must document the extra manual or application-side step. That is
+the exception, not the default.
+
 ## Database setup
 
 This app uses the `TIMESCALE_URL` database owned by `@lib/db-timescale`.
@@ -41,7 +100,8 @@ export TIMESCALE_URL="postgres://..."
 ```
 
 The target database must support the TimescaleDB APIs used by the migrations,
-including hypertables and compression policies.
+including hypertables and compression policies. The DB role must be allowed to
+create the `timescaledb` extension.
 
 ### 2. Apply the DB migration
 
@@ -49,6 +109,7 @@ From the repo root:
 
 ```bash
 pnpm --filter @lib/db-timescale db:migrate
+pnpm --filter @lib/db-timescale db:verify
 ```
 
 This must create/update:
@@ -57,6 +118,9 @@ This must create/update:
 - `candles_1h_1m`
 
 ### 3. Refresh schema snapshot and generated DB artifacts
+
+Only do this when you are maintaining the DB package itself and intend to commit
+updated DB artifacts.
 
 After the migration has been applied to the target database, refresh the DB
 contract artifacts:
@@ -70,6 +134,13 @@ Or run both after migration:
 
 ```bash
 pnpm --filter @lib/db-timescale db:sync
+```
+
+For normal deploy/bootstrap work, prefer:
+
+```bash
+pnpm --filter @lib/db-timescale db:migrate
+pnpm --filter @lib/db-timescale db:verify
 ```
 
 ## Historical rebuild flow
@@ -91,6 +162,8 @@ Notes:
 - `historical:1h1m` reads only minute-boundary rows from `candles_1m_1s`
 - `--truncate` is recommended for a full deterministic rebuild
 - without `--truncate`, the script upserts into `candles_1h_1m`
+- if you intentionally start from an empty DB, run the DB migrations first, then
+  rebuild `candles_1m_1s`, then rebuild `candles_1h_1m`
 
 ## Live flow
 
@@ -127,6 +200,14 @@ warmup.
 - keep historical and live behavior aligned through shared library code
 - `price_pct` is stored in basis points
 - `sum_price_volume / volume` is the query-time VWAP formula
+- do not manually create or alter Timescale tables; make schema changes in
+  `@lib/db-timescale/migrations`
+- after schema changes, run `pnpm --filter @lib/db-timescale db:verify`
+
+## Related docs
+
+- `lib/db-timescale/README.md` - DB package setup and migration workflow
+- `docs/db/management-playbook.md` - repo-wide migration patterns
 
 ## Validation
 

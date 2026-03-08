@@ -127,7 +127,6 @@ export interface AggregatorStats {
  */
 export interface NormalizedTrade {
   ticker: string;
-  minuteBucket: string;
   price: number;
   size: number;
   isAsk: boolean;

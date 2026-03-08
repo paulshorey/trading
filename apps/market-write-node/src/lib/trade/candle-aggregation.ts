@@ -118,27 +118,6 @@ export function updateCandleWithTrade(candle: CandleState, trade: NormalizedTrad
 }
 
 /**
- * Add a trade to a candle map, creating a new candle if needed
- *
- * @param candles - Map of key -> CandleState
- * @param key - The key for this candle (typically "ticker|minuteBucket")
- * @param trade - The normalized trade to add
- */
-export function addTradeToCandle(
-  candles: Map<string, CandleState>,
-  key: string,
-  trade: NormalizedTrade
-): void {
-  const existing = candles.get(key);
-
-  if (existing) {
-    updateCandleWithTrade(existing, trade);
-  } else {
-    candles.set(key, createCandleFromTrade(trade));
-  }
-}
-
-/**
  * Update CVD OHLC tracking after a trade has been added.
  *
  * Only CVD needs intra-minute OHLC tracking because it's a running total
@@ -167,30 +146,4 @@ export function updateCandleCvdOHLC(
   } else {
     updateCvdOHLC(candle.metricsOHLC, cvd);
   }
-}
-
-/**
- * Add a trade to a candle map and update CVD OHLC tracking
- *
- * This is the complete function that:
- * 1. Adds the trade to the candle (or creates a new candle)
- * 2. Updates the CVD OHLC tracking
- *
- * @param candles - Map of key -> CandleState
- * @param key - The key for this candle (typically "ticker|minuteBucket")
- * @param trade - The normalized trade to add
- * @param context - Context with base CVD from the aggregator
- */
-export function addTradeAndUpdateMetrics(
-  candles: Map<string, CandleState>,
-  key: string,
-  trade: NormalizedTrade,
-  context: MetricCalculationContext
-): void {
-  // Add the trade to the candle
-  addTradeToCandle(candles, key, trade);
-
-  // Update CVD OHLC
-  const candle = candles.get(key)!;
-  updateCandleCvdOHLC(candle, context);
 }

@@ -1,77 +1,108 @@
-# Market Write (NodeJS service)
+# market-write-node
 
-Multi-timeframe financial data pipeline for futures and crypto. Ingests live trades data, calculates metrics and indicators such as RSI/CVD/VWAP, aggregates raw trade data into candles time buckets.
+Canonical futures timeseries write pipeline.
 
-Aggregates raw data into 1-minute bars, calculated and written every second using rolling window sampling. Every 1-minute bar is a full legitimate 1-minute bar with a high/low value and total volume caculated over the past 60 seconds. But each candle is written every second, so every second in time has its own candle with its own close value. Instead of a new candle waiting for the previous one to close, a new candle is started every second, and an old canlde is written every second.
+## Current scope
 
-TODO: Aggregate 1-minute data into higher timeframes such as 15-minutes, 60-minutes, and even 1-day, but calculate and update every minute also using rolling window sampling.
+This app ingests TBBO trade data and writes **rolling 1-minute candles at
+1-second resolution** to `candles_1m_1s`.
 
-TODO: Indicators must be calculated per each candle, sampling candles of the same second_index (for minute candles) and same minute_index (for higher timeframes).
+Each stored row is the trailing 60-second window for a ticker at that second:
 
-## Core Innovation: Rolling-Window Sampling
+- input resolution: individual TBBO trades
+- output timeframe: 1 minute
+- output write cadence: 1 second
 
-Standard platforms calculate a 60-minute candle once per hour. This platform calculates it **every minute** using a sliding window over the previous 60 minutes. This means:
+The app has two ingest modes:
 
-- A 60m table has one row per minute (not per hour), each representing the trailing 60-minute window
-- `minute_index` cycles 0-59, identifying which phase of the timeframe the row represents
-- Indicators like RSI are calculated per minute_index independently (60 separate RSI calculators for a 60m timeframe)
-- Backtesting can evaluate any timeframe at any minute, not just at period boundaries
+- `src/stream/tbbo-stream.ts` for live Databento TCP data
+- `scripts/tbbo-1m-1s.ts` for historical JSONL backfills
 
-**Example**: To get RSI-14 on 60m data at 10:31 (minute_index=31), query 14 rows where `minute_index=31` ordered by timestamp DESC. Each row is 60 minutes apart (9:31, 8:31, 7:31...).
+Both paths must stay aligned and should share aggregation logic whenever
+possible.
 
-```sql
-SELECT close FROM candles_60m_1m
-WHERE symbol = 'ES' AND minute_index = 31 -- IMPORTANT: when querying from higher-timeframe tables, minute_index should always be set!
-ORDER BY ts DESC LIMIT 14;
+## Project goal
+
+`market-write-node` is responsible for producing and maintaining **canonical
+financial timeseries data** from historical and live market data.
+
+This data is intended to be a durable source of truth for downstream apps.
+The writer pipeline should be deterministic, explainable, and conservative
+about schema and logic changes.
+
+## Timeframe model
+
+Do not redesign this app around traditional end-of-period-only candles.
+
+The intended write model is:
+
+- `1m` candles written at `1s` resolution
+- later: `1h` candles written at `1m` resolution
+
+The saved resolution is therefore finer than the candle timeframe, because each
+row represents a rolling window that is recalculated on a higher-frequency
+schedule.
+
+## Runtime architecture
+
+```
+src/index.ts
+  -> src/stream/tbbo-stream.ts
+  -> src/stream/tbbo-1m-aggregator.ts
+  -> src/lib/trade/*
+  -> TimescaleDB candles_1m_1s
 ```
 
-**Example**: To get RSI-14 on 1m data at 10:31:47 (second_index:47), query 14 rows where `second_index:47` ordered by timestamp DESC. Each row is 60 seconds apart (10:30:47, 10:29:47, 10:28:47...).
+Key rules:
 
-```sql
-SELECT close FROM candles_1m_1s
-WHERE symbol = 'ES' AND second_index = 47 -- IMPORTANT: when querying from 1m_1s table, second_index should always be set!
-ORDER BY ts DESC LIMIT 14;
-```
+- keep the runtime focused on writing data, not serving an API
+- only `/health` exists; there is no `src/api/`
+- use `TIMESCALE_URL` through `@lib/db-timescale`
+- keep front-month stitching and rolling-window aggregation deterministic
+- prefer shared library code over duplicated live/batch logic
+- treat written tables as source-of-truth data, not disposable intermediate output
+- prefer adding new write layers only when they are part of the canonical timeseries plan
 
-Same indicator calculation as in a typical system except here the current candle is always fully closed. A new candle is always written every second (for candles_1m_1s) and every minute (for higher timeframes).
-
-## Tech Stack
-
-- **Runtime**: Node.js / TypeScript (strict mode)
-- **API**: Express
-- **Database**: PostgreSQL via `pg` (raw SQL, no ORM in production)
-- **Data feed**: Databento Raw TCP API (TBBO schema)
-- **Deployment**: Railway
-
-## Database Conventions
-
-- Table names: `candles_{interval}m` (e.g., `candles_60m`). One table per timeframe, all sharing the same schema.
-- Primary key: `(symbol, ts)`. All symbols share one table, differentiated by `symbol` column.
-- Critical index: `(symbol, minute_index, ts DESC)` for indicator lookups.
-- `minute_index` cycles 0 to N-1 for an N-minute timeframe.
-- Column names: snake_case in DB, camelCase in TypeScript.
-- Indicators stored in same row as OHLCV (no JOINs needed).
-
-## Project Structure
+## Source layout
 
 ```
 src/
-  index.ts                  # Express server entry point
-  api/                      # REST endpoints (health, tables, historical candles)
+  index.ts
   lib/
-    db.ts                   # PostgreSQL connection pool
-    candles.ts              # Candle querying + timeframe selection
-    trade/                  # TBBO processing (aggregation, side detection, thresholds)
-    metrics/                # 10 order flow metric calculators (VD, CVD, EVR, SMP, etc.)
-  stream/                   # Databento live TCP client + aggregator
-scripts/                    # Data import and analysis tools
-docs/                       # Architecture docs, examples, research notes
+    db.ts
+    metrics/
+    trade/
+  stream/
+    tbbo-stream.ts
+    tbbo-1m-aggregator.ts
+scripts/
+  tbbo-1m-1s.ts
+docs/
+  index.md
 ```
+
+## Relationship to future apps
+
+`market-write-node` should stop at **canonical timeseries writing**.
+
+A future app, `market-analyze-python`, will consume this historical and live
+timeseries data to:
+
+- build multiple timeframes and lookback windows
+- calculate indicators and derived features such as RSI, CVD, volume, and volatility
+- write those model-ready parameters into separate downstream tables
+- support both model training on historical data and inference on live data
+
+That downstream feature-engineering and ML workflow should not be folded back
+into `market-write-node`.
 
 ## Documentation
 
-See [docs/index.md](docs/index.md) for the full map. Key sections:
+Only keep docs that match the current writer pipeline and near-term roadmap.
+Remove or rewrite anything that still references:
 
-- **data-storage/**: Database schema, partitioning, optimization, Databento ingestion
-- **data-indicators/**: Indicator calculation with rolling windows, RSI reference implementation, pivot detection research
-- **data-backtesting/**: Backtesting architecture, order flow patterns, optimization
+- old `ohlcv_*` schemas
+- `minute_index` / `second_index` query models
+- nonexistent API layers
+- unrelated backtesting experiments inside this app
+- outdated roadmap assumptions beyond `1m@1s` and `1h@1m`

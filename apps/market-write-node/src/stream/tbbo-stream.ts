@@ -76,6 +76,8 @@ interface StreamState {
   reconnectAttempts: number;
   shouldReconnect: boolean;
   aggregator: Tbbo1mAggregator | null;
+  flushTimer: NodeJS.Timeout | null;
+  idleLogTimer: NodeJS.Timeout | null;
 }
 
 const state: StreamState = {
@@ -86,6 +88,8 @@ const state: StreamState = {
   reconnectAttempts: 0,
   shouldReconnect: true,
   aggregator: null,
+  flushTimer: null,
+  idleLogTimer: null,
 };
 
 /**
@@ -393,7 +397,7 @@ function handleData(data: Buffer): void {
             console.log(`🌙 Market closed - skipped ${skippedMarketClosed.toLocaleString()} records`);
             lastMarketClosedLogTime = now;
           }
-          return;
+          continue;
         }
 
         messageCount++;
@@ -484,10 +488,10 @@ function connect(): void {
     state.authenticated = false;
     state.sessionStarted = false;
 
-    // Flush any pending candles before reconnecting
-    state.aggregator?.flushAll();
-
-    scheduleReconnect();
+    void (async () => {
+      await state.aggregator?.flushAll();
+      scheduleReconnect();
+    })();
   });
 
   state.socket.on("timeout", () => {
@@ -572,19 +576,25 @@ export async function startDatabentoStream(): Promise<void> {
   state.aggregator = new Tbbo1mAggregator();
   await state.aggregator.initialize();
 
-  // Start periodic flush (every 1 second to keep database current)
-  setInterval(() => {
-    state.aggregator?.flushCompleted();
+  if (state.flushTimer) {
+    clearInterval(state.flushTimer);
+  }
+  state.flushTimer = setInterval(() => {
+    void state.aggregator?.flushCompleted();
   }, 1000);
+  state.flushTimer.unref();
 
-  // Log status every 60 seconds if streaming but no trades
-  setInterval(() => {
+  if (state.idleLogTimer) {
+    clearInterval(state.idleLogTimer);
+  }
+  state.idleLogTimer = setInterval(() => {
     if (state.sessionStarted && messageCount === 0) {
       console.log("⏳ Stream connected, waiting for trades... (market may be closed)");
       const symbols = Array.from(instrumentIdToSymbol.values());
       console.log(`   Symbol mappings received: ${symbols.length > 0 ? symbols.join(", ") : "none"}`);
     }
   }, 60000);
+  state.idleLogTimer.unref();
 
   connect();
 }
@@ -592,16 +602,26 @@ export async function startDatabentoStream(): Promise<void> {
 /**
  * Stop the Databento streaming client
  */
-export function stopDatabentoStream(): void {
+export async function stopDatabentoStream(): Promise<void> {
   console.log("🛑 Stopping Databento stream...");
   state.shouldReconnect = false;
 
-  // Flush all pending candles
-  state.aggregator?.flushAll();
+  if (state.flushTimer) {
+    clearInterval(state.flushTimer);
+    state.flushTimer = null;
+  }
+  if (state.idleLogTimer) {
+    clearInterval(state.idleLogTimer);
+    state.idleLogTimer = null;
+  }
 
   if (state.socket) {
     state.socket.end();
     state.socket = null;
+  }
+
+  if (state.aggregator) {
+    await state.aggregator.flushAll();
   }
 }
 

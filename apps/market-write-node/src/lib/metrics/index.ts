@@ -12,9 +12,6 @@
  * 5. Price: price_pct - normalized price change
  */
 
-// Types
-export type { OrderFlowMetrics, OrderFlowInput } from "./types.js";
-
 // Direction metrics (vd, vd_ratio)
 export { calculateVd, calculateVdRatio } from "./direction.js";
 
@@ -26,9 +23,6 @@ export { calculatePricePct } from "./price.js";
 
 // Absorption metrics (divergence)
 export { calculateDivergence } from "./absorption.js";
-
-// Main calculation function
-export { calculateOrderFlowMetrics } from "./calculate-all.js";
 
 // OHLC tracking for CVD
 export type { MetricOHLC, MetricsOHLC } from "./ohlc.js";

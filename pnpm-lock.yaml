@@ -321,9 +321,6 @@ importers:
       express:
         specifier: ^4.21.2
         version: 4.22.1
-      pg:
-        specifier: ^8.13.1
-        version: 8.16.3
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
@@ -337,9 +334,6 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.18.1
-      '@types/pg':
-        specifier: ^8.11.0
-        version: 8.15.5
       eslint:
         specifier: ^9.39.2
         version: 9.39.2(jiti@2.5.1)

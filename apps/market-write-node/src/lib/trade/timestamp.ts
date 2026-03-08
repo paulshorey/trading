@@ -56,15 +56,32 @@ export function toMinuteBucket(timestamp: string | number): string {
 }
 
 /**
+ * Parse any timestamp format to second bucket.
+ *
+ * Supports ISO timestamps and nanosecond epoch values.
+ */
+export function toSecondBucket(timestamp: string | number): string {
+  let date: Date;
+
+  if (typeof timestamp === "number") {
+    date = new Date(Math.floor(timestamp / 1_000_000));
+  } else if (timestamp.includes("T") || timestamp.includes("-")) {
+    date = new Date(timestamp);
+  } else {
+    date = new Date(Math.floor(parseInt(timestamp, 10) / 1_000_000));
+  }
+
+  date.setMilliseconds(0);
+  return date.toISOString();
+}
+
+/**
  * Get the start of the 1-second bucket for a nanosecond timestamp
  * @param nsTimestamp - Nanosecond epoch timestamp as string
  * @returns ISO string for the start of the second (e.g., "2024-01-15T14:30:05.000Z")
  */
 export function getSecondBucket(nsTimestamp: string): string {
-  const msTimestamp = nsToMs(nsTimestamp);
-  const date = new Date(msTimestamp);
-  date.setMilliseconds(0);
-  return date.toISOString();
+  return toSecondBucket(nsTimestamp);
 }
 
 /**

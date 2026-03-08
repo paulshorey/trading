@@ -56,7 +56,7 @@ Install any dependencies you need (like tsc).
 
 - `pnpm install`
 - `pnpm run init` if envs are missing (first-session setup)
-- Cloud agents should use `.cursor/environment.json`, which runs `pnpm run cloud:install` at install time and `pnpm run cloud:start` on boot.
+- Cloud agents use snapshot-managed environment settings (update script runs `pnpm install` automatically on boot).
 - Prefer `pnpm dev:market-write-node` for focused service work instead of the root `pnpm dev` fanout.
 
 ## Finish task:
@@ -68,3 +68,31 @@ Install any dependencies you need (like tsc).
 - Read local `AGENTS.md` in the folder you edit, when present.
 - Keep AGENTS files aligned with actual architecture.
 - Remove outdated or redundant instructions.
+
+## Cursor Cloud specific instructions
+
+### Services overview
+
+| Service | Port | Dev command | Notes |
+|---|---|---|---|
+| `market-view-next` | 3333 | `pnpm --filter market-view-next dev` | Next.js frontend; needs `TIMESCALE_URL` |
+| `tradingview-node` | 3000 | `pnpm --filter tradingview-node dev` | Express API; needs `POSTGRES_URL` |
+| `market-write-node` | 8080 | `pnpm --filter market-write-node dev` | Data pipeline; needs `TIMESCALE_URL` + Databento keys |
+| `log` | 3333 | `pnpm --filter log dev` | Log dashboard; needs `POSTGRES_URL` |
+| `eighthbrain` | 3340 | `pnpm --filter eighthbrain dev` | Marketing site; no DB required |
+
+### Environment variables
+
+- `.env` files per app are hydrated from Infisical via `pnpm run init` (requires `INFISICAL_TOKEN` + `INFISICAL_PROJECT_ID` secrets).
+- If Infisical secrets are unavailable, create stub `.env` files manually — see the "Environment Variables by App" section of each app's AGENTS.md or source code for required keys.
+- Databases (`POSTGRES_URL`, `TIMESCALE_URL`) are external/hosted; there is no Docker Compose for local DB.
+
+### Build and test
+
+- `pnpm build` runs Turbo across all packages. All apps type-check and build without a live DB connection.
+- `pnpm --filter tradingview-node test` runs the only automated test suite (node:test + supertest, mocked DB). All other apps have no automated tests.
+- `pnpm lint` uses `next lint` for Next.js apps and `eslint` for Node apps. Note: the ESLint flat-config (`eslint.config.js`) files have known compatibility issues with `next lint` in Next.js 14 — builds skip linting and succeed.
+
+### Native build scripts
+
+The root `package.json` includes `pnpm.onlyBuiltDependencies` to allow build scripts for `esbuild`, `@tailwindcss/oxide`, `@parcel/watcher`, and `unrs-resolver`. Without this, `tsx` (used by `market-write-node` and `tradingview-node`) will not work.

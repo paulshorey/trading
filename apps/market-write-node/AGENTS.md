@@ -89,6 +89,11 @@ Key rules:
 - keep column contracts aligned with `@lib/db-timescale` migrations, schema snapshot, and generated types
 - `price_pct` is stored in basis points, not percent
 - `sum_price_volume` is the stored VWAP accumulator; there is no canonical per-row `vwap` column
+- do not create or alter Timescale tables manually; change `@lib/db-timescale/migrations`
+- fresh empty DB: run `db:migrate`, not `db:migrate:baseline`
+- existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`
+- after DB contract changes, run `pnpm --filter @lib/db-timescale db:verify`
+- if a migration must change populated data, the migration SQL must backfill or convert existing rows explicitly
 
 ## Source layout
 

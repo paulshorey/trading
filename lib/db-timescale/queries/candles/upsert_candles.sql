@@ -1,6 +1,6 @@
 -- name: upsert_candles_batch
 -- Canonical upsert contract for candle rows.
--- Replace {{TABLE_NAME}} with target table (for example candles_1m_1s).
+-- Replace {{TABLE_NAME}} with target table (for example candles_1m_1s or candles_1h_1m).
 -- Expand VALUES tuples as needed for batched inserts.
 INSERT INTO {{TABLE_NAME}} (
   time, ticker, symbol,

@@ -15,9 +15,13 @@ Current:
 
 - `1m` candles written at `1s` resolution
 
-Planned next:
+Current next layer:
 
 - `1h` candles written at `1m` resolution
+
+Implementation rule:
+
+- `1h@1m` is derived from the minute-boundary subset of canonical `1m@1s` rows
 
 Not planned here:
 

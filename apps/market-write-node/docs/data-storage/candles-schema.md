@@ -1,25 +1,51 @@
-# `candles_1m_1s` schema
+# canonical candles schema
 
 ## Current source of truth
 
-`candles_1m_1s` is the only table this app currently writes.
+This app currently writes two canonical rolling tables:
+
+- `candles_1m_1s`
+- `candles_1h_1m`
+
+The lower table is canonical trade-derived data.
+
+The higher table is still canonical app-owned timeseries data, but it is
+derived from the lower canonical table rather than directly from raw trades.
 
 Each row represents:
+
+### `candles_1m_1s`
 
 - one ticker
 - one second in time
 - the fully aggregated trailing 60-second window ending at that second
 
-That means the table stores **1-minute candles sampled every second**.
+That table stores **1-minute candles sampled every second**.
+
+### `candles_1h_1m`
+
+- one ticker
+- one minute in time
+- the fully aggregated trailing 60-minute window ending at that minute
+
+That table stores **1-hour candles sampled every minute**.
 
 ## Write paths
 
-Both ingest modes write the same schema:
+Both ingest modes build `candles_1m_1s`:
 
 - `src/stream/tbbo-stream.ts` -> live ingest
 - `scripts/tbbo-1m-1s.ts` -> historical backfill
 
 Both feed the same shared rolling-window engine in `src/lib/trade/rolling-window.ts`.
+
+`candles_1h_1m` is then derived from the minute-boundary subset of
+`candles_1m_1s`:
+
+- `src/stream/candles-1h-1m-aggregator.ts` -> live derivation
+- `scripts/candles-1h-1m.ts` -> historical rebuild
+
+Those paths share `src/lib/trade/rolling-candle-window.ts`.
 
 ## Table columns
 
@@ -59,19 +85,16 @@ will still be recalculated on a finer saved resolution.
 
 This app is **not** moving toward traditional closed-bar aggregates only.
 
-The intended next stage is:
-
-- `1h` candles written every `1m`
-
-That future table should follow the same pattern as `candles_1m_1s`:
+`candles_1h_1m` follows the same rolling-window pattern as `candles_1m_1s`:
 
 - candle timeframe and saved resolution are distinct
 - each row is a trailing rolling window
-- both historical and live ingest should share the same aggregation logic
+- both historical and live maintenance share the same aggregation logic
+- the higher layer is derived from canonical lower-layer rows, not raw trade replay
 
 ## Downstream usage
 
-This table is meant to be canonical source-of-truth timeseries data for
+These tables are meant to be canonical source-of-truth timeseries data for
 downstream consumers.
 
 A future `market-analyze-python` app is expected to read from these canonical
@@ -80,4 +103,7 @@ inference workloads.
 
 ## SQL
 
-See `1s-base-1m-aggregate.sql` for the current base-table setup.
+See:
+
+- `1s-base-1m-aggregate.sql` for `candles_1m_1s`
+- `1m-base-1h-aggregate.sql` for `candles_1h_1m`

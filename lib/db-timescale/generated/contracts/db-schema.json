@@ -290,6 +290,143 @@
       "type": "number"
     }
   ],
+  "candles_1h_1m": [
+    {
+      "column": "time",
+      "nullable": false,
+      "type": "Date"
+    },
+    {
+      "column": "ticker",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "symbol",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "column": "open",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "high",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "low",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "close",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "volume",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "ask_volume",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "bid_volume",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "cvd_open",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "cvd_high",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "cvd_low",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "cvd_close",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "vd",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "vd_ratio",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "book_imbalance",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "price_pct",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "divergence",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "trades",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "max_trade_size",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "big_trades",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "big_volume",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "sum_bid_depth",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "sum_ask_depth",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "sum_price_volume",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "unknown_volume",
+      "nullable": true,
+      "type": "number"
+    }
+  ],
   "candles_1s": [
     {
       "column": "time",

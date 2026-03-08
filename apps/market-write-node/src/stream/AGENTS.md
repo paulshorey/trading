@@ -2,7 +2,8 @@
 
 Real-time TBBO trade data from Databento is aggregated into rolling
 1-minute candles at 1-second resolution and written to `candles_1m_1s`.
-Each row represents the trailing 60-second window for a ticker.
+Those canonical minute rows are then reduced to rolling 1-hour candles at
+1-minute resolution and written to `candles_1h_1m`.
 
 This live path is part of the canonical source-of-truth writer pipeline.
 It should remain aligned with historical ingest and should not absorb
@@ -23,6 +24,7 @@ downstream feature-engineering or ML-specific logic.
   - converts records into normalized trade input
   - finalizes stale seconds on a timer
   - writes pending rows to `candles_1m_1s`
+  - forwards minute-boundary `candles_1m_1s` rows to the 1h writer
   - loads latest `cvd_close` values on startup for continuity
 
 - **`src/lib/trade/rolling-window.ts`** owns the shared rolling-window logic used by both live and historical ingest
@@ -31,6 +33,15 @@ downstream feature-engineering or ML-specific logic.
   - 60-second warmup handling
   - trailing-window candle creation
   - pending candle queue management
+
+- **`candles-1h-1m-aggregator.ts`** derives rolling hourly rows from canonical
+  minute-boundary rows
+  - hydrates from recent `candles_1m_1s` minute-boundary rows on startup
+  - accepts only canonical lower-timeframe rows, never raw trades
+  - writes `candles_1h_1m`
+
+- **`src/lib/trade/rolling-candle-window.ts`** owns the shared higher-timeframe
+  rolling aggregation used by live and historical `1h@1m`
 
 ## Configuration
 
@@ -64,7 +75,8 @@ Stream-specific code should only handle:
 
 The current live writer supports `1m` candles at `1s` resolution.
 
-The next planned write layer is `1h` candles at `1m` resolution.
+The live writer now also maintains `1h` candles at `1m` resolution by deriving
+them from the minute-boundary subset of `candles_1m_1s`.
 
 ## CVD Continuity
 

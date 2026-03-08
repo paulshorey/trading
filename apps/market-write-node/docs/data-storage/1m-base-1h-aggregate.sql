@@ -1,19 +1,16 @@
 -- ============================================================================
--- Base table setup for market-write-node
+-- Derived canonical table setup for market-write-node
 --
 -- Current scope:
---   - 1-minute rolling candles
---   - written every second
---   - stored in candles_1m_1s
---
--- This script intentionally defines only the current source-of-truth table.
--- The next canonical layer, candles_1h_1m, is derived from the minute-boundary
--- subset of this table.
+--   - 1-hour rolling candles
+--   - written every minute
+--   - stored in candles_1h_1m
+--   - derived from minute-boundary rows in candles_1m_1s
 -- ============================================================================
 
-DROP TABLE IF EXISTS candles_1m_1s CASCADE;
+DROP TABLE IF EXISTS candles_1h_1m CASCADE;
 
-CREATE TABLE candles_1m_1s (
+CREATE TABLE candles_1h_1m (
   time             TIMESTAMPTZ      NOT NULL,
   ticker           TEXT             NOT NULL,
   symbol           TEXT,
@@ -45,22 +42,16 @@ CREATE TABLE candles_1m_1s (
 );
 
 SELECT create_hypertable(
-  'candles_1m_1s',
-  by_range('time', INTERVAL '1 week')
+  'candles_1h_1m',
+  by_range('time', INTERVAL '1 month')
 );
 
-CREATE INDEX idx_candles_1m_1s_time_desc ON candles_1m_1s (time DESC);
+CREATE INDEX idx_candles_1h_1m_time_desc ON candles_1h_1m (time DESC);
 
-ALTER TABLE candles_1m_1s SET (
+ALTER TABLE candles_1h_1m SET (
   timescaledb.compress,
   timescaledb.compress_segmentby = 'ticker',
   timescaledb.compress_orderby = 'time DESC'
 );
 
-SELECT add_compression_policy('candles_1m_1s', INTERVAL '1 week');
-
--- Helpful checks
-SELECT show_chunks('candles_1m_1s');
-SELECT *
-FROM chunk_compression_stats('candles_1m_1s')
-ORDER BY chunk_name;
+SELECT add_compression_policy('candles_1h_1m', INTERVAL '1 month');

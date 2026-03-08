@@ -119,6 +119,41 @@ CREATE TABLE public.candles_1m_1s (
 
 
 --
+-- Name: candles_1h_1m; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.candles_1h_1m (
+    "time" timestamp with time zone NOT NULL,
+    ticker text NOT NULL,
+    symbol text,
+    open double precision NOT NULL,
+    high double precision NOT NULL,
+    low double precision NOT NULL,
+    close double precision NOT NULL,
+    volume double precision DEFAULT 0 NOT NULL,
+    ask_volume double precision DEFAULT 0 NOT NULL,
+    bid_volume double precision DEFAULT 0 NOT NULL,
+    cvd_open double precision,
+    cvd_high double precision,
+    cvd_low double precision,
+    cvd_close double precision,
+    vd double precision,
+    vd_ratio double precision,
+    book_imbalance double precision,
+    price_pct double precision,
+    divergence double precision,
+    trades integer DEFAULT 0,
+    max_trade_size double precision DEFAULT 0,
+    big_trades integer DEFAULT 0,
+    big_volume double precision DEFAULT 0,
+    sum_bid_depth double precision DEFAULT 0,
+    sum_ask_depth double precision DEFAULT 0,
+    sum_price_volume double precision DEFAULT 0,
+    unknown_volume double precision DEFAULT 0
+);
+
+
+--
 -- Name: candles_1s; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -187,10 +222,25 @@ ALTER TABLE ONLY public.candles_1m_1s
 
 
 --
+-- Name: candles_1h_1m candles_1h_1m_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.candles_1h_1m
+    ADD CONSTRAINT candles_1h_1m_pkey PRIMARY KEY (ticker, "time");
+
+
+--
 -- Name: candles-1m_time_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX "candles-1m_time_idx" ON public."candles-1m" USING btree ("time" DESC);
+
+
+--
+-- Name: candles_1h_1m_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX candles_1h_1m_time_idx ON public.candles_1h_1m USING btree ("time" DESC);
 
 
 --

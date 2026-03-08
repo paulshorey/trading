@@ -8,7 +8,8 @@
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc --noEmit",
-    "historical:tbbo": "tsx scripts/tbbo-1m-1s.ts"
+    "historical:tbbo": "tsx scripts/tbbo-1m-1s.ts",
+    "historical:1h1m": "tsx scripts/candles-1h-1m.ts"
   },
   "author": "",
   "license": "MIT",

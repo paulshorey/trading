@@ -4,19 +4,36 @@ Canonical futures timeseries write pipeline.
 
 ## Current scope
 
-This app ingests TBBO trade data and writes **rolling 1-minute candles at
-1-second resolution** to `candles_1m_1s`.
+This app ingests TBBO trade data and maintains two canonical rolling timeseries
+tables:
 
-Each stored row is the trailing 60-second window for a ticker at that second:
+- **`candles_1m_1s`**: rolling 1-minute candles written at 1-second resolution
+- **`candles_1h_1m`**: rolling 1-hour candles written at 1-minute resolution
+
+`candles_1m_1s` is built directly from TBBO trades.
+
+`candles_1h_1m` is built from the **minute-boundary subset** of
+`candles_1m_1s`, not directly from raw trades.
+
+Each `candles_1m_1s` row is the trailing 60-second window for a ticker at that
+second:
 
 - input resolution: individual TBBO trades
 - output timeframe: 1 minute
 - output write cadence: 1 second
 
+Each `candles_1h_1m` row is the trailing 60-minute window for a ticker at that
+minute:
+
+- input resolution: canonical 1-minute rows
+- output timeframe: 1 hour
+- output write cadence: 1 minute
+
 The app has two ingest modes:
 
 - `src/stream/tbbo-stream.ts` for live Databento TCP data
-- `scripts/tbbo-1m-1s.ts` for historical JSONL backfills
+- `scripts/tbbo-1m-1s.ts` for historical TBBO -> `candles_1m_1s`
+- `scripts/candles-1h-1m.ts` for historical `candles_1m_1s` -> `candles_1h_1m`
 
 Both paths must stay aligned and should share aggregation logic whenever
 possible.
@@ -37,7 +54,7 @@ Do not redesign this app around traditional end-of-period-only candles.
 The intended write model is:
 
 - `1m` candles written at `1s` resolution
-- later: `1h` candles written at `1m` resolution
+- `1h` candles written at `1m` resolution
 
 The saved resolution is therefore finer than the candle timeframe, because each
 row represents a rolling window that is recalculated on a higher-frequency
@@ -49,8 +66,10 @@ schedule.
 src/index.ts
   -> src/stream/tbbo-stream.ts
   -> src/stream/tbbo-1m-aggregator.ts
+  -> src/stream/candles-1h-1m-aggregator.ts
   -> src/lib/trade/*
   -> TimescaleDB candles_1m_1s
+  -> TimescaleDB candles_1h_1m
 ```
 
 Key rules:
@@ -61,7 +80,9 @@ Key rules:
 - keep front-month stitching and rolling-window aggregation deterministic
 - prefer shared library code over duplicated live/batch logic
 - treat written tables as source-of-truth data, not disposable intermediate output
-- prefer adding new write layers only when they are part of the canonical timeseries plan
+- `1h@1m` must be derived from minute-boundary `1m@1s` rows
+- do not derive `1h@1m` directly from raw trades
+- do not compute `1h` every second unless the product intentionally changes to `1h@1s`
 
 ## Source layout
 
@@ -75,8 +96,10 @@ src/
   stream/
     tbbo-stream.ts
     tbbo-1m-aggregator.ts
+    candles-1h-1m-aggregator.ts
 scripts/
   tbbo-1m-1s.ts
+  candles-1h-1m.ts
 docs/
   index.md
 ```

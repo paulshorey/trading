@@ -1,153 +1,83 @@
-# Candles Schema: TimescaleDB Setup
+# `candles_1m_1s` schema
 
-## Architecture
+## Current source of truth
 
-`candles_1m_1s` is the **sole source of truth**. Rolling 1-minute candles are written at 1-second resolution (up to 60 rows per minute per ticker). Higher timeframes (`candles_5m`, `candles_15m`, `candles_60m`) are **TimescaleDB continuous aggregates** that auto-update from `candles_1m_1s`.
+`candles_1m_1s` is the only table this app currently writes.
 
-```
-TBBO trades
-  → scripts/ingest/tbbo-1m-1s.ts (historical batch)
-  → src/stream/tbbo-1m-aggregator.ts (live real-time)
-      ↓
-candles_1m_1s (hypertable, source of truth — written every second)
-      ↓ continuous aggregates (auto-updated)
-candles_5m, candles_15m, candles_60m
-```
+Each row represents:
 
-## Design Principles
+- one ticker
+- one second in time
+- the fully aggregated trailing 60-second window ending at that second
 
-**Store raw building blocks, derive ratios at query time.** The base table stores values that aggregate cleanly with `sum()`, `max()`, `min()`, `first()`, `last()`. Derived ratios (vd_ratio, book_imbalance, vwap) are stored in the base table for convenience, but higher-timeframe aggregates recompute them from the raw accumulators (sum_price_volume, sum_bid_depth, sum_ask_depth).
+That means the table stores **1-minute candles sampled every second**.
 
-This means every metric is **exactly correct at every timeframe** — no approximation from aggregating ratios.
+## Write paths
 
-## Column Reference
+Both ingest modes write the same schema:
 
-| Column             | Type             | Aggregation             | Description                             |
-| ------------------ | ---------------- | ----------------------- | --------------------------------------- |
-| `time`             | TIMESTAMPTZ      | `time_bucket()`         | Candle timestamp                        |
-| `ticker`           | TEXT             | GROUP BY                | Stitched contract name (e.g., "ES")     |
-| `symbol`           | TEXT             | —                       | Raw contract symbol (e.g., "ESH5")      |
-| `open`             | DOUBLE PRECISION | `first(open, time)`     | Opening price                           |
-| `high`             | DOUBLE PRECISION | `max(high)`             | Highest price                           |
-| `low`              | DOUBLE PRECISION | `min(low)`              | Lowest price                            |
-| `close`            | DOUBLE PRECISION | `last(close, time)`     | Closing price                           |
-| `volume`           | DOUBLE PRECISION | `sum(volume)`           | Total volume                            |
-| `ask_volume`       | DOUBLE PRECISION | `sum(ask_volume)`       | Aggressive buy volume (trades at ask)   |
-| `bid_volume`       | DOUBLE PRECISION | `sum(bid_volume)`       | Aggressive sell volume (trades at bid)  |
-| `cvd_open`         | DOUBLE PRECISION | `first(cvd_open, time)` | CVD at start of period                  |
-| `cvd_high`         | DOUBLE PRECISION | `max(cvd_high)`         | Highest CVD during period               |
-| `cvd_low`          | DOUBLE PRECISION | `min(cvd_low)`          | Lowest CVD during period                |
-| `cvd_close`        | DOUBLE PRECISION | `last(cvd_close, time)` | CVD at end of period                    |
-| `vd`               | DOUBLE PRECISION | `sum(vd)`               | Volume delta (ask_volume - bid_volume)  |
-| `vd_ratio`         | DOUBLE PRECISION | recompute               | Normalized VD, bounded -1 to +1         |
-| `book_imbalance`   | DOUBLE PRECISION | recompute               | Order book imbalance                    |
-| `price_pct`        | DOUBLE PRECISION | recompute               | Price change percentage                 |
-| `divergence`       | DOUBLE PRECISION | recompute               | Price/VD divergence signal              |
-| `trades`           | INTEGER          | `sum(trades)`           | Number of trades                        |
-| `max_trade_size`   | DOUBLE PRECISION | `max(max_trade_size)`   | Largest single trade                    |
-| `big_trades`       | INTEGER          | `sum(big_trades)`       | Count of large trades                   |
-| `big_volume`       | DOUBLE PRECISION | `sum(big_volume)`       | Volume from large trades                |
-| `sum_bid_depth`    | DOUBLE PRECISION | `sum(sum_bid_depth)`    | Raw bid depth accumulator               |
-| `sum_ask_depth`    | DOUBLE PRECISION | `sum(sum_ask_depth)`    | Raw ask depth accumulator               |
-| `sum_price_volume` | DOUBLE PRECISION | `sum(sum_price_volume)` | Raw price×volume accumulator (for VWAP) |
-| `unknown_volume`   | DOUBLE PRECISION | `sum(unknown_volume)`   | Volume with unknown trade side          |
+- `src/stream/tbbo-stream.ts` -> live ingest
+- `scripts/tbbo-1m-1s.ts` -> historical backfill
 
-**Derived at higher timeframes** (recomputed from raw accumulators, not averaged):
+Both feed the same shared rolling-window engine in `src/lib/trade/rolling-window.ts`.
 
-| Derived metric   | Formula                                                                                          | Description                   |
-| ---------------- | ------------------------------------------------------------------------------------------------ | ----------------------------- |
-| `vd_ratio`       | `(sum(ask_volume) - sum(bid_volume)) / NULLIF(sum(ask_volume) + sum(bid_volume), 0)`             | Normalized VD                 |
-| `book_imbalance` | `(sum(sum_bid_depth) - sum(sum_ask_depth)) / NULLIF(sum(sum_bid_depth) + sum(sum_ask_depth), 0)` | Order book imbalance          |
-| `vwap`           | `sum(sum_price_volume) / NULLIF(sum(volume), 0)`                                                 | Volume-weighted average price |
+## Table columns
 
-## Full SQL Setup
+| Column             | Description |
+| ------------------ | ----------- |
+| `time`             | second-level timestamp for the rolling row |
+| `ticker`           | stitched front-month ticker, such as `ES` |
+| `symbol`           | most recent raw contract symbol contributing to the row |
+| `open/high/low/close` | rolling 60-second price OHLC |
+| `volume`           | total rolling volume |
+| `ask_volume`       | rolling aggressive buy volume |
+| `bid_volume`       | rolling aggressive sell volume |
+| `cvd_open/high/low/close` | rolling CVD OHLC for the same 60-second window |
+| `vd`               | `ask_volume - bid_volume` |
+| `vd_ratio`         | normalized aggressor imbalance |
+| `book_imbalance`   | normalized passive depth imbalance |
+| `price_pct`        | percentage price change over the rolling window |
+| `divergence`       | simple price-vs-delta disagreement signal |
+| `trades`           | trade count in the rolling window |
+| `max_trade_size`   | largest trade in the rolling window |
+| `big_trades`       | count of trades above the configured threshold |
+| `big_volume`       | volume from those large trades |
+| `sum_bid_depth`    | additive raw accumulator for later aggregation |
+| `sum_ask_depth`    | additive raw accumulator for later aggregation |
+| `sum_price_volume` | additive raw accumulator for VWAP-style calculations |
+| `unknown_volume`   | volume whose side could not be classified |
 
-See **`1s-base-1m-aggregate.sql`** for the complete, runnable schema. It includes:
+## Why raw accumulators are stored
 
-1. `candles_1m_1s` base hypertable creation
-2. Index and compression setup
-3. `candles_5m`, `candles_15m`, `candles_60m` continuous aggregates
-4. Refresh policies for auto-updates
-5. Backfill commands for historical data
+The table stores both derived values and additive building blocks.
 
-## What Writes to `candles_1m_1s`
+That keeps the current 1-minute-at-1-second pipeline simple while preserving
+the inputs needed for future higher-timeframe writers, where a larger timeframe
+will still be recalculated on a finer saved resolution.
 
-- **`scripts/ingest/tbbo-1m-1s.ts`** — Historical batch ingest from TBBO JSONL files
-- **`src/stream/tbbo-1m-aggregator.ts`** — Live real-time stream from Databento
+## Future higher-timeframe model
 
-Both use the same shared libraries (`src/lib/trade/`, `src/lib/metrics/`) and the same `db-writer.ts` to ensure identical output.
+This app is **not** moving toward traditional closed-bar aggregates only.
 
-## What Reads from the Tables
+The intended next stage is:
 
-- **`src/lib/candles.ts`** — REST API (auto-selects best timeframe for requested date range)
-- **Continuous aggregates** — `candles_5m`, `candles_15m`, `candles_60m` auto-read from `candles_1m_1s`
+- `1h` candles written every `1m`
 
-## Querying with Derived Metrics
+That future table should follow the same pattern as `candles_1m_1s`:
 
-```sql
-SELECT
-  time, ticker,
-  open, high, low, close, volume,
-  ask_volume, bid_volume, vd,
-  cvd_open, cvd_high, cvd_low, cvd_close,
-  -- Derived metrics (already stored in candles_1m_1s, recomputed in aggregates)
-  vd_ratio,
-  book_imbalance,
-  sum_price_volume / NULLIF(volume, 0) AS vwap,
-  ((close - open) / NULLIF(open, 0)) * 100 AS price_pct,
-  trades, max_trade_size, big_trades, big_volume
-FROM candles_5m
-WHERE ticker = 'ES'
-  AND time >= NOW() - INTERVAL '1 day'
-ORDER BY time;
-```
+- candle timeframe and saved resolution are distinct
+- each row is a trailing rolling window
+- both historical and live ingest should share the same aggregation logic
 
-This query pattern works identically against `candles_1m_1s`, `candles_5m`, `candles_15m`, or `candles_60m` — derived metrics are always correct because they're calculated from properly aggregated raw values.
+## Downstream usage
 
-## Teardown (Start Fresh)
+This table is meant to be canonical source-of-truth timeseries data for
+downstream consumers.
 
-```sql
--- Drop in reverse dependency order (views first, then base table)
-DROP MATERIALIZED VIEW IF EXISTS candles_60m CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS candles_15m CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS candles_5m CASCADE;
-DROP TABLE IF EXISTS candles_1m_1s CASCADE;
-```
+A future `market-analyze-python` app is expected to read from these canonical
+timeseries tables and write separate derived-feature tables for ML training and
+inference workloads.
 
-## Adding Custom Timeframes
+## SQL
 
-Any integer-minute timeframe can be added as a continuous aggregate from `candles_1m_1s`:
-
-```sql
-CREATE MATERIALIZED VIEW candles_29m
-WITH (timescaledb.continuous) AS
-SELECT
-  time_bucket('29 minutes', time) AS time, ticker,
-  first(open, time) AS open, max(high) AS high,
-  min(low) AS low, last(close, time) AS close,
-  sum(volume) AS volume,
-  sum(ask_volume) AS ask_volume, sum(bid_volume) AS bid_volume,
-  sum(unknown_volume) AS unknown_volume,
-  first(cvd_open, time) AS cvd_open, max(cvd_high) AS cvd_high,
-  min(cvd_low) AS cvd_low, last(cvd_close, time) AS cvd_close,
-  sum(sum_bid_depth) AS sum_bid_depth,
-  sum(sum_ask_depth) AS sum_ask_depth,
-  sum(sum_price_volume) AS sum_price_volume,
-  sum(ask_volume) - sum(bid_volume) AS vd,
-  (sum(ask_volume) - sum(bid_volume))
-    / NULLIF(sum(ask_volume) + sum(bid_volume), 0) AS vd_ratio,
-  (sum(sum_bid_depth) - sum(sum_ask_depth))
-    / NULLIF(sum(sum_bid_depth) + sum(sum_ask_depth), 0) AS book_imbalance,
-  sum(sum_price_volume) / NULLIF(sum(volume), 0) AS vwap,
-  sum(trades) AS trades, max(max_trade_size) AS max_trade_size,
-  sum(big_trades) AS big_trades, sum(big_volume) AS big_volume
-FROM candles_1m_1s
-GROUP BY time_bucket('29 minutes', time), ticker
-WITH NO DATA;
-
-SELECT add_continuous_aggregate_policy('candles_29m',
-  start_offset => INTERVAL '87 minutes',
-  end_offset   => INTERVAL '1 minute',
-  schedule_interval => INTERVAL '29 minutes'
-);
-```
+See `1s-base-1m-aggregate.sql` for the current base-table setup.

@@ -28,6 +28,7 @@ export {
   getMinuteBucket,
   getSecondBucket,
   toMinuteBucket,
+  toSecondBucket,
   checkTradeAge,
 } from "./timestamp.js";
 
@@ -41,18 +42,12 @@ export { FrontMonthTracker } from "./front-month.js";
 export {
   createCandleFromTrade,
   updateCandleWithTrade,
-  addTradeToCandle,
   updateCandleCvdOHLC,
-  addTradeAndUpdateMetrics,
 } from "./candle-aggregation.js";
 
 // Database writer utilities
-export type { CvdContext } from "./db-writer.js";
-export {
-  COLUMNS_PER_ROW,
-  buildPlaceholder,
-  buildCandleInsertQuery,
-  buildCandleInsertParams,
-  buildFallbackRowValues,
-  buildOhlcRowValues,
-} from "./db-writer.js";
+export { writeCandles } from "./db-writer.js";
+
+// Shared rolling-window engine
+export type { RollingTickerSnapshot, RollingWindowStats, TimedTradeInput } from "./rolling-window.js";
+export { RollingWindow1m } from "./rolling-window.js";

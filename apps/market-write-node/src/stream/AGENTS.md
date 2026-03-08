@@ -1,6 +1,12 @@
 # Live Streaming Data Processing
 
-Real-time TBBO trade data from Databento, aggregated into rolling 1-minute candles at 1-second resolution and written to the `candles_1m_1s` table. Each row represents the trailing 60-second window of trade data, producing up to 60 rows per minute per ticker.
+Real-time TBBO trade data from Databento is aggregated into rolling
+1-minute candles at 1-second resolution and written to `candles_1m_1s`.
+Each row represents the trailing 60-second window for a ticker.
+
+This live path is part of the canonical source-of-truth writer pipeline.
+It should remain aligned with historical ingest and should not absorb
+downstream feature-engineering or ML-specific logic.
 
 ## How It Works
 
@@ -11,17 +17,20 @@ Real-time TBBO trade data from Databento, aggregated into rolling 1-minute candl
   - Skips spread contracts (symbols containing "-") and trades during market closed hours
   - Passes each valid trade to the aggregator
 
-- **`tbbo-1m-aggregator.ts`** collects trades into rolling 1-minute candles at 1-second resolution and writes them to `candles_1m_1s`
-  - **Front-month selection**: `FrontMonthTracker` tracks volume per contract in a 5-minute rolling window. Only the highest-volume contract per ticker is used, producing a stitched continuous series (e.g., "ES" from ESH5/ESM5)
-  - **Per-second aggregation**: each accepted trade updates the in-progress 1-second candle for its ticker -- price OHLCV, ask/bid volume, CVD OHLC, VD, trade counts, large trade detection
-  - **Rolling window**: when a second boundary is crossed, the completed second is stored as a `SecondSummary` in a per-ticker ring buffer. Old entries (>60s) are pruned. The entire ring buffer is then aggregated into a single 1-minute candle.
-  - **Warmup period**: no output is written for a ticker until 60 distinct seconds of data have been collected. This ensures the first output row represents a full 60-second window.
-  - **Flush cycle** (every 1 second):
-    - Stale seconds (current second is behind wall-clock time) are finalized
-    - Pending 1-minute rolling candles are written to `candles_1m_1s`
-  - **CVD continuity**: on startup, loads the latest `cvd_close` per ticker from `candles_1m_1s` so CVD is continuous across restarts
+- **`tbbo-1m-aggregator.ts`** is the live wrapper around the shared rolling-window engine
+  - rejects late trades
+  - classifies trade side
+  - converts records into normalized trade input
+  - finalizes stale seconds on a timer
+  - writes pending rows to `candles_1m_1s`
+  - loads latest `cvd_close` values on startup for continuity
 
-- **`deprecated/`** contains `types.ts` and `utils.ts` — unused re-export shims from an earlier refactoring. Import directly from `src/lib/trade/` and `src/lib/metrics/` instead.
+- **`src/lib/trade/rolling-window.ts`** owns the shared rolling-window logic used by both live and historical ingest
+  - front-month selection
+  - per-second aggregation
+  - 60-second warmup handling
+  - trailing-window candle creation
+  - pending candle queue management
 
 ## Configuration
 
@@ -33,16 +42,29 @@ Environment variables (all required):
 | `DATABENTO_DATASET` | `GLBX.MDP3`      | Exchange dataset (CME Globex)         |
 | `DATABENTO_SYMBOLS` | `ES.FUT,NQ.FUT`  | Comma-separated symbols               |
 | `DATABENTO_STYPE`   | `parent`         | Symbol type: `parent` or `raw_symbol` |
-| `DATABASE_URL`      | `postgres://...` | PostgreSQL/TimescaleDB connection     |
+| `TIMESCALE_URL`     | `postgres://...` | TimescaleDB connection                |
 
 ## Shared Libraries
 
-The aggregator is intentionally thin. All core logic is in shared libraries so that historical batch ingestion (`scripts/ingest/tbbo-1m-1s.ts`) and live streaming produce identical results:
+The live path should stay intentionally thin. Shared libraries must carry the
+behavior that batch and live ingest have in common:
 
-- **`src/lib/trade/`** -- Candle aggregation, CVD OHLC tracking, front-month contract selection, trade side detection (Lee-Ready), database writer, timestamp bucketing
-- **`src/lib/metrics/`** -- Volume delta calculation, order flow metrics
+- **`src/lib/trade/`** -- rolling window engine, candle aggregation, CVD tracking, front-month selection, trade side detection, DB writing, timestamp bucketing
+- **`src/lib/metrics/`** -- metric helpers used during aggregation / persistence
 
-The stream-specific code only handles: TCP connection, Databento protocol, JSON parsing, market-hours gating, and the flush timer.
+Stream-specific code should only handle:
+
+- TCP connection lifecycle
+- Databento protocol details
+- JSON parsing and symbol mapping
+- market-hours gating
+- retry / timer orchestration
+
+## Roadmap
+
+The current live writer supports `1m` candles at `1s` resolution.
+
+The next planned write layer is `1h` candles at `1m` resolution.
 
 ## CVD Continuity
 

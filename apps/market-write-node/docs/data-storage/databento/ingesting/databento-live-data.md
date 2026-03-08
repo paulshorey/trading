@@ -1,199 +1,53 @@
-# Databento Live Streaming
+# Databento live ingest
 
-Reference implementation for connecting to the Databento Raw TCP API from Node.js.
+This app connects directly to Databento's Raw TCP API and requests **JSON**
+encoding for the TBBO schema.
 
-API docs: https://databento.com/docs/api-reference-live
-TBBO schema: https://databento.com/docs/schemas-and-data-formats/tbbo
+Relevant implementation: `src/stream/tbbo-stream.ts`
 
-## Reference: Raw TCP API in Node.js
+The rows written from this live path are canonical source-of-truth timeseries
+rows for downstream consumers.
 
-Databento doesn't have an official Node.js client, but their Raw API is language-agnostic. Here's a complete implementation:
+## What the live path does
 
-```javascript
-const net = require("net");
-const crypto = require("crypto");
-const zlib = require("zlib");
+1. connect to `{dataset}.lsg.databento.com:13000`
+2. complete CRAM authentication
+3. subscribe to TBBO for the configured symbols
+4. resolve `instrument_id -> symbol` from mapping messages
+5. convert trade records into normalized trade input
+6. feed the shared rolling-window engine
+7. flush completed rows to `candles_1m_1s`
 
-class DatabentoLiveClient {
-  constructor(apiKey, dataset = "GLBX.MDP3") {
-    this.apiKey = apiKey;
-    this.dataset = dataset;
-    this.socket = null;
-    this.buffer = Buffer.alloc(0);
-    this.authenticated = false;
-    this.sessionStarted = false;
-  }
+## Environment
 
-  // Generate hostname from dataset (e.g., GLBX.MDP3 → glbx-mdp3.lsg.databento.com)
-  getHost() {
-    return `${this.dataset.toLowerCase().replace(".", "-")}.lsg.databento.com`;
-  }
+Required environment variables:
 
-  connect() {
-    return new Promise((resolve, reject) => {
-      this.socket = net.createConnection({
-        host: this.getHost(),
-        port: 13000,
-      });
+- `DATABENTO_API_KEY`
+- `DATABENTO_DATASET`
+- `DATABENTO_SYMBOLS`
+- `DATABENTO_STYPE`
+- `TIMESCALE_URL`
 
-      this.socket.on("connect", () => {
-        console.log("Connected to Databento gateway");
-      });
+## Important behavior
 
-      this.socket.on("data", (data) => {
-        this.handleData(data, resolve, reject);
-      });
+- market-hours gating happens in the stream layer
+- spread contracts are skipped
+- late-trade rejection happens before aggregation
+- CVD continuity is restored from the latest DB rows on startup
+- shutdown waits for a final flush
 
-      this.socket.on("error", reject);
-      this.socket.on("close", () => console.log("Connection closed"));
-    });
-  }
+## Why JSON encoding is used
 
-  handleData(data, resolve, reject) {
-    this.buffer = Buffer.concat([this.buffer, data]);
+JSON is slower than binary DBN, but it keeps the current writer pipeline simple
+and inspectable while the aggregation model is still evolving.
 
-    // Process text control messages (newline-delimited)
-    while (true) {
-      const newlineIndex = this.buffer.indexOf("\n");
-      if (newlineIndex === -1) break;
+That trade-off is acceptable for the current scope because correctness and
+maintainability are more important than squeezing every last percent out of the
+ingest path right now.
 
-      const message = this.buffer.slice(0, newlineIndex).toString("ascii");
-      this.buffer = this.buffer.slice(newlineIndex + 1);
+## Boundary
 
-      this.handleControlMessage(message, resolve, reject);
-    }
+This live writer should stop at canonical timeseries persistence.
 
-    // After session starts, remaining buffer is binary DBN data
-    if (this.sessionStarted && this.buffer.length > 0) {
-      this.handleDbnData(this.buffer);
-      this.buffer = Buffer.alloc(0);
-    }
-  }
-
-  handleControlMessage(message, resolve, reject) {
-    const fields = this.parseControlMessage(message);
-    console.log("Received:", fields);
-
-    if (fields.lsg_version) {
-      // Greeting message - wait for challenge
-    } else if (fields.cram) {
-      // Challenge request - send authentication
-      this.authenticate(fields.cram);
-    } else if (fields.success !== undefined) {
-      if (fields.success === "1") {
-        this.authenticated = true;
-        console.log(`Authenticated! Session ID: ${fields.session_id}`);
-        resolve(this);
-      } else {
-        reject(new Error(`Authentication failed: ${fields.error}`));
-      }
-    }
-  }
-
-  parseControlMessage(message) {
-    const fields = {};
-    message.split("|").forEach((pair) => {
-      const [key, value] = pair.split("=");
-      if (key) fields[key] = value;
-    });
-    return fields;
-  }
-
-  // CRAM authentication: SHA256(challenge + '|' + apiKey)
-  authenticate(cram) {
-    const bucketId = this.apiKey.slice(-5); // Last 5 chars of API key
-    const toHash = `${cram}|${this.apiKey}`;
-    const hash = crypto.createHash("sha256").update(toHash).digest("hex");
-    const authResponse = `${hash}-${bucketId}`;
-
-    const authMsg = `auth=${authResponse}|dataset=${this.dataset}|encoding=dbn|ts_out=0\n`;
-    this.socket.write(authMsg);
-  }
-
-  subscribe(options) {
-    const { schema, symbols, stypeIn = "raw_symbol", start } = options;
-
-    let msg = `schema=${schema}|stype_in=${stypeIn}|symbols=${symbols.join(",")}`;
-    if (start) msg += `|start=${start}`;
-    msg += "\n";
-
-    this.socket.write(msg);
-    console.log("Subscribed:", msg.trim());
-  }
-
-  startSession() {
-    this.socket.write("start_session=1\n");
-    this.sessionStarted = true;
-    console.log("Session started - streaming data...");
-  }
-
-  handleDbnData(buffer) {
-    // DBN is a binary format - you'll need to parse the metadata header
-    // and fixed-width record structs. See https://github.com/databento/dbn
-    //
-    // For simplicity, use JSON encoding instead (set encoding=json in auth)
-    // or use a library like databento-dbn (Python bindings exist)
-    console.log(`Received ${buffer.length} bytes of DBN data`);
-  }
-
-  close() {
-    if (this.socket) {
-      this.socket.end();
-    }
-  }
-}
-
-// Usage example
-async function main() {
-  const client = new DatabentoLiveClient(
-    process.env.DATABENTO_API_KEY,
-    "GLBX.MDP3", // CME Globex
-  );
-
-  try {
-    await client.connect();
-
-    // Subscribe to ES futures trades
-    client.subscribe({
-      schema: "trades",
-      symbols: ["ES.FUT"],
-      stypeIn: "parent",
-    });
-
-    // Start receiving data
-    client.startSession();
-
-    // Keep alive for demo
-    setTimeout(() => client.close(), 60000);
-  } catch (error) {
-    console.error("Error:", error);
-  }
-}
-
-main();
-```
-
-## Key Protocol Details
-
-**Connection**: `{dataset}.lsg.databento.com:13000` (e.g., `glbx-mdp3.lsg.databento.com`)
-
-**Authentication flow**:
-
-1. Gateway sends greeting: `lsg_version=X.X.X\n`
-2. Gateway sends challenge: `cram=<random_string>\n`
-3. Client computes: `SHA256(cram + "|" + api_key)` + `-` + last 5 chars of API key
-4. Client sends: `auth=<response>|dataset=GLBX.MDP3|encoding=dbn\n`
-
-**Subscription**: `schema=trades|stype_in=raw_symbol|symbols=ES.FUT\n`
-
-**Start session**: `start_session=1\n`
-
-## Parsing DBN (Binary Format)
-
-For production use, you'll need to parse DBN records. Consider:
-
-1. **Use JSON encoding** (easier but slower): Set `encoding=json` in auth
-2. **Port the Rust/C DBN library**: The [dbn repo](https://github.com/databento/dbn) has the full spec
-3. **Use a community library**: Check npm for `databento` packages
-
-The DBN format uses fixed-width structs - for example, a trade record is 72 bytes with fields like `ts_event` (8 bytes), `price` (8 bytes as fixed-point), `size` (4 bytes), etc.
+Downstream feature engineering, multi-lookback indicator generation, and ML
+training/inference belong in the future `market-analyze-python` app.

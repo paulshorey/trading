@@ -1,46 +1,45 @@
-docs
-├── data-backtesting
-│ ├── python
-│ │ ├── scripts
-│ │ │ ├── pivot-timing-analysis.py
-│ │ │ └── pivot-trajectory-analysis.py
-│ │ ├── high-low-detection.md
-│ │ └── overview.md
-│ └── optimization.md
-├── data-indicators
-│ ├── example
-│ │ ├── calculate-indicator-values.md
-│ │ └── calculate-indicator-values.ts
-│ ├── notes
-│ │ ├── README.md
-│ │ ├── absorption-theory.md
-│ │ ├── detect-patterns.ts
-│ │ ├── metrics-guide.md
-│ │ ├── pattern-detection.md
-│ │ ├── suggested-metrics-more.md
-│ │ └── suggested-metrics.md
-│ └── rsi
-│ ├── BacktestEngine.js
-│ ├── README.md
-│ ├── TimeframeBuffer.js
-│ ├── index.js
-│ ├── package.json
-│ └── run.js
-├── data-storage
-│ ├── databento
-│ │ ├── indicators
-│ │ │ ├── cvd-from-tbbo.md
-│ │ │ └── tbbo.md
-│ │ └── ingesting
-│ │ ├── databento-historical-data.md
-│ │ └── databento-live-data.md
-│ ├── ohlcv
-│ │ ├── ingest-ohlcv-timeframe.md
-│ │ └── ingest-ohlcv-timeframe.ts
-│ ├── 1s-base-1m-aggregate.sql
-│ ├── candles-schema.md
-│ ├── optimization.md
-│ └── overview.md
-├── hosting
-│ └── prisma-schema-as-code.md
-└── index.md
+# market-write-node docs
+
+This folder documents the current write pipeline only.
+
+## Read this first
+
+- `project-context.md` - concise project purpose, boundaries, and downstream plan
+
+## Current system
+
+- ingest TBBO trades from Databento
+- stitch contracts into a front-month ticker series
+- build rolling 1-minute candles
+- write one candle row every second to `candles_1m_1s`
+
+## Roadmap the docs should assume
+
+- current: `1m` candles at `1s` resolution
+- future: `1h` candles at `1m` resolution
+
+## Kept documents
+
+### Storage
+
+- `data-storage/candles-schema.md` - current source-of-truth table and write model
+- `data-storage/1s-base-1m-aggregate.sql` - base table setup for `candles_1m_1s`
+- `data-storage/databento/ingesting/databento-live-data.md` - live ingest behavior
+- `data-storage/databento/ingesting/databento-historical-data.md` - historical ingest behavior
+
+### Metrics
+
+- `data-indicators/tbbo.md` - metric definitions stored per row
+- `data-indicators/cvd-from-tbbo.md` - how CVD is produced from classified trades
+
+## Removed material
+
+Older docs about:
+
+- `ohlcv_*` schemas
+- `minute_index` / `second_index`
+- RSI worker prototypes
+- Prisma schema generation
+- backtesting experiments inside this app
+
+were removed because they no longer describe the app that exists today.

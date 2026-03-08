@@ -6,19 +6,14 @@ import { startDatabentoStream, stopDatabentoStream } from "./stream/tbbo-stream.
 
 const app = express();
 const port = Number(process.env.PORT) || 8080;
+let shuttingDown = false;
 
 app.use(cors());
-app.use(express.json());
-app.use(express.text());
 
-// Routes
 app.get("/health", (_req, res) => {
   res.json(true);
 });
 
-/**
- * Start Server
- */
 const startStreamWithRetry = async () => {
   try {
     await startDatabentoStream();
@@ -31,28 +26,32 @@ const startStreamWithRetry = async () => {
   }
 };
 
-app.listen(port, "::", () => {
-  console.log(`🚀 Market Data API server running on port ${port}`);
+const server = app.listen(port, "::", () => {
+  console.log(`🚀 Market write pipeline running on port ${port}`);
   console.log(`   Environment: ${process.env.RAILWAY_ENVIRONMENT_NAME || "local"}`);
-
-  // Start the Databento live stream after API server is ready
-  // This loads CVD from database before processing any trades
   void startStreamWithRetry();
 });
 
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, shutting down gracefully...");
-  stopDatabentoStream(); // Stop stream and flush pending candles
+const shutdown = async (signal: string) => {
+  if (shuttingDown) {
+    return;
+  }
+
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down gracefully...`);
+
+  server.close();
+  await stopDatabentoStream();
   await pool.end();
   process.exit(0);
+};
+
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
 });
 
-process.on("SIGINT", async () => {
-  console.log("SIGINT received, shutting down gracefully...");
-  stopDatabentoStream(); // Stop stream and flush pending candles
-  await pool.end();
-  process.exit(0);
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
 });
 
 process.on("unhandledRejection", (reason) => {

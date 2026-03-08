@@ -19,14 +19,18 @@ import { calculatePricePct } from "../metrics/price.js";
 import { calculateDivergence } from "../metrics/absorption.js";
 
 /** Number of columns in the candles INSERT statement */
-export const COLUMNS_PER_ROW = 27;
+const COLUMNS_PER_ROW = 27;
+
+interface Queryable {
+  query: (text: string, values: (string | number | null)[]) => Promise<unknown>;
+}
 
 /**
  * Build placeholder string for parameterized query
  * @param offset - Starting parameter number (0-based index * COLUMNS_PER_ROW)
  * @param count - Number of columns
  */
-export function buildPlaceholder(offset: number, count: number): string {
+function buildPlaceholder(offset: number, count: number): string {
   const parts: string[] = [];
   for (let i = 1; i <= count; i++) {
     parts.push(`$${offset + i}`);
@@ -39,7 +43,7 @@ export function buildPlaceholder(offset: number, count: number): string {
  * @param tableName - Target table name (e.g., "candles_1m_1s")
  * @param placeholders - Array of placeholder strings from buildPlaceholder
  */
-export function buildCandleInsertQuery(tableName: string, placeholders: string[]): string {
+function buildCandleInsertQuery(tableName: string, placeholders: string[]): string {
   return `
     INSERT INTO ${tableName} (
       time, ticker, symbol,
@@ -97,7 +101,7 @@ function calculateDerivedMetrics(candle: CandleState) {
  * Build values array for a single candle row (fallback when no metricsOHLC)
  * Used when a candle doesn't have OHLC tracking (shouldn't normally happen)
  */
-export function buildFallbackRowValues(time: string, ticker: string, candle: CandleState, cvd: number): (string | number | null)[] {
+function buildFallbackRowValues(time: string, ticker: string, candle: CandleState, cvd: number): (string | number | null)[] {
   const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
 
   return [
@@ -139,7 +143,7 @@ export function buildFallbackRowValues(time: string, ticker: string, candle: Can
 /**
  * Build values array for a single candle row with metricsOHLC
  */
-export function buildOhlcRowValues(time: string, ticker: string, candle: CandleState): (string | number | null)[] {
+function buildOhlcRowValues(time: string, ticker: string, candle: CandleState): (string | number | null)[] {
   const m = candle.metricsOHLC!;
   const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
 
@@ -196,7 +200,7 @@ export interface CvdContext {
  * @param cvdContext - Context for CVD calculations
  * @returns Object with values array and placeholders array
  */
-export function buildCandleInsertParams(
+function buildCandleInsertParams(
   candles: CandleForDb[],
   cvdContext: CvdContext,
 ): {
@@ -228,4 +232,29 @@ export function buildCandleInsertParams(
   });
 
   return { values, placeholders };
+}
+
+/**
+ * Sort and write candles with a single UPSERT query.
+ */
+export async function writeCandles(queryable: Queryable, tableName: string, candles: CandleForDb[]): Promise<void> {
+  if (candles.length === 0) {
+    return;
+  }
+
+  const sorted = [...candles].sort((a, b) => {
+    if (a.ticker !== b.ticker) {
+      return a.ticker.localeCompare(b.ticker);
+    }
+    return a.time.localeCompare(b.time);
+  });
+
+  const cvdContext: CvdContext = {
+    getBaseCvd: () => 0,
+    updateCvd: () => {},
+  };
+
+  const { values, placeholders } = buildCandleInsertParams(sorted, cvdContext);
+  const query = buildCandleInsertQuery(tableName, placeholders);
+  await queryable.query(query, values);
 }

@@ -1,15 +1,55 @@
-# Importing Historical Data from Databento
+# Databento historical ingest
 
-Databento provides historical futures market data as downloadable files. Each file is manually downloaded, then processed by a Node script.
+Historical backfills are handled by `scripts/tbbo-1m-1s.ts`.
 
-Saved `ES` ticker history to file:
-/absolute-path-in-computer/ES-20251230-full-history-OHLCV.txt
+They must produce the same canonical source-of-truth rows as live ingest.
 
-This file contains a new JS object on every new line. It is not a full formatted JSON file.
-Each line in the file looks like this. Each 1-minute ohlcv JSON object is separated by a new line.
+## Input format
 
+The script expects JSONL trade files:
+
+- one JSON object per line
+- not a JSON array
+- typically downloaded or exported from Databento historical data tooling
+
+Example:
+
+```json
+{"ts_recv":"2025-11-30T23:00:00.039353882Z","hd":{"ts_event":"2025-11-30T23:00:00.000000000Z","rtype":1,"publisher_id":1,"instrument_id":42140878},"action":"T","side":"N","depth":0,"price":"6913.500000000","size":1,"flags":0,"ts_in_delta":13803,"sequence":3353,"levels":[{"bid_px":"6915.750000000","ask_px":"6913.000000000","bid_sz":1,"ask_sz":1}],"symbol":"ESH6"}
 ```
-{"hd":{"ts_event":"2010-06-06T22:03:00.000000000Z","rtype":33,"publisher_id":1,"instrument_id":6640},"open":"1064.000000000","high":"1064.500000000","low":"1063.500000000","close":"1064.000000000","volume":"589","symbol":"ESM0"}
+
+## What the script does
+
+1. read files line-by-line
+2. skip non-trade records and spread contracts
+3. classify trade side
+4. feed the same shared rolling-window engine used by live ingest
+5. upsert rows into `candles_1m_1s`
+6. resume CVD from the latest stored rows before processing starts
+
+## Usage
+
+```bash
+pnpm --filter market-write-node historical:tbbo "/path/to/file1.json" "/path/to/file2.json"
 ```
 
-We'll need a standalone Node script, run manually, which will read this data file and upload each minute bar to a new row in the database. If that minute timestamp already exists, then update the row with new values read from the file.
+or directly:
+
+```bash
+pnpm --filter market-write-node exec tsx scripts/tbbo-1m-1s.ts "/path/to/file1.json"
+```
+
+## Why the historical path matters
+
+Backfills must match live behavior closely. Any change to:
+
+- front-month stitching
+- trade-side classification
+- rolling-window warmup
+- CVD handling
+
+should be shared between live and historical ingest rather than implemented
+twice.
+
+This script is part of the source-of-truth writer pipeline, not a downstream
+feature-generation pipeline.

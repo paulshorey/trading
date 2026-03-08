@@ -18,6 +18,7 @@ import {
   nsToMs,
   writeCandles,
 } from "../lib/trade/index.js";
+import { Candles1h1mAggregator } from "./candles-1h-1m-aggregator.js";
 
 export type { TbboRecord } from "../lib/trade/index.js";
 
@@ -28,6 +29,7 @@ const WINDOW_SECONDS = 60;
 
 export class Tbbo1mAggregator {
   private readonly rollingWindow = new RollingWindow1m();
+  private readonly hourlyAggregator = new Candles1h1mAggregator();
   private initialized = false;
   private recordsProcessed = 0;
   private candlesWritten = 0;
@@ -65,6 +67,8 @@ export class Tbbo1mAggregator {
     } catch (error) {
       console.warn("⚠️ Could not load CVD from database, starting fresh:", error);
     }
+
+    await this.hourlyAggregator.initialize();
 
     this.initialized = true;
   }
@@ -137,6 +141,7 @@ export class Tbbo1mAggregator {
   async flushAll(): Promise<void> {
     this.rollingWindow.finalizeAll();
     await this.flushPendingCandles("🔄 Flushed", "⚠️ Dropped");
+    await this.hourlyAggregator.flushAll();
   }
 
   private async flushPendingCandles(successPrefix: string, dropPrefix: string): Promise<void> {
@@ -215,6 +220,8 @@ export class Tbbo1mAggregator {
     try {
       await writeCandles(pool, TARGET_TABLE, batch);
       this.candlesWritten += batch.length;
+      this.hourlyAggregator.addBaseCandles(batch);
+      await this.hourlyAggregator.flushCompleted();
       return true;
     } catch (error) {
       console.error("❌ Failed to write 1m candles:", error);

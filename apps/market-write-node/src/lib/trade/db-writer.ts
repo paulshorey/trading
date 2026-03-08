@@ -2,7 +2,8 @@
  * Database Writer for Candles
  *
  * Shared logic for writing candles to the database.
- * Used by both live streaming (tbbo-1m-aggregator) and historical ingest (tbbo-1m-1s).
+ * Used across the canonical writer pipeline for both lower- and
+ * higher-timeframe candle tables.
  *
  * Schema: 27 columns. Price and CVD have OHLC. Derived metrics (vd_ratio,
  * book_imbalance, price_pct, divergence) are calculated at write time from

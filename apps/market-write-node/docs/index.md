@@ -12,6 +12,8 @@ This folder documents the current write pipeline only.
 - stitch contracts into a front-month ticker series
 - build rolling 1-minute candles
 - write one candle row every second to `candles_1m_1s`
+- derive rolling 1-hour candles from minute-boundary `candles_1m_1s` rows
+- write one hourly row every minute to `candles_1h_1m`
 
 ## Roadmap the docs should assume
 
@@ -24,6 +26,7 @@ This folder documents the current write pipeline only.
 
 - `data-storage/candles-schema.md` - current source-of-truth table and write model
 - `data-storage/1s-base-1m-aggregate.sql` - base table setup for `candles_1m_1s`
+- `data-storage/1m-base-1h-aggregate.sql` - derived table setup for `candles_1h_1m`
 - `data-storage/databento/ingesting/databento-live-data.md` - live ingest behavior
 - `data-storage/databento/ingesting/databento-historical-data.md` - historical ingest behavior
 

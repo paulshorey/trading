@@ -17,6 +17,7 @@ rows for downstream consumers.
 5. convert trade records into normalized trade input
 6. feed the shared rolling-window engine
 7. flush completed rows to `candles_1m_1s`
+8. derive minute-boundary hourly rows into `candles_1h_1m`
 
 ## Environment
 

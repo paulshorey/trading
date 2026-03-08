@@ -27,6 +27,11 @@ Example:
 5. upsert rows into `candles_1m_1s`
 6. resume CVD from the latest stored rows before processing starts
 
+The follow-up canonical rebuild step is:
+
+7. read minute-boundary `candles_1m_1s` rows
+8. build rolling `candles_1h_1m` rows
+
 ## Usage
 
 ```bash

@@ -1,8 +1,8 @@
 /**
  * Trade Processing Library
  *
- * Shared utilities for processing TBBO trade data into candles with order flow metrics.
- * Used by both live streaming (tbbo-1m-aggregator) and historical ingest (tbbo-1m-1s).
+ * Shared utilities for processing canonical candle data across the writer
+ * pipeline, including raw TBBO -> 1m@1s and canonical 1m@1s -> 1h@1m stages.
  */
 
 // Types
@@ -27,6 +27,7 @@ export {
   nsToMs,
   getMinuteBucket,
   getSecondBucket,
+  isMinuteBoundary,
   toMinuteBucket,
   toSecondBucket,
   checkTradeAge,
@@ -48,6 +49,14 @@ export {
 // Database writer utilities
 export { writeCandles } from "./db-writer.js";
 
+// Canonical candle helpers
+export type { StoredCandleRow } from "./canonical-candle.js";
+export { candleForDbFromStoredRow, candleStateFromStoredRow } from "./canonical-candle.js";
+
 // Shared rolling-window engine
 export type { RollingTickerSnapshot, RollingWindowStats, TimedTradeInput } from "./rolling-window.js";
 export { RollingWindow1m } from "./rolling-window.js";
+
+// Shared higher-timeframe candle-window engine
+export type { RollingCandleTickerSnapshot, RollingCandleWindowStats } from "./rolling-candle-window.js";
+export { RollingCandleWindow } from "./rolling-candle-window.js";

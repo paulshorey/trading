@@ -85,6 +85,14 @@ export function getSecondBucket(nsTimestamp: string): string {
 }
 
 /**
+ * Check whether an ISO timestamp lands exactly on a minute boundary.
+ */
+export function isMinuteBoundary(timestamp: string): boolean {
+  const date = new Date(timestamp);
+  return date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+}
+
+/**
  * Check if a trade timestamp is too old to process
  *
  * @param nsTimestamp - Trade timestamp in nanoseconds

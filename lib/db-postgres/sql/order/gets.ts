@@ -59,7 +59,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
       queryText += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
-    queryText += " ORDER BY time DESC";
+    queryText += " ORDER BY created_at DESC";
     params.push(where?.limit || 100);
     queryText += ` LIMIT $${params.length}`;
 
@@ -78,8 +78,7 @@ export const orderGets = async function ({ where }: Props = {}): Promise<Output>
       server_name: order.server_name || "",
       app_name: order.app_name || "",
       node_env: order.node_env || "",
-      time: new Date(order.time),
-      created_at: new Date(order.time),
+      created_at: new Date(order.created_at),
     })) as OrderRowGet[];
 
     output.ip = ip;

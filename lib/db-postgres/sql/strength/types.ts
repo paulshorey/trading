@@ -6,11 +6,8 @@ export type StrengthRowGet = {
   timenow: Date;
   price: number;
   volume: number;
-  server_name: string;
-  app_name: string;
-  node_env: string;
   average: number | null;
-  created_at: Date;
+  updated_at: Date | null;
 } & IntervalValues;
 
 export type StrengthRowAdd = {
@@ -18,10 +15,7 @@ export type StrengthRowAdd = {
   timenow: Date;
   price: number | null;
   volume: number | null;
-  server_name?: string;
-  app_name?: string;
-  node_env?: string;
-  created_at?: Date;
+  updated_at?: Date | null;
 } & Record<string, number | null>;
 
 export type StrengthDataAdd = {

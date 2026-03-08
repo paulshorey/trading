@@ -7,6 +7,8 @@ This directory is the canonical schema history for `POSTGRES_URL`.
 - `202602180130__baseline.sql` is generated from the live database snapshot.
 - For existing databases that already contain this schema, mark it applied with:
   - `pnpm --filter @lib/db-postgres db:migrate:baseline`
+- The baseline marker only records `__baseline` files, so later forward migrations
+  will still apply normally.
 
 ## Naming
 
@@ -23,6 +25,17 @@ Example:
 - Never edit an applied migration.
 - Add a new migration for every schema change.
 - Keep migrations SQL-first so all language clients can consume the same contract.
+- Do not add `BEGIN` / `COMMIT` inside migration files; the runner wraps each file
+  in a transaction.
+- For populated tables, prefer additive/backfill migrations:
+  1. add nullable column or safe default
+  2. backfill existing rows with `UPDATE`
+  3. add `NOT NULL` / constraints after data is clean
+- For type changes, use explicit `USING` expressions so existing rows are
+  converted automatically.
+- For operations that cannot run inside a transaction (for example
+  `CREATE INDEX CONCURRENTLY`), add `-- cursor:no-transaction` at the top of
+  the migration file.
 
 ## Typical flow
 
@@ -31,6 +44,8 @@ Example:
 2. Edit the new SQL file in this folder.
 3. Apply to target DB:
    - `pnpm --filter @lib/db-postgres db:migrate`
-4. Refresh schema snapshot + generated types:
+4. Verify migrated DB contract:
+   - `pnpm --filter @lib/db-postgres db:verify`
+5. Refresh schema snapshot + generated types:
    - `pnpm --filter @lib/db-postgres db:schema:snapshot`
    - `pnpm --filter @lib/db-postgres db:types:generate`

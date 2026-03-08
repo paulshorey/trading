@@ -14,9 +14,6 @@ export const createGetTradingView = (deps: { getStrengthRows: GetStrengthRows })
       const ticker = getQueryString(req.query.ticker);
       const timenow_gt = getQueryString(req.query.timenow_gt);
       const timenow_lt = getQueryString(req.query.timenow_lt);
-      const server_name = getQueryString(req.query.server_name);
-      const app_name = getQueryString(req.query.app_name);
-      const node_env = getQueryString(req.query.node_env);
       const limitString = getQueryString(req.query.limit);
 
       const where: StrengthWhere = {
@@ -25,9 +22,6 @@ export const createGetTradingView = (deps: { getStrengthRows: GetStrengthRows })
       if (ticker) where.ticker = ticker;
       if (timenow_gt) where.timenow_gt = timenow_gt;
       if (timenow_lt) where.timenow_lt = timenow_lt;
-      if (server_name) where.server_name = server_name;
-      if (app_name) where.app_name = app_name;
-      if (node_env) where.node_env = node_env;
       if (limitString) {
         const parsedLimit = Number.parseInt(limitString, 10);
         if (!Number.isNaN(parsedLimit)) {

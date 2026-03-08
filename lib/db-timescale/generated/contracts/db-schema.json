@@ -221,22 +221,22 @@
     },
     {
       "column": "trades",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "max_trade_size",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "big_trades",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "big_volume",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {

@@ -215,18 +215,6 @@ export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRow
       params.push(where.ticker);
       whereClauses.push(`ticker = $${params.length}`);
     }
-    if (where.server_name) {
-      params.push(where.server_name);
-      whereClauses.push(`server_name = $${params.length}`);
-    }
-    if (where.app_name) {
-      params.push(where.app_name);
-      whereClauses.push(`app_name = $${params.length}`);
-    }
-    if (where.node_env) {
-      params.push(where.node_env);
-      whereClauses.push(`node_env = $${params.length}`);
-    }
     if (where.timenow_gt) {
       params.push(where.timenow_gt);
       whereClauses.push(`timenow >= $${params.length}`);
@@ -251,10 +239,7 @@ export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRow
       timenow: new Date(String(row.timenow)),
       price: Number(row.price),
       volume: Number(row.volume),
-      server_name: String(row.server_name || ""),
-      app_name: String(row.app_name || ""),
-      node_env: String(row.node_env || ""),
-      created_at: new Date(String(row.created_at)),
+      updated_at: row.updated_at ? new Date(String(row.updated_at)) : null,
       average: row.average !== null ? Number(row.average) : null,
       ...extractIntervalValues(row),
     }));

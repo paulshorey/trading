@@ -19,9 +19,6 @@ type Output = {
 type Props = {
   where?: {
     ticker?: string;
-    server_name?: string;
-    app_name?: string;
-    node_env?: string;
     limit?: number;
     timenow_gt?: Date | string;
     timenow_lt?: Date | string;
@@ -44,18 +41,6 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
     if (where?.ticker) {
       params.push(where.ticker);
       whereClauses.push(`ticker = $${params.length}`);
-    }
-    if (where?.server_name) {
-      params.push(where.server_name);
-      whereClauses.push(`server_name = $${params.length}`);
-    }
-    if (where?.app_name) {
-      params.push(where.app_name);
-      whereClauses.push(`app_name = $${params.length}`);
-    }
-    if (where?.node_env) {
-      params.push(where.node_env);
-      whereClauses.push(`node_env = $${params.length}`);
     }
 
     if (where?.timenow_gt) {
@@ -85,10 +70,7 @@ export const strengthGets = async function ({ where }: Props = {}): Promise<Outp
       timenow: new Date(strength.timenow),
       price: Number(strength.price),
       volume: Number(strength.volume),
-      server_name: strength.server_name || "",
-      app_name: strength.app_name || "",
-      node_env: strength.node_env || "",
-      created_at: new Date(strength.created_at),
+      updated_at: strength.updated_at ? new Date(strength.updated_at) : null,
       average: strength.average !== null ? Number(strength.average) : null,
       ...extractIntervalValues(strength),
     })) as StrengthRowGet[];

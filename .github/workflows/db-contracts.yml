@@ -1,0 +1,105 @@
+name: DB Contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/db-contracts.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "lib/db-postgres/**"
+      - "lib/db-timescale/**"
+      - "apps/market-view-next/**"
+      - "apps/tradingview-node/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/db-contracts.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "lib/db-postgres/**"
+      - "lib/db-timescale/**"
+      - "apps/market-view-next/**"
+      - "apps/tradingview-node/**"
+  workflow_dispatch:
+
+jobs:
+  verify-postgres:
+    name: Verify Postgres contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: app_contracts
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app_contracts"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_URL: postgres://postgres:postgres@localhost:5432/app_contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify @lib/db-postgres
+        run: pnpm --filter @lib/db-postgres db:verify
+
+  verify-timescale:
+    name: Verify Timescale contract
+    runs-on: ubuntu-latest
+    services:
+      timescale:
+        image: timescale/timescaledb:latest-pg17
+        env:
+          POSTGRES_DB: app_contracts
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app_contracts"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TIMESCALE_URL: postgres://postgres:postgres@localhost:5432/app_contracts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify @lib/db-timescale
+        run: pnpm --filter @lib/db-timescale db:verify

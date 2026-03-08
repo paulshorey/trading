@@ -8,19 +8,13 @@ interface Timeframe {
 
 /**
  * Timeframe configurations
- * Note: "candles_1m_1s" uses dash, others use underscore
+ * The DB currently exposes two canonical rolling candle tables:
+ * - candles_1m_1s: 1-minute windows sampled every second
+ * - candles_1h_1m: 1-hour windows sampled every minute
  */
 export const TIMEFRAMES: Timeframe[] = [
-  { id: '1m_1s', table: 'candles_1m_1s', ms: 60 * 1000 },
-  { id: '3m', table: 'candles_3m', ms: 3 * 60 * 1000 },
-  { id: '7m', table: 'candles_7m', ms: 7 * 60 * 1000 },
-  { id: '19m', table: 'candles_19m', ms: 19 * 60 * 1000 },
-  { id: '29m', table: 'candles_29m', ms: 29 * 60 * 1000 },
-  { id: '59m', table: 'candles_59m', ms: 59 * 60 * 1000 },
-  { id: '109m', table: 'candles_109m', ms: 109 * 60 * 1000 },
-  { id: '181m', table: 'candles_181m', ms: 181 * 60 * 1000 },
-  { id: '1d', table: 'candles_1d', ms: 24 * 60 * 60 * 1000 },
-  { id: '1w', table: 'candles_1w', ms: 7 * 24 * 60 * 60 * 1000 },
+  { id: '1m_1s', table: 'candles_1m_1s', ms: 1000 },
+  { id: '1h_1m', table: 'candles_1h_1m', ms: 60 * 1000 },
 ]
 
 // Target number of candles to return (aim for good chart density)
@@ -178,11 +172,8 @@ export async function getCandles(
       ? Math.floor(options.limit)
       : undefined
 
-  // Build query - table name uses double quotes due to dash in "candles_1m_1s"
+  // Build query using the canonical rolling tables.
   const whereParts: string[] = ['ticker = $1', 'time >= $2', 'time <= $3']
-  if (timeframe.id.includes('1m_1s')) {
-    whereParts.push('second_index = 0')
-  }
   const params: Array<string | number> = [ticker, startISO, endISO]
 
   // Select all metrics columns

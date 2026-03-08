@@ -67,7 +67,7 @@ export class FetchStrengthData {
           return {
             ...row,
             timenow,
-            created_at: new Date(row.created_at),
+            updated_at: row.updated_at ? new Date(row.updated_at) : null,
           }
         })
 

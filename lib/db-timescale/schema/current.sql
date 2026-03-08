@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict uaAOcJ3xUyljp8sKxVUFMyjqhAFmOABa0ORdZTg25ri5pQdmeqHHVy1Ox1JGfvS
-
 -- Dumped from database version 17.7
 -- Dumped by pg_dump version 18.2
 
@@ -18,20 +16,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
---
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA public;
-
-
---
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON SCHEMA public IS 'standard public schema';
-
 
 SET default_tablespace = '';
 
@@ -303,11 +287,4 @@ CREATE INDEX idx_hour ON public."candles-1m" USING btree (EXTRACT(hour FROM ("ti
 --
 
 CREATE INDEX idx_minute ON public."candles-1m" USING btree (EXTRACT(minute FROM ("time" AT TIME ZONE 'UTC'::text)));
-
-
---
--- PostgreSQL database dump complete
---
-
-\unrestrict uaAOcJ3xUyljp8sKxVUFMyjqhAFmOABa0ORdZTg25ri5pQdmeqHHVy1Ox1JGfvS
 

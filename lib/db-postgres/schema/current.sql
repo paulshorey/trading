@@ -2,8 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict OC6Q6hD3edaZkMbkNI1Wd2cd67MfjD4xDz7rfqysgRfznttF0wy4eyp2bMFARo6
-
 -- Dumped from database version 17.7 (Debian 17.7-3.pgdg13+1)
 -- Dumped by pg_dump version 18.2
 
@@ -18,20 +16,6 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-
---
--- Name: public; Type: SCHEMA; Schema: -; Owner: -
---
-
-CREATE SCHEMA public;
-
-
---
--- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
---
-
-COMMENT ON SCHEMA public IS 'standard public schema';
-
 
 SET default_tablespace = '';
 
@@ -204,11 +188,4 @@ ALTER TABLE ONLY public.order_v1
 
 ALTER TABLE ONLY public.strength_v1
     ADD CONSTRAINT strength_v1_ticker_timenow_unique UNIQUE (ticker, timenow);
-
-
---
--- PostgreSQL database dump complete
---
-
-\unrestrict OC6Q6hD3edaZkMbkNI1Wd2cd67MfjD4xDz7rfqysgRfznttF0wy4eyp2bMFARo6
 

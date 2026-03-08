@@ -124,22 +124,22 @@
     },
     {
       "column": "trades",
-      "nullable": false,
+      "nullable": true,
       "type": "number"
     },
     {
       "column": "max_trade_size",
-      "nullable": false,
+      "nullable": true,
       "type": "number"
     },
     {
       "column": "big_trades",
-      "nullable": false,
+      "nullable": true,
       "type": "number"
     },
     {
       "column": "big_volume",
-      "nullable": false,
+      "nullable": true,
       "type": "number"
     },
     {
@@ -221,22 +221,22 @@
     },
     {
       "column": "trades",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "max_trade_size",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "big_trades",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {
       "column": "big_volume",
-      "nullable": true,
+      "nullable": false,
       "type": "number"
     },
     {

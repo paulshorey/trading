@@ -3,6 +3,7 @@
  * already-finalized lower-timeframe candle rows.
  */
 
+import { collectOpenBucketTimesBetween, getConfiguredMarketSession, type WeeklyMarketSession } from "./market-session.js";
 import type { CandleForDb, CandleState } from "./types.js";
 
 interface TickerWindowState {
@@ -31,14 +32,15 @@ interface RollingCandleWindowOptions {
   windowSize: number;
   expectedIntervalMs: number;
   label: string;
+  sessionCalendar?: WeeklyMarketSession;
 }
 
 export class RollingCandleWindow {
   private readonly tickerStates = new Map<string, TickerWindowState>();
   private readonly windowSize: number;
   private readonly expectedIntervalMs: number;
-  private readonly windowSpanMs: number;
   private readonly label: string;
+  private readonly sessionCalendar: WeeklyMarketSession;
 
   private pendingCandles: CandleForDb[] = [];
   private stats = {
@@ -51,8 +53,8 @@ export class RollingCandleWindow {
   constructor(options: RollingCandleWindowOptions) {
     this.windowSize = options.windowSize;
     this.expectedIntervalMs = options.expectedIntervalMs;
-    this.windowSpanMs = (this.windowSize - 1) * this.expectedIntervalMs;
     this.label = options.label;
+    this.sessionCalendar = options.sessionCalendar ?? getConfiguredMarketSession();
   }
 
   seedCandles(candles: CandleForDb[]): void {
@@ -139,9 +141,19 @@ export class RollingCandleWindow {
       }
 
       if (deltaMs > this.expectedIntervalMs) {
-        state.ring = [];
-        state.warmupDone = false;
-        this.stats.gapResets++;
+        const firstMissingInputMs = state.lastInputMs + this.expectedIntervalMs;
+        const openGap = collectOpenBucketTimesBetween(
+          firstMissingInputMs,
+          inputTimeMs,
+          this.expectedIntervalMs,
+          0,
+          this.sessionCalendar,
+        );
+        if (openGap.exceeded) {
+          state.ring = [];
+          state.warmupDone = false;
+          this.stats.gapResets++;
+        }
       }
     }
 
@@ -149,8 +161,7 @@ export class RollingCandleWindow {
     state.lastInputMs = inputTimeMs;
     state.ring.push(input);
 
-    const cutoffMs = inputTimeMs - this.windowSpanMs;
-    while (state.ring.length > 0 && new Date(state.ring[0].time).getTime() < cutoffMs) {
+    while (state.ring.length > this.windowSize) {
       state.ring.shift();
     }
 

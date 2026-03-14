@@ -22,7 +22,8 @@ second:
 - output timeframe: 1 minute
 - output write cadence: 1 second
 - short no-trade gaps are forward-filled as zero-volume seconds
-- extended inactivity resets the rolling warmup instead of stitching distant seconds together
+- extended open-market inactivity resets the rolling warmup instead of stitching distant seconds together
+- scheduled closures from the configured session calendar are treated as paused time so rolling VWAP/CVD continuity carries across closes and reopens
 
 Each `candles_1h_1m` row is the trailing 60-minute window for a ticker at that
 minute:
@@ -83,6 +84,7 @@ Key rules:
 - keep front-month stitching and rolling-window aggregation deterministic
 - prefer shared library code over duplicated live/batch logic
 - treat written tables as source-of-truth data, not disposable intermediate output
+- define market-session windows in local exchange time with an IANA time zone; do not hardcode fixed UTC close/reopen hours
 - `1h@1m` must be derived from minute-boundary `1m@1s` rows
 - do not derive `1h@1m` directly from raw trades
 - do not compute `1h` every second unless the product intentionally changes to `1h@1s`

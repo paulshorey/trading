@@ -33,6 +33,17 @@ export {
   checkTradeAge,
 } from "./timestamp.js";
 
+// Market-session utilities
+export type { MarketSessionConfig, OpenBucketCollection, WeeklySessionWindowInput } from "./market-session.js";
+export {
+  DEFAULT_GLOBEX_MARKET_SESSION_CONFIG,
+  WeeklyMarketSession,
+  collectOpenBucketTimesBetween,
+  getConfiguredMarketSession,
+  isMarketOpenAt,
+  parseWeeklySessionWindows,
+} from "./market-session.js";
+
 // Symbol utilities
 export { extractTicker } from "./symbol.js";
 

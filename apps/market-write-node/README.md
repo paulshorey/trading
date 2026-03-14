@@ -10,8 +10,10 @@ This app maintains:
 
 The shared rolling engine forward-fills short no-trade gaps as zero-volume
 seconds so minute-boundary rows stay available for the hourly layer. Extended
-gaps reset warmup instead of combining distant activity into one "continuous"
-window.
+open-market gaps reset warmup instead of combining distant activity into one
+"continuous" window. Scheduled closures from the configured session calendar are
+treated as paused time, so rolling VWAP/CVD continuity carries across closes
+and reopens without hardcoding UTC hours.
 
 ## What this app does
 
@@ -181,11 +183,22 @@ Required env vars:
 - `DATABENTO_SYMBOLS`
 - `DATABENTO_STYPE`
 
+Optional session-calendar env vars:
+
+- `MARKET_SESSION_TIME_ZONE` - IANA time zone for the trading session
+  (default: `America/Chicago`)
+- `MARKET_SESSION_OPEN_WINDOWS` - comma-separated weekly open windows in local
+  session time, for example:
+  `Sun 17:00-Mon 16:00, Mon 17:00-Tue 16:00, Tue 17:00-Wed 16:00, Wed 17:00-Thu 16:00, Thu 17:00-Fri 16:00`
+
 Live behavior:
 
 1. raw TBBO trades -> `candles_1m_1s`
 2. successful 1m writes at minute boundaries feed the hourly aggregator
 3. minute-boundary rows -> `candles_1h_1m`
+
+The live stream gates trades by the trade event timestamp in the configured
+session calendar, not by fixed UTC close/reopen assumptions.
 
 On startup, the hourly writer hydrates itself from the most recent
 minute-boundary `candles_1m_1s` rows so it does not need a fresh 60-minute

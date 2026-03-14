@@ -10,6 +10,7 @@
 
 import { createConnection, Socket } from "net";
 import { createHash } from "crypto";
+import { getConfiguredMarketSession, isMarketOpenAt, toSecondBucket } from "../lib/trade/index.js";
 import { Tbbo1mAggregator, TbboRecord } from "./tbbo-1m-aggregator.js";
 
 // Configuration from environment (all required - no defaults)
@@ -24,44 +25,14 @@ const DATABENTO_STYPE = process.env.DATABENTO_STYPE;
 // Reconnection settings
 const MAX_RECONNECT_DELAY = 30000;
 const INITIAL_RECONNECT_DELAY = 1000;
+const marketSession = getConfiguredMarketSession();
 
-/**
- * Check if futures market is currently open
- *
- * Futures market closed hours (all times in UTC):
- * - All days: 22:00 - 22:59 (daily maintenance window)
- * - Friday: 22:00 - 24:00 (weekend close starts)
- * - Saturday: all day (closed)
- * - Sunday: 0:00 - 22:59 (closed until market opens at 23:00)
- *
- * @returns true if market is open, false if closed
- */
 function isFuturesMarketOpen(): boolean {
-  const now = new Date();
-  const utcDay = now.getUTCDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
-  const utcHour = now.getUTCHours();
+  return isMarketOpenAt(new Date(), marketSession);
+}
 
-  // Saturday: all day closed
-  if (utcDay === 6) {
-    return false;
-  }
-
-  // Sunday: closed 0:00 - 22:59, opens at 23:00
-  if (utcDay === 0 && utcHour < 23) {
-    return false;
-  }
-
-  // Friday: closed from 22:00 onward (until Sunday 23:00)
-  if (utcDay === 5 && utcHour >= 22) {
-    return false;
-  }
-
-  // All other days (Mon-Thu, and Sun after 23:00): closed 22:00 - 22:59
-  if (utcHour === 22) {
-    return false;
-  }
-
-  return true;
+function isRecordDuringOpenSession(record: TbboRecord): boolean {
+  return isMarketOpenAt(new Date(toSecondBucket(record.timestamp)), marketSession);
 }
 
 // Track skipped records due to market closed
@@ -388,8 +359,8 @@ function handleData(data: Buffer): void {
       // After session starts, messages are JSON records
       const record = parseTbboRecord(message);
       if (record && state.aggregator) {
-        // Check if futures market is open before processing
-        if (!isFuturesMarketOpen()) {
+        // Gate live ingestion by the trade's event timestamp in the configured session calendar.
+        if (!isRecordDuringOpenSession(record)) {
           skippedMarketClosed++;
           // Log market closed status periodically (every 5 minutes)
           const now = Date.now();
@@ -568,6 +539,7 @@ export async function startDatabentoStream(): Promise<void> {
   console.log(`   Symbols: ${DATABENTO_SYMBOLS!.join(", ")}`);
   console.log(`   Symbol Type: ${DATABENTO_STYPE}`);
   console.log(`   Schema: TBBO (Top of Book on Trade)`);
+  console.log(`   Session: ${marketSession.describe()}`);
   console.log(`   API Key: ${apiKeyPreview}`);
   console.log("═".repeat(50));
 

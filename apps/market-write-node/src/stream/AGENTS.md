@@ -15,7 +15,7 @@ downstream feature-engineering or ML-specific logic.
   - Parses newline-delimited JSON messages from the socket
   - Builds an instrument_id-to-symbol lookup from symbol mapping messages (rtype=22)
   - Converts trade messages (action="T") into `TbboRecord` objects
-  - Skips spread contracts (symbols containing "-") and trades during market closed hours
+  - Skips spread contracts (symbols containing "-") and gates trades by the configured session calendar using the trade event timestamp
   - Passes each valid trade to the aggregator
 
 - **`tbbo-1m-aggregator.ts`** is the live wrapper around the shared rolling-window engine
@@ -56,6 +56,8 @@ Environment variables (all required):
 | `DATABENTO_SYMBOLS` | `ES.FUT,NQ.FUT`  | Comma-separated symbols               |
 | `DATABENTO_STYPE`   | `parent`         | Symbol type: `parent` or `raw_symbol` |
 | `TIMESCALE_URL`     | `postgres://...` | TimescaleDB connection                |
+| `MARKET_SESSION_TIME_ZONE` | `America/Chicago` | Optional IANA time zone for the trading session |
+| `MARKET_SESSION_OPEN_WINDOWS` | `Sun 17:00-Mon 16:00, ...` | Optional weekly open windows in local session time |
 
 ## Shared Libraries
 
@@ -70,7 +72,7 @@ Stream-specific code should only handle:
 - TCP connection lifecycle
 - Databento protocol details
 - JSON parsing and symbol mapping
-- market-hours gating
+- session-calendar gating
 - retry / timer orchestration
 
 ## Roadmap

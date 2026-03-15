@@ -20,7 +20,7 @@ export function createApp(options?: {
   app.use(cors());
   app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "256kb" }));
 
-  app.get("/health", (_req, res) => {
+  app.get("/api/v1/health", (_req, res) => {
     formatResponse(res, { ok: true });
   });
 

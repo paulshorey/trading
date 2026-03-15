@@ -1,5 +1,0 @@
-@import "@lib/common/fe/styles/tailwind.css";
-
-/* App-specific source paths for Tailwind v4 */
-@source "../app/**/*.{js,ts,jsx,tsx}";
-@source "../components/**/*.{js,ts,jsx,tsx}";

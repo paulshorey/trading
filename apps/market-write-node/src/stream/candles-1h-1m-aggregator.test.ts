@@ -11,7 +11,7 @@ const { Candles1h1mAggregator } = await import("./candles-1h-1m-aggregator.js");
 const BASE_TIME_MS = Date.parse("2026-03-10T14:00:00.000Z");
 
 function isLatestTargetQuery(text: string): boolean {
-  return text.includes("MAX(time) AS latest_target_time") && text.includes("FROM candles_1h_1m");
+  return text.includes("SELECT DISTINCT ON (ticker)") && text.includes("FROM candles_1h_1m");
 }
 
 function isHydrationQuery(text: string): boolean {
@@ -162,6 +162,7 @@ test("reconciles missing hourly rows from canonical 1m source on startup", async
     latest_target_time: minuteIso(59),
   }));
   const writtenTimes: string[] = [];
+  let reconciliationQueryCount = 0;
 
   const aggregator = new Candles1h1mAggregator({
     queryable: {
@@ -177,7 +178,10 @@ test("reconciles missing hourly rows from canonical 1m source on startup", async
         }
 
         if (isReconciliationQuery(text)) {
-          return { rows: reconciliationRows as Row[] };
+          reconciliationQueryCount++;
+          return {
+            rows: (reconciliationQueryCount === 1 ? reconciliationRows : []) as Row[],
+          };
         }
 
         throw new Error(`Unexpected query: ${text}`);

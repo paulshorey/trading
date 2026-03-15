@@ -8,6 +8,8 @@ const HYDRATION_WINDOW_ROWS = 60;
 const WINDOW_MINUTES = 60;
 const WRITE_BATCH_SIZE = 500;
 const HYDRATION_RETRY_LOG_INTERVAL_MS = 30_000;
+const RECONCILIATION_PAGE_SIZE = 5_000;
+const RECONCILIATION_FLUSH_THRESHOLD = 10_000;
 
 const SOURCE_COLUMNS = `
   time,
@@ -85,11 +87,11 @@ const HYDRATION_QUERY = `
 `;
 
 const LATEST_TARGET_TIMES_QUERY = `
-  SELECT
+  SELECT DISTINCT ON (ticker)
     ticker,
-    MAX(time) AS latest_target_time
+    time AS latest_target_time
   FROM ${TARGET_TABLE}
-  GROUP BY ticker
+  ORDER BY ticker ASC, time DESC
 `;
 
 interface QueryResultLike<Row> {
@@ -107,6 +109,16 @@ interface LatestTargetRow {
 
 interface ReconciliationSourceRow extends StoredCandleRow {
   latest_target_time: Date | string;
+}
+
+interface ReconciliationCursor {
+  ticker: string;
+  time: string;
+}
+
+interface ReconciliationResult {
+  seeded: number;
+  replayed: number;
 }
 
 interface Candles1h1mAggregatorOptions {
@@ -224,42 +236,24 @@ export class Candles1h1mAggregator {
   private async hydrateFromDatabase(): Promise<boolean> {
     try {
       const latestTargetTimes = await this.loadLatestTargetTimes();
-      const [recentSourceRows, reconciliationRows] = await Promise.all([
-        this.queryable.query<StoredCandleRow>(HYDRATION_QUERY, [HYDRATION_WINDOW_ROWS]),
-        this.loadReconciliationRows(latestTargetTimes),
-      ]);
+      const recentSourceRows = await this.queryable.query<StoredCandleRow>(HYDRATION_QUERY, [HYDRATION_WINDOW_ROWS]);
 
       const latestTargetTimeByTicker = new Map(latestTargetTimes.map((row) => [row.ticker, new Date(row.latest_target_time).getTime()]));
       const recentSeedCandles = recentSourceRows.rows
         .filter((row) => !latestTargetTimeByTicker.has(row.ticker))
         .map((row) => candleForDbFromStoredRow(row, { requireCompleteCvd: true }));
-
-      const reconciliationSeedCandles: CandleForDb[] = [];
-      const reconciliationReplayCandles: CandleForDb[] = [];
-      for (const row of reconciliationRows) {
-        const candle = candleForDbFromStoredRow(row, { requireCompleteCvd: true });
-        const latestTargetTimeMs = new Date(row.latest_target_time).getTime();
-
-        if (new Date(candle.time).getTime() <= latestTargetTimeMs) {
-          reconciliationSeedCandles.push(candle);
-          continue;
-        }
-
-        reconciliationReplayCandles.push(candle);
-      }
-
-      const seedCandles = [...recentSeedCandles, ...reconciliationSeedCandles];
+      const reconciliation = await this.reconcileFromSource(latestTargetTimes);
+      const seedCandles = [...recentSeedCandles];
       this.rollingWindow.seedCandles(seedCandles);
-      const replayedFromSource = this.rollingWindow.addCandles(reconciliationReplayCandles);
-      this.initialized = true;
 
-      if (seedCandles.length > 0) {
-        console.log(`📚 Hydrated ${seedCandles.length} canonical 1m row(s) into ${TARGET_TABLE}`);
+      const totalSeeded = seedCandles.length + reconciliation.seeded;
+      if (totalSeeded > 0) {
+        console.log(`📚 Hydrated ${totalSeeded} canonical 1m row(s) into ${TARGET_TABLE}`);
       } else {
         console.log(`📚 No canonical 1m rows available yet to hydrate ${TARGET_TABLE}`);
       }
-      if (replayedFromSource > 0) {
-        console.log(`🔁 Replayed ${replayedFromSource} canonical 1m row(s) newer than ${TARGET_TABLE}`);
+      if (reconciliation.replayed > 0) {
+        console.log(`🔁 Replayed ${reconciliation.replayed} canonical 1m row(s) newer than ${TARGET_TABLE}`);
       }
 
       const replayed = this.replayBufferedBaseCandles();
@@ -267,6 +261,7 @@ export class Candles1h1mAggregator {
         console.log(`📥 Replayed ${replayed} buffered canonical 1m row(s) into ${TARGET_TABLE}`);
       }
 
+      this.initialized = true;
       await this.flushPendingCandles();
 
       return true;
@@ -291,17 +286,69 @@ export class Candles1h1mAggregator {
     return result.rows;
   }
 
-  private async loadReconciliationRows(latestTargetTimes: LatestTargetRow[]): Promise<ReconciliationSourceRow[]> {
+  private async reconcileFromSource(latestTargetTimes: LatestTargetRow[]): Promise<ReconciliationResult> {
     if (latestTargetTimes.length === 0) {
-      return [];
+      return { seeded: 0, replayed: 0 };
     }
 
-    const values: string[] = [];
+    let cursor: ReconciliationCursor | null = null;
+    let seeded = 0;
+    let replayed = 0;
+
+    while (true) {
+      const rows = await this.loadReconciliationRows(latestTargetTimes, cursor);
+      if (rows.length === 0) {
+        break;
+      }
+
+      const reconciliationSeedCandles: CandleForDb[] = [];
+      const reconciliationReplayCandles: CandleForDb[] = [];
+      for (const row of rows) {
+        const candle = candleForDbFromStoredRow(row, { requireCompleteCvd: true });
+        const latestTargetTimeMs = new Date(row.latest_target_time).getTime();
+
+        if (new Date(candle.time).getTime() <= latestTargetTimeMs) {
+          reconciliationSeedCandles.push(candle);
+        } else {
+          reconciliationReplayCandles.push(candle);
+        }
+      }
+
+      if (reconciliationSeedCandles.length > 0) {
+        seeded += reconciliationSeedCandles.length;
+        this.rollingWindow.seedCandles(reconciliationSeedCandles);
+      }
+      if (reconciliationReplayCandles.length > 0) {
+        replayed += this.rollingWindow.addCandles(reconciliationReplayCandles);
+      }
+      if (this.rollingWindow.getStats().pendingCandles >= RECONCILIATION_FLUSH_THRESHOLD) {
+        await this.flushPendingCandles();
+      }
+
+      const lastRow = rows[rows.length - 1];
+      cursor = {
+        ticker: lastRow.ticker,
+        time: lastRow.time instanceof Date ? lastRow.time.toISOString() : new Date(lastRow.time).toISOString(),
+      };
+    }
+
+    return { seeded, replayed };
+  }
+
+  private async loadReconciliationRows(
+    latestTargetTimes: LatestTargetRow[],
+    cursor: ReconciliationCursor | null,
+  ): Promise<ReconciliationSourceRow[]> {
+    const values: unknown[] = [];
     const placeholders = latestTargetTimes.map((row, index) => {
       const offset = index * 2;
       values.push(row.ticker, row.latest_target_time instanceof Date ? row.latest_target_time.toISOString() : row.latest_target_time);
       return `($${offset + 1}, $${offset + 2}::timestamptz)`;
     });
+    const cursorTickerIndex = values.length + 1;
+    const cursorTimeIndex = values.length + 2;
+    const limitIndex = values.length + 3;
+    values.push(cursor?.ticker ?? "", cursor?.time ?? "1970-01-01T00:00:00.000Z", String(RECONCILIATION_PAGE_SIZE));
 
     const query = `
       WITH latest_target(ticker, latest_target_time) AS (
@@ -315,7 +362,12 @@ export class Candles1h1mAggregator {
         ON latest_target.ticker = ${SOURCE_TABLE}.ticker
       WHERE time = date_trunc('minute', time)
         AND time >= latest_target.latest_target_time - INTERVAL '${WINDOW_MINUTES - 1} minutes'
+        AND (
+          $${cursorTickerIndex} = ''
+          OR (${SOURCE_TABLE}.ticker, ${SOURCE_TABLE}.time) > ($${cursorTickerIndex}, $${cursorTimeIndex}::timestamptz)
+        )
       ORDER BY ${SOURCE_TABLE}.ticker ASC, ${SOURCE_TABLE}.time ASC
+      LIMIT $${limitIndex}::int
     `;
 
     const result = await this.queryable.query<ReconciliationSourceRow>(query, values);

@@ -4,11 +4,13 @@ This directory is the canonical schema history for `TIMESCALE_URL`.
 
 ## Baseline
 
-- `202602180131__baseline.sql` is generated from the live database snapshot.
+- `202602180131__baseline.sql` is the canonical bootstrap baseline for the
+  current writer scope.
 - For existing databases that already contain this schema, mark it applied with:
   - `pnpm --filter @lib/db-timescale db:migrate:baseline`
 - The baseline marker only records `__baseline` files, so later forward migrations
   will still apply normally.
+- Current canonical runtime tables are `candles_1m_1s` and `candles_1h_1m`.
 
 ## Naming
 
@@ -16,7 +18,7 @@ This directory is the canonical schema history for `TIMESCALE_URL`.
 
 ## Rules
 
-- Never edit applied migrations.
+- Do not edit applied migrations in active shared environments.
 - Add forward-only migrations.
 - Keep schema ownership here even if apps use raw SQL.
 - Do not add `BEGIN` / `COMMIT` inside migration files; the runner wraps each file

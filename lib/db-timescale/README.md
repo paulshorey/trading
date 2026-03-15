@@ -11,6 +11,16 @@ This package owns:
 
 If application code and the Timescale schema disagree, fix the contract here.
 
+## Current canonical scope
+
+`market-write-node` currently writes and reads only:
+
+- `public.candles_1m_1s`
+- `public.candles_1h_1m`
+
+`db:migrate` now converges the schema to only those two candle tables (plus
+the migration bookkeeping table `schema_migrations_cursor`).
+
 ## Environment
 
 Set:
@@ -38,7 +48,7 @@ pnpm --filter @lib/db-timescale db:verify
 
 What this does:
 
-- creates the baseline tables
+- applies baseline schema history for canonical candle writes
 - applies forward migrations such as:
   - `candles_1h_1m`
   - `candles_1m_1s` contract cleanup

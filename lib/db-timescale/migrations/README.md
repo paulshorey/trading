@@ -9,6 +9,8 @@ This directory is the canonical schema history for `TIMESCALE_URL`.
   - `pnpm --filter @lib/db-timescale db:migrate:baseline`
 - The baseline marker only records `__baseline` files, so later forward migrations
   will still apply normally.
+- Legacy baseline tables are removed by forward migrations; current canonical
+  runtime tables are `candles_1m_1s` and `candles_1h_1m`.
 
 ## Naming
 

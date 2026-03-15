@@ -1,6 +1,6 @@
-import { getTimescaleDb } from "@lib/db-timescale/lib/db/timescale";
+import { getDb } from "@lib/db-timescale";
 
-export const pool = getTimescaleDb();
+export const pool = getDb();
 
 // Log which database URL is being used (without password)
 const dbUrl = process.env.TIMESCALE_DB_URL || "";

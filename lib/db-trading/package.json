@@ -3,6 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./generated/*": "./generated/*",
+    "./lib/*": "./lib/*.ts",
+    "./sql/log": "./sql/log/index.ts",
+    "./sql/order": "./sql/order/index.ts",
+    "./sql/strength": "./sql/strength/index.ts",
+    "./sql/*": "./sql/*.ts"
+  },
   "scripts": {
     "db:schema:snapshot": "bash scripts/snapshot-schema.sh",
     "db:types:generate": "node scripts/generate-types.mjs",

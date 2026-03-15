@@ -179,6 +179,9 @@ importers:
       '@lib/common':
         specifier: workspace:*
         version: link:../../lib/common
+      '@lib/db-timescale':
+        specifier: workspace:*
+        version: link:../../lib/db-timescale
       '@lib/db-trading':
         specifier: workspace:*
         version: link:../../lib/db-trading

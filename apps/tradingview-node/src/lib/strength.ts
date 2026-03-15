@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
+import { getDb } from "@lib/db-trading";
 import { ALL_INTERVALS, FORWARD_FILL_DEPTH } from "./constants.js";
-import { pool } from "./db.js";
 import type { StrengthDataAdd, StrengthInterval, StrengthRow, StrengthRowGet, StrengthWhere } from "../types/strength.js";
 
 export const parseStrengthText = (bodyText: string): StrengthDataAdd => {
@@ -164,7 +164,7 @@ export const strengthAdd = async (data: StrengthDataAdd) => {
     throw new Error(`Unsupported interval: ${data.interval}`);
   }
 
-  const client = await pool.connect();
+  const client = await getDb().connect();
   const onClientError = (err: Error) => {
     console.error("Postgres client error:", err);
   };
@@ -200,7 +200,7 @@ export const strengthAdd = async (data: StrengthDataAdd) => {
 };
 
 export const getStrengthRows = async (where: StrengthWhere): Promise<StrengthRowGet[]> => {
-  const client = await pool.connect();
+  const client = await getDb().connect();
   const onClientError = (err: Error) => {
     console.error("Postgres client error:", err);
   };

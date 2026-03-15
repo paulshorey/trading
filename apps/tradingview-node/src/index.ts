@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { getDb } from "@lib/db-trading";
 import cors from "cors";
 import express from "express";
 import { formatResponse } from "./lib/http.js";
@@ -6,7 +7,6 @@ import { Router } from "express";
 import { createGetTradingView } from "./api/v1/tradingview/get.js";
 import { createPostTradingView } from "./api/v1/tradingview/post.js";
 import { getStrengthRows, strengthAdd } from "./lib/strength.js";
-import { pool } from "./lib/db.js";
 
 export function createApp(options?: {
   getStrengthRows?: typeof getStrengthRows;
@@ -83,7 +83,7 @@ if (process.env.NODE_ENV !== "test") {
 
     server.close(async () => {
       try {
-        await pool.end();
+        await getDb().end();
       } catch (error) {
         console.error("Error closing Postgres pool during shutdown:", error);
       } finally {

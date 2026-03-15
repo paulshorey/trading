@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db'
+import { getDb } from '@lib/db-timescale'
 
 interface Timeframe {
   id: string

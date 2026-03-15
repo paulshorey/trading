@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { Pool } from 'pg'
+import { getDb } from '@lib/db-trading'
 import {
   ALL_INTERVALS,
   extractIntervalValues,
@@ -58,13 +58,12 @@ const TICKERS = [
 ]
 
 async function backfillNulls() {
-  const connectionString = process.env.TRADING_DB_URL
-  if (!connectionString) {
+  if (!process.env.TRADING_DB_URL) {
     console.error('Error: TRADING_DB_URL environment variable not set')
     process.exit(1)
   }
 
-  const pool = new Pool({ connectionString })
+  const db = getDb()
 
   try {
     console.log('Connecting to database...')
@@ -79,7 +78,7 @@ async function backfillNulls() {
       console.log(`\nProcessing ticker: ${ticker}`)
 
       // Fetch rows starting from cutoff date, ordered by timenow ASC (oldest first)
-      const rowsResult = await pool.query(
+      const rowsResult = await db.query(
         `
         SELECT * FROM strength_v1
         WHERE ticker = $1 AND timenow >= $2
@@ -132,7 +131,7 @@ async function backfillNulls() {
           setClauses.push(`"average" = $${values.length + 1}`)
           values.push(average as any)
 
-          await pool.query(
+          await db.query(
             `
             UPDATE strength_v1
             SET ${setClauses.join(', ')}
@@ -154,7 +153,7 @@ async function backfillNulls() {
     console.error('Error:', error)
     process.exit(1)
   } finally {
-    await pool.end()
+    await db.end()
   }
 }
 

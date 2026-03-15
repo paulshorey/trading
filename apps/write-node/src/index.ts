@@ -10,7 +10,7 @@ let shuttingDown = false;
 
 app.use(cors());
 
-app.get("/health", (_req, res) => {
+app.get("/v1/health", (_req, res) => {
   res.json(true);
 });
 

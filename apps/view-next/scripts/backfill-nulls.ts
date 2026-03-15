@@ -7,7 +7,7 @@
 
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { getDb } from '@lib/db-trading'
+import { getDb } from '@lib/db-trading/lib/db/postgres'
 import {
   ALL_INTERVALS,
   extractIntervalValues,

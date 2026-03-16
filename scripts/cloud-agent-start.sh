@@ -33,5 +33,6 @@ fi
 
 echo "Workspace ready."
 echo "Recommended commands:"
+echo "  pnpm run deps:install -- <package>..."
 echo "  pnpm dev:write-node"
 echo "  pnpm build:write-node"

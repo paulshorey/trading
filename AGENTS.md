@@ -49,6 +49,11 @@ In `lib/*` packages:
 
 - Always use `pnpm` (never `npm`)
 - Use `pnpm --filter <app> <command>` or `cd apps/<app> && pnpm run <command>`
+- Never add `pnpm install` / `pnpm i` inside package-level `build`, `dev`, `test`, or `start` scripts. Install dependencies from the workspace root only.
+- For focused work on one app or package, install from the root with a filter that includes that target plus its workspace dependencies, for example:
+  - `pnpm run deps:install -- notes-next...`
+  - `pnpm run deps:install -- @lib/config...`
+- Use a full root install (`pnpm run deps:install`) when running repo-wide commands such as `pnpm build`, when touching multiple apps, or when changing shared workspace dependencies.
 - If request is ambiguous or contradictory, ask for clarification
 
 If DB schema changed:

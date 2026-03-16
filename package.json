@@ -4,6 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:write-node": "turbo run build --filter=write-node...",
+    "deps:install": "bash scripts/install-workspace-deps.sh",
     "test": "turbo run test",
     "dev": "turbo run dev",
     "dev:write-node": "pnpm --filter write-node dev",

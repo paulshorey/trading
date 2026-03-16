@@ -1,0 +1,34 @@
+{
+  "name": "@lib/db-marketing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./db/postgres": "./lib/db/postgres.ts",
+    "./generated/*": "./generated/*",
+    "./generated/typescript/db-types": "./generated/typescript/db-types.ts",
+    "./lib/*": "./lib/*.ts",
+    "./sql/note": "./sql/note/index.ts",
+    "./sql/user": "./sql/user/index.ts",
+    "./sql/*": "./sql/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "db:schema:snapshot": "bash scripts/snapshot-schema.sh",
+    "db:types:generate": "node scripts/generate-types.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:verify": "node scripts/verify-contract.mjs",
+    "db:migrate:baseline": "node scripts/baseline.mjs",
+    "db:migration:new": "node scripts/new-migration.mjs",
+    "db:sync": "pnpm db:migrate && pnpm db:schema:snapshot && pnpm db:types:generate"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@lib/config": "workspace:*",
+    "@types/pg": "^8.11.10",
+    "typescript": "5.9.2"
+  }
+}

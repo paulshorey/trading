@@ -35,23 +35,33 @@ const ROOT = resolve(__dirname, "..");
 const APPS = [
   {
     name: "log-next",
-    outputFile: "apps/log-next/.env",
+    outputFile: "apps-trading/log-next/.env",
     infisicalPaths: ["/trading/apps/log-next"],
   },
   {
     name: "view-next",
-    outputFile: "apps/view-next/.env",
+    outputFile: "apps-trading/view-next/.env",
     infisicalPaths: ["/trading/apps/view-next"],
   },
   {
     name: "write-node",
-    outputFile: "apps/write-node/.env",
+    outputFile: "apps-trading/write-node/.env",
     infisicalPaths: ["/trading/apps/write-node"],
   },
   {
     name: "tradingview-node",
-    outputFile: "apps/tradingview-node/.env",
+    outputFile: "apps-trading/tradingview-node/.env",
     infisicalPaths: ["/trading/apps/tradingview-node"],
+  },
+  {
+    name: "eighthbrain-next",
+    outputFile: "apps-marketing/eighthbrain-next/.env",
+    infisicalPaths: ["/marketing/apps/eighthbrain-next"],
+  },
+  {
+    name: "notes-next",
+    outputFile: "apps-marketing/notes-next/.env",
+    infisicalPaths: ["/marketing/apps/notes-next"],
   },
 ];
 

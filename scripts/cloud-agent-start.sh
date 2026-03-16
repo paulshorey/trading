@@ -5,10 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 expected_env_files=(
-  "apps/log-next/.env"
-  "apps/view-next/.env"
-  "apps/write-node/.env"
-  "apps/tradingview-node/.env"
+  "apps-trading/log-next/.env"
+  "apps-trading/view-next/.env"
+  "apps-trading/write-node/.env"
+  "apps-trading/tradingview-node/.env"
+  "apps-marketing/eighthbrain-next/.env"
+  "apps-marketing/notes-next/.env"
 )
 
 missing_env=0

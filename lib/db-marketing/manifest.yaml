@@ -1,0 +1,16 @@
+database: postgres
+env_var: MARKETING_DB_URL
+owners:
+  - apps/eighthbrain
+source_of_truth:
+  migrations: ./migrations
+  schema_snapshot: ./schema/current.sql
+  query_contracts: ./queries
+generated_artifacts:
+  - ./generated/typescript
+  - ./generated/contracts
+compatibility:
+  policy: additive-first
+  breaking_changes_require:
+    - deprecation_window
+    - migration_plan

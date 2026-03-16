@@ -2,19 +2,25 @@
 
 ## Folder structure
 
-### Apps:
+### Marketing Apps `./apps-marketing/`
 
-- `view-next` - ./apps/view-next - TypeScript app to display financial charts and data analysis visualizations
-- `write-node` - ./apps/write-node - TypeScript server that connects to data providers, ingests price and volume data per trade, calculates indicators, aggregates candles and higher timeframes for backtestsing
-- `tradingview-node` - ./apps/tradingview-node - Node.js/Express API for TradingView webhook ingest and strength reads
-- `log-next` - ./apps/log-next - logging and observability dashboard
+- `eighthbrain-next` - NextJS marketing website for an upcoming project
+- `notes-next` - NextJS web app to help users quickly organize their tasks, notes, and all kinds of information.
 
-### Shared Libraries:
+### Trading Apps `./apps-trading/`
 
-- `lib/common` shared utilities
-- `lib/config` shared tooling
-- `lib/db-trading` owns `TRADING_DB_URL` database contracts
-- `lib/db-timescale` owns `TIMESCALE_DB_URL` database contracts
+- `view-next` - TypeScript app to display financial charts and data analysis visualizations
+- `write-node` - TypeScript server that connects to data providers, ingests price and volume data per trade, calculates indicators, aggregates candles and higher timeframes for backtestsing
+- `tradingview-node` Node.js/Express API for TradingView webhook ingest and strength reads
+- `log-next` - logging and observability dashboard
+
+### Shared Libraries `./lib/`
+
+- `common` shared utilities
+- `config` shared tooling
+- `db-marketing` database contracts for MARKETING_DB
+- `db-trading` database contracts for TRADING_DB
+- `db-timescale` database contracts for TIMESCALE_DB
 
 ## DB package contract model
 
@@ -56,6 +62,6 @@ If DB schema changed:
 ## AGENTS maintenance
 
 - Read local `AGENTS.md` in the folder you edit, when present.
-- Keep AGENTS files aligned with actual architecture.
+- Keep AGENTS.md files aligned with actual architecture.
 - Remove outdated or incorrect instructions.
 - Documentation should be concise and minimal.

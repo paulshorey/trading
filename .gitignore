@@ -18,6 +18,9 @@ coverage
 # Tools
 .turbo
 .pnpm-store
+.android-sdk
+.android-user-home
+.gradle
 .vercel
 ._vscode
 

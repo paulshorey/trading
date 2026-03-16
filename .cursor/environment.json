@@ -4,11 +4,20 @@
   "start": "pnpm run cloud:start",
   "persistedDirectories": [
     "/workspace/.pnpm-store",
-    "/workspace/.turbo"
+    "/workspace/.turbo",
+    "/workspace/.android-sdk",
+    "/workspace/.android-user-home",
+    "/workspace/.gradle",
+    "/workspace/apps-marketing/notes-android/.gradle"
   ],
   "env": {
+    "ANDROID_HOME": "/workspace/.android-sdk",
+    "ANDROID_SDK_ROOT": "/workspace/.android-sdk",
+    "ANDROID_USER_HOME": "/workspace/.android-user-home",
     "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0",
+    "GRADLE_USER_HOME": "/workspace/.gradle",
     "HUSKY": "0",
+    "JAVA_HOME": "/usr/lib/jvm/java-21-openjdk-amd64",
     "PNPM_HOME": "/home/ubuntu/.local/share/pnpm",
     "PNPM_STORE_DIR": "/workspace/.pnpm-store",
     "TURBO_TELEMETRY_DISABLED": "1"

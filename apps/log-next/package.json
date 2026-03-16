@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3333",
-    "build": "next build",
+    "build": "pnpm i && next build",
     "env:pull": "node ../../scripts/fetch-infisical.mjs --app log-next",
     "analyze": "ANALYZE=true next build",
     "start": "next start",

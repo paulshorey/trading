@@ -3,8 +3,12 @@
  * Fetch secrets from Infisical and write to .env files.
  *
  * Required environment variables:
- *   INFISICAL_TOKEN      - Machine identity access token
- *   INFISICAL_PROJECT_ID - Project ID (found in Project Settings or URL)
+ *   INFISICAL_MACHINE_CLIENT_SECRET - Machine identity client secret
+ *   INFISICAL_MACHINE_CLIENT_ID     - Machine identity client ID
+ *   INFISICAL_PROJECT_ID            - Project ID (found in Project Settings or URL)
+ *
+ * Backward-compatible alias:
+ *   INFISICAL_MACHINE_ID - Used as the client ID if INFISICAL_MACHINE_CLIENT_ID is not set
  *
  * Optional environment variables:
  *   INFISICAL_ENV        - Environment slug (default: "dev")
@@ -30,38 +34,54 @@ const ROOT = resolve(__dirname, "..");
 // Candidate paths let us migrate app names without breaking existing secret mounts.
 const APPS = [
   {
-    name: "log",
+    name: "log-next",
     outputFile: "apps/log-next/.env",
-    infisicalPaths: ["/m/apps/log-next"],
+    infisicalPaths: ["/trading/apps/log-next"],
   },
   {
     name: "view-next",
     outputFile: "apps/view-next/.env",
-    infisicalPaths: ["/m/apps/view-next", "/m/apps/market-view-ts", "/m/apps/strength", "/m/apps/price-ui"],
+    infisicalPaths: ["/trading/apps/view-next"],
   },
   {
     name: "write-node",
     outputFile: "apps/write-node/.env",
-    infisicalPaths: ["/m/apps/write-node", "/m/apps/trade"],
+    infisicalPaths: ["/trading/apps/write-node"],
   },
   {
     name: "tradingview-node",
     outputFile: "apps/tradingview-node/.env",
-    infisicalPaths: ["/m/apps/tradingview-node"],
+    infisicalPaths: ["/trading/apps/tradingview-node"],
   },
 ];
 
 const APPS_BY_NAME = new Map(APPS.map((app) => [app.name, app]));
 
-async function fetchSecrets(infisicalPath, outputFile, options) {
-  const { token, projectId, env, siteUrl } = options;
+function normalizeSecretPath(secretPath) {
+  if (!secretPath || secretPath === "/") {
+    return "/";
+  }
+
+  return secretPath.replace(/\/+$/, "") || "/";
+}
+
+async function createAuthenticatedClient(options) {
+  const { clientId, clientSecret, siteUrl } = options;
 
   const client = new InfisicalSDK({
     siteUrl: siteUrl || undefined,
   });
 
-  // Set the access token directly (machine identity token)
-  client.auth().accessToken(token);
+  await client.auth().universalAuth.login({
+    clientId,
+    clientSecret,
+  });
+
+  return client;
+}
+
+async function fetchSecrets(infisicalPath, outputFile, options) {
+  const { client, projectId, env } = options;
 
   // Fetch secrets from the specified path
   const secrets = await client.secrets().listSecrets({
@@ -69,8 +89,15 @@ async function fetchSecrets(infisicalPath, outputFile, options) {
     environment: env,
     secretPath: infisicalPath,
     expandSecretReferences: true,
-    includeImports: true,
+    includeImports: false,
   });
+
+  const requestedPath = normalizeSecretPath(infisicalPath);
+  const returnedPaths = [...new Set(secrets.secrets.map((secret) => normalizeSecretPath(secret.secretPath)))];
+
+  if (requestedPath !== "/" && returnedPaths.length > 0 && !returnedPaths.includes(requestedPath)) {
+    throw new Error(`Infisical returned secrets from ${returnedPaths.join(", ")} for requested path ${requestedPath}; refusing to overwrite ${outputFile}.`);
+  }
 
   // Convert to dotenv format
   const dotenvContent = secrets.secrets.map((secret) => `${secret.secretKey}=${secret.secretValue}`).join("\n");
@@ -101,14 +128,22 @@ async function fetchAppSecrets(app, options) {
 }
 
 async function main() {
-  const token = process.env.INFISICAL_TOKEN;
+  const clientId = process.env.INFISICAL_MACHINE_CLIENT_ID || process.env.INFISICAL_MACHINE_ID;
+  const clientSecret = process.env.INFISICAL_MACHINE_CLIENT_SECRET;
   const projectId = process.env.INFISICAL_PROJECT_ID;
   const env = process.env.INFISICAL_ENV || "dev";
   const siteUrl = process.env.INFISICAL_SITE_URL;
 
-  if (!token) {
-    console.error("Error: INFISICAL_TOKEN environment variable is required.");
-    console.error("Set it to your machine identity access token.");
+  if (!clientId) {
+    console.error("Error: INFISICAL_MACHINE_CLIENT_ID environment variable is required.");
+    console.error("You can also use INFISICAL_MACHINE_ID as a compatibility alias.");
+    console.error("Important: this must be the machine identity Client ID, not the identity record ID.");
+    process.exit(1);
+  }
+
+  if (!clientSecret) {
+    console.error("Error: INFISICAL_MACHINE_CLIENT_SECRET environment variable is required.");
+    console.error("Set it to the client secret you created for the machine identity.");
     process.exit(1);
   }
 
@@ -119,7 +154,8 @@ async function main() {
   }
 
   const args = process.argv.slice(2);
-  const options = { token, projectId, env, siteUrl };
+  const client = await createAuthenticatedClient({ clientId, clientSecret, siteUrl });
+  const options = { client, projectId, env };
 
   const appFlagIndex = args.indexOf("--app");
   const appName = appFlagIndex === -1 ? undefined : args[appFlagIndex + 1];

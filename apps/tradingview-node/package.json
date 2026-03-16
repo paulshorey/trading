@@ -7,7 +7,7 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc --noEmit",
+    "build": "pnpm i && tsc --noEmit",
     "env:pull": "node ../../scripts/fetch-infisical.mjs --app tradingview-node",
     "test": "NODE_ENV=test node --import tsx --import ./src/test/setup.ts --test src/**/*.test.ts"
   },

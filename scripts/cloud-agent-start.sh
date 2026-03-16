@@ -24,7 +24,8 @@ if [[ $missing_env -eq 1 ]]; then
     echo "Hydrating app .env files from Infisical..."
     pnpm run init
   else
-    echo "Skipping Infisical bootstrap because required secrets are not configured."
+    echo "App .env files are missing, but Infisical bootstrap secrets are not configured."
+    echo "Set INFISICAL_TOKEN and INFISICAL_PROJECT_ID in Cursor Cloud Agent secrets, then rerun pnpm run init."
   fi
 fi
 

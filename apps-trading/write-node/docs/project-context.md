@@ -68,3 +68,5 @@ That app will consume the canonical historical and live timeseries to:
 
 `write-node` should remain focused on canonical timeseries writing, not
 full feature engineering or ML workflows.
+
+...test deploy...

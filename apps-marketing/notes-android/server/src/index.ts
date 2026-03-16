@@ -2,12 +2,13 @@ import "dotenv/config"
 
 import cors from "cors"
 import express from "express"
+import type { Express } from "express"
 import { getDb } from "@lib/db-marketing"
 import { createNotesRouter } from "@/routes/notes"
 import { createSearchRouter } from "@/routes/search"
 import { createSessionRouter } from "@/routes/session"
 
-export const createApp = () => {
+export const createApp = (): Express => {
   const app = express()
 
   app.use(cors())

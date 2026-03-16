@@ -3,6 +3,8 @@ package com.eighthbrain.notesandroid.app.widget
 import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.action.ActionParameters
@@ -18,11 +20,9 @@ import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
-import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.FillMaxSize
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
@@ -34,8 +34,6 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import androidx.glance.unit.DpSize
-import androidx.glance.unit.dp
 import com.eighthbrain.notesandroid.app.NotesApplication
 import com.eighthbrain.notesandroid.app.model.AppSnapshot
 import com.eighthbrain.notesandroid.app.model.NoteRecord
@@ -129,7 +127,7 @@ private fun WidgetContent(snapshot: AppSnapshot) {
                     Spacer(modifier = GlanceModifier.height(10.dp))
                     WidgetChip(
                         text = "Sign in",
-                        action = actionStartActivity<WidgetLoginActivity>(),
+                        action = actionStartActivity(Intent(context, WidgetLoginActivity::class.java)),
                     )
                 }
             } else {
@@ -165,7 +163,7 @@ private fun WidgetToolbar(
             Spacer(modifier = GlanceModifier.width(8.dp))
             WidgetChip(
                 text = "Search",
-                action = actionStartActivity<WidgetSearchActivity>(),
+                action = actionStartActivity(Intent(context, WidgetSearchActivity::class.java)),
                 highlighted = snapshot.widgetMode == WidgetMode.SEARCH,
             )
         }
@@ -185,7 +183,7 @@ private fun NotesPane(
     snapshot: AppSnapshot,
     context: Context,
 ) {
-    SurfaceCard(modifier = GlanceModifier.defaultWeight()) {
+    SurfaceCard(modifier = GlanceModifier.fillMaxWidth()) {
         Text(
             text = "${snapshot.notes.size} note(s)",
             style = TextStyle(color = widgetMuted),
@@ -200,7 +198,7 @@ private fun NotesPane(
             return@SurfaceCard
         }
 
-        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+        LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
             items(snapshot.notes.take(5), itemId = { it.id.toLong() }) { note ->
                 NoteRow(note = note, context = context)
             }
@@ -213,9 +211,9 @@ private fun SearchPane(
     snapshot: AppSnapshot,
     context: Context,
 ) {
-    SurfaceCard(modifier = GlanceModifier.defaultWeight()) {
+    SurfaceCard(modifier = GlanceModifier.fillMaxWidth()) {
         Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Column(modifier = GlanceModifier.defaultWeight()) {
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Text(
                     text = if (snapshot.lastSearchQuery.isBlank()) "Semantic search" else snapshot.lastSearchQuery,
                     style = TextStyle(color = widgetText, fontWeight = FontWeight.Bold),
@@ -248,7 +246,7 @@ private fun SearchPane(
             return@SurfaceCard
         }
 
-        LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+        LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
             items(snapshot.searchResults.take(5), itemId = { it.note.id.toLong() }) { result ->
                 SearchResultRow(result = result, context = context)
             }
@@ -274,7 +272,7 @@ private fun NoteRow(
                 .padding(vertical = 4.dp),
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Column(modifier = GlanceModifier.defaultWeight().clickable(actionStartActivity(editIntent))) {
+            Column(modifier = GlanceModifier.fillMaxWidth().clickable(actionStartActivity(editIntent))) {
                 Text(
                     text = note.title?.takeIf { it.isNotBlank() } ?: "Untitled note",
                     style = TextStyle(color = widgetText, fontWeight = FontWeight.Bold),
@@ -326,7 +324,7 @@ private fun SearchResultRow(
                 .clickable(actionStartActivity(editIntent)),
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth()) {
-            Column(modifier = GlanceModifier.defaultWeight()) {
+            Column(modifier = GlanceModifier.fillMaxWidth()) {
                 Text(
                     text = result.note.title?.takeIf { it.isNotBlank() } ?: "Untitled note",
                     style = TextStyle(color = widgetText, fontWeight = FontWeight.Bold),

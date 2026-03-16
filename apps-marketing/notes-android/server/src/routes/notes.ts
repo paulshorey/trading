@@ -6,6 +6,7 @@ import {
   updateNoteForUser,
 } from "@lib/db-marketing"
 import { Router } from "express"
+import type { Router as ExpressRouter } from "express"
 import {
   EmbeddingConfigurationError,
   EmbeddingRequestError,
@@ -25,7 +26,7 @@ const getErrorStatus = (error: unknown) => {
   return 400
 }
 
-export const createNotesRouter = () => {
+export const createNotesRouter = (): ExpressRouter => {
   const router = Router()
 
   router.get("/", async (request, response) => {

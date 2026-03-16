@@ -30,30 +30,40 @@ output_path = sys.argv[1]
 repository_url = "https://dl.google.com/android/repository/repository2-1.xml"
 document = urllib.request.urlopen(repository_url, timeout=30).read()
 root = ET.fromstring(document)
-namespace = {"sdk": "http://schemas.android.com/sdk/android/repo/repository2/01"}
 
 archive_url = None
-for remote_package in root.findall("sdk:remotePackage", namespace):
-    if remote_package.attrib.get("path") != "cmdline-tools;latest":
+best_version = None
+
+for remote_package in root.iter("remotePackage"):
+    package_path = remote_package.attrib.get("path", "")
+    if not package_path.startswith("cmdline-tools;"):
         continue
 
-    archives = remote_package.find("sdk:archives", namespace)
+    try:
+        version = tuple(int(part) for part in package_path.split(";", 1)[1].split("."))
+    except Exception:
+        continue
+
+    archives = remote_package.find("archives")
     if archives is None:
         continue
 
-    for archive in archives.findall("sdk:archive", namespace):
-        host_os = archive.findtext("sdk:host-os", namespaces=namespace)
+    candidate_url = None
+    for archive in archives.findall("archive"):
+        host_os = archive.findtext("host-os")
         if host_os != "linux":
             continue
-        complete = archive.find("sdk:complete", namespace)
+        complete = archive.find("complete")
         if complete is None:
             continue
-        url = complete.attrib.get("url")
+        url = complete.findtext("url")
         if url:
-            archive_url = f"https://dl.google.com/android/repository/{url}"
+            candidate_url = f"https://dl.google.com/android/repository/{url}"
             break
-    if archive_url:
-        break
+
+    if candidate_url and (best_version is None or version > best_version):
+        best_version = version
+        archive_url = candidate_url
 
 if not archive_url:
     raise SystemExit("Failed to locate Android command-line tools download URL.")

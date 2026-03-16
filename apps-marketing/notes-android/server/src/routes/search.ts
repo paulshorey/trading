@@ -4,6 +4,7 @@ import {
   updateNoteEmbeddingsForUser,
 } from "@lib/db-marketing"
 import { Router } from "express"
+import type { Router as ExpressRouter } from "express"
 import {
   EmbeddingConfigurationError,
   EmbeddingRequestError,
@@ -38,7 +39,7 @@ const syncMissingEmbeddingsForUser = async (userId: number) => {
   }
 }
 
-export const createSearchRouter = () => {
+export const createSearchRouter = (): ExpressRouter => {
   const router = Router()
 
   router.post("/", async (request, response) => {

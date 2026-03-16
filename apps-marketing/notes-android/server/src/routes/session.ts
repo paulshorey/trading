@@ -1,8 +1,9 @@
 import { findUserByIdentifier, getUserById } from "@lib/db-marketing"
 import { Router } from "express"
+import type { Router as ExpressRouter } from "express"
 import { parsePositiveInteger, sendError, toBodyObject } from "@/lib/http"
 
-export const createSessionRouter = () => {
+export const createSessionRouter = (): ExpressRouter => {
   const router = Router()
 
   router.get("/", async (request, response) => {

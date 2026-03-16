@@ -515,6 +515,9 @@ importers:
       postcss-simple-vars:
         specifier: ^7.0.1
         version: 7.0.1(postcss@8.5.8)
+      tailwindcss:
+        specifier: ^4.2.1
+        version: 4.2.1
     devDependencies:
       '@eslint/js':
         specifier: ^9.31.0
@@ -5228,6 +5231,9 @@ packages:
 
   tailwindcss@4.1.13:
     resolution: {integrity: sha512-i+zidfmTqtwquj4hMEwdjshYYgMbOrPzb9a0M3ZgNa0JMoZeFC6bxZvO8yr8ozS6ix2SDz0+mvryPeBs2TFE+w==}
+
+  tailwindcss@4.2.1:
+    resolution: {integrity: sha512-/tBrSQ36vCleJkAOsy9kbNTgaxvGbyOamC30PRePTQe/o1MFwEKHQk4Cn7BNGaPtjp+PuUrByJehM1hgxfq4sw==}
 
   tapable@2.2.3:
     resolution: {integrity: sha512-ZL6DDuAlRlLGghwcfmSn9sK3Hr6ArtyudlSAiCqQ6IfE+b+HHbydbYDIG15IfS5do+7XQQBdBiubF/cV2dnDzg==}
@@ -11414,6 +11420,8 @@ snapshots:
       - yaml
 
   tailwindcss@4.1.13: {}
+
+  tailwindcss@4.2.1: {}
 
   tapable@2.2.3: {}
 

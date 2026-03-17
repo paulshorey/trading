@@ -28,6 +28,34 @@ SET row_security = off;
 
 
 
+--
+-- Name: sync_candles_1h_1m_minute(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sync_candles_1h_1m_minute() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.minute := EXTRACT(MINUTE FROM NEW."time" AT TIME ZONE 'UTC')::smallint;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: sync_candles_1m_1s_second(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.sync_candles_1m_1s_second() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    NEW.second := EXTRACT(SECOND FROM NEW."time" AT TIME ZONE 'UTC')::smallint;
+    RETURN NEW;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -134,6 +162,20 @@ CREATE INDEX idx_candles_1h_1m_time_desc ON public.candles_1h_1m USING btree ("t
 --
 
 CREATE INDEX idx_candles_1m_1s_time_desc ON public.candles_1m_1s USING btree ("time" DESC);
+
+
+--
+-- Name: candles_1h_1m candles_1h_1m_sync_minute; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER candles_1h_1m_sync_minute BEFORE INSERT OR UPDATE ON public.candles_1h_1m FOR EACH ROW EXECUTE FUNCTION public.sync_candles_1h_1m_minute();
+
+
+--
+-- Name: candles_1m_1s candles_1m_1s_sync_second; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER candles_1m_1s_sync_second BEFORE INSERT OR UPDATE ON public.candles_1m_1s FOR EACH ROW EXECUTE FUNCTION public.sync_candles_1m_1s_second();
 
 
 --

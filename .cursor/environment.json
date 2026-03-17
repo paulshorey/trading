@@ -3,12 +3,11 @@
   "install": "pnpm run cloud:install",
   "start": "pnpm run cloud:start",
   "persistedDirectories": [
-    "/workspace/.pnpm-store",
-    "/workspace/.turbo",
     "/workspace/.android-sdk",
     "/workspace/.android-user-home",
     "/workspace/.gradle",
-    "/workspace/apps-marketing/notes-android/.gradle"
+    "/workspace/.pnpm-store",
+    "/workspace/.turbo"
   ],
   "env": {
     "ANDROID_HOME": "/workspace/.android-sdk",

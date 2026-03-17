@@ -12,6 +12,15 @@ export ANDROID_USER_HOME="$ANDROID_USER_HOME_DIR"
 CMDLINE_TOOLS_DIR="$SDK_ROOT/cmdline-tools/latest"
 SDKMANAGER_BIN="$CMDLINE_TOOLS_DIR/bin/sdkmanager"
 
+require_command() {
+  local command_name="$1"
+  local install_hint="$2"
+
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Missing required command '$command_name'. $install_hint" >&2
+    exit 1
+  fi
+}
 has_required_packages() {
   [[ -x "$SDKMANAGER_BIN" ]] &&
     [[ -x "$SDK_ROOT/platform-tools/adb" ]] &&
@@ -24,15 +33,19 @@ ensure_cmdline_tools() {
     return
   fi
 
+  require_command "python3" "Install Python 3 before provisioning the Android SDK."
+  require_command "curl" "Install curl before provisioning the Android SDK."
+  require_command "unzip" "Install unzip before provisioning the Android SDK."
   echo "Installing Android command-line tools into $SDK_ROOT"
   mkdir -p "$SDK_ROOT/cmdline-tools" "$ANDROID_USER_HOME_DIR"
   touch "$ANDROID_USER_HOME_DIR/repositories.cfg"
 
   local tmp_dir
   tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "$tmp_dir"' RETURN
+  (
+    trap 'rm -rf "$tmp_dir"' EXIT
 
-  python3 - "$tmp_dir/url.txt" <<'PY'
+    python3 - "$tmp_dir/url.txt" <<'PY'
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -83,14 +96,35 @@ with open(output_path, "w", encoding="utf-8") as handle:
     handle.write(archive_url)
 PY
 
-  local archive_url
-  archive_url="$(<"$tmp_dir/url.txt")"
+    local archive_url
+    archive_url="$(<"$tmp_dir/url.txt")"
 
-  curl -fsSL "$archive_url" -o "$tmp_dir/commandlinetools.zip"
-  unzip -q "$tmp_dir/commandlinetools.zip" -d "$tmp_dir/unpacked"
+    curl -fsSL "$archive_url" -o "$tmp_dir/commandlinetools.zip"
+    unzip -q "$tmp_dir/commandlinetools.zip" -d "$tmp_dir/unpacked"
 
-  rm -rf "$CMDLINE_TOOLS_DIR"
-  mv "$tmp_dir/unpacked/cmdline-tools" "$CMDLINE_TOOLS_DIR"
+    rm -rf "$CMDLINE_TOOLS_DIR"
+    mv "$tmp_dir/unpacked/cmdline-tools" "$CMDLINE_TOOLS_DIR"
+  )
+}
+
+accept_android_licenses() {
+  set +e
+  set +o pipefail
+  yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" --licenses >/dev/null
+  local pipe_status=("${PIPESTATUS[@]}")
+  set -e
+  set -o pipefail
+
+  local yes_exit="${pipe_status[0]:-0}"
+  local sdkmanager_exit="${pipe_status[1]:-0}"
+
+  if [[ "$sdkmanager_exit" -ne 0 ]]; then
+    return "$sdkmanager_exit"
+  fi
+
+  if [[ "$yes_exit" -ne 0 && "$yes_exit" -ne 141 ]]; then
+    return "$yes_exit"
+  fi
 }
 
 install_android_packages() {
@@ -99,10 +133,13 @@ install_android_packages() {
     return
   fi
 
+  require_command "java" "Install a Java runtime before provisioning Android SDK packages."
+  require_command "yes" "Install coreutils before provisioning Android SDK packages."
+
   mkdir -p "$SDK_ROOT" "$ANDROID_USER_HOME_DIR"
   touch "$ANDROID_USER_HOME_DIR/repositories.cfg"
 
-  yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" --licenses >/dev/null || true
+  accept_android_licenses
   "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" \
     "platform-tools" \
     "platforms;android-36" \

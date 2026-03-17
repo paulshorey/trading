@@ -449,7 +449,11 @@ private fun LoginScreen(
                 value = uiState.apiBaseUrl,
                 onValueChange = viewModel::updateApiBaseUrl,
                 label = { Text("Server URL") },
-                supportingText = { Text("Use the companion API, e.g. http://10.0.2.2:8787 on the emulator.") },
+                supportingText = {
+                    Text(
+                        "Release builds default to Railway HTTPS. Debug builds use http://10.0.2.2:8787 on the emulator; on a phone use HTTPS or your computer's LAN IP.",
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )

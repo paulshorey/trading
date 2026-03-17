@@ -10,6 +10,7 @@
     "build:server": "pnpm run build:contracts && tsc --project tsconfig.json --noEmit",
     "build:android": "bash ./scripts/build-android.sh",
     "build": "pnpm run build:server && pnpm run build:android",
+    "test": "node --import tsx --test test/**/*.test.ts",
     "check-types": "pnpm run build:server"
   },
   "dependencies": {

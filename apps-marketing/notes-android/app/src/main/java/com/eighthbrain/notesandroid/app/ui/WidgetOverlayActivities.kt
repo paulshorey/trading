@@ -107,7 +107,7 @@ private fun WidgetLoginScreen(
 
     OverlayCard(
         title = "Widget sign-in",
-        subtitle = "Widgets cannot host text input, so this short overlay collects the username and server URL.",
+        subtitle = "Widgets cannot host text input, so this short overlay collects the username and server URL. Use the Railway HTTPS URL on a phone, or the emulator/LAN URL in debug.",
         busy = busy,
         error = error,
     ) {

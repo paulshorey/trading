@@ -227,6 +227,19 @@ export const searchNotesForNotesApp = async (
   return { results };
 };
 
+export const notesAppService = {
+  getNotesAppErrorStatus,
+  getNotesAppSession,
+  findNotesAppSession,
+  listNotesForNotesApp,
+  createNoteForNotesApp,
+  updateNoteForNotesApp,
+  deleteNoteForNotesApp,
+  searchNotesForNotesApp,
+};
+
+export type NotesAppService = typeof notesAppService;
+
 export {
   EmbeddingConfigurationError,
   EmbeddingRequestError,

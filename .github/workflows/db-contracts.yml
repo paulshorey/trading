@@ -83,6 +83,48 @@ jobs:
       - name: Verify @lib/db-marketing
         run: pnpm --filter @lib/db-marketing db:verify
 
+  verify-marketing-clients:
+    name: Verify Marketing clients
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test notes-next adapter parity
+        run: pnpm --filter notes-next test
+
+      - name: Type-check notes-next
+        run: pnpm --filter notes-next check-types
+
+      - name: Build notes-next
+        run: pnpm --filter notes-next build
+
+      - name: Test notes-android adapter parity
+        run: pnpm --filter notes-android test
+
+      - name: Build notes-android
+        env:
+          ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
+          ANDROID_HOME: ${{ github.workspace }}/.android-sdk
+        run: pnpm --filter notes-android build
+
   verify-trading:
     name: Verify Trading contract
     runs-on: ubuntu-latest

@@ -8,6 +8,7 @@
     "build:contracts": "pnpm --filter @lib/db-marketing check-types",
     "build": "pnpm run build:contracts && next build",
     "start": "next start",
+    "test": "node --import tsx --test test/**/*.test.ts",
     "lint": "eslint --max-warnings 0",
     "check-types": "pnpm run build:contracts && next typegen && tsc --noEmit"
   },
@@ -23,6 +24,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "eslint": "^9.39.1",
+    "tsx": "^4.20.6",
     "typescript": "5.9.2"
   },
   "packageManager": "pnpm@10.28.1",

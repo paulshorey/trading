@@ -3,6 +3,23 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun escapedBuildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+fun buildUrlProperty(name: String, fallback: String): String =
+    providers.gradleProperty(name).orElse(providers.environmentVariable(name)).getOrElse(fallback)
+
+val releaseApiBaseUrl =
+    buildUrlProperty(
+        name = "NOTES_ANDROID_RELEASE_API_BASE_URL",
+        fallback = "https://marketing-apps-notes-next.up.railway.app",
+    )
+val debugApiBaseUrl =
+    buildUrlProperty(
+        name = "NOTES_ANDROID_DEBUG_API_BASE_URL",
+        fallback = "http://10.0.2.2:8787",
+    )
+
 android {
     namespace = "com.eighthbrain.notesandroid.app"
     compileSdk = 36
@@ -15,16 +32,21 @@ android {
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "DEFAULT_API_BASE_URL", "\"http://10.0.2.2:8787\"")
+        buildConfigField("String", "DEFAULT_API_BASE_URL", escapedBuildConfigString(releaseApiBaseUrl))
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "DEFAULT_API_BASE_URL", escapedBuildConfigString(debugApiBaseUrl))
+        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            buildConfigField("String", "DEFAULT_API_BASE_URL", escapedBuildConfigString(releaseApiBaseUrl))
         }
     }
 

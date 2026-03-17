@@ -6,7 +6,7 @@
  * `second` for `candles_1m_1s` and `minute` for `candles_1h_1m`.
  */
 
-import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types";
+import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types.ts";
 
 import type { CandleForDb, CandleState } from "./types.js";
 import { calculateVd, calculateVdRatio } from "../metrics/index.js";

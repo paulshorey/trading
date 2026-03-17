@@ -1,4 +1,4 @@
-import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types";
+import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types.ts";
 
 import type { CandleForDb, CandleState } from "./types.js";
 

@@ -107,9 +107,9 @@ interface LatestTargetRow {
   latest_target_time: Date | string;
 }
 
-interface ReconciliationSourceRow extends StoredCandleRow {
+type ReconciliationSourceRow = StoredCandleRow & {
   latest_target_time: Date | string;
-}
+};
 
 interface ReconciliationCursor {
   ticker: string;

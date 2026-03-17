@@ -1,6 +1,8 @@
 -- name: upsert_candles_batch
 -- Canonical upsert contract for candle rows.
 -- Replace {{TABLE_NAME}} with target table (for example candles_1m_1s or candles_1h_1m).
+-- Replace {{TIME_OFFSET_COLUMN}} with the table's explicit sample offset column
+-- (`second` for candles_1m_1s, `minute` for candles_1h_1m).
 -- Expand VALUES tuples as needed for batched inserts.
 INSERT INTO {{TABLE_NAME}} (
   time, ticker, symbol,
@@ -9,10 +11,11 @@ INSERT INTO {{TABLE_NAME}} (
   cvd_open, cvd_high, cvd_low, cvd_close,
   vd, vd_ratio, book_imbalance, price_pct, divergence,
   trades, max_trade_size, big_trades, big_volume,
-  sum_bid_depth, sum_ask_depth, sum_price_volume, unknown_volume
+  sum_bid_depth, sum_ask_depth, sum_price_volume, unknown_volume,
+  {{TIME_OFFSET_COLUMN}}
 )
 VALUES
-  -- ($1, $2, ... $27), ($28, ...), ...
+  -- ($1, $2, ... $28), ($29, ...), ...
 ON CONFLICT (ticker, time) DO UPDATE SET
   symbol = EXCLUDED.symbol,
   open = EXCLUDED.open,
@@ -38,4 +41,5 @@ ON CONFLICT (ticker, time) DO UPDATE SET
   sum_bid_depth = EXCLUDED.sum_bid_depth,
   sum_ask_depth = EXCLUDED.sum_ask_depth,
   sum_price_volume = EXCLUDED.sum_price_volume,
-  unknown_volume = EXCLUDED.unknown_volume;
+  unknown_volume = EXCLUDED.unknown_volume,
+  {{TIME_OFFSET_COLUMN}} = EXCLUDED.{{TIME_OFFSET_COLUMN}};

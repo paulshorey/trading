@@ -38,6 +38,8 @@ CREATE TABLE candles_1h_1m (
   sum_ask_depth    DOUBLE PRECISION NOT NULL DEFAULT 0,
   sum_price_volume DOUBLE PRECISION NOT NULL DEFAULT 0,
   unknown_volume   DOUBLE PRECISION NOT NULL DEFAULT 0,
+  minute           SMALLINT         NOT NULL,
+  CHECK (minute BETWEEN 0 AND 59),
   PRIMARY KEY (ticker, time)
 );
 

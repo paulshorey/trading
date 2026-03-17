@@ -1,34 +1,40 @@
+import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types";
+
 import type { CandleForDb, CandleState } from "./types.js";
 
-export interface StoredCandleRow {
-  time: Date | string;
-  ticker: string;
-  symbol: string | null;
-  open: number | string;
-  high: number | string;
-  low: number | string;
-  close: number | string;
-  volume: number | string | null;
-  ask_volume: number | string | null;
-  bid_volume: number | string | null;
-  cvd_open: number | string | null;
-  cvd_high: number | string | null;
-  cvd_low: number | string | null;
-  cvd_close: number | string | null;
-  trades: number | string | null;
-  max_trade_size: number | string | null;
-  big_trades: number | string | null;
-  big_volume: number | string | null;
-  vd: number | string | null;
-  vd_ratio: number | string | null;
-  book_imbalance: number | string | null;
-  price_pct: number | string | null;
-  divergence: number | string | null;
-  sum_bid_depth: number | string | null;
-  sum_ask_depth: number | string | null;
-  sum_price_volume: number | string | null;
-  unknown_volume: number | string | null;
-}
+type StoredCandleCommonColumn =
+  | "time"
+  | "ticker"
+  | "symbol"
+  | "open"
+  | "high"
+  | "low"
+  | "close"
+  | "volume"
+  | "ask_volume"
+  | "bid_volume"
+  | "cvd_open"
+  | "cvd_high"
+  | "cvd_low"
+  | "cvd_close"
+  | "trades"
+  | "max_trade_size"
+  | "big_trades"
+  | "big_volume"
+  | "vd"
+  | "vd_ratio"
+  | "book_imbalance"
+  | "price_pct"
+  | "divergence"
+  | "sum_bid_depth"
+  | "sum_ask_depth"
+  | "sum_price_volume"
+  | "unknown_volume";
+
+type Stored1mCandleRow = Pick<Candles1m1sRow, StoredCandleCommonColumn>;
+type Stored1hCandleRow = Pick<Candles1h1mRow, StoredCandleCommonColumn>;
+
+export type StoredCandleRow = Stored1mCandleRow | Stored1hCandleRow;
 
 function toNumber(value: number | string | null | undefined): number {
   if (value === null || value === undefined) {

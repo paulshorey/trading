@@ -63,7 +63,9 @@ CREATE TABLE public.candles_1h_1m (
     sum_bid_depth double precision DEFAULT 0 NOT NULL,
     sum_ask_depth double precision DEFAULT 0 NOT NULL,
     sum_price_volume double precision DEFAULT 0 NOT NULL,
-    unknown_volume double precision DEFAULT 0 NOT NULL
+    unknown_volume double precision DEFAULT 0 NOT NULL,
+    minute smallint NOT NULL,
+    CONSTRAINT candles_1h_1m_minute_range CHECK (((minute >= 0) AND (minute <= 59)))
 );
 
 
@@ -98,7 +100,9 @@ CREATE TABLE public.candles_1m_1s (
     sum_bid_depth double precision DEFAULT 0 NOT NULL,
     sum_ask_depth double precision DEFAULT 0 NOT NULL,
     sum_price_volume double precision DEFAULT 0 NOT NULL,
-    unknown_volume double precision DEFAULT 0 NOT NULL
+    unknown_volume double precision DEFAULT 0 NOT NULL,
+    second smallint NOT NULL,
+    CONSTRAINT candles_1m_1s_second_range CHECK (((second >= 0) AND (second <= 59)))
 );
 
 

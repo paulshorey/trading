@@ -5,8 +5,10 @@ Canonical futures timeseries writer.
 This app maintains:
 
 - `candles_1m_1s`: rolling 1-minute candles written every second from TBBO trades
+  with an explicit UTC `second` column
 - `candles_1h_1m`: rolling 1-hour candles written every minute from the
-  minute-boundary subset of `candles_1m_1s`
+  minute-boundary subset of `candles_1m_1s`, with an explicit UTC `minute`
+  column
 
 The shared rolling engine forward-fills short no-trade gaps as zero-volume
 seconds so minute-boundary rows stay available for the hourly layer. Extended

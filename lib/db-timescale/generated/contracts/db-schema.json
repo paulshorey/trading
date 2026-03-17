@@ -134,6 +134,11 @@
       "column": "unknown_volume",
       "nullable": false,
       "type": "number"
+    },
+    {
+      "column": "minute",
+      "nullable": false,
+      "type": "number"
     }
   ],
   "candles_1m_1s": [
@@ -269,6 +274,11 @@
     },
     {
       "column": "unknown_volume",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "second",
       "nullable": false,
       "type": "number"
     }

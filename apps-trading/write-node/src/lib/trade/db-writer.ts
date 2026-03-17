@@ -1,17 +1,12 @@
 /**
  * Database Writer for Candles
  *
- * Shared logic for writing candles to the database.
- * Used across the canonical writer pipeline for both lower- and
- * higher-timeframe candle tables.
- *
- * Schema: 27 columns. Price and CVD have OHLC. Derived metrics (vd_ratio,
- * book_imbalance, price_pct, divergence) are calculated at write time from
- * the candle's raw aggregation state. Raw accumulators (sum_bid_depth,
- * sum_ask_depth, sum_price_volume, unknown_volume) are stored for correct
- * higher-timeframe aggregation. VWAP is derived at query time from
- * sum_price_volume / volume — not stored per-row.
+ * Shared logic for writing canonical candle rows to TimescaleDB. Each target
+ * table carries the same rolling metrics plus an explicit UTC sample offset:
+ * `second` for `candles_1m_1s` and `minute` for `candles_1h_1m`.
  */
+
+import type { Candles1h1mRow, Candles1m1sRow } from "@lib/db-timescale/generated/typescript/db-types";
 
 import type { CandleForDb, CandleState } from "./types.js";
 import { calculateVd, calculateVdRatio } from "../metrics/index.js";
@@ -19,169 +14,106 @@ import { calculateBookImbalance } from "../metrics/book-imbalance.js";
 import { calculatePricePct } from "../metrics/price.js";
 import { calculateDivergence } from "../metrics/absorption.js";
 
-/** Number of columns in the candles INSERT statement */
-const COLUMNS_PER_ROW = 27;
+type QueryValue = string | number | Date | null;
+type CandleTableName = "candles_1m_1s" | "candles_1h_1m";
+
+const CANDLES_1M_1S_COLUMNS = [
+  "time",
+  "ticker",
+  "symbol",
+  "open",
+  "high",
+  "low",
+  "close",
+  "volume",
+  "ask_volume",
+  "bid_volume",
+  "cvd_open",
+  "cvd_high",
+  "cvd_low",
+  "cvd_close",
+  "vd",
+  "vd_ratio",
+  "book_imbalance",
+  "price_pct",
+  "divergence",
+  "trades",
+  "max_trade_size",
+  "big_trades",
+  "big_volume",
+  "sum_bid_depth",
+  "sum_ask_depth",
+  "sum_price_volume",
+  "unknown_volume",
+  "second",
+] as const satisfies readonly (keyof Candles1m1sRow)[];
+
+const CANDLES_1H_1M_COLUMNS = [
+  "time",
+  "ticker",
+  "symbol",
+  "open",
+  "high",
+  "low",
+  "close",
+  "volume",
+  "ask_volume",
+  "bid_volume",
+  "cvd_open",
+  "cvd_high",
+  "cvd_low",
+  "cvd_close",
+  "vd",
+  "vd_ratio",
+  "book_imbalance",
+  "price_pct",
+  "divergence",
+  "trades",
+  "max_trade_size",
+  "big_trades",
+  "big_volume",
+  "sum_bid_depth",
+  "sum_ask_depth",
+  "sum_price_volume",
+  "unknown_volume",
+  "minute",
+] as const satisfies readonly (keyof Candles1h1mRow)[];
+
+const SUPPORTED_CANDLE_TABLES = new Set<CandleTableName>(["candles_1m_1s", "candles_1h_1m"]);
 
 interface Queryable {
-  query: (text: string, values: (string | number | null)[]) => Promise<unknown>;
+  query: (text: string, values: QueryValue[]) => Promise<unknown>;
 }
 
-/**
- * Build placeholder string for parameterized query
- * @param offset - Starting parameter number (0-based index * COLUMNS_PER_ROW)
- * @param count - Number of columns
- */
-function buildPlaceholder(offset: number, count: number): string {
-  const parts: string[] = [];
-  for (let i = 1; i <= count; i++) {
-    parts.push(`$${offset + i}`);
-  }
-  return `(${parts.join(", ")})`;
+interface CvdRowValues {
+  cvd_open: number | null;
+  cvd_high: number | null;
+  cvd_low: number | null;
+  cvd_close: number | null;
 }
 
-/**
- * Build the INSERT query for candles
- * @param tableName - Target table name (e.g., "candles_1m_1s")
- * @param placeholders - Array of placeholder strings from buildPlaceholder
- */
-function buildCandleInsertQuery(tableName: string, placeholders: string[]): string {
-  return `
-    INSERT INTO ${tableName} (
-      time, ticker, symbol,
-      open, high, low, close, volume,
-      ask_volume, bid_volume,
-      cvd_open, cvd_high, cvd_low, cvd_close,
-      vd, vd_ratio, book_imbalance, price_pct, divergence,
-      trades, max_trade_size, big_trades, big_volume,
-      sum_bid_depth, sum_ask_depth, sum_price_volume, unknown_volume
-    )
-    VALUES ${placeholders.join(", ")}
-    ON CONFLICT (ticker, time) DO UPDATE SET
-      symbol = EXCLUDED.symbol,
-      open = EXCLUDED.open,
-      high = EXCLUDED.high,
-      low = EXCLUDED.low,
-      close = EXCLUDED.close,
-      volume = EXCLUDED.volume,
-      ask_volume = EXCLUDED.ask_volume,
-      bid_volume = EXCLUDED.bid_volume,
-      cvd_open = EXCLUDED.cvd_open,
-      cvd_high = EXCLUDED.cvd_high,
-      cvd_low = EXCLUDED.cvd_low,
-      cvd_close = EXCLUDED.cvd_close,
-      vd = EXCLUDED.vd,
-      vd_ratio = EXCLUDED.vd_ratio,
-      book_imbalance = EXCLUDED.book_imbalance,
-      price_pct = EXCLUDED.price_pct,
-      divergence = EXCLUDED.divergence,
-      trades = EXCLUDED.trades,
-      max_trade_size = EXCLUDED.max_trade_size,
-      big_trades = EXCLUDED.big_trades,
-      big_volume = EXCLUDED.big_volume,
-      sum_bid_depth = EXCLUDED.sum_bid_depth,
-      sum_ask_depth = EXCLUDED.sum_ask_depth,
-      sum_price_volume = EXCLUDED.sum_price_volume,
-      unknown_volume = EXCLUDED.unknown_volume
-  `;
-}
-
-/**
- * Calculate derived metrics from candle state.
- * Used by both fallback and OHLC row builders.
- */
-function calculateDerivedMetrics(candle: CandleState) {
-  const vd = candle.askVolume - candle.bidVolume;
-  const vdRatio = calculateVdRatio(candle.askVolume, candle.bidVolume);
-  const bookImbalance = calculateBookImbalance(candle.sumBidDepth, candle.sumAskDepth);
-  const pricePct = calculatePricePct(candle.open, candle.close);
-  const divergence = calculateDivergence(pricePct, vdRatio);
-  return { vd, vdRatio, bookImbalance, pricePct, divergence };
-}
-
-/**
- * Build values array for a single candle row (fallback when no metricsOHLC)
- * Used when a candle doesn't have OHLC tracking (shouldn't normally happen)
- */
-function buildFallbackRowValues(time: string, ticker: string, candle: CandleState, cvd: number): (string | number | null)[] {
-  const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
-
-  return [
-    time,
-    ticker,
-    candle.symbol,
-    candle.open,
-    candle.high,
-    candle.low,
-    candle.close,
-    candle.volume,
-    // Volume breakdown
-    candle.askVolume,
-    candle.bidVolume,
-    // CVD OHLC (all same since no tracking)
-    cvd,
-    cvd,
-    cvd,
-    cvd,
-    // Volume Delta & derived metrics
-    vd,
-    vdRatio,
-    bookImbalance,
-    pricePct,
-    divergence,
-    // Activity
-    candle.tradeCount,
-    candle.maxTradeSize,
-    candle.largeTradeCount,
-    candle.largeTradeVolume,
-    // Raw accumulators for higher-timeframe aggregation
-    candle.sumBidDepth,
-    candle.sumAskDepth,
-    candle.sumPriceVolume,
-    candle.unknownSideVolume,
-  ];
-}
-
-/**
- * Build values array for a single candle row with metricsOHLC
- */
-function buildOhlcRowValues(time: string, ticker: string, candle: CandleState): (string | number | null)[] {
-  const m = candle.metricsOHLC!;
-  const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
-
-  return [
-    time,
-    ticker,
-    candle.symbol,
-    candle.open,
-    candle.high,
-    candle.low,
-    candle.close,
-    candle.volume,
-    // Volume breakdown
-    candle.askVolume,
-    candle.bidVolume,
-    // CVD OHLC (tracked throughout the candle)
-    m.cvd.open,
-    m.cvd.high,
-    m.cvd.low,
-    m.cvd.close,
-    // Volume Delta & derived metrics
-    vd,
-    vdRatio,
-    bookImbalance,
-    pricePct,
-    divergence,
-    // Activity
-    candle.tradeCount,
-    candle.maxTradeSize,
-    candle.largeTradeCount,
-    candle.largeTradeVolume,
-    // Raw accumulators for higher-timeframe aggregation
-    candle.sumBidDepth,
-    candle.sumAskDepth,
-    candle.sumPriceVolume,
-    candle.unknownSideVolume,
-  ];
+interface SharedRowValues extends CvdRowValues {
+  symbol: string | null;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  ask_volume: number;
+  bid_volume: number;
+  vd: number;
+  vd_ratio: number | null;
+  book_imbalance: number | null;
+  price_pct: number | null;
+  divergence: number | null;
+  trades: number;
+  max_trade_size: number;
+  big_trades: number;
+  big_volume: number;
+  sum_bid_depth: number;
+  sum_ask_depth: number;
+  sum_price_volume: number;
+  unknown_volume: number;
 }
 
 /**
@@ -194,42 +126,198 @@ export interface CvdContext {
   updateCvd?: (ticker: string, newCvd: number) => void;
 }
 
+function assertSupportedCandleTable(tableName: string): asserts tableName is CandleTableName {
+  if (SUPPORTED_CANDLE_TABLES.has(tableName as CandleTableName)) {
+    return;
+  }
+
+  throw new Error(`Unsupported candle table: ${tableName}`);
+}
+
 /**
- * Build INSERT parameters for a batch of candles
- *
- * @param candles - Array of candles to insert
- * @param cvdContext - Context for CVD calculations
- * @returns Object with values array and placeholders array
+ * Build placeholder string for parameterized query.
+ */
+function buildPlaceholder(offset: number, count: number): string {
+  const parts: string[] = [];
+  for (let i = 1; i <= count; i++) {
+    parts.push(`$${offset + i}`);
+  }
+  return `(${parts.join(", ")})`;
+}
+
+function getColumnsForTable(tableName: CandleTableName): readonly string[] {
+  switch (tableName) {
+    case "candles_1m_1s":
+      return CANDLES_1M_1S_COLUMNS;
+    case "candles_1h_1m":
+      return CANDLES_1H_1M_COLUMNS;
+  }
+}
+
+function getColumnValues<Row extends object>(
+  row: Row,
+  columns: readonly (keyof Row & string)[],
+): QueryValue[] {
+  return columns.map((column) => row[column] as QueryValue);
+}
+
+/**
+ * Build the INSERT query for candles.
+ */
+function buildCandleInsertQuery(tableName: CandleTableName, placeholders: string[]): string {
+  const columns = getColumnsForTable(tableName);
+  const updateColumns = columns.filter((column) => column !== "time" && column !== "ticker");
+
+  return `
+    INSERT INTO ${tableName} (
+      ${columns.join(", ")}
+    )
+    VALUES ${placeholders.join(", ")}
+    ON CONFLICT (ticker, time) DO UPDATE SET
+      ${updateColumns.map((column) => `${column} = EXCLUDED.${column}`).join(",\n      ")}
+  `;
+}
+
+/**
+ * Calculate derived metrics from candle state.
+ */
+function calculateDerivedMetrics(candle: CandleState) {
+  const vd = candle.askVolume - candle.bidVolume;
+  const vdRatio = calculateVdRatio(candle.askVolume, candle.bidVolume);
+  const bookImbalance = calculateBookImbalance(candle.sumBidDepth, candle.sumAskDepth);
+  const pricePct = calculatePricePct(candle.open, candle.close);
+  const divergence = calculateDivergence(pricePct, vdRatio);
+  return { vd, vdRatio, bookImbalance, pricePct, divergence };
+}
+
+function toTimestamp(time: string): Date {
+  const timestamp = new Date(time);
+  if (Number.isNaN(timestamp.getTime())) {
+    throw new Error(`Invalid candle timestamp: ${time}`);
+  }
+  return timestamp;
+}
+
+function buildSharedRowValues(candle: CandleState, cvdValues: CvdRowValues): SharedRowValues {
+  const { vd, vdRatio, bookImbalance, pricePct, divergence } = calculateDerivedMetrics(candle);
+
+  return {
+    symbol: candle.symbol,
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    volume: candle.volume,
+    ask_volume: candle.askVolume,
+    bid_volume: candle.bidVolume,
+    ...cvdValues,
+    vd,
+    vd_ratio: vdRatio,
+    book_imbalance: bookImbalance,
+    price_pct: pricePct,
+    divergence,
+    trades: candle.tradeCount,
+    max_trade_size: candle.maxTradeSize,
+    big_trades: candle.largeTradeCount,
+    big_volume: candle.largeTradeVolume,
+    sum_bid_depth: candle.sumBidDepth,
+    sum_ask_depth: candle.sumAskDepth,
+    sum_price_volume: candle.sumPriceVolume,
+    unknown_volume: candle.unknownSideVolume,
+  };
+}
+
+function buildCandles1m1sRow(time: string, ticker: string, candle: CandleState, cvdValues: CvdRowValues): Candles1m1sRow {
+  const timestamp = toTimestamp(time);
+
+  return {
+    time: timestamp,
+    ticker,
+    ...buildSharedRowValues(candle, cvdValues),
+    second: timestamp.getUTCSeconds(),
+  };
+}
+
+function buildCandles1h1mRow(time: string, ticker: string, candle: CandleState, cvdValues: CvdRowValues): Candles1h1mRow {
+  const timestamp = toTimestamp(time);
+
+  return {
+    time: timestamp,
+    ticker,
+    ...buildSharedRowValues(candle, cvdValues),
+    minute: timestamp.getUTCMinutes(),
+  };
+}
+
+function buildRowForTable(
+  tableName: CandleTableName,
+  time: string,
+  ticker: string,
+  candle: CandleState,
+  cvdValues: CvdRowValues,
+): Candles1m1sRow | Candles1h1mRow {
+  switch (tableName) {
+    case "candles_1m_1s":
+      return buildCandles1m1sRow(time, ticker, candle, cvdValues);
+    case "candles_1h_1m":
+      return buildCandles1h1mRow(time, ticker, candle, cvdValues);
+  }
+}
+
+function buildRowValuesForTable(tableName: CandleTableName, row: Candles1m1sRow | Candles1h1mRow): QueryValue[] {
+  switch (tableName) {
+    case "candles_1m_1s":
+      return getColumnValues(row as Candles1m1sRow, CANDLES_1M_1S_COLUMNS);
+    case "candles_1h_1m":
+      return getColumnValues(row as Candles1h1mRow, CANDLES_1H_1M_COLUMNS);
+  }
+}
+
+/**
+ * Build INSERT parameters for a batch of candles.
  */
 function buildCandleInsertParams(
+  tableName: CandleTableName,
   candles: CandleForDb[],
   cvdContext: CvdContext,
 ): {
-  values: (string | number | null)[];
+  values: QueryValue[];
   placeholders: string[];
 } {
-  const values: (string | number | null)[] = [];
+  const values: QueryValue[] = [];
   const placeholders: string[] = [];
+  const columnsPerRow = getColumnsForTable(tableName).length;
 
   candles.forEach(({ ticker, time, candle }, i) => {
-    const m = candle.metricsOHLC;
-    const offset = i * COLUMNS_PER_ROW;
+    const metrics = candle.metricsOHLC;
+    const offset = i * columnsPerRow;
 
-    placeholders.push(buildPlaceholder(offset, COLUMNS_PER_ROW));
+    placeholders.push(buildPlaceholder(offset, columnsPerRow));
 
-    if (!m) {
-      // Fallback: no metricsOHLC, calculate CVD from base
+    if (!metrics) {
       const baseCvd = cvdContext.getBaseCvd(ticker);
       const vd = calculateVd(candle.askVolume, candle.bidVolume);
       const cvd = baseCvd + vd;
       cvdContext.updateCvd?.(ticker, cvd);
 
-      values.push(...buildFallbackRowValues(time, ticker, candle, cvd));
-    } else {
-      // Has metricsOHLC - use it
-      cvdContext.updateCvd?.(ticker, m.cvd.close);
-      values.push(...buildOhlcRowValues(time, ticker, candle));
+      const row = buildRowForTable(tableName, time, ticker, candle, {
+        cvd_open: cvd,
+        cvd_high: cvd,
+        cvd_low: cvd,
+        cvd_close: cvd,
+      });
+      values.push(...buildRowValuesForTable(tableName, row));
+      return;
     }
+
+    cvdContext.updateCvd?.(ticker, metrics.cvd.close);
+    const row = buildRowForTable(tableName, time, ticker, candle, {
+      cvd_open: metrics.cvd.open,
+      cvd_high: metrics.cvd.high,
+      cvd_low: metrics.cvd.low,
+      cvd_close: metrics.cvd.close,
+    });
+    values.push(...buildRowValuesForTable(tableName, row));
   });
 
   return { values, placeholders };
@@ -243,6 +331,8 @@ export async function writeCandles(queryable: Queryable, tableName: string, cand
     return;
   }
 
+  assertSupportedCandleTable(tableName);
+
   const sorted = [...candles].sort((a, b) => {
     if (a.ticker !== b.ticker) {
       return a.ticker.localeCompare(b.ticker);
@@ -255,7 +345,7 @@ export async function writeCandles(queryable: Queryable, tableName: string, cand
     updateCvd: () => {},
   };
 
-  const { values, placeholders } = buildCandleInsertParams(sorted, cvdContext);
+  const { values, placeholders } = buildCandleInsertParams(tableName, sorted, cvdContext);
   const query = buildCandleInsertQuery(tableName, placeholders);
   await queryable.query(query, values);
 }

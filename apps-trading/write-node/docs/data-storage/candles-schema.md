@@ -30,6 +30,7 @@ Each row is:
 
 - one ticker
 - one second timestamp
+- one explicit `second` column storing the UTC second within that minute
 - the trailing 60-second rolling window ending at that second
 
 The shared 1m engine forward-fills short no-trade gaps as zero-volume seconds so
@@ -45,6 +46,7 @@ Each row is:
 
 - one ticker
 - one minute timestamp
+- one explicit `minute` column storing the UTC minute within that hour
 - the trailing 60-minute rolling window ending at that minute
 
 This table is built only from the minute-boundary subset of canonical
@@ -102,6 +104,11 @@ inputs needed to derive VWAP when reading.
 | --- | --- | --- |
 | `candles_1m_1s` | second timestamp | trailing 60 seconds |
 | `candles_1h_1m` | minute timestamp | trailing 60 minutes |
+
+For explicit boundary queries, the writer also persists:
+
+- `candles_1m_1s.second` = UTC second bucket (`0`-`59`)
+- `candles_1h_1m.minute` = UTC minute bucket (`0`-`59`)
 
 ## Why additive accumulators are stored
 

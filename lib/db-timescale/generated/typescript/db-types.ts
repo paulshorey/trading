@@ -29,6 +29,7 @@ export interface Candles1h1mRow {
   "sum_ask_depth": number;
   "sum_price_volume": number;
   "unknown_volume": number;
+  "minute": number;
 }
 
 export interface Candles1m1sRow {
@@ -59,6 +60,7 @@ export interface Candles1m1sRow {
   "sum_ask_depth": number;
   "sum_price_volume": number;
   "unknown_volume": number;
+  "second": number;
 }
 
 export interface TimescaleDbSchema {

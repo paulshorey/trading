@@ -22,6 +22,8 @@ for TypeScript, Python, C#, and R.
 - Fresh empty DB: run `pnpm --filter @lib/db-timescale db:migrate`, then `db:verify`.
 - Existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`, then `db:verify`.
 - The migration runner creates `timescaledb` if needed; the DB role must have permission to create extensions.
+- `db:verify` is not read-only; it runs `db:migrate` first.
+- Only run `db:migrate` / `db:verify` against a deployed remote DB when the user explicitly requests it. Check connectivity and pending migrations first.
 - Never manually create or alter tables outside migrations.
 - Migration files are forward-only SQL; do not add `BEGIN` / `COMMIT`.
 - For populated tables, migrations must explicitly backfill data and explicitly convert types with `USING` where needed.

@@ -51,9 +51,12 @@ In `lib/*` packages:
 - Use `pnpm --filter <app> <command>` or `cd apps/<app> && pnpm run <command>`
 - If request is ambiguous or contradictory, ask for clarification
 
-If DB schema changed:
+Remote DB operations:
 
-- Instruct the user to run `pnpm --filter @lib/db-marketing db:migrate` to update the database to match the latest table structure. Do not run this yourself.
+- `db:migrate` writes to the target database.
+- `db:verify` is not read-only; it runs `db:migrate` first, then regenerates local contract artifacts.
+- Only run remote `db:migrate` / `db:verify` when the user explicitly requests it.
+- Before running against a deployed DB, confirm the environment variable is present, the host is reachable from the cloud agent, and there are no unexpected pending migrations.
 
 ## Finish task:
 

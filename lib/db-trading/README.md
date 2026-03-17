@@ -105,6 +105,9 @@ pnpm --filter @lib/db-trading db:migrate
 pnpm --filter @lib/db-trading db:verify
 ```
 
+`db:verify` is not read-only. It runs `db:migrate` first, then regenerates
+local contract artifacts and checks them with `git diff --exit-code`.
+
 ### Create a new migration
 
 ```bash

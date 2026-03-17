@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+package_dir="$(cd "${script_dir}/.." && pwd)"
+repo_root="$(cd "${package_dir}/../.." && pwd)"
+
 if [[ -z "${MARKETING_DB_URL:-}" ]]; then
   echo "MARKETING_DB_URL is required"
   exit 1
 fi
+
+bash "${repo_root}/scripts/check-postgres-client-version.sh" MARKETING_DB_URL "@lib/db-marketing"
 
 pg_dump "$MARKETING_DB_URL" \
   --schema-only \
@@ -13,10 +19,12 @@ pg_dump "$MARKETING_DB_URL" \
   --no-privileges \
   --exclude-table=public.schema_migrations_cursor \
   | sed \
+      -e '/^-- Dumped from database version /d' \
+      -e '/^-- Dumped by pg_dump version /d' \
       -e '/^\\restrict /d' \
       -e '/^\\unrestrict /d' \
       -e '/^CREATE SCHEMA public;$/d' \
       -e "/^COMMENT ON SCHEMA public IS 'standard public schema';$/d" \
-  > schema/current.sql
+  > "${package_dir}/schema/current.sql"
 
 echo "Wrote schema/current.sql"

@@ -30,6 +30,9 @@ Database-first package for the `MARKETING_DB_URL` database.
   `db:verify`.
 - Existing pre-migration DB with baseline schema already present: run
   `db:migrate:baseline` once, then `db:migrate`, then `db:verify`.
+- `db:verify` is not read-only; it runs `db:migrate` first.
+- Only run `db:migrate` / `db:verify` against a deployed remote DB when the
+  user explicitly requests it. Check connectivity and pending migrations first.
 - Never manually create or alter tables outside migrations.
 - Migration files are forward-only SQL; do not add `BEGIN` / `COMMIT`.
 - For populated tables, migrations must explicitly backfill data and explicitly

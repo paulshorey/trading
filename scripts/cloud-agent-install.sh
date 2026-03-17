@@ -19,6 +19,9 @@ esac
 corepack enable
 corepack prepare pnpm@10.28.1 --activate
 
+# Preinstall the Android SDK used by notes-android so cloud builds reuse cached tooling.
+bash "$ROOT_DIR/scripts/install-android-sdk.sh"
+
 # Install PostgreSQL 17 client tools (psql, pg_dump) for db:migrate and db:verify
 need_pg17=false
 if ! command -v psql >/dev/null 2>&1 || ! command -v pg_dump >/dev/null 2>&1; then

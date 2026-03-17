@@ -16,6 +16,9 @@ node_modules
 coverage
 
 # Tools
+.android-sdk
+.android-user-home
+.gradle
 .turbo
 .pnpm-store
 .vercel

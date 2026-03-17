@@ -53,8 +53,9 @@ In `lib/*` packages:
 
 Cloud agent:
 
-- `cloud:install` installs PostgreSQL 17 client tools (psql, pg_dump) so
-  `db:migrate` and `db:verify` run in fresh sessions without manual apt setup.
+- `cloud:install` installs Android SDK tooling for `notes-android` and
+  PostgreSQL 17 client tools (psql, pg_dump) so Android builds, `db:migrate`,
+  and `db:verify` run in fresh sessions without manual apt setup.
 
 Remote DB operations:
 

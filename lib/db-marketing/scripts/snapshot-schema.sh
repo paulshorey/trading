@@ -10,9 +10,14 @@ if [[ -z "${MARKETING_DB_URL:-}" ]]; then
   exit 1
 fi
 
-bash "${repo_root}/scripts/check-postgres-client-version.sh" MARKETING_DB_URL "@lib/db-marketing"
+eval "$(
+  bash "${repo_root}/scripts/check-postgres-client-version.sh" \
+    MARKETING_DB_URL \
+    "@lib/db-marketing" \
+    --print-env
+)"
 
-pg_dump "$MARKETING_DB_URL" \
+"${CURSOR_POSTGRES_PG_DUMP}" "$MARKETING_DB_URL" \
   --schema-only \
   --schema=public \
   --no-owner \

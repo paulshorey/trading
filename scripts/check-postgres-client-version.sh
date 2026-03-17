@@ -1,21 +1,70 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <DATABASE_URL_ENV_VAR> <label>" >&2
+usage() {
+  echo "Usage: $0 <DATABASE_URL_ENV_VAR> <label> [--print-env]" >&2
+}
+
+extract_major() {
+  local version_output="$1"
+  printf '%s\n' "$version_output" \
+    | sed -nE 's/.* ([0-9]+)(\.[0-9]+)?([[:space:]].*)?$/\1/p'
+}
+
+pick_highest_versioned_bin() {
+  local command_name="$1"
+  local candidates=()
+  local latest=""
+
+  shopt -s nullglob
+  candidates=(/usr/lib/postgresql/*/bin/"${command_name}")
+  shopt -u nullglob
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    return 1
+  fi
+
+  latest="$(
+    printf '%s\n' "${candidates[@]}" \
+      | sort -V \
+      | sed -n '$p'
+  )"
+
+  if [[ -z "$latest" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$latest"
+}
+
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  usage
   exit 1
 fi
 
 database_url_env="$1"
 label="$2"
-database_url="${!database_url_env:-}"
+print_env="${3:-}"
 
+if [[ -n "$print_env" && "$print_env" != "--print-env" ]]; then
+  usage
+  exit 1
+fi
+
+database_url="${!database_url_env:-}"
 if [[ -z "$database_url" ]]; then
   echo "${database_url_env} is required" >&2
   exit 1
 fi
 
-if ! command -v psql >/dev/null 2>&1 || ! command -v pg_dump >/dev/null 2>&1; then
+probe_psql=""
+if ! probe_psql="$(pick_highest_versioned_bin psql)"; then
+  if command -v psql >/dev/null 2>&1; then
+    probe_psql="$(command -v psql)"
+  fi
+fi
+
+if [[ -z "$probe_psql" ]]; then
   cat >&2 <<'EOF'
 PostgreSQL client tools are required to verify DB contracts.
 
@@ -31,32 +80,61 @@ Examples:
   Homebrew:
     brew install postgresql@17
 
-After installation, ensure `psql --version` and `pg_dump --version` report the
-same PostgreSQL major version as the DB server.
+If Debian/Ubuntu installs multiple PostgreSQL client majors, the versioned
+binaries under `/usr/lib/postgresql/<major>/bin/` avoid wrapper mismatches.
 EOF
   exit 1
 fi
 
 server_major="$(
-  psql "$database_url" -Atqc "SELECT current_setting('server_version_num')::int / 10000"
+  "$probe_psql" "$database_url" -Atqc "SELECT current_setting('server_version_num')::int / 10000"
 )"
-pg_dump_version="$(pg_dump --version)"
-client_major="$(
-  printf '%s\n' "$pg_dump_version" \
-    | sed -E 's/.* ([0-9]+)(\.[0-9]+)?([[:space:]].*)?$/\1/'
-)"
-
-if [[ -z "$server_major" || -z "$client_major" ]]; then
-  echo "Unable to determine PostgreSQL client/server major versions for ${label}" >&2
+if [[ -z "$server_major" ]]; then
+  echo "Unable to determine PostgreSQL server major version for ${label}" >&2
   exit 1
 fi
 
-if [[ "$client_major" != "$server_major" ]]; then
+psql_bin="/usr/lib/postgresql/${server_major}/bin/psql"
+pg_dump_bin="/usr/lib/postgresql/${server_major}/bin/pg_dump"
+
+if [[ ! -x "$psql_bin" ]]; then
+  if command -v psql >/dev/null 2>&1; then
+    psql_bin="$(command -v psql)"
+  else
+    psql_bin="$probe_psql"
+  fi
+fi
+
+if [[ ! -x "$pg_dump_bin" ]]; then
+  if command -v pg_dump >/dev/null 2>&1; then
+    pg_dump_bin="$(command -v pg_dump)"
+  else
+    pg_dump_bin=""
+  fi
+fi
+
+if [[ -z "$pg_dump_bin" || ! -x "$pg_dump_bin" ]]; then
+  echo "Unable to locate pg_dump for ${label}" >&2
+  exit 1
+fi
+
+psql_version="$("$psql_bin" --version)"
+pg_dump_version="$("$pg_dump_bin" --version)"
+psql_major="$(extract_major "$psql_version")"
+pg_dump_major="$(extract_major "$pg_dump_version")"
+
+if [[ -z "$psql_major" || -z "$pg_dump_major" ]]; then
+  echo "Unable to determine PostgreSQL client major versions for ${label}" >&2
+  exit 1
+fi
+
+if [[ "$psql_major" != "$server_major" || "$pg_dump_major" != "$server_major" ]]; then
   cat >&2 <<EOF
 PostgreSQL client/server major version mismatch for ${label}.
 
   server major: ${server_major}
-  pg_dump: ${pg_dump_version}
+  psql: ${psql_version} (${psql_bin})
+  pg_dump: ${pg_dump_version} (${pg_dump_bin})
 
 Install PostgreSQL client ${server_major} locally so schema snapshots match the
 PostgreSQL ${server_major} service containers used in CI.
@@ -71,9 +149,17 @@ Examples:
     brew install postgresql@${server_major}
 
 After installation, ensure `psql` and `pg_dump` resolve to PostgreSQL
-${server_major} before rerunning this command.
+${server_major}, or invoke the versioned binaries under
+`/usr/lib/postgresql/${server_major}/bin/` directly.
 EOF
   exit 1
 fi
 
-echo "Using ${pg_dump_version} against ${label} server major ${server_major}"
+echo "Using ${psql_version} at ${psql_bin} against ${label} server major ${server_major}" >&2
+echo "Using ${pg_dump_version} at ${pg_dump_bin}" >&2
+
+if [[ "$print_env" == "--print-env" ]]; then
+  printf 'export CURSOR_POSTGRES_SERVER_MAJOR=%q\n' "$server_major"
+  printf 'export CURSOR_POSTGRES_PSQL=%q\n' "$psql_bin"
+  printf 'export CURSOR_POSTGRES_PG_DUMP=%q\n' "$pg_dump_bin"
+fi

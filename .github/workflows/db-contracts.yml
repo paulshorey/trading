@@ -61,9 +61,12 @@ jobs:
           sudo apt-get install -y postgresql-common ca-certificates
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Show PostgreSQL versions
         run: |
+          which psql
+          which pg_dump
           pg_dump --version
           psql --version
           psql "$TRADING_DB_URL" -Atqc "SELECT version()"
@@ -111,9 +114,12 @@ jobs:
           sudo apt-get install -y postgresql-common ca-certificates
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Show PostgreSQL versions
         run: |
+          which psql
+          which pg_dump
           pg_dump --version
           psql --version
           psql "$TIMESCALE_DB_URL" -Atqc "SELECT version()"

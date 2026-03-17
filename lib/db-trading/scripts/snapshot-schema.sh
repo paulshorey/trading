@@ -10,9 +10,14 @@ if [[ -z "${TRADING_DB_URL:-}" ]]; then
   exit 1
 fi
 
-bash "${repo_root}/scripts/check-postgres-client-version.sh" TRADING_DB_URL "@lib/db-trading"
+eval "$(
+  bash "${repo_root}/scripts/check-postgres-client-version.sh" \
+    TRADING_DB_URL \
+    "@lib/db-trading" \
+    --print-env
+)"
 
-pg_dump "$TRADING_DB_URL" \
+"${CURSOR_POSTGRES_PG_DUMP}" "$TRADING_DB_URL" \
   --schema-only \
   --schema=public \
   --no-owner \

@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+pg17_bindir="/usr/lib/postgresql/17/bin"
+if [[ -d "$pg17_bindir" ]]; then
+  case ":$PATH:" in
+    *":$pg17_bindir:"*) ;;
+    *) export PATH="$pg17_bindir:$PATH" ;;
+  esac
+fi
+
 expected_env_files=(
   "apps-trading/log-next/.env"
   "apps-trading/view-next/.env"

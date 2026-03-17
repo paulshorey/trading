@@ -10,9 +10,14 @@ if [[ -z "${TIMESCALE_DB_URL:-}" ]]; then
   exit 1
 fi
 
-bash "${repo_root}/scripts/check-postgres-client-version.sh" TIMESCALE_DB_URL "@lib/db-timescale"
+eval "$(
+  bash "${repo_root}/scripts/check-postgres-client-version.sh" \
+    TIMESCALE_DB_URL \
+    "@lib/db-timescale" \
+    --print-env
+)"
 
-pg_dump "$TIMESCALE_DB_URL" \
+"${CURSOR_POSTGRES_PG_DUMP}" "$TIMESCALE_DB_URL" \
   --schema-only \
   --schema=public \
   --no-owner \

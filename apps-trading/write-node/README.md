@@ -197,6 +197,13 @@ Optional session-calendar env vars:
 - `MARKET_SESSION_OPEN_WINDOWS` - comma-separated weekly open windows in local
   session time (overrides the selected profile's windows), for example:
   `Sun 17:00-Mon 16:00, Mon 17:00-Tue 16:00, Tue 17:00-Wed 16:00, Wed 17:00-Thu 16:00, Thu 17:00-Fri 16:00`
+- `HOURLY_HEALTH_MAX_LAG_MINUTES` - optional maximum allowed `candles_1h_1m`
+  lag behind committed minute-boundary `candles_1m_1s` rows before `/api/v1/health`
+  returns unhealthy (default `2`)
+- `WRITE_PIPELINE_HEALTH_ALERT_INTERVAL_MS` - optional interval for in-process
+  stale/recovery health logs (default `60000`)
+- `WRITE_PIPELINE_HEALTH_STARTUP_GRACE_MS` - optional startup grace window before
+  stream readiness failures become unhealthy (default `120000`)
 
 Session profiles live in `src/lib/trade/market-session-config.ts`. Start by
 adding/adjusting entries in `SESSION_PROFILE_BY_TICKER`, then use
@@ -220,6 +227,11 @@ session calendar, not by fixed UTC close/reopen assumptions.
 On startup, the hourly writer hydrates itself from the most recent
 minute-boundary `candles_1m_1s` rows so it does not need a fresh 60-minute
 warmup.
+
+`/api/v1/health` now returns structured pipeline health instead of a bare
+boolean. It reports stream readiness, per-ticker source/target timestamps, and
+returns HTTP `503` when `candles_1h_1m` is stale beyond the configured lag
+threshold while the market is open.
 
 ## Developer rules
 

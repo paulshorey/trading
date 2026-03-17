@@ -18,6 +18,21 @@ export type {
   UserV1Row,
 } from "./generated/typescript/db-types";
 export type {
+  CreateNoteRequest,
+  DeleteNoteRequest,
+  DeleteResponse,
+  ErrorResponse,
+  NoteResponse,
+  NotesRequest,
+  NotesResponse,
+  SearchRequest,
+  SearchResponse,
+  SessionLookupRequest,
+  SessionRequest,
+  SessionResponse,
+  UpdateNoteRequest,
+} from "./contracts/notes-app";
+export type {
   NoteEmbeddingBackfillRow,
   NoteEmbeddingWriteInput,
   NoteInput,

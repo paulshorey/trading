@@ -1,39 +1,26 @@
 import {
-  createNoteForUser,
-  deleteNoteForUser,
-  listNotesByUser,
-  parseNoteInput,
-  updateNoteForUser,
-} from "@lib/db-marketing"
+  createNoteForNotesApp,
+  deleteNoteForNotesApp,
+  getNotesAppErrorStatus,
+  listNotesForNotesApp,
+  NOTES_APP_NOTE_NOT_FOUND_ERROR,
+  parseCreateNoteRequest,
+  parseDeleteNoteRequest,
+  parseNotesRequest,
+  parseUpdateNoteRequest,
+  updateNoteForNotesApp,
+} from "@lib/db-marketing/services/notes-app"
 import { Router } from "express"
 import type { Router as ExpressRouter } from "express"
-import {
-  EmbeddingConfigurationError,
-  EmbeddingRequestError,
-  createNoteEmbeddingInput,
-} from "@/lib/note-embeddings"
-import { parsePositiveInteger, sendError, toBodyObject } from "@/lib/http"
-
-const getErrorStatus = (error: unknown) => {
-  if (error instanceof EmbeddingConfigurationError) {
-    return 500
-  }
-
-  if (error instanceof EmbeddingRequestError) {
-    return error.status >= 400 && error.status < 500 ? 502 : error.status
-  }
-
-  return 400
-}
+import { sendError } from "@/lib/http"
 
 export const createNotesRouter = (): ExpressRouter => {
   const router = Router()
 
   router.get("/", async (request, response) => {
     try {
-      const userId = parsePositiveInteger(request.query.userId, "userId")
-      const notes = await listNotesByUser(userId)
-      return response.json({ notes })
+      const result = await listNotesForNotesApp(parseNotesRequest(request.query.userId))
+      return response.json(result)
     } catch (error) {
       return sendError(response, error)
     }
@@ -41,48 +28,36 @@ export const createNotesRouter = (): ExpressRouter => {
 
   router.post("/", async (request, response) => {
     try {
-      const body = toBodyObject(request.body)
-      const userId = parsePositiveInteger(body.userId, "userId")
-      const noteInput = parseNoteInput(body.note)
-      const embeddings = await createNoteEmbeddingInput(noteInput)
-      const note = await createNoteForUser(userId, noteInput, embeddings)
-      return response.status(201).json({ note })
+      const result = await createNoteForNotesApp(parseCreateNoteRequest(request.body))
+      return response.status(201).json(result)
     } catch (error) {
-      return sendError(response, error, getErrorStatus(error))
+      return sendError(response, error, getNotesAppErrorStatus(error))
     }
   })
 
   router.patch("/", async (request, response) => {
     try {
-      const body = toBodyObject(request.body)
-      const userId = parsePositiveInteger(body.userId, "userId")
-      const noteId = parsePositiveInteger(body.noteId, "noteId")
-      const noteInput = parseNoteInput(body.note)
-      const embeddings = await createNoteEmbeddingInput(noteInput)
-      const note = await updateNoteForUser(noteId, userId, noteInput, embeddings)
+      const result = await updateNoteForNotesApp(parseUpdateNoteRequest(request.body))
 
-      if (!note) {
-        return response.status(404).json({ error: "Note not found." })
+      if (!result) {
+        return response.status(404).json({ error: NOTES_APP_NOTE_NOT_FOUND_ERROR })
       }
 
-      return response.json({ note })
+      return response.json(result)
     } catch (error) {
-      return sendError(response, error, getErrorStatus(error))
+      return sendError(response, error, getNotesAppErrorStatus(error))
     }
   })
 
   router.delete("/", async (request, response) => {
     try {
-      const body = toBodyObject(request.body)
-      const userId = parsePositiveInteger(body.userId, "userId")
-      const noteId = parsePositiveInteger(body.noteId, "noteId")
-      const deleted = await deleteNoteForUser(noteId, userId)
+      const result = await deleteNoteForNotesApp(parseDeleteNoteRequest(request.body))
 
-      if (!deleted) {
-        return response.status(404).json({ error: "Note not found." })
+      if (!result) {
+        return response.status(404).json({ error: NOTES_APP_NOTE_NOT_FOUND_ERROR })
       }
 
-      return response.json({ ok: true })
+      return response.json(result)
     } catch (error) {
       return sendError(response, error)
     }

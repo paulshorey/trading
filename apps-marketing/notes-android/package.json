@@ -6,7 +6,8 @@
   "scripts": {
     "start": "tsx server/src/index.ts",
     "dev": "tsx watch server/src/index.ts",
-    "build:server": "tsc --project tsconfig.json --noEmit",
+    "build:contracts": "pnpm --filter @lib/db-marketing check-types && node scripts/validate-marketing-contract.mjs",
+    "build:server": "pnpm run build:contracts && tsc --project tsconfig.json --noEmit",
     "build:android": "bash ./scripts/build-android.sh",
     "build": "pnpm run build:server && pnpm run build:android",
     "check-types": "pnpm run build:server"

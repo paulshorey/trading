@@ -12,10 +12,12 @@ Database-first package for the `MARKETING_DB_URL` database.
 - `migrations/`: canonical schema change history
 - `schema/current.sql`: generated snapshot of expected schema
 - `queries/`: language-agnostic SQL query contracts
+- `generated/contracts/notes-app.json`: generated app-facing Notes contract
 
 ## TypeScript adapter
 
 - `lib/db/postgres.ts`: connection accessor for app/runtime code
+- `services/notes-app.ts`: shared Notes app workflow layer for web and Android servers
 
 ## Notes
 
@@ -38,4 +40,4 @@ Database-first package for the `MARKETING_DB_URL` database.
 - For populated tables, migrations must explicitly backfill data and explicitly
   convert types with `USING` where needed.
 - After schema changes, keep `migrations/`, `schema/current.sql`, generated
-  artifacts, and query contracts in sync.
+  artifacts, app contracts, and query contracts in sync.

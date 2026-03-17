@@ -8,4 +8,4 @@
   - text entry flows must continue to use small overlay activities because Android widgets do not support editable text fields
 - Repo scripts:
   - `pnpm --filter notes-android start` runs the companion API
-  - `pnpm --filter notes-android build` type-checks the API and assembles the Android debug app
+  - `pnpm --filter notes-android build` validates the generated `@lib/db-marketing` notes contract, type-checks the companion API, then assembles the Android debug app

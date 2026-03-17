@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { findUserByIdentifier, getUserById } from "@lib/db-marketing"
+import {
+  findNotesAppSession,
+  getNotesAppSession,
+  NOTES_APP_LOGIN_NOT_FOUND_ERROR,
+  NOTES_APP_USER_NOT_FOUND_ERROR,
+  parseSessionLookupRequest,
+  parseSessionRequest,
+} from "@lib/db-marketing/services/notes-app"
 
 export const runtime = "nodejs"
-
-const getPositiveInteger = (value: string | null, fieldName: string) => {
-  if (!value) {
-    throw new Error(`${fieldName} is required.`)
-  }
-
-  const parsed = Number.parseInt(value, 10)
-
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${fieldName} must be a positive integer.`)
-  }
-
-  return parsed
-}
 
 const readJsonObject = async (request: Request) => {
   try {
@@ -43,14 +36,15 @@ const toErrorResponse = (error: unknown, status = 400) =>
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = getPositiveInteger(request.nextUrl.searchParams.get("userId"), "userId")
-    const user = await getUserById(userId)
+    const result = await getNotesAppSession(
+      parseSessionRequest(request.nextUrl.searchParams.get("userId")),
+    )
 
-    if (!user) {
-      return NextResponse.json({ error: "User not found." }, { status: 404 })
+    if (!result) {
+      return NextResponse.json({ error: NOTES_APP_USER_NOT_FOUND_ERROR }, { status: 404 })
     }
 
-    return NextResponse.json({ user })
+    return NextResponse.json(result)
   } catch (error) {
     return toErrorResponse(error)
   }
@@ -58,23 +52,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: Request) {
   try {
-    const body = await readJsonObject(request)
-    const identifier =
-      typeof body.identifier === "string" ? body.identifier.trim() : ""
+    const result = await findNotesAppSession(
+      parseSessionLookupRequest(await readJsonObject(request)),
+    )
 
-    const user = await findUserByIdentifier(identifier)
-
-    if (!user) {
+    if (!result) {
       return NextResponse.json(
         {
-          error:
-            "No matching user was found. Enter an existing username, email, or phone number.",
+          error: NOTES_APP_LOGIN_NOT_FOUND_ERROR,
         },
         { status: 404 },
       )
     }
 
-    return NextResponse.json({ user })
+    return NextResponse.json(result)
   } catch (error) {
     return toErrorResponse(error)
   }

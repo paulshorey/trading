@@ -1,21 +1,27 @@
-import { findUserByIdentifier, getUserById } from "@lib/db-marketing"
+import {
+  findNotesAppSession,
+  getNotesAppSession,
+  NOTES_APP_LOGIN_NOT_FOUND_ERROR,
+  NOTES_APP_USER_NOT_FOUND_ERROR,
+  parseSessionLookupRequest,
+  parseSessionRequest,
+} from "@lib/db-marketing/services/notes-app"
 import { Router } from "express"
 import type { Router as ExpressRouter } from "express"
-import { parsePositiveInteger, sendError, toBodyObject } from "@/lib/http"
+import { sendError } from "@/lib/http"
 
 export const createSessionRouter = (): ExpressRouter => {
   const router = Router()
 
   router.get("/", async (request, response) => {
     try {
-      const userId = parsePositiveInteger(request.query.userId, "userId")
-      const user = await getUserById(userId)
+      const result = await getNotesAppSession(parseSessionRequest(request.query.userId))
 
-      if (!user) {
-        return response.status(404).json({ error: "User not found." })
+      if (!result) {
+        return response.status(404).json({ error: NOTES_APP_USER_NOT_FOUND_ERROR })
       }
 
-      return response.json({ user })
+      return response.json(result)
     } catch (error) {
       return sendError(response, error)
     }
@@ -23,19 +29,15 @@ export const createSessionRouter = (): ExpressRouter => {
 
   router.post("/", async (request, response) => {
     try {
-      const body = toBodyObject(request.body)
-      const identifier =
-        typeof body.identifier === "string" ? body.identifier.trim() : ""
-      const user = await findUserByIdentifier(identifier)
+      const result = await findNotesAppSession(parseSessionLookupRequest(request.body))
 
-      if (!user) {
+      if (!result) {
         return response.status(404).json({
-          error:
-            "No matching user was found. Enter an existing username, email, or phone number.",
+          error: NOTES_APP_LOGIN_NOT_FOUND_ERROR,
         })
       }
 
-      return response.json({ user })
+      return response.json(result)
     } catch (error) {
       return sendError(response, error)
     }

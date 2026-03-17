@@ -1,19 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import type { SemanticSearchResult, UserSummary } from "@lib/db-marketing"
+import type {
+  SearchResponse,
+  SemanticSearchResult,
+  SessionResponse,
+  UserSummary,
+} from "@lib/db-marketing"
 import { type FormEvent, useEffect, useState } from "react"
 import styles from "../page.module.css"
 
 const STORAGE_KEY = "notes-app-user-id"
-
-interface SessionResponse {
-  user: UserSummary
-}
-
-interface SearchResponse {
-  results: SemanticSearchResult[]
-}
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Unexpected request error."

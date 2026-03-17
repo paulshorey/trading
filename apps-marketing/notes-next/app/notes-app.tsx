@@ -1,7 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import type { NoteRecord, UserSummary } from "@lib/db-marketing"
+import type {
+  NotesResponse,
+  NoteRecord,
+  SessionResponse,
+  UserSummary,
+} from "@lib/db-marketing"
 import { type FormEvent, useCallback, useEffect, useState } from "react"
 import styles from "./page.module.css"
 
@@ -13,14 +18,6 @@ interface NoteFormState {
   description: string
   timeDue: string
   timeRemind: string
-}
-
-interface SessionResponse {
-  user: UserSummary
-}
-
-interface NotesResponse {
-  notes: NoteRecord[]
 }
 
 const formatDateTime = (value: string) =>

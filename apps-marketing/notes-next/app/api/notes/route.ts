@@ -1,34 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import {
-  createNoteForUser,
-  deleteNoteForUser,
-  listNotesByUser,
-  parseNoteInput,
-  updateNoteForUser,
-} from "@lib/db-marketing"
-import {
-  EmbeddingConfigurationError,
-  EmbeddingRequestError,
-  createNoteEmbeddingInput,
-} from "../../../lib/note-embeddings"
+  createNoteForNotesApp,
+  deleteNoteForNotesApp,
+  getNotesAppErrorStatus,
+  listNotesForNotesApp,
+  NOTES_APP_NOTE_NOT_FOUND_ERROR,
+  parseCreateNoteRequest,
+  parseDeleteNoteRequest,
+  parseNotesRequest,
+  parseUpdateNoteRequest,
+  updateNoteForNotesApp,
+} from "@lib/db-marketing/services/notes-app"
 
 export const runtime = "nodejs"
-
-const getPositiveInteger = (value: unknown, fieldName: string) => {
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
-    return value
-  }
-
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number.parseInt(value, 10)
-
-    if (Number.isInteger(parsed) && parsed > 0) {
-      return parsed
-    }
-  }
-
-  throw new Error(`${fieldName} must be a positive integer.`)
-}
 
 const readJsonObject = async (request: Request) => {
   try {
@@ -54,27 +38,12 @@ const toErrorResponse = (error: unknown, status = 400) =>
     { status },
   )
 
-const getErrorStatus = (error: unknown) => {
-  if (error instanceof EmbeddingConfigurationError) {
-    return 500
-  }
-
-  if (error instanceof EmbeddingRequestError) {
-    return error.status >= 400 && error.status < 500 ? 502 : error.status
-  }
-
-  return 400
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const userId = getPositiveInteger(
-      request.nextUrl.searchParams.get("userId"),
-      "userId",
+    const result = await listNotesForNotesApp(
+      parseNotesRequest(request.nextUrl.searchParams.get("userId")),
     )
-    const notes = await listNotesByUser(userId)
-
-    return NextResponse.json({ notes })
+    return NextResponse.json(result)
   } catch (error) {
     return toErrorResponse(error)
   }
@@ -82,49 +51,42 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: Request) {
   try {
-    const body = await readJsonObject(request)
-    const userId = getPositiveInteger(body.userId, "userId")
-    const noteInput = parseNoteInput(body.note)
-    const embeddings = await createNoteEmbeddingInput(noteInput)
-    const note = await createNoteForUser(userId, noteInput, embeddings)
-
-    return NextResponse.json({ note }, { status: 201 })
+    const result = await createNoteForNotesApp(
+      parseCreateNoteRequest(await readJsonObject(request)),
+    )
+    return NextResponse.json(result, { status: 201 })
   } catch (error) {
-    return toErrorResponse(error, getErrorStatus(error))
+    return toErrorResponse(error, getNotesAppErrorStatus(error))
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const body = await readJsonObject(request)
-    const userId = getPositiveInteger(body.userId, "userId")
-    const noteId = getPositiveInteger(body.noteId, "noteId")
-    const noteInput = parseNoteInput(body.note)
-    const embeddings = await createNoteEmbeddingInput(noteInput)
-    const note = await updateNoteForUser(noteId, userId, noteInput, embeddings)
+    const result = await updateNoteForNotesApp(
+      parseUpdateNoteRequest(await readJsonObject(request)),
+    )
 
-    if (!note) {
-      return NextResponse.json({ error: "Note not found." }, { status: 404 })
+    if (!result) {
+      return NextResponse.json({ error: NOTES_APP_NOTE_NOT_FOUND_ERROR }, { status: 404 })
     }
 
-    return NextResponse.json({ note })
+    return NextResponse.json(result)
   } catch (error) {
-    return toErrorResponse(error, getErrorStatus(error))
+    return toErrorResponse(error, getNotesAppErrorStatus(error))
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const body = await readJsonObject(request)
-    const userId = getPositiveInteger(body.userId, "userId")
-    const noteId = getPositiveInteger(body.noteId, "noteId")
-    const deleted = await deleteNoteForUser(noteId, userId)
+    const result = await deleteNoteForNotesApp(
+      parseDeleteNoteRequest(await readJsonObject(request)),
+    )
 
-    if (!deleted) {
-      return NextResponse.json({ error: "Note not found." }, { status: 404 })
+    if (!result) {
+      return NextResponse.json({ error: NOTES_APP_NOTE_NOT_FOUND_ERROR }, { status: 404 })
     }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json(result)
   } catch (error) {
     return toErrorResponse(error)
   }

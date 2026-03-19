@@ -4,25 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ROOT_DIR/.android-sdk}"
-export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-export ANDROID_USER_HOME="${ANDROID_USER_HOME:-$ROOT_DIR/.android-user-home}"
 export CI="${CI:-true}"
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$ROOT_DIR/.gradle}"
 export HUSKY="${HUSKY:-0}"
-export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-openjdk-amd64}"
 export PNPM_HOME="${PNPM_HOME:-$HOME/.local/share/pnpm}"
 STORE_DIR="${PNPM_STORE_DIR:-$ROOT_DIR/.pnpm-store}"
 PG17_BINDIR="/usr/lib/postgresql/17/bin"
 
-mkdir -p \
-  "$ROOT_DIR/.turbo" \
-  "$ANDROID_SDK_ROOT" \
-  "$ANDROID_USER_HOME" \
-  "$GRADLE_USER_HOME" \
-  "$PNPM_HOME" \
-  "$STORE_DIR"
+mkdir -p "$ROOT_DIR/.turbo" "$PNPM_HOME" "$STORE_DIR"
 
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
@@ -30,15 +19,6 @@ case ":$PATH:" in
 esac
 
 bash scripts/install-workspace-deps.sh "$@"
-
-bash scripts/install-android-sdk.sh
-
-# Preinstall the Android SDK used by notes-android so cloud builds reuse cached tooling.
-(
-  cd apps-marketing/notes-android
-  ./gradlew --no-daemon :app:help >/dev/null
-)
-bash "$ROOT_DIR/scripts/install-android-sdk.sh"
 
 # Install PostgreSQL 17 client tools (psql, pg_dump) for db:migrate and db:verify
 has_pg17_clients() {

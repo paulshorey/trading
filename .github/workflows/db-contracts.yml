@@ -6,13 +6,10 @@ on:
       - ".github/workflows/db-contracts.yml"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "lib/db-marketing/**"
       - "lib/db-trading/**"
       - "lib/db-timescale/**"
-      - "apps-marketing/notes-android/**"
-      - "apps-marketing/notes-next/**"
-      - "apps-trading/view-next/**"
-      - "apps-trading/tradingview-node/**"
+      - "apps/view-next/**"
+      - "apps/tradingview-node/**"
   push:
     branches:
       - main
@@ -20,111 +17,13 @@ on:
       - ".github/workflows/db-contracts.yml"
       - "package.json"
       - "pnpm-lock.yaml"
-      - "lib/db-marketing/**"
       - "lib/db-trading/**"
       - "lib/db-timescale/**"
-      - "apps-marketing/notes-android/**"
-      - "apps-marketing/notes-next/**"
-      - "apps-trading/view-next/**"
-      - "apps-trading/tradingview-node/**"
+      - "apps/view-next/**"
+      - "apps/tradingview-node/**"
   workflow_dispatch:
 
 jobs:
-  verify-marketing:
-    name: Verify Marketing contract
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17-trixie
-        env:
-          POSTGRES_DB: app_contracts
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d app_contracts"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      MARKETING_DB_URL: postgres://postgres:postgres@localhost:5432/app_contracts
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install PostgreSQL 17 client tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-common ca-certificates
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-17
-          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
-
-      - name: Show PostgreSQL versions
-        run: |
-          which psql
-          which pg_dump
-          pg_dump --version
-          psql --version
-          psql "$MARKETING_DB_URL" -Atqc "SELECT version()"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Verify @lib/db-marketing
-        run: pnpm --filter @lib/db-marketing db:verify
-
-  verify-marketing-clients:
-    name: Verify Marketing clients
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.28.1
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Test notes-next adapter parity
-        run: pnpm --filter notes-next test
-
-      - name: Type-check notes-next
-        run: pnpm --filter notes-next check-types
-
-      - name: Build notes-next
-        run: pnpm --filter notes-next build
-
-      - name: Test notes-android adapter parity
-        run: pnpm --filter notes-android test
-
-      - name: Build notes-android
-        env:
-          ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
-          ANDROID_HOME: ${{ github.workspace }}/.android-sdk
-        run: pnpm --filter notes-android build
-
   verify-trading:
     name: Verify Trading contract
     runs-on: ubuntu-latest

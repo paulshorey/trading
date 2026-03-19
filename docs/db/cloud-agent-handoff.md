@@ -10,7 +10,7 @@
 
 - Renamed the GitHub Actions check from `Verify Postgres contract` to
   `Verify Trading contract`.
-- Fixed stale workflow path filters to use `apps-trading/...`.
+- Fixed stale workflow path filters to use `apps/...`.
 - Pinned CI database service versions and installed PostgreSQL 17 client tools
   in CI.
 - Added a shared PostgreSQL client/server major-version preflight script:
@@ -18,7 +18,6 @@
 - Hardened schema snapshot scripts for:
   - `@lib/db-trading`
   - `@lib/db-timescale`
-  - `@lib/db-marketing`
 - Removed `pg_dump` version-banner noise from committed schema snapshots so
   contract files are deterministic across matching PostgreSQL 17 clients.
 
@@ -28,13 +27,10 @@
   correct package-local artifact paths:
   - `lib/db-trading/scripts/verify-contract.mjs`
   - `lib/db-timescale/scripts/verify-contract.mjs`
-  - `lib/db-marketing/scripts/verify-contract.mjs`
 
 ### Contract artifacts committed
 
 - Committed regenerated DB contract artifacts for trading and timescale.
-- Committed the normalized marketing schema snapshot after applying the same
-  deterministic snapshot rules there.
 
 ### Documentation / agent instructions
 
@@ -43,10 +39,8 @@
   - `docs/db/management-playbook.md`
   - `lib/db-trading/AGENTS.md`
   - `lib/db-timescale/AGENTS.md`
-  - `lib/db-marketing/AGENTS.md`
   - `lib/db-trading/README.md`
   - `lib/db-timescale/README.md`
-  - `lib/db-marketing/README.md`
 - Remote `db:migrate` / `db:verify` is now explicitly documented as allowed
   only when the user asks for it.
 - Docs now explicitly state that `db:verify` is not read-only because it runs
@@ -59,10 +53,6 @@
 - `@lib/db-timescale`
   - `pnpm --filter @lib/db-timescale db:migrate`
   - `pnpm --filter @lib/db-timescale db:verify`
-- `@lib/db-marketing`
-  - `pnpm --filter @lib/db-marketing db:migrate`
-  - `pnpm --filter @lib/db-marketing db:verify`
-
 Both remote databases were reachable from this cloud environment and both
 already had all known migrations applied before the commands were run.
 
@@ -123,11 +113,10 @@ In a fresh cloud agent session:
 
 ## Expected outcome in the fresh agent
 
-If the corrected `TRADING_DB_URL` is now public and reachable, all three
+If the corrected `TRADING_DB_URL` is now public and reachable, both
 packages should be able to run against their real remote databases:
 
 - `@lib/db-trading`
-- `@lib/db-marketing`
 - `@lib/db-timescale`
 
 ## Relevant commits already on this branch

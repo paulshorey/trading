@@ -1,4 +1,0 @@
-@import "@lib/config/tailwind";
-
-@source "../app/**/*.{js,ts,jsx,tsx}";
-@source "../components/**/*.{js,ts,jsx,tsx}";

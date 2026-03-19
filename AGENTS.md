@@ -1,24 +1,18 @@
-# This project is a monorepo of multiple apps. It uses TurboRepo to build, test, and deploy.
+# This project is a monorepo of trading and financial data apps. It uses TurboRepo to build, test, and deploy.
 
 ## Folder structure
 
-### Marketing Apps `./apps-marketing/`
-
-- `eighthbrain-next` - NextJS marketing website for an upcoming project
-- `notes-next` - NextJS web app to help users quickly organize their tasks, notes, and all kinds of information.
-
-### Trading Apps `./apps-trading/`
+### Apps `./apps/`
 
 - `view-next` - TypeScript app to display financial charts and data analysis visualizations
 - `write-node` - TypeScript server that connects to data providers, ingests price and volume data per trade, calculates indicators, aggregates candles and higher timeframes for backtestsing
-- `tradingview-node` Node.js/Express API for TradingView webhook ingest and strength reads
+- `tradingview-node` - Node.js/Express API for TradingView webhook ingest and strength reads
 - `log-next` - logging and observability dashboard
 
 ### Shared Libraries `./lib/`
 
 - `common` shared utilities
 - `config` shared tooling
-- `db-marketing` database contracts for MARKETING_DB
 - `db-trading` database contracts for TRADING_DB
 - `db-timescale` database contracts for TIMESCALE_DB
 
@@ -51,15 +45,14 @@ In `lib/*` packages:
 - Use `pnpm --filter <app> <command>` or `cd apps/<app> && pnpm run <command>`
 - Never add `pnpm install` / `pnpm i` inside package-level `build`, `dev`, `test`, or `start` scripts. Install dependencies from the workspace root only.
 - For focused work on one app or package, install from the root with a filter that includes that target plus its workspace dependencies, for example:
-  - `pnpm run deps:install -- notes-next...`
+  - `pnpm run deps:install -- view-next...`
   - `pnpm run deps:install -- @lib/config...`
 - Use a full root install (`pnpm run deps:install`) when running repo-wide commands such as `pnpm build`, when touching multiple apps, or when changing shared workspace dependencies.
 - If request is ambiguous or contradictory, ask for clarification
 
 Cloud agent:
 
-- `cloud:install` installs Android SDK tooling for `notes-android` and
-  PostgreSQL 17 client tools (psql, pg_dump) so Android builds, `db:migrate`,
+- `cloud:install` installs PostgreSQL 17 client tools (psql, pg_dump) so `db:migrate`
   and `db:verify` run in fresh sessions without manual apt setup.
 
 Remote DB operations:

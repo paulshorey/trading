@@ -13,12 +13,10 @@ if [[ -d "$pg17_bindir" ]]; then
 fi
 
 expected_env_files=(
-  "apps-trading/log-next/.env"
-  "apps-trading/view-next/.env"
-  "apps-trading/write-node/.env"
-  "apps-trading/tradingview-node/.env"
-  "apps-marketing/eighthbrain-next/.env"
-  "apps-marketing/notes-next/.env"
+  "apps/log-next/.env"
+  "apps/view-next/.env"
+  "apps/write-node/.env"
+  "apps/tradingview-node/.env"
 )
 
 missing_env=0

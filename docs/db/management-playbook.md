@@ -3,6 +3,10 @@
 This is the operational guide for database-first schema management in this
 monorepo.
 
+For day-to-day command selection across local development, cloud agents,
+production deploys, and PR review, see
+[`workflow-guide.md`](./workflow-guide.md).
+
 ## Packages and source of truth
 
 - `@lib/db-trading` owns `TRADING_DB_URL`
@@ -35,6 +39,7 @@ Before running package scripts, export the correct DB URL:
 
 The app `.env` files already contain these values.
 
+`db:migrate` uses only the Node `pg` client and does not require `pg_dump` or `psql`.
 `db:schema:snapshot` and `db:verify` also require local PostgreSQL client tools.
 Match the client major version to the target DB server and CI. The current DB
 contract workflow runs PostgreSQL 17 service containers with PostgreSQL 17
@@ -86,9 +91,11 @@ pnpm --filter @lib/db-trading db:verify
 pnpm --filter @lib/db-timescale db:verify
 ```
 
+Read-only contract check (no migrate): `db:verify:readonly` or `DB_VERIFY_READONLY=1` with `db:verify`.
+
 Each command:
 
-1. runs migrations
+1. runs migrations (skipped when using `db:verify:readonly` / `DB_VERIFY_READONLY=1`)
 2. regenerates `schema/current.sql`
 3. regenerates generated TS/JSON artifacts
 4. checks those files are reproducible with `git diff --exit-code`
@@ -97,9 +104,14 @@ Each command:
 The same verification commands run in CI against fresh Postgres and Timescale
 containers.
 
-`db:verify` is not read-only. It runs `db:migrate` first, so using it against a
-deployed remote database can apply pending migrations before regenerating local
-contract artifacts.
+For guarded live-production parity checks from GitHub Actions, use the manual
+workflow at
+[`db-production-parity.yml`](../../.github/workflows/db-production-parity.yml),
+which runs `db:verify:readonly` with protected environment secrets.
+
+`db:verify` runs `db:migrate` first unless you use `db:verify:readonly` (or
+`DB_VERIFY_READONLY=1`), so the default command against a deployed remote database
+can apply pending migrations before regenerating local contract artifacts.
 
 Remote `db:migrate` / `db:verify` runs are allowed only with an explicit user
 request. Before running them from a cloud agent:

@@ -39,6 +39,13 @@ Use the same PostgreSQL major version as the target DB server and CI
 (`pg_dump`/`psql` 17 for the current GitHub Actions workflow). The snapshot
 script fails fast if the local client major version does not match the server.
 
+## How connection and tooling work
+
+- **`db:migrate`** uses only the Node `pg` client. It connects to whatever `TIMESCALE_DB_URL` points to (local or remote). It does not start a temporary local database server.
+- **`db:verify`** runs `db:migrate`, then `pg_dump` against the **same** URL, regenerates contract artifacts, runs sanity checks (tables, indexes, hypertables), and fails if `git diff` shows drift. Client tools connect to the host in the URL over the network when that URL is remote.
+- **`db:verify:readonly`** skips migrate. Use it to compare the repo to an already-migrated database without applying pending migrations. Same effect: `DB_VERIFY_READONLY=1` with `db:verify`.
+- **GitHub Actions** uses an ephemeral Timescale image on `localhost`, not production.
+
 The target DB must support TimescaleDB. The migration runner executes:
 
 ```sql

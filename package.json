@@ -2,6 +2,7 @@
   "name": "m",
   "private": true,
   "scripts": {
+    "dbs": "pnpm --filter @lib/db-trading db:migrate && pnpm --filter @lib/db-trading db:verify && pnpm --filter @lib/db-timescale db:migrate && pnpm --filter @lib/db-timescale db:verify",
     "build": "turbo run build",
     "build:write-node": "turbo run build --filter=write-node...",
     "deps:install": "bash scripts/install-workspace-deps.sh",

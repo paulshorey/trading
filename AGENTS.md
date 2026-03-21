@@ -52,13 +52,12 @@ In `lib/*` packages:
 
 Cloud agent:
 
-- `cloud:install` installs PostgreSQL 17 client tools (psql, pg_dump) so `db:migrate`
-  and `db:verify` run in fresh sessions without manual apt setup.
+- `cloud:install` installs PostgreSQL 17 client tools (`psql`, `pg_dump`) so `db:verify` (schema snapshot) runs without manual apt setup. `db:migrate` only needs the Node `pg` client.
 
 Remote DB operations:
 
-- `db:migrate` writes to the target database.
-- `db:verify` is not read-only; it runs `db:migrate` first, then regenerates local contract artifacts.
+- `db:migrate` writes to the target database (via `TRADING_DB_URL` / `TIMESCALE_DB_URL`).
+- `db:verify` runs `db:migrate` first, then snapshots with `pg_dump` against the same URL and regenerates contract artifacts. Use `db:verify:readonly` in each DB package to skip migrate and only diff the live DB vs repo.
 - Only run remote `db:migrate` / `db:verify` when the user explicitly requests it.
 - Before running against a deployed DB, confirm the environment variable is present, the host is reachable from the cloud agent, and there are no unexpected pending migrations.
 

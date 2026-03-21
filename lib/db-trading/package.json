@@ -17,6 +17,7 @@
     "db:types:generate": "node scripts/generate-types.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "db:verify": "node scripts/verify-contract.mjs",
+    "db:verify:readonly": "node scripts/verify-contract.mjs --readonly",
     "db:migrate:baseline": "node scripts/baseline.mjs",
     "db:migration:new": "node scripts/new-migration.mjs",
     "db:sync": "pnpm db:migrate && pnpm db:schema:snapshot && pnpm db:types:generate"

@@ -20,7 +20,9 @@ Database-first package for the `TRADING_DB_URL` database.
 - Do not import `@lib/common` from this package. Runtime concerns like request IP lookup, response formatting, and SMS alerts belong in apps or `@lib/common`.
 - Fresh empty DB: run `pnpm --filter @lib/db-trading db:migrate`, then `db:verify`.
 - Existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`, then `db:verify`.
-- `db:verify` is not read-only; it runs `db:migrate` first.
+- `db:migrate` uses Node `pg` only (no `pg_dump`). `db:verify` runs migrate, then `pg_dump` snapshot + regenerate artifacts + `git diff`; install matching `psql`/`pg_dump` for the server major version.
+- `db:verify:readonly` skips migrate (snapshot + checks + `git diff` only). CI uses a fresh Postgres 17 service container, not production URLs.
+- `db:verify` is not read-only unless you use `db:verify:readonly`.
 - Only run `db:migrate` / `db:verify` against a deployed remote DB when the user explicitly requests it. Check connectivity and pending migrations first.
 - Never manually create or alter tables outside migrations.
 - Migration files are forward-only SQL; do not add `BEGIN` / `COMMIT`.

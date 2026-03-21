@@ -25,6 +25,13 @@ Use the same PostgreSQL major version as the target DB server and CI
 (`pg_dump`/`psql` 17 for the current GitHub Actions workflow). The snapshot
 script fails fast if the local client major version does not match the server.
 
+## How connection and tooling work
+
+- **`db:migrate`** uses only the Node `pg` client. It connects to whatever `TRADING_DB_URL` points to (local or remote). It does not start a temporary local Postgres server.
+- **`db:verify`** runs `db:migrate`, then `pg_dump` (via `db:schema:snapshot`) against the **same** URL, regenerates `schema/current.sql` and generated types/contracts, runs sanity SQL checks, and fails if `git diff` shows uncommitted changes. Client tools are for talking to the remote (or local) server named in the URL—not for spawning a new database process.
+- **`db:verify:readonly`** skips migrate. Use it to confirm the repo matches an already-migrated database (for example production) without applying pending migrations. Same effect: `DB_VERIFY_READONLY=1` with `db:verify`.
+- **GitHub Actions** (`.github/workflows/db-contracts.yml`) points `TRADING_DB_URL` at an ephemeral `postgres:17` service container on `localhost`, not at production.
+
 ## Fresh empty database
 
 Use this flow for a brand-new empty Postgres database:

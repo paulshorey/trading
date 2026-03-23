@@ -61,7 +61,7 @@ jobs:
         run: pnpm run deps:install -- @lib/db-trading...
 
       - name: Verify production trading DB parity
-        run: pnpm --filter @lib/db-trading db:verify:readonly
+        run: pnpm --filter @lib/db-trading db:verify
 
   verify-timescale:
     name: Verify production Timescale parity
@@ -103,4 +103,4 @@ jobs:
         run: pnpm run deps:install -- @lib/db-timescale...
 
       - name: Verify production Timescale DB parity
-        run: pnpm --filter @lib/db-timescale db:verify:readonly
+        run: pnpm --filter @lib/db-timescale db:verify

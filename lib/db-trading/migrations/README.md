@@ -45,7 +45,7 @@ Example:
 3. Apply to target DB:
    - `pnpm --filter @lib/db-trading db:migrate`
 4. Verify migrated DB contract:
-   - `pnpm --filter @lib/db-trading db:verify`
+   - `pnpm --filter @lib/db-trading db:migrate-and-verify`
 5. Refresh schema snapshot + generated types:
    - `pnpm --filter @lib/db-trading db:schema:snapshot`
    - `pnpm --filter @lib/db-trading db:types:generate`

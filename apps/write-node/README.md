@@ -44,7 +44,7 @@ Use this path for a new environment with no existing tables:
 ```bash
 export TIMESCALE_DB_URL="postgres://..."
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 What this does:
@@ -66,7 +66,7 @@ manual or legacy setup:
 export TIMESCALE_DB_URL="postgres://..."
 pnpm --filter @lib/db-timescale db:migrate:baseline
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 Do **not** use `db:migrate:baseline` for a fresh empty database.
@@ -111,7 +111,7 @@ From the repo root:
 
 ```bash
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 This must create/update:
@@ -142,7 +142,7 @@ For normal deploy/bootstrap work, prefer:
 
 ```bash
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 ## Historical rebuild flow
@@ -224,7 +224,7 @@ warmup.
 - `sum_price_volume / volume` is the query-time VWAP formula
 - do not manually create or alter Timescale tables; make schema changes in
   `@lib/db-timescale/migrations`
-- after schema changes, run `pnpm --filter @lib/db-timescale db:verify`
+- after schema changes, run `pnpm --filter @lib/db-timescale db:migrate-and-verify`
 
 ## Related docs
 

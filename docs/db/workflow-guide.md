@@ -1,7 +1,7 @@
 # Database Workflow Guide
 
-This guide explains when to use `db:migrate`, `db:verify:readonly`, and
-`db:verify` in day-to-day development, deployment, PR review, and cloud-agent
+This guide explains when to use `db:migrate`, `db:verify`, and
+`db:migrate-and-verify` in day-to-day development, deployment, PR review, and cloud-agent
 work.
 
 ## What each command does
@@ -15,7 +15,7 @@ work.
 
 Use it when the goal is: "make this database catch up to the migration files."
 
-### `db:verify:readonly`
+### `db:verify`
 
 - does not run migrations
 - snapshots the live database with `pg_dump`
@@ -26,10 +26,10 @@ Use it when the goal is: "make this database catch up to the migration files."
 Use it when the goal is: "this database should already be correct; prove the
 repo matches it."
 
-### `db:verify`
+### `db:migrate-and-verify`
 
 - runs `db:migrate` first
-- then runs the full `db:verify:readonly` flow
+- then runs the full `db:verify` flow
 
 Use it when the goal is: "apply the schema change, then prove the repo artifacts
 match the migrated database."
@@ -38,9 +38,9 @@ match the migrated database."
 
 - Need to apply pending migrations only: run `db:migrate`
 - Need to compare the repo to an already-migrated database without changing it:
-  run `db:verify:readonly`
+  run `db:verify`
 - Need to apply migrations and then regenerate/verify repo artifacts: run
-  `db:verify`
+  `db:migrate-and-verify`
 
 ## Human developer on a local machine
 
@@ -49,7 +49,7 @@ match the migrated database."
 If you changed app code but did not change `lib/db-trading` or
 `lib/db-timescale`:
 
-- run `db:verify:readonly` when you want confidence that the repo still matches
+- run `db:verify` when you want confidence that the repo still matches
   the live database
 - do not run `db:migrate` unless you intentionally want to apply pending
   migrations
@@ -57,8 +57,8 @@ If you changed app code but did not change `lib/db-trading` or
 Examples:
 
 ```bash
-pnpm --filter @lib/db-trading db:verify:readonly
-pnpm --filter @lib/db-timescale db:verify:readonly
+pnpm --filter @lib/db-trading db:verify
+pnpm --filter @lib/db-timescale db:verify
 ```
 
 ### Database package changes
@@ -66,7 +66,7 @@ pnpm --filter @lib/db-timescale db:verify:readonly
 If you edited migrations, SQL contracts, or generated DB-facing code:
 
 1. Make the DB package change.
-2. Run `db:verify` for the affected package.
+2. Run `db:migrate-and-verify` for the affected package.
 3. Review the regenerated files.
 4. Update app code that depends on the new contract.
 5. Run the app/test/build commands that depend on that package.
@@ -74,8 +74,8 @@ If you edited migrations, SQL contracts, or generated DB-facing code:
 Examples:
 
 ```bash
-pnpm --filter @lib/db-trading db:verify
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-trading db:migrate-and-verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 Why this is the normal developer loop:
@@ -88,33 +88,33 @@ Why this is the normal developer loop:
 
 If a migration is ready to go to production:
 
-1. Optionally run `db:verify:readonly` first to confirm the repo matches the
+1. Optionally run `db:verify` first to confirm the repo matches the
    current production DB.
 2. Run `db:migrate` once against production.
-3. Run `db:verify:readonly` again to confirm production now matches the repo.
+3. Run `db:verify` again to confirm production now matches the repo.
 
 Examples:
 
 ```bash
 pnpm --filter @lib/db-trading db:migrate
-pnpm --filter @lib/db-trading db:verify:readonly
+pnpm --filter @lib/db-trading db:verify
 ```
 
 ```bash
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify:readonly
+pnpm --filter @lib/db-timescale db:verify
 ```
 
 This split is useful because `db:migrate` is the minimal write step, while
-`db:verify:readonly` is the safest parity check after deploy.
+`db:verify` is the safest parity check after deploy.
 
 ## AI agent in a temporary cloud workspace
 
 ### App code changes only
 
 - default to no DB writes
-- run `db:verify:readonly` only when parity with a live DB is part of the task
-- do not use `db:verify` unless the task explicitly includes applying
+- run `db:verify` only when parity with a live DB is part of the task
+- do not use `db:migrate-and-verify` unless the task explicitly includes applying
   migrations
 
 ### Database package changes
@@ -122,12 +122,12 @@ This split is useful because `db:migrate` is the minimal write step, while
 Recommended agent workflow:
 
 1. Make the DB package change.
-2. Run `db:verify` against a disposable, staging, or explicitly approved
+2. Run `db:migrate-and-verify` against a disposable, staging, or explicitly approved
    database.
 3. If you need to compare against production after that, run
-   `db:verify:readonly`.
+   `db:verify`.
 
-For agents, this matters because `db:verify` is a write operation by default.
+For agents, this matters because `db:migrate-and-verify` is a write operation by default.
 Temporary cloud workspaces should not silently apply production migrations just
 to refresh contract files.
 
@@ -151,7 +151,7 @@ The normal PR workflow in
 
 - starts fresh Postgres and Timescale service containers on `localhost`
 - points `TRADING_DB_URL` and `TIMESCALE_DB_URL` at those containers
-- runs `db:verify`
+- runs `db:migrate-and-verify`
 
 This is good for PR review because it proves:
 
@@ -171,7 +171,7 @@ exists for that production-parity question.
 It:
 
 - runs only on `workflow_dispatch`
-- uses `db:verify:readonly`, not `db:verify`
+- uses `db:verify`, not `db:migrate-and-verify`
 - reads `TRADING_DB_URL` and `TIMESCALE_DB_URL` from a protected GitHub
   environment
 - checks the live production DB shape against the repo without applying
@@ -198,5 +198,5 @@ Use the manual production parity workflow when:
 - you want a human-approved check from CI infrastructure without giving normal
   PR jobs access to production DB credentials
 
-If the repo is ahead of production, `db:verify:readonly` should fail. That is
+If the repo is ahead of production, `db:verify` should fail. That is
 expected. Apply the migration first, then rerun the parity check.

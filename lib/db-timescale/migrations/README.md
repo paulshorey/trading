@@ -43,7 +43,7 @@ This directory is the canonical schema history for `TIMESCALE_DB_URL`.
 3. Apply to target DB:
    - `pnpm --filter @lib/db-timescale db:migrate`
 4. Verify migrated DB contract:
-   - `pnpm --filter @lib/db-timescale db:verify`
+   - `pnpm --filter @lib/db-timescale db:migrate-and-verify`
 5. Refresh schema snapshot + generated types:
    - `pnpm --filter @lib/db-timescale db:schema:snapshot`
    - `pnpm --filter @lib/db-timescale db:types:generate`

@@ -20,7 +20,7 @@ esac
 
 bash scripts/install-workspace-deps.sh "$@"
 
-# Install PostgreSQL 17 client tools (psql, pg_dump) for db:migrate and db:verify
+# Install PostgreSQL 17 client tools (psql, pg_dump) for db:verify / db:migrate-and-verify snapshots
 has_pg17_clients() {
   if [[ -x "${PG17_BINDIR}/psql" && -x "${PG17_BINDIR}/pg_dump" ]]; then
     return 0

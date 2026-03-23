@@ -1,8 +1,11 @@
 {
-  "name": "m",
+  "name": "trading",
   "private": true,
   "scripts": {
-    "dbs": "pnpm --filter @lib/db-trading db:migrate && pnpm --filter @lib/db-trading db:verify && pnpm --filter @lib/db-timescale db:migrate && pnpm --filter @lib/db-timescale db:verify",
+    "db:migrate": "turbo run db:migrate",
+    "db:verify": "turbo run db:verify",
+    "db:migrate-and-verify": "turbo run db:migrate-and-verify",
+    "dbs": "pnpm db:migrate-and-verify",
     "build": "turbo run build",
     "build:write-node": "turbo run build --filter=write-node...",
     "deps:install": "bash scripts/install-workspace-deps.sh",

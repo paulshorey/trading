@@ -20,6 +20,18 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "db:migrate": {
+      "cache": false,
+      "env": ["TRADING_DB_URL", "TIMESCALE_DB_URL"]
+    },
+    "db:verify": {
+      "cache": false,
+      "env": ["TRADING_DB_URL", "TIMESCALE_DB_URL"]
+    },
+    "db:migrate-and-verify": {
+      "cache": false,
+      "env": ["TRADING_DB_URL", "TIMESCALE_DB_URL"]
     }
   }
 }

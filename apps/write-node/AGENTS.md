@@ -94,7 +94,7 @@ Key rules:
 - do not create or alter Timescale tables manually; change `@lib/db-timescale/migrations`
 - fresh empty DB: run `db:migrate`, not `db:migrate:baseline`
 - existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`
-- after DB contract changes, run `pnpm --filter @lib/db-timescale db:verify`
+- after DB contract changes, run `pnpm --filter @lib/db-timescale db:migrate-and-verify`
 - if a migration must change populated data, the migration SQL must backfill or convert existing rows explicitly
 
 ## Source layout

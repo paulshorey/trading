@@ -75,7 +75,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify @lib/db-trading
-        run: pnpm --filter @lib/db-trading db:verify
+        run: pnpm --filter @lib/db-trading db:migrate-and-verify
 
   verify-timescale:
     name: Verify Timescale contract
@@ -128,4 +128,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify @lib/db-timescale
-        run: pnpm --filter @lib/db-timescale db:verify
+        run: pnpm --filter @lib/db-timescale db:migrate-and-verify

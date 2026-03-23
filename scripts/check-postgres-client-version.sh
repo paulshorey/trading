@@ -37,6 +37,33 @@ pick_highest_versioned_bin() {
   printf '%s\n' "$latest"
 }
 
+# Same-major clients as Debian layout, or Homebrew postgresql@<major> (macOS).
+versioned_client_path() {
+  local major="$1"
+  local cmd="$2"
+  local p=""
+
+  p="/usr/lib/postgresql/${major}/bin/${cmd}"
+  if [[ -x "$p" ]]; then
+    printf '%s\n' "$p"
+    return 0
+  fi
+
+  p="/opt/homebrew/opt/postgresql@${major}/bin/${cmd}"
+  if [[ -x "$p" ]]; then
+    printf '%s\n' "$p"
+    return 0
+  fi
+
+  p="/usr/local/opt/postgresql@${major}/bin/${cmd}"
+  if [[ -x "$p" ]]; then
+    printf '%s\n' "$p"
+    return 0
+  fi
+
+  return 1
+}
+
 if [[ $# -lt 2 || $# -gt 3 ]]; then
   usage
   exit 1
@@ -94,22 +121,31 @@ if [[ -z "$server_major" ]]; then
   exit 1
 fi
 
-psql_bin="/usr/lib/postgresql/${server_major}/bin/psql"
-pg_dump_bin="/usr/lib/postgresql/${server_major}/bin/pg_dump"
+psql_bin=""
+pg_dump_bin=""
 
-if [[ ! -x "$psql_bin" ]]; then
-  if command -v psql >/dev/null 2>&1; then
-    psql_bin="$(command -v psql)"
-  else
-    psql_bin="$probe_psql"
+if v_psql="$(versioned_client_path "$server_major" psql)" \
+  && v_dump="$(versioned_client_path "$server_major" pg_dump)"; then
+  psql_bin="$v_psql"
+  pg_dump_bin="$v_dump"
+else
+  psql_bin="/usr/lib/postgresql/${server_major}/bin/psql"
+  pg_dump_bin="/usr/lib/postgresql/${server_major}/bin/pg_dump"
+
+  if [[ ! -x "$psql_bin" ]]; then
+    if command -v psql >/dev/null 2>&1; then
+      psql_bin="$(command -v psql)"
+    else
+      psql_bin="$probe_psql"
+    fi
   fi
-fi
 
-if [[ ! -x "$pg_dump_bin" ]]; then
-  if command -v pg_dump >/dev/null 2>&1; then
-    pg_dump_bin="$(command -v pg_dump)"
-  else
-    pg_dump_bin=""
+  if [[ ! -x "$pg_dump_bin" ]]; then
+    if command -v pg_dump >/dev/null 2>&1; then
+      pg_dump_bin="$(command -v pg_dump)"
+    else
+      pg_dump_bin=""
+    fi
   fi
 fi
 
@@ -147,10 +183,12 @@ Examples:
 
   Homebrew:
     brew install postgresql@${server_major}
+    # Then put that major on PATH ahead of the default formula, e.g.:
+    #   export PATH="/opt/homebrew/opt/postgresql@${server_major}/bin:\$PATH"
+    # Apple Silicon: /opt/homebrew/opt/postgresql@${server_major}/bin/
+    # Intel Homebrew: /usr/local/opt/postgresql@${server_major}/bin/
 
-After installation, ensure `psql` and `pg_dump` resolve to PostgreSQL
-${server_major}, or invoke the versioned binaries under
-`/usr/lib/postgresql/${server_major}/bin/` directly.
+Linux versioned binaries (when installed): /usr/lib/postgresql/${server_major}/bin/psql
 EOF
   exit 1
 fi

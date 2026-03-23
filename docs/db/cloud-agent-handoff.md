@@ -23,10 +23,12 @@
 
 ### Verify-script correctness
 
-- Fixed all DB package `db:verify` scripts so `git diff --exit-code` checks the
+- Fixed all DB package `db:migrate-and-verify` scripts so `git diff --exit-code` checks the
   correct package-local artifact paths:
-  - `lib/db-trading/scripts/verify-contract.mjs`
-  - `lib/db-timescale/scripts/verify-contract.mjs`
+  - `lib/db-trading/scripts/migrate.mjs`
+  - `lib/db-trading/scripts/verify.mjs`
+  - `lib/db-timescale/scripts/migrate.mjs`
+  - `lib/db-timescale/scripts/verify.mjs`
 
 ### Contract artifacts committed
 
@@ -41,9 +43,9 @@
   - `lib/db-timescale/AGENTS.md`
   - `lib/db-trading/README.md`
   - `lib/db-timescale/README.md`
-- Remote `db:migrate` / `db:verify` is now explicitly documented as allowed
+- Remote `db:migrate` / `db:migrate-and-verify` is now explicitly documented as allowed
   only when the user asks for it.
-- Docs now explicitly state that `db:verify` is not read-only because it runs
+- Docs now explicitly state that `db:migrate-and-verify` is not read-only because it runs
   `db:migrate` first.
 
 ## Remote DB results from this agent
@@ -52,7 +54,7 @@
 
 - `@lib/db-timescale`
   - `pnpm --filter @lib/db-timescale db:migrate`
-  - `pnpm --filter @lib/db-timescale db:verify`
+  - `pnpm --filter @lib/db-timescale db:migrate-and-verify`
 Both remote databases were reachable from this cloud environment and both
 already had all known migrations applied before the commands were run.
 
@@ -100,10 +102,10 @@ In a fresh cloud agent session:
 
    ```bash
    pnpm --filter @lib/db-trading db:migrate
-   pnpm --filter @lib/db-trading db:verify
+   pnpm --filter @lib/db-trading db:migrate-and-verify
    ```
 
-5. If `db:verify` produces tracked-file diffs, review them, run:
+5. If `db:migrate-and-verify` produces tracked-file diffs, review them, run:
 
    ```bash
    pnpm build

@@ -34,7 +34,7 @@ Set:
 export TIMESCALE_DB_URL="postgres://..."
 ```
 
-`db:schema:snapshot` and `db:verify` require local PostgreSQL client tools.
+`db:schema:snapshot`, `db:verify`, and `db:migrate-and-verify` require local PostgreSQL client tools.
 Use the same PostgreSQL major version as the target DB server and CI
 (`pg_dump`/`psql` 17 for the current GitHub Actions workflow). The snapshot
 script fails fast if the local client major version does not match the server.
@@ -42,8 +42,8 @@ script fails fast if the local client major version does not match the server.
 ## How connection and tooling work
 
 - **`db:migrate`** uses only the Node `pg` client. It connects to whatever `TIMESCALE_DB_URL` points to (local or remote). It does not start a temporary local database server.
-- **`db:verify`** runs `db:migrate`, then `pg_dump` against the **same** URL, regenerates contract artifacts, runs sanity checks (tables, indexes, hypertables), and fails if `git diff` shows drift. Client tools connect to the host in the URL over the network when that URL is remote.
-- **`db:verify:readonly`** skips migrate. Use it to compare the repo to an already-migrated database without applying pending migrations. Same effect: `DB_VERIFY_READONLY=1` with `db:verify`.
+- **`db:verify`** snapshots the live schema with `pg_dump`, regenerates contract artifacts, runs sanity checks (tables, indexes, hypertables), and fails if `git diff` shows drift. It does **not** run migrations.
+- **`db:migrate-and-verify`** runs `db:migrate`, then the same flow as `db:verify`.
 - **GitHub Actions** uses an ephemeral Timescale image on `localhost`, not production.
 
 The target DB must support TimescaleDB. The migration runner executes:
@@ -60,7 +60,7 @@ Use this flow for a brand-new empty Timescale/Postgres database:
 
 ```bash
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 What this does:
@@ -82,7 +82,7 @@ from an older/manual setup and has not yet been put under migration tracking:
 ```bash
 pnpm --filter @lib/db-timescale db:migrate:baseline
 pnpm --filter @lib/db-timescale db:migrate
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
 `db:migrate:baseline` records only baseline migrations. It does **not** skip
@@ -143,10 +143,10 @@ pnpm --filter @lib/db-timescale db:migrate
 ### Verify DB contract
 
 ```bash
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
-`db:verify` is not read-only. It runs `db:migrate` first, then regenerates
+`db:migrate-and-verify` applies migrations, then runs `db:verify`, which regenerates
 local contract artifacts and checks them with `git diff --exit-code`.
 
 ### Create a new migration
@@ -182,7 +182,7 @@ Or:
 pnpm --filter @lib/db-timescale db:sync
 ```
 
-For most engineering work, `db:verify` is the safer command because it checks
+For most engineering work, `db:migrate-and-verify` is the safer command because it checks
 reproducibility too.
 
 ## CI

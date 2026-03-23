@@ -21,13 +21,12 @@ for TypeScript, Python, C#, and R.
 
 ## Notes
 
-- Fresh empty DB: run `pnpm --filter @lib/db-timescale db:migrate`, then `db:verify`.
-- Existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`, then `db:verify`.
+- Fresh empty DB: run `pnpm --filter @lib/db-timescale db:migrate`, then `db:migrate-and-verify`.
+- Existing pre-migration DB with baseline schema already present: run `db:migrate:baseline` once, then `db:migrate`, then `db:migrate-and-verify`.
 - The migration runner creates `timescaledb` if needed; the DB role must have permission to create extensions.
-- `db:migrate` uses Node `pg` only. `db:verify` runs migrate, then `pg_dump` snapshot + regenerate artifacts + `git diff`; matching client major version required.
-- `db:verify:readonly` skips migrate. CI uses an ephemeral Timescale service container, not production.
-- `db:verify` is not read-only unless you use `db:verify:readonly`.
-- Only run `db:migrate` / `db:verify` against a deployed remote DB when the user explicitly requests it. Check connectivity and pending migrations first.
+- `db:migrate` uses Node `pg` only. `db:verify` runs snapshot + regenerate artifacts + SQL checks + `git diff`; matching client major version required.
+- `db:migrate-and-verify` runs `db:migrate` then `db:verify`. CI uses an ephemeral Timescale service container, not production.
+- Only run `db:migrate` / `db:migrate-and-verify` against a deployed remote DB when the user explicitly requests it. Check connectivity and pending migrations first.
 - Never manually create or alter tables outside migrations.
 - Migration files are forward-only SQL; do not add `BEGIN` / `COMMIT`.
 - For populated tables, migrations must explicitly backfill data and explicitly convert types with `USING` where needed.

@@ -39,8 +39,10 @@ Before running package scripts, export the correct DB URL:
 
 The app `.env` files already contain these values.
 
+From the monorepo root you can run `pnpm db:migrate`, `pnpm db:verify`, or `pnpm db:migrate-and-verify` (Turborepo runs the task in each package that defines it—currently both DB packages). Target one package with e.g. `pnpm exec turbo run db:migrate --filter=@lib/db-trading`.
+
 `db:migrate` uses only the Node `pg` client and does not require `pg_dump` or `psql`.
-`db:schema:snapshot` and `db:verify` also require local PostgreSQL client tools.
+`db:schema:snapshot`, `db:verify`, and `db:migrate-and-verify` also require local PostgreSQL client tools.
 Match the client major version to the target DB server and CI. The current DB
 contract workflow runs PostgreSQL 17 service containers with PostgreSQL 17
 client tools, and the local snapshot scripts now fail fast if `pg_dump` and the
@@ -87,33 +89,34 @@ pnpm --filter @lib/db-timescale db:migrate
 Each DB package now has a contract verification command:
 
 ```bash
-pnpm --filter @lib/db-trading db:verify
-pnpm --filter @lib/db-timescale db:verify
+pnpm --filter @lib/db-trading db:migrate-and-verify
+pnpm --filter @lib/db-timescale db:migrate-and-verify
 ```
 
-Read-only contract check (no migrate): `db:verify:readonly` or `DB_VERIFY_READONLY=1` with `db:verify`.
+Contract check without migrations: `db:verify` (`verify.mjs`). Full pipeline: `db:migrate-and-verify` (pnpm runs `migrate.mjs` then `verify.mjs`).
 
-Each command:
+`db:verify`:
 
-1. runs migrations (skipped when using `db:verify:readonly` / `DB_VERIFY_READONLY=1`)
-2. regenerates `schema/current.sql`
-3. regenerates generated TS/JSON artifacts
-4. checks those files are reproducible with `git diff --exit-code`
-5. runs DB-level assertions for expected tables/indexes/constraints
+1. regenerates `schema/current.sql`
+2. regenerates generated TS/JSON artifacts
+3. checks those files are reproducible with `git diff --exit-code`
+4. runs DB-level assertions for expected tables/indexes/constraints
 
-The same verification commands run in CI against fresh Postgres and Timescale
+`db:migrate-and-verify` is implemented as `node scripts/migrate.mjs && node scripts/verify.mjs`.
+
+The same `db:migrate-and-verify` command runs in CI against fresh Postgres and Timescale
 containers.
 
 For guarded live-production parity checks from GitHub Actions, use the manual
 workflow at
 [`db-production-parity.yml`](../../.github/workflows/db-production-parity.yml),
-which runs `db:verify:readonly` with protected environment secrets.
+which runs `db:verify` with protected environment secrets.
 
-`db:verify` runs `db:migrate` first unless you use `db:verify:readonly` (or
-`DB_VERIFY_READONLY=1`), so the default command against a deployed remote database
-can apply pending migrations before regenerating local contract artifacts.
+Against a deployed remote database, `db:migrate-and-verify` applies pending migrations
+before regenerating local contract artifacts; use `db:verify` alone to diff the live
+DB against the repo without migrating.
 
-Remote `db:migrate` / `db:verify` runs are allowed only with an explicit user
+Remote `db:migrate` / `db:migrate-and-verify` runs are allowed only with an explicit user
 request. Before running them from a cloud agent:
 
 1. confirm the corresponding `*_DB_URL` environment variable is present
@@ -206,7 +209,7 @@ Example: add column `status` to `order_v1`.
    ```
 4. Verify and refresh contracts:
    ```bash
-   pnpm --filter @lib/db-trading db:verify
+   pnpm --filter @lib/db-trading db:migrate-and-verify
    ```
 5. Update query contracts in `lib/db-trading/queries/*` if needed.
 6. Update adapters (`lib/db-trading/sql/*`) to read/write the new column.
@@ -242,7 +245,7 @@ Generated files:
 
 How to enforce:
 
-1. Regenerate after every migration (`db:types:generate` or `db:verify`).
+1. Regenerate after every migration (`db:types:generate` or `db:migrate-and-verify`).
 2. Import generated row types in adapter code where practical.
 3. Run `pnpm build` in CI; any adapter code out of sync with updated generated
    types should fail type-check.
@@ -257,7 +260,7 @@ How to enforce:
 
 - [ ] New migration added (no edits to already-applied migrations)
 - [ ] Migration applied successfully in target environment
-- [ ] `db:verify` passes for the affected DB package
+- [ ] `db:migrate-and-verify` passes for the affected DB package
 - [ ] `schema/current.sql` updated
 - [ ] `generated/typescript/db-types.ts` updated
 - [ ] `generated/contracts/db-schema.json` updated
@@ -271,7 +274,7 @@ Postgres package:
 
 - `pnpm --filter @lib/db-trading db:migration:new -- <name>`
 - `pnpm --filter @lib/db-trading db:migrate`
-- `pnpm --filter @lib/db-trading db:verify`
+- `pnpm --filter @lib/db-trading db:migrate-and-verify`
 - `pnpm --filter @lib/db-trading db:migrate:baseline`
 - `pnpm --filter @lib/db-trading db:schema:snapshot`
 - `pnpm --filter @lib/db-trading db:types:generate`
@@ -280,7 +283,7 @@ Timescale package:
 
 - `pnpm --filter @lib/db-timescale db:migration:new -- <name>`
 - `pnpm --filter @lib/db-timescale db:migrate`
-- `pnpm --filter @lib/db-timescale db:verify`
+- `pnpm --filter @lib/db-timescale db:migrate-and-verify`
 - `pnpm --filter @lib/db-timescale db:migrate:baseline`
 - `pnpm --filter @lib/db-timescale db:schema:snapshot`
 - `pnpm --filter @lib/db-timescale db:types:generate`

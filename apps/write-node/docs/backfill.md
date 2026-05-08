@@ -113,7 +113,7 @@ ORDER BY ticker, d;
 ```
 
 For a 23-hour Globex day you should see ~82,800 rows per ticker per day in
-`candles_1m_1s` (60 * 60 * 23). Holiday / half-trading days will be lower.
+`candles_1m_1s` (60 _ 60 _ 23). Holiday / half-trading days will be lower.
 
 ### CVD continuity (no jumps mid-row)
 

@@ -7,8 +7,8 @@ Reads ``TIMESCALE_DB_URL`` from the environment, the same variable used by
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import psycopg
 from psycopg_pool import ConnectionPool

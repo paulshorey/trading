@@ -1,4 +1,51 @@
 {
+  "backtests": [
+    {
+      "column": "id",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "model_id",
+      "nullable": true,
+      "type": "number"
+    },
+    {
+      "column": "strategy",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "ticker",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "range_start",
+      "nullable": false,
+      "type": "Date"
+    },
+    {
+      "column": "range_end",
+      "nullable": false,
+      "type": "Date"
+    },
+    {
+      "column": "params",
+      "nullable": false,
+      "type": "unknown"
+    },
+    {
+      "column": "metrics",
+      "nullable": false,
+      "type": "unknown"
+    },
+    {
+      "column": "created_at",
+      "nullable": false,
+      "type": "Date"
+    }
+  ],
   "candles_1d_1h": [
     {
       "column": "time",
@@ -407,6 +454,97 @@
     {
       "column": "unknown_volume",
       "nullable": false,
+      "type": "number"
+    }
+  ],
+  "features_v1": [
+    {
+      "column": "time",
+      "nullable": false,
+      "type": "Date"
+    },
+    {
+      "column": "ticker",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "timeframe",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "feature",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "value",
+      "nullable": true,
+      "type": "number"
+    }
+  ],
+  "models": [
+    {
+      "column": "id",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "name",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "version",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "params",
+      "nullable": false,
+      "type": "unknown"
+    },
+    {
+      "column": "metrics",
+      "nullable": false,
+      "type": "unknown"
+    },
+    {
+      "column": "artifact_uri",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "column": "created_at",
+      "nullable": false,
+      "type": "Date"
+    }
+  ],
+  "predictions": [
+    {
+      "column": "time",
+      "nullable": false,
+      "type": "Date"
+    },
+    {
+      "column": "model_id",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "ticker",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "column": "prediction",
+      "nullable": false,
+      "type": "number"
+    },
+    {
+      "column": "label",
+      "nullable": true,
       "type": "number"
     }
   ]

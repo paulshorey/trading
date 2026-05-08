@@ -86,29 +86,66 @@ Phase 1 exit criteria (unchanged): clean canonical history exists for ES, NQ,
 GC, SI, HG, CL across 1m@1s, 1h@1m, 1d@1h, with continuous CVD and stable
 rolling stats.
 
-### Phase 2 — Scaffold backtest-python — current focus
+### Phase 2 — Scaffold backtest-python — code-complete
 
-See [backtest-python.md](./backtest-python.md) for full detail.
+See [backtest-python.md](./backtest-python.md) for full detail and
+implementation status.
 
-1. Bootstrap Python app inside the monorepo.
-2. Read-only client that loads canonical candles into pandas/polars.
-3. Notebooks to explore data, validate quality, and prototype features.
-4. First feature: multi-timeframe RSI written to a `features_v1` table.
+What shipped:
 
-Exit criteria: a Python script can read 1m/1h/1d candles for any ticker and
-write multi-timeframe RSI(7), RSI(14), RSI(28) into a feature table that
-view-next can render.
+- Python app bootstrapped (`uv` + `pyproject.toml`, ruff lint clean,
+  `pytest` green, Python 3.11+).
+- Read-only candle client (`backtest.db.candles.read_candles`) that loads any
+  of the three canonical timeframes into pandas DataFrames indexed by `time`.
+- Long-format feature store: new migration adds `features_v1`, `models`,
+  `backtests`, and `predictions` tables in `@lib/db-timescale`. `features_v1`
+  and `predictions` are hypertables with compression policies. `db:verify`
+  enforces the new tables, indexes, and hypertable configuration.
+- Feature registry + builder pipeline: `backtest.features.registry` maps
+  stable names (`rsi_7`, `rsi_14`, `rsi_28`) to causal builder functions, and
+  `backtest.features.builder` orchestrates `read_candles → compute → upsert`.
+- CLI commands: `read-candles`, `build-features rsi`, `read-features`,
+  with `train` / `backtest` placeholders kept for Phase 3.
+- Notebook `01_explore_canonical.ipynb` joins canonical price + multi-period
+  RSI per timeframe for sanity-checking new ranges.
 
-### Phase 3 — Backtesting engine
+Database additions are documented in
+[`backtest-python.md`](./backtest-python.md). All four downstream tables
+follow the same database-first contract as canonical tables.
 
-1. Strategy interface (signal -> position sizing -> fills).
-2. Walk-forward evaluation with realistic slippage and commission.
-3. Metrics: Sharpe, Sortino, max drawdown, hit rate, expectancy, exposure.
-4. Backtest result tables persisted to TimescaleDB and viewable in `view-next`.
+Phase 2 exit criteria, met:
 
-Exit criteria: at least one baseline rules-based strategy (e.g. CVD divergence
-+ multi-timeframe RSI) is fully backtested across all in-scope tickers with
-reproducible metrics.
+- A Python script reads 1m/1h/1d candles for any ticker and writes
+  multi-timeframe RSI(7), RSI(14), RSI(28) into `features_v1`.
+- `pnpm build`, `pnpm --filter @lib/db-timescale db:verify`, and the Python
+  test suite are all green.
+
+### Phase 3 — Backtesting engine — current focus
+
+Builds on the canonical candles (Phase 1) and `features_v1` (Phase 2). All
+new code lives under `apps/backtest-python/src/backtest/backtest/`.
+
+1. Strategy interface (`signals(df) -> {-1, 0, +1}`) plus a registry of
+   built-in strategies. First strategy: RSI(14) on 1h crossing up through 30
+   while CVD slope on 1h is rising.
+2. Walk-forward evaluation with **time-based** train/validation/test split.
+   No random shuffling. Add an embargo gap when overlapping forward labels
+   exist between train and test periods.
+3. Realistic execution model: per-ticker slippage (in ticks) and commission
+   (per round trip). Default to "next bar open" fills with conservative
+   slippage; allow overrides per-strategy or per-backtest.
+4. Metrics: Sharpe, Sortino, max drawdown, hit rate, expectancy, exposure,
+   profit factor, time-in-market.
+5. Backtest results persisted to `public.backtests` (already migrated in
+   Phase 2). One row per run captures the strategy, params, range, and
+   metrics so runs are reproducible.
+6. Optional `view-next` dashboard tab to list recent backtests with metric
+   tiles and an equity curve. Read-only consumer of `public.backtests`.
+
+Exit criteria: at least one baseline rules-based strategy (e.g. CVD
+divergence + multi-timeframe RSI) is fully backtested across all in-scope
+tickers with reproducible metrics, walk-forward validation, and persisted
+results.
 
 ### Phase 4 — Machine learning
 

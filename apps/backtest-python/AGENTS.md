@@ -10,17 +10,18 @@ Reads (canonical, owned by `write-node`):
 
 - `candles_1m_1s`
 - `candles_1h_1m`
-- `candles_1d_1h` (planned)
+- `candles_1d_1h`
 
 Writes (downstream, owned by this app):
 
 - `features_v1` — long-format feature timeseries keyed by `(ticker, timeframe, feature, time)`
 - `models` — model registry
 - `backtests` — backtest run summaries
-- `predictions` — model predictions per `(ticker, time)`
+- `predictions` — model predictions per `(model_id, ticker, time)`
 
 Schema for these tables lives in `@lib/db-timescale/migrations/`. Do not
-create or alter tables outside that package.
+create or alter tables outside that package. `db:verify` enforces the full
+table list (canonical + downstream) and the hypertable / index allowlists.
 
 ## Source layout
 
@@ -28,12 +29,20 @@ create or alter tables outside that package.
 src/backtest/
   config.py              # tickers, timeframes, registries
   db/                    # connection + readers/writers
-  features/              # feature definitions (RSI, CVD, returns, ...)
-  backtest/              # walk-forward engine, strategy, metrics
-  models/                # ML training/eval wrappers
-  cli.py                 # entry point: build-features, train, backtest
+    candles.py           # read canonical candles (1m_1s/1h_1m/1d_1h)
+    features.py          # upsert/read features_v1
+    models.py            # register_model / get_model
+    backtests.py         # record_backtest (append-only)
+    predictions.py       # upsert_predictions / read_predictions
+  features/
+    rsi.py               # Wilder RSI (causal, unit-tested)
+    registry.py          # name-resolved FeatureSpec registry
+    builder.py           # read_candles -> compute -> upsert orchestration
+  backtest/              # walk-forward engine, strategy, metrics (Phase 3)
+  models/                # ML training/eval wrappers (Phase 4)
+  cli.py                 # entry point
 notebooks/               # research notebooks
-tests/                   # pytest suite
+tests/                   # pytest suite (no DB required)
 ```
 
 ## Operational rules
@@ -52,10 +61,24 @@ tests/                   # pytest suite
 
 ## Useful entry points
 
+Phase 2 (shipped):
+
 ```bash
-# Once implemented:
 uv run python -m backtest.cli read-candles --ticker ES --timeframe 1m_1s --limit 100
-uv run python -m backtest.cli build-features rsi --ticker ES --timeframe 1m_1s --period 14 --start 2026-01-01 --end 2026-02-01
+
+# Multi-period RSI in one invocation: repeat --period for each.
+uv run python -m backtest.cli build-features rsi \
+  --ticker ES --timeframe 1h_1m \
+  --period 7 --period 14 --period 28 \
+  --start 2026-01-01 --end 2026-04-01
+
+uv run python -m backtest.cli read-features \
+  --ticker ES --timeframe 1h_1m --feature rsi_14 --limit 10
+```
+
+Phase 3 / 4 (placeholders, not yet implemented):
+
+```bash
 uv run python -m backtest.cli train --model gbm --range 2026-01-01:2026-04-01
 uv run python -m backtest.cli backtest --strategy rsi_cvd --ticker ES --range 2026-01-01:2026-04-01
 ```

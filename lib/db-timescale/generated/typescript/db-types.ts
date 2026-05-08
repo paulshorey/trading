@@ -1,6 +1,18 @@
 // AUTO-GENERATED FILE. DO NOT EDIT.
 // Run: pnpm --filter @lib/db-timescale db:types:generate
 
+export interface BacktestsRow {
+  "id": number;
+  "model_id": number | null;
+  "strategy": string;
+  "ticker": string;
+  "range_start": Date;
+  "range_end": Date;
+  "params": unknown;
+  "metrics": unknown;
+  "created_at": Date;
+}
+
 export interface Candles1d1hRow {
   "time": Date;
   "ticker": string;
@@ -91,8 +103,38 @@ export interface Candles1m1sRow {
   "unknown_volume": number;
 }
 
+export interface FeaturesV1Row {
+  "time": Date;
+  "ticker": string;
+  "timeframe": string;
+  "feature": string;
+  "value": number | null;
+}
+
+export interface ModelsRow {
+  "id": number;
+  "name": string;
+  "version": string;
+  "params": unknown;
+  "metrics": unknown;
+  "artifact_uri": string | null;
+  "created_at": Date;
+}
+
+export interface PredictionsRow {
+  "time": Date;
+  "model_id": number;
+  "ticker": string;
+  "prediction": number;
+  "label": number | null;
+}
+
 export interface TimescaleDbSchema {
+  "backtests": BacktestsRow;
   "candles_1d_1h": Candles1d1hRow;
   "candles_1h_1m": Candles1h1mRow;
   "candles_1m_1s": Candles1m1sRow;
+  "features_v1": FeaturesV1Row;
+  "models": ModelsRow;
+  "predictions": PredictionsRow;
 }

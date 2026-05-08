@@ -1,8 +1,12 @@
-# `apps/backtest-python` plan
+# `apps/backtest-python` — Phase 2 status + Phase 3 plan
 
 A Python research app inside the monorepo that reads canonical TimescaleDB
 candle tables, builds derived features (multi-timeframe RSI, CVD slope, etc.),
 trains and evaluates ML models, and runs backtests.
+
+**Phase 2 (scaffold + first feature) is code-complete.** This document keeps
+the original architecture as a reference and documents what shipped vs. what
+remains for Phases 3+.
 
 ## Why Python here
 
@@ -20,7 +24,7 @@ trains and evaluates ML models, and runs backtests.
 
 - `candles_1m_1s`
 - `candles_1h_1m`
-- (planned) `candles_1d_1h`
+- `candles_1d_1h`
 
 `backtest-python` **writes** its own tables, never the canonical ones:
 
@@ -96,8 +100,9 @@ apps/backtest-python/
 
 ## Database additions
 
-Add three new migrations in `@lib/db-timescale/migrations/`. Schema sketch
-only — refine before applying.
+Shipped in `lib/db-timescale/migrations/202605072300__add_backtest_python_tables.sql`.
+The four downstream tables are now part of the same database-first contract
+as the canonical tables. `db:verify` enforces both.
 
 ### `features_v1`
 
@@ -181,56 +186,58 @@ SELECT create_hypertable(
 );
 ```
 
-## Step-by-step implementation plan
+## Phase 2 status
 
-### Step 1 — Bootstrap the app
+### Step 1 — Bootstrap the app — done
 
-- Create `apps/backtest-python/` skeleton: `pyproject.toml`, `AGENTS.md`,
-  `README.md`, `src/backtest/`, `notebooks/`, `tests/`.
-- Add to `pnpm-workspace.yaml`? No — this is a Python package. The monorepo
-  Turbo build does not need to know about it. `pnpm build` already filters by
-  workspace and will skip it.
-- Pin Python with `.python-version` and `uv.lock` (or `requirements.txt`).
-- Expose a single `cli.py` entry point with subcommands: `read-candles`,
-  `build-features`, `train`, `backtest`.
+- `apps/backtest-python/` skeleton: `pyproject.toml`, `AGENTS.md`, `README.md`,
+  `src/backtest/`, `notebooks/`, `tests/`.
+- `uv` venv + `uv pip install -e ".[dev]"` works end-to-end. `.python-version`
+  pins the interpreter.
+- `cli.py` exposes `read-candles`, `build-features rsi`, `read-features`,
+  with `train` / `backtest` placeholders for later phases.
 
-### Step 2 — Read canonical candles
+### Step 2 — Read canonical candles — done
 
-- Implement `db/connection.py` reading `TIMESCALE_DB_URL` with `psycopg`.
-- Implement `db/candles.py`:
-  - `read_candles_1m_1s(ticker, start, end) -> pandas.DataFrame`
-  - same for `1h_1m`, `1d_1h`.
-- Notebook `01_explore_canonical.ipynb` plots a few days for ES and confirms
-  the data looks sane (continuity, CVD curves, volume, no NaNs in required
-  columns).
+- `db/connection.py` opens a pooled `psycopg` connection via
+  `TIMESCALE_DB_URL`.
+- `db/candles.py::read_candles(ticker, timeframe, start, end, columns, limit)`
+  returns a DataFrame for any of the three canonical layers
+  (`1m_1s`, `1h_1m`, `1d_1h`).
+- Notebook `notebooks/01_explore_canonical.ipynb` reads all three timeframes
+  for one ticker, summarises row counts and CVD endpoints, and plots
+  price + RSI(14) per timeframe.
 
-Validation gates before moving on:
+Validation gates that should be checked when a fresh range is loaded:
 
 - No timestamp gaps inside open-market windows.
-- CVD is monotonic only as expected (changes by per-second VD, not jumps).
+- CVD changes by per-second VD, never jumps.
 - Row count per day matches expected open-market seconds.
 
-### Step 3 — Multi-timeframe RSI as the first feature
+### Step 3 — Multi-timeframe RSI — done
 
-- Implement `features/rsi.py`:
-  - Standard Wilder RSI on `close`.
-  - Vectorized over a pandas Series.
-  - Configurable period.
-- Implement a writer in `db/features.py` that batches inserts into
-  `features_v1` with `(ticker, timeframe, feature, time)` as primary key.
-- CLI command:
+- `features/rsi.py::wilder_rsi(close, period)` is vectorized, causal, and
+  unit-tested for bounds and warmup behaviour.
+- `features/registry.py` resolves stable feature names (`rsi_7`, `rsi_14`,
+  `rsi_28`) to `FeatureSpec`s. New features register here, not in migrations.
+- `features/builder.py::build_and_write_features(...)` reads canonical
+  candles, computes each spec's series, drops NaN warmup rows, and UPSERTS
+  the result into `features_v1`. Pure `compute_feature_series(...)` is
+  available for notebooks/tests with no DB.
+- `db/features.py` provides `upsert_features`, `upsert_feature_series`,
+  `read_features` (long), and `read_features_wide` (pivoted) helpers.
+- CLI:
+  ```bash
+  uv run python -m backtest.cli build-features rsi \
+    --ticker ES --timeframe 1h_1m \
+    --period 7 --period 14 --period 28 \
+    --start 2026-01-01 --end 2026-04-01
   ```
-  python -m backtest.cli build-features rsi \
-    --ticker ES \
-    --timeframe 1m_1s \
-    --period 14 \
-    --start 2026-01-01 --end 2026-02-01
-  ```
-- Notebook `02_features_rsi.ipynb`: load price + RSI(14) on 1m and 1h and
-  confirm overbought/oversold zones look right.
-- Compute RSI on **each canonical timeframe separately** (1m_1s, 1h_1m,
-  1d_1h). Multi-timeframe RSI is just the union of these features at the
-  feature-vector level.
+- Multi-timeframe RSI is the union of `(rsi_7, rsi_14, rsi_28)` written
+  independently for each canonical timeframe — no cross-timeframe code; the
+  feature vector layer in Phase 3 joins them by `(ticker, time)`.
+
+## Phase 3 plan
 
 ### Step 4 — Strategy interface and a baseline backtest
 

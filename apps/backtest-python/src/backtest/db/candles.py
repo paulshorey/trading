@@ -6,10 +6,11 @@ them. See ``docs/project/roadmap.md`` for the full table contract.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
 
 import pandas as pd
+from psycopg.rows import dict_row
 
 from ..config import Timeframe, resolve_candle_table
 from .connection import connection
@@ -82,7 +83,15 @@ def read_candles(
         params["limit"] = limit
 
     with connection() as conn:
-        df = pd.read_sql(sql, conn, params=params)
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, params)
+            data = cur.fetchall()
+
+    df = pd.DataFrame(data, columns=list(selected))
+    if df.empty:
+        if "time" in df.columns:
+            df = df.set_index("time")
+        return df
 
     if "time" in df.columns:
         df["time"] = pd.to_datetime(df["time"], utc=True)

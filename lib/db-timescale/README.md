@@ -11,15 +11,26 @@ This package owns:
 
 If application code and the Timescale schema disagree, fix the contract here.
 
-## Current canonical scope
+## Current scope
 
-`write-node` currently writes and reads only:
+Canonical timeseries tables (writer: `apps/write-node`):
 
 - `public.candles_1m_1s`
 - `public.candles_1h_1m`
+- `public.candles_1d_1h`
 
-`db:migrate` now converges the schema to only those two candle tables (plus
-the migration bookkeeping table `schema_migrations_cursor`).
+Downstream research tables (writer: `apps/backtest-python`):
+
+- `public.features_v1` — long-format derived feature timeseries (hypertable)
+- `public.models` — model registry
+- `public.backtests` — backtest run summaries
+- `public.predictions` — model predictions per `(model_id, ticker, time)`
+  (hypertable)
+
+`db:migrate` converges the schema to exactly the tables listed above (plus
+the migration bookkeeping table `schema_migrations_cursor`). `db:verify`
+enforces the same allowlist along with each table's index and hypertable
+configuration.
 
 ## Environment
 
@@ -58,6 +69,9 @@ What this does:
   - `candles_1h_1m`
   - `candles_1m_1s` contract cleanup
   - Timescale hypertable/compression setup
+  - `candles_1d_1h` (24h rolling window over hour-boundary rows)
+  - `features_v1`, `models`, `backtests`, `predictions` (downstream
+    `apps/backtest-python` tables)
 - verifies expected tables, indexes, hypertables, and generated artifacts
 
 ## Existing database that already has the baseline schema

@@ -1,0 +1,31 @@
+{
+  "name": "m",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "build:write-node": "turbo run build --filter=write-node...",
+    "deps:install": "bash scripts/install-workspace-deps.sh",
+    "test": "turbo run test",
+    "dev": "turbo run dev",
+    "dev:write-node": "pnpm --filter write-node dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "init": "node scripts/fetch-infisical.mjs --all",
+    "cloud:install": "bash scripts/cloud-agent-install.sh",
+    "cloud:start": "bash scripts/cloud-agent-start.sh",
+    "create:next-app": "node scripts/create-next-app.js"
+  },
+  "devDependencies": {
+    "@infisical/sdk": "^4.0.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.5.5",
+    "typescript": "5.8.3"
+  },
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.11"
+  }
+}

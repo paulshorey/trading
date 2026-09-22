@@ -1,0 +1,11 @@
+{
+  "name": "backtest-runner",
+  "private": true,
+  "dependencies": {
+    "@lib/strategy-core": "workspace:*"
+  },
+  "scripts": {
+    "build": "python3 -m compileall -q src",
+    "dev": "python3 ../../scripts/research.py serve"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "strategy": "sma_cross",
+  "fast": 10,
+  "slow": 30,
+  "quantity": 1,
+  "initial_cash": 100000,
+  "fee_bps": 0,
+  "fee_per_unit": 2.5,
+  "slippage_bps": 1,
+  "max_drawdown_pct": 10,
+  "allow_short": true
+}

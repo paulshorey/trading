@@ -1,6 +1,5 @@
-## How to
+# Git hooks
 
-1. `bun i -D husky`
-2. `npx husky install`
-3. create a file in `./.husky/pre-WHATEVER` that contains the bash script to execute, such as `npm run test`
-4. `chmod +x .husky/pre-WHATEVER`
+`pre-push` runs `pnpm test` when pushing from `main`, if the hook is enabled locally.
+Dependency installation does not configure hooks. Use `pnpm test` and `pnpm build`
+from the repository root to validate code changes independently of hooks.

@@ -1,13 +1,12 @@
-# Project goals
+# Project: Trading research
 
 Build a backtesting and trading bot development platform for futures and crypto.
 Developers configure, troubleshoot, and test custom metrics, strategies, and ML
 models trained on those metrics. Historical research comes first; paper and live
 trading will reuse strategy logic with a UI for monitoring and human overrides.
 
-The next priority is obtaining and validating Databento TBBO trade and trade-time
-top-of-book data, deriving candles from observed trades, then developing metrics,
-models, apps, algorithms, and services around those inputs.
+Validate Databento TBBO trades and trade-time top-of-book inputs before deriving
+candles or building dependent metrics and models.
 
 ## Code boundaries
 
@@ -62,3 +61,16 @@ Do not install dependencies inside build, test, dev, or start scripts.
 For code changes, run relevant tests and `pnpm build`. For documentation changes,
 check accuracy and links. Keep documentation short, avoid duplicated instructions,
 and distinguish implemented behavior from planned capabilities.
+
+# Research and report
+
+If something goes wrong, stop the affected operation and report relevant findings, data, and logs.
+Redact secrets and private content.
+If unsure about something, research, search the web, find latest techniques and best practices.
+
+# Next steps
+
+Consider what was recently done, what's in progress, and how it contributes to the goal.
+Decide and recommend what to do next.
+
+# Goal: Develop reproducible strategies from historical research through live trading

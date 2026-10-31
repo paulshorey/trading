@@ -1,8 +1,5 @@
 # Research data
 
-Historical futures and crypto data supports metric development, ML training, and
-strategy testing. Store dataset metadata in `manifests/`, Databento TBBO exports in
-`databento/`, and generated experiments in `runs/`. Only manifests belong in git.
-
-See the [data workflow](../docs/project/data.md) for downloads, validation, and
-supported formats. No historical data is bundled.
+Gitignored local data: Databento job folders under `databento/GLBX.MDP3/<job_id>/`,
+the one-day sample under `sample/`, and saved runs under `runs/`. Keep job folders
+exactly as delivered. See the [data plan](../docs/project/data.md).

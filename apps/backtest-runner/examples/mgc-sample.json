@@ -1,0 +1,16 @@
+{
+  "product": "MGC",
+  "contract": "MGCZ6",
+  "start": "2026-08-31",
+  "end": "2026-08-31",
+  "warmup_sessions": 0,
+  "strategy": "bias_pullback",
+  "strategy_params": {
+    "bias_ret_atr": 0.3,
+    "trigger_rsi": 35,
+    "trigger_delta": 0.1,
+    "bracket": { "target_atr": 1.5, "stop_atr": 1.0, "max_hold_s": 180 }
+  },
+  "features": { "rsi_period": 7, "atr_period": 7, "volume_period": 7 },
+  "execution": { "contracts": 1, "commission_per_contract": 1.0 }
+}

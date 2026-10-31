@@ -1,16 +1,16 @@
 # Sliding-window candles
 
-Status: planned research design, not implemented. See [Status](#status).
+Status: implemented for historical runs and rehearsals; see [Status](#status).
 
 At every refresh, build a **complete** candle from the most recent full duration,
 instead of a partial candle that began at the top of the hour. Indicators then
 compare a full current candle with full earlier candles, and hourly signals can
-update every minute. The project plans two windows:
+update every minute. The project uses two windows:
 
-| Name    | Each candle covers  | New candle every | Built from         |
-| ------- | ------------------- | ---------------- | ------------------ |
-| `1h@1m` | the last 60 minutes | minute           | 1-minute base bars |
-| `1m@1s` | the last 60 seconds | second           | 1-second base bars |
+| Name    | Each candle covers  | New candle every | Built from         | Role                          |
+| ------- | ------------------- | ---------------- | ------------------ | ----------------------------- |
+| `1h@1m` | the last 60 minutes | minute           | 1-minute base bars | Bias: rules out a direction   |
+| `1m@1s` | the last 60 seconds | second           | 1-second base bars | Timing: decides when to enter |
 
 ## The problem with clock-aligned candles
 
@@ -125,17 +125,19 @@ Whether this improves decisions after costs is a research question. The
 
 ## Scope
 
-Only `1h@1m` and `1m@1s` are planned. Daily candles, other durations, and windows
-anchored to each tick are out of scope. Windows count only time when the market is
+Only `1h@1m` and `1m@1s` are implemented. A `1d@1h` window may later add a slower
+bias; other durations and windows anchored to each tick are out of scope. Windows count only time when the market is
 scheduled open, using an exchange calendar; see
 [closures and data gaps](design.md#7-closures-and-data-gaps).
 
 ## Status
 
-Nothing on this page is implemented. The current importer builds clock-aligned
-minute bars from Databento TBBO CSV and omits minutes without trades; the baseline
-backtest uses those bars directly. `1m@1s` first needs a 1-second trade aggregation.
-The [PostgreSQL schema](../../lib/db-research/README.md) is proposed and unapplied.
+Base bars, both rolling windows, per-phase indicators, and normalized features are
+implemented in `lib/strategy-core` and tested: phase 0 equals standard clock-aligned
+candles and indicators, and whole-session and second-by-second runs agree exactly.
+On the sample day, RSI over consecutive rolling candles (the archived approach)
+correlated only 0.12 with the correct per-phase hourly RSI. Persisting candles and
+the research comparison are next; see the [engine](../project/engine.md).
 
 ## Further reading
 
@@ -143,5 +145,5 @@ The [PostgreSQL schema](../../lib/db-research/README.md) is proposed and unappli
   closures, backtesting, ML, and validation.
 - [Background and sources](sources.md): where the idea came from, what the archived
   implementation did, and supporting research.
-- [Metric explorer plan](../project/metric-explorer.md): the UI that inspects these
-  outputs.
+- [Engine](../project/engine.md) and [research UI](../project/metric-explorer.md): how
+  these outputs drive backtests and how to inspect them.

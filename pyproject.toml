@@ -1,0 +1,33 @@
+# uv workspace root. Python packages live in lib/strategy-core and apps/backtest-runner.
+[project]
+name = "trading-research"
+version = "0.2.0"
+description = "Workspace root for the trading research Python packages"
+requires-python = ">=3.13"
+dependencies = ["backtest-runner", "strategy-core"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/backtest-runner", "lib/strategy-core"]
+
+[tool.uv.sources]
+backtest-runner = { workspace = true }
+strategy-core = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=9.2", "ruff>=0.17"]
+
+[tool.pytest.ini_options]
+testpaths = ["lib/strategy-core/tests", "apps/backtest-runner/tests"]
+addopts = ["--import-mode=importlib", "-ra"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["archive"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "NPY", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]

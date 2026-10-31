@@ -5,7 +5,8 @@
     "@lib/strategy-core": "workspace:*"
   },
   "scripts": {
-    "build": "python3 -m compileall -q src",
-    "dev": "python3 ../../scripts/research.py serve"
+    "build": "uv run --no-sync python -m compileall -q src",
+    "test": "uv run --no-sync pytest tests",
+    "dev": "uv run --no-sync research serve"
   }
 }

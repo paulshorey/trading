@@ -4,6 +4,21 @@ Status: proposed PostgreSQL 17+ schema, not applied to a database. No database
 connection or application adapter is included. Metric definitions and settings
 remain developer-authored Python; database metadata records their snapshots.
 
+## Revise before applying
+
+The engine now rebuilds base bars, candles, and features from DBN files in memory,
+in backtests and live sessions alike ([engine](../../docs/project/engine.md)). Before
+setup:
+
+- Remove `market.trade` and `market.quote`; DBN files are the tick archive.
+- Keep `market.base_bar` and `research.rolling_bar` optional: store bars only for
+  inspection or audit, never one-second rows for full history.
+- Add the roll schedule and per-session quality reports, and file schema, date, and
+  job ID to `market.source_file`.
+- Add tables for runs, closed trades, and ML rows (one would-be trade per signal:
+  features at the decision plus the simulated outcome, with `decision_ns`/`exit_ns`
+  for purged splits). Store features as one typed column set per feature-set version.
+
 [Schema](schema.sql) · [Partition example](partitions.example.sql) ·
 [Feature inspection query](queries/inspect_features.sql) ·
 [Phase history query](queries/phase_history.sql) ·

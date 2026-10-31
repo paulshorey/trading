@@ -1,64 +1,59 @@
 # Backtesting and trading bot development platform
 
-A developer platform for configuring, troubleshooting, and testing trading metrics,
-strategies, and machine-learning models for futures and crypto markets.
+A developer platform for building, testing, and running short-horizon futures
+strategies and the machine-learning models behind them. It starts with CME GC (gold)
+and NQ (Nasdaq-100) and supports adding more products.
 
-The workflow starts with historical Databento TBBO trades and trade-time top-of-book
-quotes. Developers will build custom metrics, train models on those
-metrics, compare strategies through reproducible backtests, and inspect results in
-a charting UI. The same strategy logic will later support continuous paper and live
-trading, with controls to monitor, pause, and override bot decisions.
+Strategies read Databento TBBO trades with their pre-trade bid and ask. A rolling
+`1h@1m` candle (the last hour, every minute) sets the direction bias; a rolling
+`1m@1s` candle (the last minute, every second) times entries; a bracket sized in ATRs
+exits within minutes. Every feature is normalized: basis points, ATR multiples,
+ratios, oscillators, or time; never raw prices. The same engine runs backtests (as fast
+as possible) and second-by-second live-style sessions with identical results, so paper
+trading can start before a strategy is final.
 
 ## Workspace
 
-| Path                   | Purpose                                                                   |
-| ---------------------- | ------------------------------------------------------------------------- |
-| `apps/backtest-runner` | Python CLI/API for historical data analysis and backtest experiments      |
-| `apps/research-web`    | UI for strategy configuration, charts, execution details, and run history |
-| `lib/strategy-core`    | Shared Python metrics, strategy logic, and replay calculations            |
-| `lib/research-charts`  | Reusable charting components                                              |
-| `lib/db-research`      | Proposed PostgreSQL schema and storage contract; not connected or applied |
-| `data/manifests`       | Dataset sources, checksums, and instrument metadata                       |
+| Path                   | Purpose                                                                     |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `lib/strategy-core`    | Base bars, rolling windows, features, strategies, execution, engine, labels |
+| `apps/backtest-runner` | Databento catalog and source, calendars, runs, CLI (`research`), local API  |
+| `apps/research-web`    | Run setup, results, and the second-by-second trade inspector                |
+| `lib/research-charts`  | Reusable chart components                                                   |
+| `lib/db-research`      | Proposed PostgreSQL schema (not applied yet)                                |
+| `data/`                | Databento job folders, the one-day sample, and saved runs (all gitignored)  |
 
-Python owns research and trading calculations. The planned metric explorer uses
-code-defined metrics and settings; its frontend visualizes and inspects results.
 `archive/` is reference-only, excluded from active builds and deployments.
 
 ## Run locally
 
-Requirements: Node 20+, pnpm 10.28.1, and Python 3.11+.
+Requirements: Node 20+, pnpm 10.28.1, and [uv](https://docs.astral.sh/uv/) 0.13+ (it
+installs Python 3.13 from `.python-version`).
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm dev
+pnpm deps:install    # pnpm install --frozen-lockfile && uv sync --frozen
+pnpm dev             # research UI at http://127.0.0.1:4400, API on 8001
 ```
-
-Open [the local UI](http://127.0.0.1:4400/). Its `/api` requests are proxied to the
-Python API on port 8001. The current Python baseline uses the standard library.
 
 ```sh
-python3 scripts/research.py catalog
-python3 scripts/research.py analyze --dataset YOUR_DATASET
-pnpm backtest --dataset YOUR_DATASET --config apps/backtest-runner/examples/es.json
-pnpm test
-pnpm build
+uv run research catalog                                              # data on disk
+uv run research backtest apps/backtest-runner/examples/mgc-sample.json
+uv run research verify apps/backtest-runner/examples/mgc-sample.json # live path = backtest
+uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
+pnpm lint && pnpm test && pnpm build
 ```
 
-## Development focus
+The bundled sample (`data/sample/`, not in git) is one day of Micro Gold. GC and NQ
+history comes from Databento batch downloads; see the [data plan](docs/project/data.md).
 
-The current foundation provides a local Databento TBBO CSV importer, trade-derived
-minute bars, SMA/RSI baseline strategies, a replay simulator, and a results UI.
-No historical files are bundled. ML training and live execution are planned.
+## Documentation
 
-Next, obtain TBBO history, validate its coverage, and use it to develop custom
-metrics, models, algorithms, apps, and services. See the [data workflow](docs/project/data.md) and
-[roadmap](docs/project/roadmap.md). The [metric explorer architecture](docs/project/metric-explorer.md)
-defines the next app, including [sliding-window candles](docs/sliding-windows/README.md)
-and a [proposed storage design](lib/db-research/README.md).
+- [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
+- [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
+- [Historical data](docs/project/data.md) and [roadmap](docs/project/roadmap.md).
+- [Research UI](docs/project/metric-explorer.md) and the [storage contract](lib/db-research/README.md).
 
 ## Private phone access through Tailscale
 
-Run `pnpm dev:tailscale --background` from the repository root.
-Use `pnpm dev:tailscale:status` and `pnpm dev:tailscale:stop` to manage it.
-The shared tool lives in `~/git/tailscale-dev`; this project's setup and address
-are in [the local Tailscale guide](docs/local-development-tailscale.md).
+`~/git/local-dev` manages the local services and the private Tailscale route; see
+[the local Tailscale guide](docs/local-development-tailscale.md).

@@ -1,8 +1,13 @@
 # Sliding-window engineering design
 
-Status: planned, not implemented. This page turns the [concept](README.md) into
-rules for code in `lib/strategy-core`. Window specifications, metrics, and their
-parameters are defined in Python code; the UI only displays results.
+Status: sections 1–8 are implemented in `lib/strategy-core` (`bars.py`, `windows.py`,
+`kernels.py`, `features.py`, `engine.py`); see the [engine](../project/engine.md).
+Persisted candles (section 10) and the research comparison (section 11.7) are next.
+Window specifications, metrics, and parameters are defined in Python code; the UI
+only displays results.
+
+`1m@1s` is the primary decision timeframe: it times entries every second. `1h@1m`
+supplies the direction bias, read as of the latest completed minute.
 
 ## Terms
 
@@ -19,8 +24,8 @@ parameters are defined in Python code; the UI only displays results.
 
 ## 1. Base bars
 
-Build 1-second and 1-minute base bars from Databento TBBO trades. The current
-importer already builds minute bars; seconds use the same aggregation.
+Build 1-second base bars from Databento TBBO trades and roll them up into 1-minute
+base bars (an exact aggregation).
 
 - Use integer UTC nanoseconds. A bar covers `[start, end)`; a trade exactly at a
   boundary belongs to the later bar. Assign trades by `ts_event` and keep `ts_recv`
@@ -31,8 +36,7 @@ importer already builds minute bars; seconds use the same aggregation.
 - Give every step when the market is scheduled open a slot, with one status:
   `observed` (at least one trade), `no_trades` (feed healthy, no trades), or
   `missing` (feed gap or unknown). Scheduled closures get no slot; see
-  [section 7](#7-closures-and-data-gaps). The current importer omits no-trade
-  minutes, so the window engine must insert empty slots.
+  [section 7](#7-closures-and-data-gaps).
 
 Build hourly candles from 1-minute base bars. Adding up overlapping `1m@1s` volumes
 would count each trade up to 60 times.
@@ -104,9 +108,10 @@ ending at `T`.
 - **Composites stay in phase.** MACD, RSI of an EMA, and divergences use the same
   phase at every level.
 - **Missing candles stay missing.** A missing candle leaves an empty slot in the
-  phase series; never pull an older candle forward to fill it. Each indicator
-  declares whether to hold or reset its state over the gap. Closed periods are not
-  missing: they do not exist in trading time, so state simply continues.
+  phase series; never pull an older candle forward to fill it. Implemented
+  indicators hold their averages over the gap and restart the previous close, so no
+  change is measured across it. Closed periods are not missing: they do not exist in
+  trading time, so state simply continues.
 - **Cost.** Memory is `60 × indicator instances × instruments` small states.
 
 A history lookup returns one slot per expected end time, oldest first. The session
@@ -229,19 +234,10 @@ those candles with `irregular_closure`. This affects a few holidays a year and n
 
 ## 10. Storage
 
-Compute in memory. Persist candles and features for inspection, plus the exact
-inputs of every decision. The [proposed PostgreSQL contract](../../lib/db-research/README.md)
-stores one base bar per scheduled-open step and all rolling candles in one table.
-Each candle records its status, slot counts, closed time, `spans_closure`,
-`irregular_closure`, and generated `phase_index` and `period_ordinal`. The
-[phase history query](../../lib/db-research/queries/phase_history.sql) uses an index
-on `phase_index, end_ns DESC`; benchmark it after database setup.
-
-Code modules follow the [metric explorer plan](../project/metric-explorer.md):
-`strategy_core/market/calendar.py` for scheduled-open steps, `strategy_core/windows/`
-for specs and the engine, `strategy_core/history/` for phase arithmetic and lookups,
-and `strategy_core/metrics/runner.py` for per-phase state. Add each module when its
-milestone needs it.
+Compute candles and features in memory from the DBN files, in backtests and live
+sessions alike; recompute them for inspection. Persist the exact inputs of every
+decision and trade, and the ML rows. The [proposed PostgreSQL contract](../../lib/db-research/README.md)
+describes candle tables; its README lists the revisions needed before it is applied.
 
 ## 11. Validation
 
@@ -263,14 +259,26 @@ Build in this order. Each step's tests must pass before the next step starts.
    run.
 6. **Causality.** Appending later data never changes earlier outputs, and no feature
    uses a candle that ends after its decision time.
-7. **Research comparison.** Use the same data, costs, targets, and holdout for:
-   - standard clock candles with decisions only at candle close;
-   - standard candles including the forming candle, with decisions every minute;
-   - each single phase alone, where the spread across 60 phases measures timing
-     luck;
+7. **Research comparison.** The question: does the rolling, per-phase representation
+   produce better decisions _after costs_ than simpler uses of the same trades? Hold
+   everything else fixed (data, costs, entry and exit rules, holdout) and change only
+   how the bias and timing inputs are built:
+   - standard clock candles, deciding only when a candle closes;
+   - standard candles plus the forming candle, deciding every step;
+   - each single phase alone (60 runs);
    - the full rolling system;
-   - the same model given minute bars without phases, which tests whether the
-     representation adds value beyond the raw data.
+   - the same model on plain base bars without phases, which tests whether the
+     representation adds anything beyond the raw data;
+   - for the bias: no bias filter at all, which tests whether `1h@1m` adds value to
+     `1m@1s` timing.
+
+   **Timing luck.** A single-phase run is an ordinary hourly strategy whose candles
+   end at minute `k` instead of `:00`. All 60 choices are equally valid, so the spread
+   of their results is what the clock alone can do. If phase-0 returns +8% and the
+   other phases range from −4% to +12%, a variant that beats phase 0 by 3% has not
+   shown anything. A result counts only when it beats that spread, holds across time
+   blocks, and survives costs. The rolling system should land near the middle of the
+   phase distribution with less variation, and react sooner.
 
    Report after-cost returns, drawdown, turnover, and variation across phases and
    time blocks.

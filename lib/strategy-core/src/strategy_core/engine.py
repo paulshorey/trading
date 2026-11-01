@@ -156,7 +156,12 @@ class Engine:
             self.pending = None
         if self.position is not None and self.last is not None:
             view, k = self.last
+            # The latest trade that happened after the entry (receive order can deliver an
+            # earlier event last); the exit can never precede the position.
+            after = np.flatnonzero(view.t.ts_event[: k + 1] >= self.position.entry_ns)
+            k = int(after[-1]) if len(after) else k
             trade = self.sim.close(view, k, self.position, reason, None)
+            trade["exit_ns"] = str(max(int(trade["exit_ns"]), self.position.entry_ns))
             trade["flags"] = sorted({*trade["flags"], "abandoned"})
             self.trades.append(trade)
             self.position = None

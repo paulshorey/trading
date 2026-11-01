@@ -231,3 +231,25 @@ def test_fills_never_match_a_trade_that_happened_before_arrival():
     assert view.first_at_or_after(1, T0 + 15 * S) == 2
     assert view.first_at_or_after(0, T0 + 15 * S) == 0
     assert view.first_at_or_after(0, T0 + 30 * S) == 3
+
+
+def test_trades_before_the_entry_never_trigger_or_fill_exits():
+    """Regression (PR #62 review): with event-time inversions after the entry, a trade that
+    happened earlier must not hit the target or stop, count toward excursions, or fill a
+    triggered stop."""
+    entry = (T0 + 60_200_000_000, 2000.0, 1, 1, 1000, 2000.0, 2000.1)  # long fills at 2000.1
+    target_rows = [entry, (T0 + 59 * S, 2000.9, 1, 1), (T0 + 62 * S, 2000.7, 1, 1)]
+    _, out = simulate(target_rows)
+    assert out["exit_reason"] == "target" and out["exit_ns"] == str(T0 + 62 * S)
+    assert out["mfe_ticks"] == pytest.approx(6)  # 2000.7, not the earlier 2000.9
+    stop_rows = [
+        entry,
+        (T0 + 59_500_000_000, 1999.0, 1, -1),  # before the entry: ignored
+        (T0 + 61 * S, 1999.6, 1, -1),  # triggers the stop at 61 s
+        (T0 + 60_500_000_000, 1999.9, 1, 1, 1000, 1999.8, 1999.9),  # before the trigger
+        (T0 + 62 * S, 1999.5, 1, -1, 1000, 1999.4, 1999.5),  # first trade after the trigger
+    ]
+    _, out = simulate(stop_rows)
+    assert out["exit_reason"] == "stop" and out["exit_ns"] == str(T0 + 62 * S)
+    assert out["exit_px"] == pytest.approx(1999.4) and out["pnl_ticks"] == pytest.approx(-7)
+    assert int(out["exit_ns"]) >= int(out["entry_ns"])

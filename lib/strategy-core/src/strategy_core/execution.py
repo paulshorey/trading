@@ -9,8 +9,9 @@ Timing model (see docs/project/engine.md):
   met. Size beyond the displayed size pays `depth_penalty_ticks`.
 - The target is a resting limit: it fills only when a trade prints beyond it
   (`limit_fill="through"`) or at it (`"touch"`). The stop is a resting stop-market:
-  a trade at or beyond it triggers it, and it fills at the next trade's book, never
-  better than the triggering trade's price.
+  a trade at or beyond it triggers it, and it fills at the book of the next trade that
+  happened after the trigger, never better than the triggering trade's price. Only
+  trades that happened after the entry fill can trigger an exit.
 - Time and session exits are market orders sent at the deadline.
 - Reactions (cooldown, the hold timer) start when the engine learns of a fill: when
   the fill trade's slot closes, never the earlier exchange time.
@@ -148,6 +149,7 @@ class Position:
     worst_px: int = 0
     stop_triggered: bool = False
     stop_trigger_px: int = 0
+    stop_trigger_ns: int = 0
     flags: list[str] = field(default_factory=list)
 
 
@@ -219,29 +221,35 @@ class Simulator:
         if j >= n:
             return n, None
         if pos.stop_triggered:
-            return j + 1, self.close(view, j, pos, "stop", None)
+            # The stop-market order fills at the next trade that happened after its trigger.
+            k = view.first_at_or_after(j, pos.stop_trigger_ns)
+            if k >= n:
+                return n, None
+            return k + 1, self.close(view, k, pos, "stop", None)
         lim = view.first_at_or_after(j, pos.exit_arrival_ns)
         prices = t.price[j:lim]
+        # Only trades that happened after the entry count: an event-time inversion can deliver
+        # an earlier trade later in receive order.
+        live = t.ts_event[j:lim] >= pos.entry_ns
         long = pos.direction > 0
         through = self.config.limit_fill == "through"
         if long:
-            hit_t = prices > pos.target_px if through else prices >= pos.target_px
-            hit_s = prices <= pos.stop_px
+            hit_t = live & (prices > pos.target_px if through else prices >= pos.target_px)
+            hit_s = live & (prices <= pos.stop_px)
         else:
-            hit_t = prices < pos.target_px if through else prices <= pos.target_px
-            hit_s = prices >= pos.stop_px
+            hit_t = live & (prices < pos.target_px if through else prices <= pos.target_px)
+            hit_s = live & (prices >= pos.stop_px)
         kt = int(np.argmax(hit_t)) if hit_t.any() else len(prices)
         ks = int(np.argmax(hit_s)) if hit_s.any() else len(prices)
         k = min(kt, ks)
-        self.excursion(pos, prices[: k + 1])
+        self.excursion(pos, prices[: k + 1][live[: k + 1]])
         if k < len(prices):
             if kt < ks:
                 return j + kt + 1, self.close(view, j + kt, pos, "target", pos.target_px)
             pos.stop_triggered = True
             pos.stop_trigger_px = int(prices[ks])
-            if j + ks + 1 < n:
-                return j + ks + 2, self.close(view, j + ks + 1, pos, "stop", None)
-            return n, None
+            pos.stop_trigger_ns = int(t.ts_event[j + ks])
+            return self.advance(view, j + ks + 1, pos)
         if lim < n:
             return lim + 1, self.close(view, lim, pos, pos.timed_reason, None)
         return n, None

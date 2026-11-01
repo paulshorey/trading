@@ -63,8 +63,10 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
    Size beyond the displayed top-of-book size pays `depth_penalty_ticks`.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
-   at or beyond it triggers it, and it fills at the next trade's book, never better
-   than the trigger price. Time and pre-close exits are market orders.
+   at or beyond it triggers it, and it fills at the book of the next trade that
+   happened after the trigger, never better than the trigger price. Only trades that
+   happened after the entry fill can trigger an exit, even if receive order delivers an
+   earlier one later. Time and pre-close exits are market orders.
 6. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
    and the hold timer start then.
 

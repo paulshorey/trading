@@ -1,58 +1,77 @@
 # Historical data
 
-Status: plan for review. Nothing below is implemented except the CSV importer
-described in [Current importer](#current-importer). The plan feeds the session
-calendar, 1-minute base bars, and `1h@1m` window engine in the
-[sliding-window design](../sliding-windows/design.md).
+Status: the DBN file catalog, contract selection, session calendars, one-second and
+one-minute base bars, and per-session quality checks are implemented in memory
+(`apps/backtest-runner`). PostgreSQL holds the file catalog; one-second rows come
+next. The bars feed the window
+engine described in the [sliding-window design](../sliding-windows/design.md).
 
-## What to download
+## What we have
 
-Buy Databento **TBBO** for **6 years of MGC**: every trade, with its aggressor side
-and the best bid and ask immediately before it.
+One year of Databento **TBBO** (every trade with its aggressor side and the best bid
+and ask just before it), November 1, 2025 to October 31, 2026, for seven CME
+products. **GC and SI are the prototype pair**; NQ and ES are much larger, so leave
+them for later.
 
-| Schema     | Contents                                     | CVD | Spread-aware fills | Bytes per record |
-| ---------- | -------------------------------------------- | --- | ------------------ | ---------------- |
-| `ohlcv-1s` | One bar per second with trades               | No  | No                 | 56               |
-| `trades`   | Every trade with aggressor side              | Yes | No                 | 48               |
-| `tbbo`     | Every trade plus the bid and ask just before | Yes | Yes                | 80               |
+| Product | Exchange contract      | Tick, value  | Files | Trades/day, front (median) | Seconds with a trade | Unknown side |
+| ------- | ---------------------- | ------------ | ----- | -------------------------- | -------------------- | ------------ |
+| GC      | COMEX gold, 100 oz     | 0.10, $10    | 311   | 97,000                     | 38%                  | 3.1%         |
+| SI      | COMEX silver, 5,000 oz | 0.005, $25   | 311   | 30,000                     | 20%                  | 3.1%         |
+| PL      | NYMEX platinum, 50 oz  | 0.10, $5     | 311   | 12,000                     | 8%                   | 3.7%         |
+| ES      | E-mini S&P 500         | 0.25, $12.50 | 312   | 451,000                    | 60%                  | ~0%          |
+| NQ      | E-mini Nasdaq-100      | 0.25, $5     | 312   | 381,000                    | 63%                  | ~0%          |
+| YM      | E-mini Dow ($5)        | 1, $5        | 312   | 65,000                     | 29%                  | ~0%          |
+| RTY     | E-mini Russell 2000    | 0.10, $5     | 312   | 92,000                     | 33%                  | ~0%          |
 
-One-second bars have no aggressor side, so they cannot produce CVD. `trades` is
-enough for OHLCV and CVD, but TBBO is worth about 1.7× the size. It lets the
-backtest charge the actual spread at the moment of each simulated order, which is
-the main source of optimism in day-trading backtests. It also shows sweeps and how
-much size was displayed at the best price. The extra complexity is small: the same
-records carry six more fields, and the bar builder can ignore them. The bid and ask
-are a pre-trade snapshot, not a continuous quote history.
+Layout: one Databento job folder per product, kept exactly as delivered (manifest,
+metadata, condition, and daily `glbx-mdp3-YYYYMMDD.tbbo.dbn.zst` files), under
+`data/databento/tbbo/<ROOT>--2025-11--2026-10/` (gitignored, 7.3 GB; back it up).
+Every job is dataset `GLBX.MDP3`, schema `tbbo`, parent symbology (`GC.FUT` and so on:
+all contracts and calendar spreads), DBN with zstd, split by UTC day.
 
-Download settings for the portal:
+Verified on November 1, 2026 (`uv run research catalog --verify` plus a full decode):
 
-| Job       | Settings                                                                                                    |
-| --------- | ----------------------------------------------------------------------------------------------------------- |
-| Trades    | Dataset `GLBX.MDP3`, schema `tbbo`, symbol `MGC.FUT` (parent), encoding DBN, compression zstd, split by day |
-| Contracts | Same symbol and dates, schema `definition` (expirations, tick size, multiplier)                             |
-| Optional  | `statistics` for settlement and open interest; `status` to cross-check the session calendar                 |
+- All 2,181 files are present with the manifest size and SHA-256; all are registered
+  in `market.source_file`.
+- Every record is a trade, receive times are sorted, and no event time goes backward.
+- Tick sizes implied by the prices equal the product specs in `strategy_core.market`.
+- No outright trade falls outside the exchange calendar in any file, including
+  holidays, early closes, and the equity-only Good Friday session (2026-04-03).
+- Databento marks 2025-11-28 (a long CME Globex outage), 2026-03-16, 2026-04-10, and
+  four weekend dates `degraded`. On 2025-11-28 most NQ, YM, and RTY records carry the
+  "book may be wrong" flag; exclude or flag that day.
+- Unknown-side volume is the outright legs of spread trades; it stays out of CVD.
+- Front months by volume: GC G, J, M, Q, Z (rolling late in the month before); SI H,
+  K, N, U, Z; PL F, J, N, V; ES, NQ, YM, RTY quarterly, about the second Monday of the
+  expiry month.
 
-Choose DBN rather than JSON or CSV. Its records already have integer prices (in
-units of 10⁻⁹) and nanosecond timestamps, and its header records the query and
-which contract each instrument ID means on each date. On the sample day it decoded
-about 10 times faster than JSON, and it converts losslessly to JSON or CSV whenever
-a readable copy helps. Compression does not change how easy it is to read.
+**TBBO only, for every product (decided November 1, 2026).** No more detailed
+Databento schema will be bought. TBBO is exact for every trade, but it shows the book
+only at trades, so simulated fills in thin markets are uncertain by a tick or two;
+see [data limits](engine.md#data-limits-tbbo-only) for measurements and design
+consequences.
 
-Split by day. Each file covers one UTC date, matching the per-date entries in
-`condition.json`, and one file is small enough to read whole. A CME session runs
-from 17:00 to 16:00 CT, so it spans two files; the pipeline reads files in order and
-never assumes a file is a session.
+**Contract definitions (recommended, not yet downloaded):** Databento quoted $0.00 for
+a year of `definition` records for all seven parents. They give each contract's
+expiration, tick size, and multiplier for the contracts table, and distinguish raw
+symbols that repeat each decade. Download a batch job with the same settings as the
+TBBO jobs (`GLBX.MDP3`, parents above, schema `definition`, 2025-11-01 to 2026-11-01,
+DBN, zstd, split by day) into `data/databento/definition/`. The catalog recognizes
+`definition` jobs, and `research catalog --verify` checks them.
 
-`MGC.FUT` includes every MGC contract and calendar spread. That lets us choose our
-own roll rule and warm up the next contract before switching to it. Keep each job
-folder exactly as delivered, including `manifest.json`, `metadata.json`, and
-`condition.json`, under `data/databento/GLBX.MDP3/<job_id>/`. That folder is
-gitignored; back it up.
+TBBO lets the backtest charge the actual spread at each simulated order. It carries
+only top-of-book size and order count at trades; there is no depth beyond the best
+price.
+
+Choose DBN rather than JSON or CSV: integer prices (units of 10⁻⁹), nanosecond
+timestamps, and a header with the query and the instrument ID of each contract on
+each date. A CME session runs from 17:00 to 16:00 CT, so it spans two daily files;
+the source reads both and never assumes a file is a session.
 
 ## What the sample shows
 
-The one-day sample in `data/sample/` (August 31, 2026) has 218,695 TBBO records
-across 21 instruments:
+The one-day Micro Gold (MGC) sample in `data/sample/` (August 31, 2026) has 218,695
+TBBO records across 21 instruments:
 
 - **Contracts.** The front contract, MGCZ6, has 80% of trades. The expiring MGCV6
   has 11%, calendar spreads 9%, and farther months 0.5%.
@@ -67,55 +86,60 @@ across 21 instruments:
 
 ## Storage
 
-**Decision: Databento's DBN files are the permanent tick archive, and PostgreSQL
-holds everything derived from them from the start.** There is no intermediate
-Parquet or DuckDB layer.
+**Decision (revised October 31, 2026): DBN files are the permanent tick archive, and
+PostgreSQL holds everything derived from them, including one row per scheduled-open
+second per contract.** There is no Parquet or DuckDB layer.
 
-| Storage for ticks                  | One sample day | 6 years, upper bound |
-| ---------------------------------- | -------------- | -------------------- |
-| DBN uncompressed (Databento bills) | 17.5 MB        | ≈ 27 GB              |
-| DBN with zstd                      | 4.6 MB         | ≈ 7 GB               |
-| Lean PostgreSQL table, measured    | 39 MB          | ≈ 60 GB              |
+- **DBN files** keep every trade with its pre-trade book. Fills and any rebuild read
+  them. A year of the seven products is 7.3 GB with zstd.
+- **One-second rows** (OHLCV plus per-second metrics such as aggressor flow, CVD,
+  spread, and top-of-book size and imbalance at trades) are computed by an ingestion
+  job and stored for SQL research, ML exports, and fast backtests. **Every
+  scheduled-open second gets a row, including seconds without trades** (status
+  `no_trades`; decided November 1, 2026), and every row carries its index counter
+  (`slot_ordinal`), so a sliding window is always exactly 60 consecutive rows with no
+  skip logic and phases never depend on the clock. SI has trades in only 20% of its seconds. A
+  contract-year is about 21 million scheduled seconds. A measured binary `COPY` of 44-column rows wrote
+  about 400,000 rows per second at about 400 bytes per row before indexes, or about
+  a minute and 8 GB per contract-year. Store the front and next contracts from the
+  roll schedule, not every listed month.
+- **Relational data**: the file catalog with checksums, contracts, coverage, the roll
+  schedule, quality reports, runs, trades, ML rows, models, predictions, and live
+  decisions.
 
-The upper bound assumes every session is as busy as the sample; earlier years were
-quieter. The purchased files must be kept anyway as the original record, and
-loading ticks into PostgreSQL would create a second copy at about 8.5 times the
-size. Every tick consumer reads whole days in order: the bar builder, tick-level
-metrics, the fill simulator, and a "show trades in this candle" inspector. Reading
-the day's DBN file serves all of them. If a real need to query ticks appears later,
-load a date range into PostgreSQL then.
-
-PostgreSQL stores instruments and contracts, the dataset and file catalog with
-checksums, coverage and closures, the roll schedule, base bars, and later rolling
-candles, metrics, runs, features, models, predictions, and live decisions. One-minute
-base bars for two contracts over 6 years are about 4.2 million rows.
+The ingestion job must compute rows with `strategy-core` code, the same code a live
+session runs on the live feed; never reimplement a metric in SQL or a separate
+script. Each stored row set records its builder version (code hash, assignment
+settings such as `close_delay`, and source files). See the
+[storage contract](../../lib/db-research/README.md) for the table design guidance.
 
 ## Ingestion pipeline
 
-Each stage reads the output of the one before and can be rerun.
+Each stage reads the output of the one before and can be rerun. Stages 1–6 run in
+memory today, per backtest. Next, an ingestion job persists their outputs and the
+one-second rows; `research db register` already records downloaded files.
 
-1. **Register.** Verify each file against `manifest.json`. Record the job, query,
-   and files in `market.dataset` and `market.source_file`. Dates whose
-   `condition.json` entry is not `available` become `missing` coverage.
-2. **Contracts.** Load `definition` records into `market.instrument`, one row per
-   contract, with expiration, tick size, multiplier, and session calendar.
-3. **Calendar.** Generate scheduled-open minutes from a CME Globex metals calendar
-   in `pandas_market_calendars`, such as `CMEGlobex_Gold`. Report any trade during a
-   scheduled closure and any unusually long silence during open hours.
-4. **Rolls.** Count each outright's volume per session. The research series follows
-   the front contract: the outright with the most volume in the previous session,
-   switching at the session open. Store the schedule.
-5. **Base bars.** Stream each day's DBN file once. For the front and next contracts,
-   write one `market.base_bar` row per scheduled-open minute with status
-   `observed`, `no_trades`, or `missing`.
-6. **Quality report.** Per session: trades, volume, unknown-side share, missing
-   minutes, trades during closures, and sweep fills.
-
-Changing the builder writes a new derived dataset; runs keep the bars they used.
+1. **Register.** Verify each file against `manifest.json` (size and SHA-256). Dates
+   whose `condition.json` entry is not `available` or `degraded` have no coverage.
+2. **Contracts.** Resolve each raw symbol to its instrument ID per date from the file's
+   symbol mappings; IDs are unique only within a day. Spreads are excluded. Loading
+   `definition` records (expiration, tick size, multiplier) comes next.
+3. **Calendar.** Scheduled-open sessions come from `pandas_market_calendars`
+   (`CMEGlobex_GC`, `CMEGlobex_SI`, `CMEGlobex_PL`, and `CME Globex Equity` for the
+   equity-index products), including early closes.
+4. **Rolls.** The front contract is the outright with the most volume in the previous
+   session, switching at the session open, after warmup sessions on the new contract.
+   An explicit contract overrides it.
+5. **Base bars.** One row per scheduled-open second (and minute) with status
+   `observed`, `no_trades`, or `missing`. Late trades follow the
+   [timing model](engine.md#timing-model).
+6. **Quality report.** Per session: trades, volume, unknown-side share, late trades,
+   trades outside the schedule or coverage, missing slots, event-time inversions,
+   trades outside the pre-trade book, and Databento quality flags.
 
 ### Base bar fields
 
-Each 1-minute base bar stores OHLC and when the high and low occurred; volume split
+Each base bar (one second or one minute) stores OHLC and when the high and low occurred; volume split
 into buy, sell, and unknown aggressor side; trade count; and the price × size sum
 for VWAP. It also stores `delta_high` and `delta_low`: the highest and lowest
 running buy − sell volume within the minute, measured from its start. Together with
@@ -130,50 +154,10 @@ pre-trade bid and ask would be a separately named metric, not part of CVD.
 Spread, sweep, and displayed-size fields come later, when a metric needs them, by
 rerunning the builder over the DBN files.
 
-## Changes this requires
-
-The current code cannot ingest this data:
-
-- The importer reads CSV only, and your files are DBN.
-- It expects one contract per manifest. `MGC.FUT` has 21 instruments, so it stops at
-  the first trade from another contract.
-- It has no contract definitions, rolls, session calendar, empty minutes, or side
-  volumes.
-- It re-parses every file into memory on each run. Six years must be ingested once
-  into PostgreSQL instead.
-
-Planned changes:
-
-- **Dependencies:** `databento` to decode DBN, `psycopg` for PostgreSQL, and
-  `pandas_market_calendars`, declared in the Python `pyproject.toml` files.
-- **Schema:** remove `market.trade` and `market.quote`. Add the file's schema, date
-  range, and job ID to `market.source_file`, and `delta_high` and `delta_low` to
-  `market.base_bar`. Add a roll-schedule table.
-- **Database:** a local PostgreSQL 17 database, with its connection string in the
-  environment (for example `DATABASE_URL` in the gitignored `.secrets.sh`). The
-  `AGENTS.md` rule that defers database setup changes when this plan is approved.
-- **Commands:** `ingest` runs the pipeline stages for a job folder; the existing
-  `analyze` and `run` read bars from PostgreSQL.
-- **Tests:** small hand-built fixtures, so tests never need purchased data. The
-  sample day serves as an end-to-end check against its JSON copy.
-
 ## Open decisions
 
-1. **One-second base bars.** One row per open second is about 127 million rows per
-   contract for 6 years, as many as the ticks. Build them from the DBN files when
-   `1m@1s` work starts, and decide then whether to persist them.
-2. **Roll rule.** Previous-session volume is the default. Open interest requires the
+1. **Roll rule.** Previous-session volume is the default. Open interest requires the
    `statistics` schema; a fixed number of days before expiry needs only definitions.
-3. **Optional schemas.** Whether to buy `statistics` and `status`.
-
-## Current importer
-
-`python3 scripts/research.py analyze --dataset ID` and `run --dataset ID --config
-PATH` read a single-contract Databento TBBO CSV export (decimal prices, UTC ISO 8601
-timestamps, symbols mapped) described by a JSON manifest in `data/manifests/`. They
-build clock-aligned minute bars from trades, omit minutes without trades, and do not
-use the bid and ask. The planned pipeline replaces this path.
-
-References: [TBBO fields](https://databento.com/docs/schemas-and-data-formats/tbbo),
-[batch download options](https://databento.com/docs/portal/batch-download), and
-[DBN encoding](https://databento.com/docs/standards-and-conventions/databento-binary-encoding).
+   References: [TBBO fields](https://databento.com/docs/schemas-and-data-formats/tbbo),
+   [batch download options](https://databento.com/docs/portal/batch-download), and
+   [DBN encoding](https://databento.com/docs/standards-and-conventions/databento-binary-encoding).

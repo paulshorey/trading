@@ -1,54 +1,103 @@
-"""Causal indicators: update once per completed observed bar, with explicit warmup."""
-from collections import deque
+"""Strategies turn normalized feature rows into entry signals.
+
+`signals` must be row-wise: each output may depend only on that row's features,
+which already summarize history causally. Do not shift, roll, or normalize across
+rows. The engine verifies this by comparing whole-session and second-by-second runs.
+"""
+
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field
 from typing import Protocol
-from .models import Bar
+
+import numpy as np
+
+
+@dataclass(frozen=True)
+class Bracket:
+    """Exit plan fixed at entry, sized by the 1m@1s ATR at the signal."""
+
+    target_atr: float = 1.5
+    stop_atr: float = 1.0
+    max_hold_s: int = 180
+
+    def __post_init__(self):
+        if not (0 < self.target_atr <= 50 and 0 < self.stop_atr <= 50):
+            raise ValueError("Bracket ATR multiples must be in (0, 50]")
+        if type(self.max_hold_s) is not int or not 1 <= self.max_hold_s <= 6 * 3600:
+            raise ValueError("max_hold_s must be an integer from 1 to 21600")
 
 
 class Strategy(Protocol):
-    def on_bar(self, bar: Bar) -> int | None:
-        """Return desired direction (-1, 0, 1), or None while warming up."""
+    name: str
+    bracket: Bracket
+
+    def required(self) -> tuple[str, ...]: ...
+
+    def signals(self, features: Mapping[str, np.ndarray]) -> np.ndarray:
+        """Per row: +1 enter long, -1 enter short, 0 nothing (int8)."""
+        ...
+
+    def params(self) -> dict: ...
 
 
-class MovingAverageCross:
-    def __init__(self, fast: int, slow: int, allow_short: bool):
-        self.fast, self.slow, self.allow_short = fast, slow, allow_short
-        self.closes: deque[float] = deque(maxlen=slow)
+@dataclass(frozen=True)
+class BiasPullback:
+    """Infrastructure baseline, not a claim of edge.
 
-    def on_bar(self, bar: Bar) -> int | None:
-        self.closes.append(bar.close)
-        if len(self.closes) < self.slow:
-            return None
-        spread = sum(list(self.closes)[-self.fast:]) / self.fast - sum(self.closes) / self.slow
-        return 1 if spread > 0 else -1 if spread < 0 and self.allow_short else 0
+    Bias (1h@1m) disqualifies a direction: longs need the last hour up by at least
+    `bias_ret_atr` hourly ATRs with RSI above `bias_rsi`; shorts mirror it. Timing (1m@1s)
+    enters in an allowed direction after a pullback (fast RSI at or beyond `trigger_rsi`)
+    while aggressive volume leans the bias way (delta ratio beyond `trigger_delta`).
+    `use_bias=False` drops the filter, as an experiment control."""
 
+    bias_ret_atr: float = 0.5
+    bias_rsi: float = 50.0
+    trigger_rsi: float = 35.0
+    trigger_delta: float = 0.1
+    max_bias_age_s: float = 60.0
+    use_bias: bool = True
+    allow_short: bool = True
+    bracket: Bracket = field(default_factory=Bracket)
+    name: str = "bias_pullback"
 
-class RsiReversion:
-    """Wilder RSI, entering below 30 and exiting above 50; symmetric shorts if enabled."""
-    def __init__(self, period: int, allow_short: bool):
-        self.period, self.allow_short = period, allow_short
-        self.previous: float | None = None
-        self.count = 0
-        self.gain = self.loss = 0.0
-        self.target = 0
+    def __post_init__(self):
+        if not 0 <= self.trigger_rsi <= 50 or not 0 <= self.bias_rsi <= 100:
+            raise ValueError("trigger_rsi must be in [0, 50] and bias_rsi in [0, 100]")
+        if not -1 <= self.trigger_delta <= 1:
+            raise ValueError("trigger_delta must be in [-1, 1]")
 
-    def on_bar(self, bar: Bar) -> int | None:
-        previous, self.previous = self.previous, bar.close
-        if previous is None:
-            return None
-        change = bar.close - previous
-        gain, loss = max(change, 0), max(-change, 0)
-        self.count += 1
-        if self.count <= self.period:
-            self.gain += gain / self.period
-            self.loss += loss / self.period
+    def required(self) -> tuple[str, ...]:
+        fast = ("1m@1s.rsi", "1m@1s.delta_ratio", "1m@1s.atr_bps")
+        return (*fast, "1h@1m.ret_atr", "1h@1m.rsi", "1h@1m.age_s") if self.use_bias else fast
+
+    def signals(self, f: Mapping[str, np.ndarray]) -> np.ndarray:
+        fast_rsi, delta = f["1m@1s.rsi"], f["1m@1s.delta_ratio"]
+        n = len(fast_rsi)
+        if self.use_bias:
+            fresh = f["1h@1m.age_s"] <= self.max_bias_age_s
+            ret, rsi = f["1h@1m.ret_atr"], f["1h@1m.rsi"]
+            long_ok = fresh & (ret >= self.bias_ret_atr) & (rsi > self.bias_rsi)
+            short_ok = fresh & (ret <= -self.bias_ret_atr) & (rsi < 100 - self.bias_rsi)
         else:
-            self.gain = (self.gain * (self.period - 1) + gain) / self.period
-            self.loss = (self.loss * (self.period - 1) + loss) / self.period
-        if self.count < self.period:
-            return None
-        rsi = 50 if self.gain == self.loss == 0 else 100 if self.loss == 0 else 100 - 100 / (1 + self.gain / self.loss)
-        if self.target == 1 and rsi >= 50 or self.target == -1 and rsi <= 50:
-            self.target = 0
-        elif self.target == 0:
-            self.target = 1 if rsi < 30 else -1 if rsi > 70 and self.allow_short else 0
-        return self.target
+            long_ok = short_ok = np.ones(n, bool)
+        long = long_ok & (fast_rsi <= self.trigger_rsi) & (delta >= self.trigger_delta)
+        short = short_ok & (fast_rsi >= 100 - self.trigger_rsi) & (delta <= -self.trigger_delta)
+        if not self.allow_short:
+            short = np.zeros(n, bool)
+        return np.where(long, 1, np.where(short, -1, 0)).astype(np.int8)
+
+    def params(self) -> dict:
+        return asdict(self)
+
+
+STRATEGIES = {"bias_pullback": BiasPullback}
+
+
+def make_strategy(name: str, params: dict | None = None) -> Strategy:
+    if name not in STRATEGIES:
+        raise ValueError(f"Unknown strategy {name!r}; known: {sorted(STRATEGIES)}")
+    params = dict(params or {})
+    if isinstance(params.get("bracket"), dict):
+        params["bracket"] = Bracket(**params["bracket"])
+    params.pop("name", None)
+    return STRATEGIES[name](**params)

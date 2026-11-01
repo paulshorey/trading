@@ -177,7 +177,8 @@ label {
   margin: 0 0 16px;
 }
 select,
-input[type="number"] {
+input[type="number"],
+input[type="date"] {
   width: 100%;
   height: 39px;
   border: 1px solid #3b4a3e;
@@ -197,10 +198,17 @@ select {
   line-height: 1.7;
   margin: 8px 0 18px;
 }
-.pair {
+.pair,
+.triple {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.triple {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+input[type="date"] {
+  color-scheme: dark;
 }
 .rule {
   height: 1px;
@@ -540,5 +548,64 @@ footer a {
   footer {
     gap: 20px;
     line-height: 1.8;
+  }
+}
+
+/* Backtest inspector */
+.metrics.six {
+  grid-template-columns: repeat(6, 1fr);
+}
+.metrics.six .metric strong,
+.metrics.six .metric:last-child strong {
+  font-size: 15px;
+}
+.secondary {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid #3b4a3e;
+  background: transparent;
+  color: #a7b8aa;
+  padding: 10px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+aside details.advanced {
+  margin: 4px 0 20px;
+}
+aside details.advanced summary {
+  margin-bottom: 16px;
+}
+.spaced {
+  margin-top: 20px;
+}
+.panel-title.padded {
+  padding: 19px 20px;
+  border-bottom: 1px solid #2b3b30;
+}
+table.clickable tbody tr {
+  cursor: pointer;
+}
+table.clickable tbody tr:hover,
+table.clickable tbody tr.active {
+  background: #233325;
+}
+.inspector {
+  margin-top: 20px;
+}
+.inspector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid #2b3b30;
+}
+.inspector-grid table + table {
+  border-left: 1px solid #2b3b30;
+}
+@media (max-width: 1100px) {
+  .metrics.six {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .inspector-grid {
+    grid-template-columns: 1fr;
   }
 }

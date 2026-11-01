@@ -1,26 +1,32 @@
 # Sliding-window engineering design
 
-Status: planned, not implemented. This page turns the [concept](README.md) into
-rules for code in `lib/strategy-core`. Window specifications, metrics, and their
-parameters are defined in Python code; the UI only displays results.
+Status: sections 1–8 are implemented in `lib/strategy-core` (`bars.py`, `windows.py`,
+`kernels.py`, `features.py`, `engine.py`); see the [engine](../project/engine.md).
+Persisted candles (section 10) and the research comparison (section 11.7) are next.
+Window specifications, metrics, and parameters are defined in Python code; the UI
+only displays results.
+
+`1m@1s` is the primary decision timeframe: it times entries every second. `1h@1m`
+supplies the direction bias, read as of the latest completed minute.
 
 ## Terms
 
-| Term           | Meaning                                                                   |
-| -------------- | ------------------------------------------------------------------------- |
-| Window `W`     | Candle duration: 60 minutes for `1h@1m`, 60 seconds for `1m@1s`.          |
-| Step `S`       | Time between candles: 1 minute or 1 second. Both specs have `W/S = 60`.   |
-| Base bar       | A disjoint `S`-long bar built directly from trades; one window slot.      |
-| Trading time   | Steps when the market is scheduled open. Closed steps add no slot.        |
-| Rolling candle | The last 60 open-market slots, completed at `T`. Usually `[T−W, T)`.      |
-| Phase          | `(T mod W) / S`: minute of the hour or second of the minute.              |
-| Phase series   | Candles of one phase, one period apart. The input to standard indicators. |
-| Rolling stream | One output per step, cycling through phases. Read by charts and strategy. |
+| Term           | Meaning                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Window `W`     | 60 rows: 60 scheduled-open minutes for `1h@1m`, 60 seconds for `1m@1s`.                         |
+| Step `S`       | One row: 1 minute or 1 second of scheduled-open time.                                           |
+| Base bar       | A disjoint `S`-long bar built directly from trades; one row and one window slot.                |
+| Trading time   | Steps when the market is scheduled open. Closed steps add no slot.                              |
+| Rolling candle | The last 60 rows (index `o − 59 … o`). Equals clock `[T−W, T)` only when no closure intervenes. |
+| Ordinal        | The row's index counter (`slot_ordinal`): scheduled-open slots counted from a fixed origin.     |
+| Phase          | `ordinal mod 60`; equals the clock minute or second until a closure that is not a whole period. |
+| Phase series   | Candles of one phase, 60 rows apart. The input to standard indicators.                          |
+| Rolling stream | One output per step, cycling through phases. Read by charts and strategy.                       |
 
 ## 1. Base bars
 
-Build 1-second and 1-minute base bars from Databento TBBO trades. The current
-importer already builds minute bars; seconds use the same aggregation.
+Build 1-second base bars from Databento TBBO trades and roll them up into 1-minute
+base bars (an exact aggregation).
 
 - Use integer UTC nanoseconds. A bar covers `[start, end)`; a trade exactly at a
   boundary belongs to the later bar. Assign trades by `ts_event` and keep `ts_recv`
@@ -31,8 +37,7 @@ importer already builds minute bars; seconds use the same aggregation.
 - Give every step when the market is scheduled open a slot, with one status:
   `observed` (at least one trade), `no_trades` (feed healthy, no trades), or
   `missing` (feed gap or unknown). Scheduled closures get no slot; see
-  [section 7](#7-closures-and-data-gaps). The current importer omits no-trade
-  minutes, so the window engine must insert empty slots.
+  [section 7](#7-closures-and-data-gaps).
 
 Build hourly candles from 1-minute base bars. Adding up overlapping `1m@1s` volumes
 would count each trade up to 60 times.
@@ -68,24 +73,34 @@ it as a trade.
 
 ## 3. Phases
 
-For a candle completed at `T` (UTC nanoseconds since the epoch):
+Phases count trading time, never the clock. Every scheduled-open slot has an
+**ordinal**: the number of scheduled-open slots of its step that end at or before it,
+counted from a fixed origin (the first session on or after 2010-01-01). Closures add
+no ordinals, and every scheduled slot is a row, including slots without trades or data.
 
 ```text
-phase_index    = (T mod W) / S
-period_ordinal = T div W
+ordinal(T)     = scheduled-open slots ending in (origin, T]   (SessionCalendar.slot_ordinals)
+phase          = ordinal mod 60
+window(T)      = the 60 slots with ordinals ordinal(T) − 59 … ordinal(T)
+previous period = the candle at ordinal(T) − 60
 ```
+
+Same-phase candles are therefore always exactly 60 slots apart: adjacent,
+non-overlapping periods of open market, across any closure. In a stretch without an
+irregular closure since the origin, the phase equals the clock minute (`1h@1m`) or
+second (`1m@1s`):
 
 | Spec    | Candle completed | Phase | Previous same-phase candle |
 | ------- | ---------------- | ----- | -------------------------- |
 | `1h@1m` | 10:23:00         | 23    | 09:23:00                   |
 | `1m@1s` | 10:15:23         | 23    | 10:14:23                   |
 
-Within a phase, consecutive candles are adjacent, non-overlapping periods of open
-market. A closure skips ordinals: after the daily halt, phase 30's candle at 17:30
-follows the one at 15:30. Phase 0 equals standard session-chart candles, and phase
-`k` equals those candles shifted by `k` steps; both are test targets. Closures that
-are not whole periods are the one exception, described in
-[section 7](#7-closures-and-data-gaps).
+After the daily halt (a whole hour) the clock alignment holds: the 17:30 candle's
+previous same-phase candle ends at 15:30. After an early close that is not a whole
+hour, such as 18:15 UTC with a 23:00 reopen, the window ending 23:01 covers 17:16 to
+18:15 plus 23:00 to 23:01, and its previous same-phase candle ends at 17:16, 60 rows
+earlier. Phase labels shift relative to the clock from then on; values never depend on
+the labels or the origin.
 
 ## 4. Indicators per phase
 
@@ -104,22 +119,29 @@ ending at `T`.
 - **Composites stay in phase.** MACD, RSI of an EMA, and divergences use the same
   phase at every level.
 - **Missing candles stay missing.** A missing candle leaves an empty slot in the
-  phase series; never pull an older candle forward to fill it. Each indicator
-  declares whether to hold or reset its state over the gap. Closed periods are not
-  missing: they do not exist in trading time, so state simply continues.
+  phase series; never pull an older candle forward to fill it. Implemented
+  indicators hold their averages over the gap and restart the previous close, so no
+  change is measured across it. Closed periods are not missing: they do not exist in
+  trading time, so state simply continues.
 - **Cost.** Memory is `60 × indicator instances × instruments` small states.
 
-A history lookup returns one slot per expected end time, oldest first. The session
-calendar supplies the expected times, skipping closures:
+A history lookup reads rows by index, never by clock time. For the candle at index
+`o`, its phase series is the rows `o, o − 60, o − 120, …`, oldest first. Every
+scheduled slot has a row, so the list has no holes; a row's status says whether its
+candle is usable:
 
-```python
-phase_history(instrument, spec="1h@1m", end=T, count=15)
-# the 15 most recent open-market candles of T's phase, each with its status
+```sql
+-- Inputs of RSI(14) for the 1h@1m candle at minute index :o, from rolling candles stored
+-- one per minute row (or each rebuilt from base rows i − 59 … i). A base row's own close
+-- is not the rolling candle's close when that minute had no trades.
+SELECT slot_ordinal, end_ns, status, close FROM research.candles_1h_1m
+WHERE contract_id = :contract AND slot_ordinal <= :o AND slot_ordinal % 60 = :o % 60
+ORDER BY slot_ordinal DESC LIMIT 15;
 ```
 
-Lag is typed. `previous_period()` moves back `W` within a phase; `previous_step()`
-moves back `S` in the rolling stream. A plain `.shift(1)` on an interleaved table is
-a step lag, so it must not feed standard indicators.
+Lag is typed. `previous_period()` moves back 60 rows within a phase; `previous_step()`
+moves back one row in the rolling stream. A plain `.shift(1)` on an interleaved table
+is a step lag, so it must not feed standard indicators.
 
 ## 5. Highs, lows, and pivots
 
@@ -188,12 +210,11 @@ These candles carry `spans_closure`. Their range includes any price gap across t
 closure, such as a weekend gap. Standard ATR includes the same gap through the
 previous close, but features and the inspector should still be able to see it.
 
-Phase stays tied to the clock so that phase 0 remains the standard hourly candle.
-The daily halt and weekend last whole hours, so same-phase candles stay exactly 60
-open minutes apart. An early close such as 12:15 CT does not: across that closure,
-each `1h@1m` phase series has a single gap or overlap shorter than an hour. Flag
-those candles with `irregular_closure`. This affects a few holidays a year and never
-`1m@1s`, whose closures are whole minutes.
+Because phases come from trading-time ordinals (section 3), same-phase candles stay
+exactly 60 slots apart across every closure, including early closes that are not whole
+hours. No candle needs special handling; only the phase labels shift relative to the
+clock after such a closure. `1m@1s` labels never shift, because closures are whole
+minutes.
 
 ### Other rules
 
@@ -229,19 +250,11 @@ those candles with `irregular_closure`. This affects a few holidays a year and n
 
 ## 10. Storage
 
-Compute in memory. Persist candles and features for inspection, plus the exact
-inputs of every decision. The [proposed PostgreSQL contract](../../lib/db-research/README.md)
-stores one base bar per scheduled-open step and all rolling candles in one table.
-Each candle records its status, slot counts, closed time, `spans_closure`,
-`irregular_closure`, and generated `phase_index` and `period_ordinal`. The
-[phase history query](../../lib/db-research/queries/phase_history.sql) uses an index
-on `phase_index, end_ns DESC`; benchmark it after database setup.
-
-Code modules follow the [metric explorer plan](../project/metric-explorer.md):
-`strategy_core/market/calendar.py` for scheduled-open steps, `strategy_core/windows/`
-for specs and the engine, `strategy_core/history/` for phase arithmetic and lookups,
-and `strategy_core/metrics/runner.py` for per-phase state. Add each module when its
-milestone needs it.
+Store one row per scheduled-open second (base bars and their per-second metrics) in
+PostgreSQL, computed by the same code live sessions run. Rolling candles and per-phase
+indicators are derived from those rows and can be stored or recomputed; persist the
+exact inputs of every decision and trade, and the ML rows. See the
+[storage contract](../../lib/db-research/README.md).
 
 ## 11. Validation
 
@@ -256,21 +269,35 @@ Build in this order. Each step's tests must pass before the next step starts.
 3. **Window engine.** Each rolling candle equals a brute-force aggregation of trades
    over its 60 open-market steps. Batch, incremental, and chunked replays produce
    identical output.
-4. **Phases.** Phase 0 equals standard session-chart candles; phase `k` equals those
-   candles offset by `k` steps. Only flagged irregular-closure candles may differ.
+4. **Phases.** Same-phase candles are exactly 60 slots apart across every closure,
+   including an early close that is not a whole hour. In a stretch without such a
+   closure, phase 0 equals standard session-chart candles and phase `k` equals those
+   candles offset by `k` steps.
 5. **Indicators.** Each phase's SMA, RSI, EMA, ATR, and MACD equal the pinned
    reference on that phase's series. A restored checkpoint matches an uninterrupted
    run.
 6. **Causality.** Appending later data never changes earlier outputs, and no feature
    uses a candle that ends after its decision time.
-7. **Research comparison.** Use the same data, costs, targets, and holdout for:
-   - standard clock candles with decisions only at candle close;
-   - standard candles including the forming candle, with decisions every minute;
-   - each single phase alone, where the spread across 60 phases measures timing
-     luck;
+7. **Research comparison.** The question: does the rolling, per-phase representation
+   produce better decisions _after costs_ than simpler uses of the same trades? Hold
+   everything else fixed (data, costs, entry and exit rules, holdout) and change only
+   how the bias and timing inputs are built:
+   - standard clock candles, deciding only when a candle closes;
+   - standard candles plus the forming candle, deciding every step;
+   - each single phase alone (60 runs);
    - the full rolling system;
-   - the same model given minute bars without phases, which tests whether the
-     representation adds value beyond the raw data.
+   - the same model on plain base bars without phases, which tests whether the
+     representation adds anything beyond the raw data;
+   - for the bias: no bias filter at all, which tests whether `1h@1m` adds value to
+     `1m@1s` timing.
+
+   **Timing luck.** A single-phase run is an ordinary hourly strategy whose candles
+   end at minute `k` instead of `:00`. All 60 choices are equally valid, so the spread
+   of their results is what the clock alone can do. If phase-0 returns +8% and the
+   other phases range from −4% to +12%, a variant that beats phase 0 by 3% has not
+   shown anything. A result counts only when it beats that spread, holds across time
+   blocks, and survives costs. The rolling system should land near the middle of the
+   phase distribution with less variation, and react sooner.
 
    Report after-cost returns, drawdown, turnover, and variation across phases and
    time blocks.

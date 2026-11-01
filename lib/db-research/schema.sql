@@ -1,3 +1,4 @@
+-- REFERENCE ONLY: superseded by migrations/ (see README.md). Do not apply.
 -- Proposed initial schema for PostgreSQL 17+. Not applied to any database.
 -- No extensions, connections, migration runner, or runtime adapter are required.
 -- Apply once to an empty database when ready; this is not an upgrade migration.

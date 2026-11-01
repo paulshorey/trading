@@ -1,16 +1,20 @@
 # Sliding-window candles
 
-Status: planned research design, not implemented. See [Status](#status).
+Status: implemented for historical runs and rehearsals; see [Status](#status).
 
 At every refresh, build a **complete** candle from the most recent full duration,
 instead of a partial candle that began at the top of the hour. Indicators then
 compare a full current candle with full earlier candles, and hourly signals can
-update every minute. The project plans two windows:
+update every minute. The project uses two windows:
 
-| Name    | Each candle covers  | New candle every | Built from         |
-| ------- | ------------------- | ---------------- | ------------------ |
-| `1h@1m` | the last 60 minutes | minute           | 1-minute base bars |
-| `1m@1s` | the last 60 seconds | second           | 1-second base bars |
+| Name    | Each candle covers          | New candle every | Built from           | Role                          |
+| ------- | --------------------------- | ---------------- | -------------------- | ----------------------------- |
+| `1h@1m` | the last 60 one-minute rows | minute           | one-minute base bars | Bias: rules out a direction   |
+| `1m@1s` | the last 60 one-second rows | second           | one-second base bars | Timing: decides when to enter |
+
+**The core rule: windows count rows, never clock time.** Every scheduled-open minute
+or second is one row with an index counter; see
+[rows and index counters](#rows-and-index-counters).
 
 ## The problem with clock-aligned candles
 
@@ -54,16 +58,46 @@ minute when the market is closed does not, so every candle holds exactly 60 minu
 of open market. After a closure, candles combine the last minutes before it with
 the first minutes after it. `1m@1s` works the same way with 60 one-second slots.
 
+## Rows and index counters
+
+Every scheduled-open minute (for `1h@1m`) and second (for `1m@1s`) is one row, whether
+or not anything traded and even when data is missing (the row's status says so).
+Closed periods have no rows. Each row carries an **index counter**, `slot_ordinal`,
+that increases by exactly one per row. Windows and phases are row arithmetic on that
+counter, never arithmetic on clock timestamps:
+
+| For the row with index `o`                                 | Rows                                                           |
+| ---------------------------------------------------------- | -------------------------------------------------------------- |
+| Its rolling candle                                         | `o − 59 … o` (the last 60 rows)                                |
+| Its phase (the original `minute_index` and `second_index`) | `o mod 60`                                                     |
+| The same-phase candle one period earlier                   | `o − 60` (then `o − 120`, `o − 180`, …: the indicator's input) |
+| The previous step of the rolling stream                    | `o − 1`                                                        |
+
+Example: an early close at 18:15 UTC and a reopen at 23:00. The candle at 23:01 covers
+17:16–18:15 plus 23:00–23:01, and its same-phase candle one period earlier covers
+16:16–17:16. Counting clock time instead would lose those 45 minutes or overlap them.
+
+The counter starts at a fixed origin on the exchange calendar (the first session on or
+after 2010-01-01), so every contract, ingestion batch, and live session assigns the
+same index to the same slot; `SessionCalendar.slot_ordinals` computes it. A minute row
+with index `m` holds the second rows `60m − 59 … 60m`, because closures always fall on
+whole minutes. Until the first closure that is not a whole hour, the phase equals the
+minute of the hour, so the examples below use clock times; after one, labels shift
+and only the counter is meaningful. Timestamps remain on every row for charts and
+joins, never for choosing window members.
+
 ## Indicators run on one phase at a time
 
 **Do not feed consecutive rolling candles into an indicator.** The 13:06 and 13:07
 candles share 59 minutes, and their closes are just prices one minute apart. RSI(14)
 over consecutive rolling closes is simply a 1-minute RSI.
 
-Instead, an indicator reads candles one full hour apart. The candle ending at 13:07
-is compared with those ending at 12:07, 11:07, 10:07, and so on. That is an ordinary
-sequence of non-overlapping hourly candles that starts at :07 instead of :00. Its
-**phase** is 7, the minute of the hour at which its candles end.
+Instead, an indicator reads candles one full period of trading time apart: exactly
+60 rows earlier, 120, and so on. In an ordinary stretch, the candle ending at 13:07 is
+compared with those ending at 12:07, 11:07, 10:07: a sequence of non-overlapping
+hourly candles that starts at :07 instead of :00. Its **phase** is 7. Phases count
+scheduled-open minutes (an index that increments with every row and wraps at 60),
+not the clock, so closures never break the chain.
 
 | Time  | Phase | RSI(14) reads hourly candles ending at |
 | ----- | ----- | -------------------------------------- |
@@ -71,10 +105,13 @@ sequence of non-overlapping hourly candles that starts at :07 instead of :00. It
 | 13:07 | 7     | 13:07, 12:07, 11:07, …                 |
 | 13:08 | 8     | 13:08, 12:08, 11:08, …                 |
 
-`1h@1m` has 60 phases (minute of the hour); `1m@1s` has 60 (second of the minute).
-Each phase keeps its own indicator state, and only the phase ending now advances.
-RSI, EMA, ATR, and other formulas are unchanged; only their input sequence differs.
-Phase 0 reproduces standard clock-aligned candles, which gives a built-in check.
+`1h@1m` and `1m@1s` each have 60 phases. Each phase keeps its own indicator state,
+and only the phase ending now advances. RSI, EMA, ATR, and other formulas are
+unchanged; only their input sequence differs. Until a closure that is not a whole hour
+(a few early closes a year), phases equal clock minutes and phase 0 reproduces standard
+clock-aligned candles, which gives a built-in check. After one, an hourly window
+ending at 23:01 that follows an 18:15 close starts at 17:16, and its previous
+same-phase candle covers 16:16 to 17:16.
 
 ## What a strategy sees
 
@@ -84,10 +121,10 @@ form a **rolling stream**: hourly RSI, ATR, and so on, updated every minute.
 
 Code must say which "previous value" it means:
 
-- **Previous period:** the same phase one hour earlier. Standard crossovers, higher
-  highs, divergences, and pivots use this.
-- **Previous step:** the previous minute's output, from a different phase. This
-  measures how the hourly picture changed in the last minute.
+- **Previous period:** the same phase one period earlier, 60 rows back. Standard
+  crossovers, higher highs, divergences, and pivots use this.
+- **Previous step:** the previous row's output, from a different phase. This measures
+  how the hourly picture changed in the last minute.
 
 ## What this gains
 
@@ -125,17 +162,20 @@ Whether this improves decisions after costs is a research question. The
 
 ## Scope
 
-Only `1h@1m` and `1m@1s` are planned. Daily candles, other durations, and windows
-anchored to each tick are out of scope. Windows count only time when the market is
+Only `1h@1m` and `1m@1s` are implemented. A `1d@1h` window may later add a slower
+bias; other durations and windows anchored to each tick are out of scope. Windows count only time when the market is
 scheduled open, using an exchange calendar; see
 [closures and data gaps](design.md#7-closures-and-data-gaps).
 
 ## Status
 
-Nothing on this page is implemented. The current importer builds clock-aligned
-minute bars from Databento TBBO CSV and omits minutes without trades; the baseline
-backtest uses those bars directly. `1m@1s` first needs a 1-second trade aggregation.
-The [PostgreSQL schema](../../lib/db-research/README.md) is proposed and unapplied.
+Base bars, both rolling windows, per-phase indicators, and normalized features are
+implemented in `lib/strategy-core` and tested: same-phase candles are exactly 60 rows
+apart across every closure, phase 0 equals standard clock-aligned candles where no
+early close intervenes, and whole-session and second-by-second runs agree exactly.
+On the sample day, RSI over consecutive rolling candles (the archived approach)
+correlated only 0.12 with the correct per-phase hourly RSI. Persisting candles and
+the research comparison are next; see the [engine](../project/engine.md).
 
 ## Further reading
 
@@ -143,5 +183,5 @@ The [PostgreSQL schema](../../lib/db-research/README.md) is proposed and unappli
   closures, backtesting, ML, and validation.
 - [Background and sources](sources.md): where the idea came from, what the archived
   implementation did, and supporting research.
-- [Metric explorer plan](../project/metric-explorer.md): the UI that inspects these
-  outputs.
+- [Engine](../project/engine.md) and [research UI](../project/metric-explorer.md): how
+  these outputs drive backtests and how to inspect them.

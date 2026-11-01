@@ -18,7 +18,10 @@ the retired Node writer's instructions, removed in commit `d9727fd`:
 git show 'd9727fd^:apps/market-write-node/AGENTS.md'
 ```
 
-That revision's `minute_index` and `second_index` are this design's `phase_index`.
+That revision's `minute_index` and `second_index` are this design's phase:
+`slot_ordinal mod 60`, an index counter that increases by one per row. Its examples
+equated the index with the clock minute (10:31 → 31), which holds only until a closure
+that is not a whole hour; the current design counts rows.
 It also contains `docs/data-indicators/example/calculate-indicator-values.md` and
 its `.ts` example, which stream one phase at a time through a Wilder RSI, and
 `docs/data-backtesting/optimization.md`, which proposes in-memory lookbacks. Their

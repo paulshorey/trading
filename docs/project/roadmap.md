@@ -1,40 +1,38 @@
 # Platform roadmap
 
-## 1. Historical data
+Goal: reproducible short-horizon futures strategies, from historical research through
+live trading, on one engine. See the [engine](engine.md) for how the stages share code.
 
-Obtain Databento TBBO trade and trade-time top-of-book data for supported futures
-and crypto markets. Choose instruments and date ranges; record dataset, raw symbols,
-source files, and instrument metadata. Validate ordering, duplicates, gaps, and
-coverage before deriving candles or metrics. Keep futures contracts and roll rules
-explicit.
+## Done
 
-## 2. Metrics, strategies, and ML
+- uv-managed Python workspace with numpy, numba, Databento, and exchange calendars.
+- DBN catalog with checksums, per-date contract resolution, volume-based front-month
+  rolls, and per-session data-quality reports.
+- One-second and one-minute base bars, `1m@1s` and `1h@1m` rolling candles, per-phase
+  indicators, and normalized features with enforced scale invariance.
+- One engine for whole-session backtests and second-by-second rehearsals, verified
+  identical; TBBO-based fills, ATR brackets, one portfolio.
+- Per-signal would-be-trade outcomes (ML rows) and a UI to inspect runs and trades.
+- Local PostgreSQL 18 database `trading` with numbered migrations, a Databento file
+  registry, and database tests in CI.
 
-Build reusable Python metrics and feature pipelines. Develop configurable rule-based
-strategies and ML models trained on custom metrics. Use chronological training,
-validation, and holdout periods, and version inputs, parameters, and model artifacts.
+## Next
 
-## 3. Backtesting and developer tools
-
-The [historical metric explorer plan](metric-explorer.md) proposes modernizing
-`view-next` for code-defined metrics/settings and read-only inspection of model inputs.
-The separate [sliding-window concept](../sliding-windows/README.md) and
-[engineering design](../sliding-windows/design.md) define phase-correct indicators
-and backtesting. A [PostgreSQL schema](../../lib/db-research/README.md) is proposed
-for later database setup; the initial workflow can use files.
-
-Expand the runner to run and compare experiments defined in code, and the UI to
-troubleshoot features, signals, orders, costs, and equity. Improve execution
-assumptions for each market and add apps or services as the research workflow
-requires.
-
-## 4. Continuous trading and control
-
-Apply the same strategy logic to historical warmup plus incoming live data. Develop
-paper trading first, then broker execution, recovery, and position reconciliation.
-Provide configuration, monitoring, pause/resume, risk limits, and manual overrides
-with a record of automated and human decisions.
-
-The current local foundation includes TBBO CSV ingestion to minute trade bars,
-baseline strategies, replay accounting, and a charting UI. Sliding-window candles,
-broader tick metrics, ML training, and bot execution are the next development stages.
+1. **Data.** Done: one year of TBBO for GC, SI, PL, ES, NQ, YM, and RTY, verified and
+   registered ([details](data.md#what-we-have)). TBBO is the only market data for every
+   product. Next: download the free `definition` records.
+2. **Ingestion.** Starting with GC and SI, store one row for every scheduled-open
+   second per contract (OHLCV plus per-second metrics) computed by `strategy-core`, then contracts, rolls, runs,
+   trades, and ML rows ([storage guidance](../../lib/db-research/README.md)).
+3. **Research comparison.** Run the [validation experiments](../sliding-windows/design.md#11-validation):
+   phases, bias on and off, and rolling against clock candles, after costs.
+4. **Metrics.** Add order-flow and structure metrics (CVD slope and divergence, sweeps,
+   spread and displayed size, swing points) that pass the scale-invariance test.
+5. **ML.** Train on the signal rows with purged walk-forward splits (gradient-boosted
+   trees with a logistic baseline), then backtest the out-of-sample predictions on
+   newer sessions. Keep a final holdout that is evaluated once.
+6. **Paper trading.** A Databento live TBBO source feeding one-second chunks into the
+   same engine with simulated fills; record each day and replay it as a backtest to
+   confirm identical decisions.
+7. **Live trading.** A broker execution adapter with order reconciliation, risk limits,
+   pause and resume, manual overrides, and a log of automated and human decisions.

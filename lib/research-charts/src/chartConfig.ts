@@ -5,10 +5,16 @@ import {
   type ChartOptions,
   type Time,
 } from "lightweight-charts";
-export function getChartConfig(height: number): DeepPartial<ChartOptions> {
+export function getChartConfig(
+  height: number,
+  { seconds = false }: { seconds?: boolean } = {},
+): DeepPartial<ChartOptions> {
   const format = (time: Time) =>
     typeof time === "number"
-      ? new Date(time * 1000).toISOString().slice(5, 16).replace("T", " ")
+      ? new Date(time * 1000)
+          .toISOString()
+          .slice(seconds ? 11 : 5, seconds ? 19 : 16)
+          .replace("T", " ")
       : String(time);
   return {
     height,
@@ -23,7 +29,7 @@ export function getChartConfig(height: number): DeepPartial<ChartOptions> {
     rightPriceScale: { minimumWidth: 80, borderColor: "#2b3b30" },
     timeScale: {
       timeVisible: true,
-      secondsVisible: false,
+      secondsVisible: seconds,
       borderColor: "#2b3b30",
       tickMarkFormatter: format,
     },

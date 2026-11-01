@@ -47,6 +47,8 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 | `execution.py`                                  | Simulated fills against TBBO trades                                                                          |
 | `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                          |
 | `labels.py`                                     | One would-be trade per signal, for ML                                                                        |
+| `metrics.py`, `window_metrics.py`               | Per-second TBBO metrics and their rolling windows, for stored rows                                           |
+| `indicators.py`, `rows.py`, `state.py`          | Stored-row features, the row builder, and exact checkpoints                                                  |
 
 `apps/backtest-runner` adds the Databento file catalog, exchange calendars, the
 historical source (contract selection and rolls), run storage, the CLI, and the API.
@@ -124,10 +126,12 @@ with the ingestion milestone.
 
 ## Stored one-second rows
 
-The planned ingestion job writes one row per scheduled-open second, computed by this
-engine's code (`bars.aggregate` and its extensions). A backtest may read stored rows
-instead of rebuilding them only when their builder version and assignment settings
-match the run's configuration; fills always come from the DBN trades.
+`research ingest` writes one row per scheduled-open second and its rolling `1m@1s`
+candle with features, computed by this engine's code (`bars.aggregate`, `windows`, the
+feature kernels, and `rows.SecondRowBuilder`) with the backtest's default assignment
+timing; see [ingestion](ingestion.md). A backtest may read stored rows instead of
+rebuilding them only when their builder version and assignment settings match the run's
+configuration (not implemented yet); fills always come from the DBN trades.
 
 ## Data limits: TBBO only
 

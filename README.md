@@ -43,6 +43,7 @@ uv run research catalog                                              # data on d
 uv run research backtest apps/backtest-runner/examples/mgc-sample.json
 uv run research verify apps/backtest-runner/examples/mgc-sample.json # live path = backtest
 uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
+uv run research ingest plan GC SI    # stored one-second rows: plan, run, status
 pnpm lint && pnpm test && pnpm build
 ```
 
@@ -57,7 +58,8 @@ See [historical data](docs/project/data.md) for the layout and verification.
 - [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), the
   [handoff notes](docs/project/handoff.md) with decisions and next steps, and the
   prioritized [to-do list](docs/project/todo.md).
-- [Research UI](docs/project/metric-explorer.md) and the [storage contract](lib/db-research/README.md).
+- [One-second ingestion](docs/project/ingestion.md), the [TBBO metrics handoff](docs/project/tbbo-engineering-handoff.md) it implements, and the [storage contract](lib/db-research/README.md).
+- [Research UI](docs/project/metric-explorer.md).
 
 ## Private phone access through Tailscale
 

@@ -15,12 +15,18 @@ import numpy as np
 from strategy_core.bars import assignment_ns, assignment_times
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import NS, UNDEF_PRICE, Product, Trades
+from strategy_core.market import (
+    F_BAD_TS_RECV,
+    F_MAYBE_BAD_BOOK,
+    NS,
+    UNDEF_PRICE,
+    Product,
+    Trades,
+)
 
 from .calendars import Session
 from .catalog import DbnFile, verify
 
-F_BAD_TS_RECV, F_MAYBE_BAD_BOOK = 1 << 3, 1 << 2
 SIDES = {b"B": 1, b"A": -1}  # Databento: B = buyer aggressor, A = seller aggressor
 DAY = 86_400 * NS
 
@@ -65,6 +71,8 @@ def to_trades(records: np.ndarray) -> Trades:
         ask=records["ask_px_00"].astype(np.int64),
         bid_size=records["bid_sz_00"].astype(np.int64),
         ask_size=records["ask_sz_00"].astype(np.int64),
+        bid_count=records["bid_ct_00"].astype(np.int64),
+        ask_count=records["ask_ct_00"].astype(np.int64),
         flags=records["flags"].astype(np.uint8),
     )
 
@@ -157,7 +165,7 @@ class HistoricalSource:
         kept, and with no current contract the run cannot start."""
         volumes = self.outright_volumes(previous) if previous is not None else None
         if volumes:
-            return max(volumes, key=volumes.get)
+            return front_of(volumes)
         if current is not None:
             self.kept_front.add(session.trade_date)
             return current
@@ -206,6 +214,11 @@ class HistoricalSource:
                 sel = in_session & (records["instrument_id"] == iid)
                 volumes[symbol] = volumes.get(symbol, 0) + int(records["size"][sel].sum())
         return {k: v for k, v in volumes.items() if v > 0}
+
+
+def front_of(volumes: dict[str, int]) -> str:
+    """The outright with the most volume; an exact tie goes to the first symbol in order."""
+    return max(sorted(volumes), key=volumes.get)
 
 
 def raw_quality(t: Trades) -> dict:

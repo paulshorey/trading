@@ -35,6 +35,8 @@ RECORD = np.dtype(
         ("ask_px_00", "i8"),
         ("bid_sz_00", "u4"),
         ("ask_sz_00", "u4"),
+        ("bid_ct_00", "u4"),
+        ("ask_ct_00", "u4"),
         ("flags", "u1"),
     ]
 )
@@ -46,7 +48,7 @@ def records(rows):
     for i, (iid, ts, side, price, size, *delay) in enumerate(rows):
         px = round(price * 1e9)
         recv = ts + (delay[0] if delay else 1000)
-        out[i] = (iid, ts, recv, b"T", side, px, size, px - 100_000_000, px, 3, 3, 0)
+        out[i] = (iid, ts, recv, b"T", side, px, size, px - 100_000_000, px, 3, 3, 1, 1, 0)
     return out[np.argsort(out["ts_recv"], kind="stable")]
 
 

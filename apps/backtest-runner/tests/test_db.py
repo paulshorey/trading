@@ -1,34 +1,10 @@
-import os
 import shutil
-import uuid
 from datetime import date
 from pathlib import Path
 
-import psycopg
 import pytest
 from backtest_runner import db
 from backtest_runner.catalog import DbnFile
-from psycopg import conninfo, sql
-
-
-@pytest.fixture
-def database():
-    """A throwaway database on the configured server, dropped afterwards. Skips when the
-    server is unreachable unless TRADING_REQUIRE_DB is set (CI sets it)."""
-    base = conninfo.conninfo_to_dict(db.database_url())
-    admin = conninfo.make_conninfo(**{**base, "dbname": "postgres"})
-    name = f"trading_test_{uuid.uuid4().hex[:10]}"
-    try:
-        conn = psycopg.connect(admin, autocommit=True, connect_timeout=3)
-    except psycopg.OperationalError as error:
-        if os.environ.get("TRADING_REQUIRE_DB"):
-            raise
-        pytest.skip(f"PostgreSQL not reachable: {error}")
-    with conn:
-        conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    yield conninfo.make_conninfo(**{**base, "dbname": name})
-    with psycopg.connect(admin, autocommit=True) as conn:
-        conn.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
 
 
 def test_migrations_apply_once_and_record_checksums(database):

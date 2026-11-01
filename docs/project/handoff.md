@@ -36,35 +36,39 @@ at 23:01 covers 17:16–18:15 plus 23:00–23:01, and its previous same-phase ca
 instead compare it with the 18:01 candle, overlapping by 45 minutes.
 
 Implemented in the engine (`SessionCalendar.slot_ordinals`, `windows.RollingWindow`;
-tests in `lib/strategy-core/tests/test_windows_features.py`). Not yet in the database:
-the one-second and one-minute tables must store `slot_ordinal` (next task, step 3).
+tests in `lib/strategy-core/tests/test_windows_features.py`) and in the stored one-second
+tables, keyed by `(contract_id, slot_ordinal, end_ns)` ([ingestion](ingestion.md)).
 
 ## Where things stand
 
-| Area     | State                                                                                                                                          |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, TBBO fills, ML rows, research UI, and database layer in PR #62 (draft, branch `claude/uv-unified-engine`); CI green |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/`: verified and registered                 |
-| Database | Local PostgreSQL 18 database `trading` (Homebrew service); migration `0001_foundation`; all 2,182 files in `market.source_file`                |
-| Services | Under `~/git/local-dev`, Trading web on 4400 and API on 4401; plain `pnpm dev` uses 4400 and 8001                                              |
-| Strategy | `bias_pullback` is an infrastructure baseline; it loses money and is not a candidate                                                           |
+| Area     | State                                                                                                                                                       |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code     | Engine, windows, features, TBBO fills, ML rows, research UI, and database layer merged (PR #62); one-second ingestion on branch `claude/tbbo-second-ingest` |
+| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/`: verified and registered                              |
+| Database | Local PostgreSQL 18 database `trading` (Homebrew service); `0001_foundation` applied, `0002_second_rows` pending; all 2,182 files in `market.source_file`   |
+| Ingest   | `research ingest plan, run, status`: one-second rows and `1m@1s` candle features, tested; not yet run on `trading` ([ingestion](ingestion.md))              |
+| Services | Under `~/git/local-dev`, Trading web on 4400 and API on 4401; plain `pnpm dev` uses 4400 and 8001                                                           |
+| Strategy | `bias_pullback` is an infrastructure baseline; it loses money and is not a candidate                                                                        |
 
 ## Decisions and why
 
-| Decision                                                                                                                                        | Why                                                                                                                                                   | Details                                                             |
-| ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Prototype with GC and SI                                                                                                                        | Liquid enough to research, far smaller than NQ or ES (GC 32M and SI 13M trades a year against NQ's 103M)                                              | [Data](data.md#what-we-have)                                        |
-| Rolling candles in trading time; indicators run per phase on candles exactly 60 rows apart, phase = trading-time index mod 60 (never the clock) | Complete candles at every step; early closes cannot misalign phases. RSI over consecutive rolling candles correlated only 0.12 with the correct value | [Sliding windows](../sliding-windows/design.md#3-phases)            |
-| Features use only normalized units, enforced by `features.Unit` and a scale-invariance test                                                     | Prices change by multiples over years; models must not learn price levels                                                                             | [AGENTS.md](../../AGENTS.md#normalized-features-required)           |
-| One engine for backtests and live sessions: whole sessions for speed, one second per call live; `research verify` proves equality               | Paper-test unfinished strategies on the code that ships; the equality check also catches look-ahead                                                   | [Engine](engine.md)                                                 |
-| Explicit timing and conservative TBBO fills (pre-trade book, trade-through targets, stops never better than the trigger)                        | Realistic second-scale costs; every setting is recorded with the run                                                                                  | [Timing model](engine.md#timing-model)                              |
-| DBN files are the tick archive; PostgreSQL holds everything derived                                                                             | SQL research and fast backtests on stored rows; one consistent stack, no Parquet layer                                                                | [Data](data.md#storage), [storage](../../lib/db-research/README.md) |
-| Every scheduled-open second gets a row, including seconds without trades                                                                        | Each sliding window is exactly 60 consecutive rows, with no skip logic. SI trades in only 20% of its seconds                                          | [Storage](../../lib/db-research/README.md)                          |
-| Stored rows are computed by `strategy-core`, the code live sessions run                                                                         | Stored history and live features must be identical                                                                                                    | [Storage](../../lib/db-research/README.md)                          |
-| TBBO only, the same rules for every product; no more detailed data                                                                              | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI                       | [Data limits](engine.md#data-limits-tbbo-only)                      |
-| Use Databento `definition` records for contract metadata                                                                                        | Free for this data (quoted $0.00); authoritative expiration, tick size, and multiplier; distinguishes raw symbols that repeat each decade             | [Data](data.md#what-we-have)                                        |
-| uv (Python 3.13), numba for per-phase loops, psycopg 3, numbered SQL migrations                                                                 | Reproducible environments, fast batch runs, simple schema history                                                                                     | [README](../../README.md)                                           |
-| `research-web` is the only UI; its center is the trade inspector                                                                                | Checking backtest logic matters most now                                                                                                              | [Research UI](metric-explorer.md)                                   |
+| Decision                                                                                                                                                  | Why                                                                                                                                                   | Details                                                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Prototype with GC and SI                                                                                                                                  | Liquid enough to research, far smaller than NQ or ES (GC 32M and SI 13M trades a year against NQ's 103M)                                              | [Data](data.md#what-we-have)                                                                          |
+| Rolling candles in trading time; indicators run per phase on candles exactly 60 rows apart, phase = trading-time index mod 60 (never the clock)           | Complete candles at every step; early closes cannot misalign phases. RSI over consecutive rolling candles correlated only 0.12 with the correct value | [Sliding windows](../sliding-windows/design.md#3-phases)                                              |
+| Features use only normalized units, enforced by `features.Unit` and a scale-invariance test                                                               | Prices change by multiples over years; models must not learn price levels                                                                             | [AGENTS.md](../../AGENTS.md#normalized-features-required)                                             |
+| One engine for backtests and live sessions: whole sessions for speed, one second per call live; `research verify` proves equality                         | Paper-test unfinished strategies on the code that ships; the equality check also catches look-ahead                                                   | [Engine](engine.md)                                                                                   |
+| Explicit timing and conservative TBBO fills (pre-trade book, trade-through targets, stops never better than the trigger)                                  | Realistic second-scale costs; every setting is recorded with the run                                                                                  | [Timing model](engine.md#timing-model)                                                                |
+| DBN files are the tick archive; PostgreSQL holds everything derived                                                                                       | SQL research and fast backtests on stored rows; one consistent stack, no Parquet layer                                                                | [Data](data.md#storage), [storage](../../lib/db-research/README.md)                                   |
+| Every scheduled-open second gets a row, including seconds without trades                                                                                  | Each sliding window is exactly 60 consecutive rows, with no skip logic. SI trades in only 20% of its seconds                                          | [Storage](../../lib/db-research/README.md)                                                            |
+| Stored rows are computed by `strategy-core`, the code live sessions run                                                                                   | Stored history and live features must be identical                                                                                                    | [Storage](../../lib/db-research/README.md)                                                            |
+| TBBO only, the same rules for every product; no more detailed data                                                                                        | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI                       | [Data limits](engine.md#data-limits-tbbo-only)                                                        |
+| Use Databento `definition` records for contract metadata                                                                                                  | Free for this data (quoted $0.00); authoritative expiration, tick size, and multiplier; distinguishes raw symbols that repeat each decade             | [Data](data.md#what-we-have)                                                                          |
+| uv (Python 3.13), numba for per-phase loops, psycopg 3, numbered SQL migrations                                                                           | Reproducible environments, fast batch runs, simple schema history                                                                                     | [README](../../README.md)                                                                             |
+| `research-web` is the only UI; its center is the trade inspector                                                                                          | Checking backtest logic matters most now                                                                                                              | [Research UI](metric-explorer.md)                                                                     |
+| Store the rolling `1m@1s` candle and its 85 features per second, beside the exact per-second base row (decided November 1, 2026)                          | Research and ML read compiled rows directly; base rows keep every statistic mergeable for other windows                                               | [Ingestion](ingestion.md)                                                                             |
+| Store each front contract from 5 sessions before it becomes front; a builder hash marks stored rows stale after any change to the code that computes them | Indicators are warm at each roll; rows never mix code versions                                                                                        | [Ingestion](ingestion.md#run-it)                                                                      |
+| TBBO metrics follow the handoff's validity subsets and merge rules; values are NULL when undefined, never zero                                            | Exact windows of any length; missing, quiet, and invalid stay distinguishable                                                                         | [TBBO handoff](tbbo-engineering-handoff.md), [differences](ingestion.md#differences-from-the-handoff) |
 
 ## Data verification (November 1, 2026)
 
@@ -84,55 +88,49 @@ uv run research catalog [--verify]       # products on disk; --verify checks eve
 uv run research backtest apps/backtest-runner/examples/gc.json   # also si.json, mgc-sample.json
 uv run research verify apps/backtest-runner/examples/mgc-sample.json
 uv run research db status | migrate | register
+uv run research ingest plan GC SI | run GC SI | status   # stored one-second rows
 pnpm lint && pnpm test && pnpm build
 ```
 
-## Next task: store one-second rows and metrics (GC and SI first)
+## Next task: run the one-second ingest, then add `1h@1m` rows
 
-1. **Definitions.** Download the `definition` batch job (settings in
-   [data](data.md#what-we-have)) into `data/databento/definition/`, then
-   `research catalog --verify` and `research db register`. Submitting the job needs
-   the account owner's approval; it was blocked for the agent.
-2. **Per-second fields.** Add the researched metrics to `BaseBars` in `bars.py`, in
-   both `aggregate` (trades to seconds) and `combine` (seconds to minutes). Keep the
-   tests that require roll-ups to equal direct aggregation in any chunking.
-   Calculate more than you need; experiments will decide what is useful.
-3. **Schema.** Add `0002_*.sql`: contracts (from definitions), the roll schedule,
-   builder versions, and monthly-partitioned one-second and one-minute tables with a
-   row for every scheduled-open slot, each carrying its `slot_ordinal` and phase
-   (`slot_ordinal % 60`), indexed on `(contract_id, slot_ordinal)`. Follow the
-   [storage guidance](../../lib/db-research/README.md), which sketches the table.
-4. **Ingest command.** For each product and session: `HistoricalSource.session_trades`,
-   then `bars.aggregate`, then `SessionCalendar.slot_ordinals` for each row's index,
-   then binary `COPY`. Make each (contract, session) slice
-   idempotent (delete, then copy) and record the builder version (code hash,
-   `close_delay`, `feed_latency`, files). Store front and next contracts only.
-   Parallelize by product or day: a full-year decode of all seven products took 28 s
-   on 10 cores, and binary `COPY` writes about 400,000 rows per second.
-5. **Optional.** Let backtests read stored rows when the builder version and settings
+Implemented on November 1, 2026 ([ingestion](ingestion.md)): per-second TBBO metrics
+(`metrics.py`), their rolling windows (`window_metrics.py`), 77 more `1m@1s` features
+(`indicators.py`), the row builder with exact checkpoints (`rows.py`, `state.py`),
+migration `0002_second_rows`, and `research ingest`.
+
+1. **Run it.** `research db migrate`, then `research ingest plan GC SI` and
+   `research ingest run GC SI`. Expect about 46.5 million rows and 59 GB. Check
+   `research ingest status` and the session reports, especially the `degraded` dates.
+2. **`1h@1m` rows.** `market.bar_1m` rolled up from `bar_1s` (merge each metric field by its
+   kind) and `market.candle_1h_1m` with the same features on the `BIAS` window spec.
+3. **Definitions.** Download the `definition` batch job (settings in
+   [data](data.md#what-we-have)) into `data/databento/definition/` and load expirations into
+   `market.contract`. Submitting the job needs the account owner's approval.
+4. **Optional.** Let backtests read stored rows when the builder version and settings
    match the run, with fills still from DBN trades.
 
 Things to know:
 
 - TBBO has only top-of-book data, at trades. "Depth" means the displayed size and
   order count at the best bid and ask (`bid_sz_00`, `ask_sz_00`, `bid_ct_00`,
-  `ask_ct_00`). `Trades` does not yet carry the order counts; add them if needed.
-  There is no depth beyond the best price.
-- CVD needs an explicit origin, such as the session open. Store per-second net delta
-  and the running extremes; derive cumulative values from the origin. Unknown-side
-  volume stays out of CVD and is reported separately.
+  `ask_ct_00`), all carried by `Trades`. There is no depth beyond the best price.
+- CVD needs an explicit origin. Stored rows keep per-second net delta and its running
+  extremes, plus `session_cvd` from the session open (NULL after missing data).
+  Unknown-side volume stays out of CVD and is reported separately.
 - TBBO shows the book only at trades. At random moments in September 2026, the next
   SI trade came a median 5.9 s later (GC 1.7 s), and the ask had often moved 2+ ticks
   by then. Store book fields with their age, and see the recommended fill changes in
   [data limits](engine.md#data-limits-tbbo-only).
-- A contract-year is about 21 million scheduled seconds, roughly 8 GB at 44 columns
-  before indexes.
+- A contract-year is about 21 million scheduled seconds: about 27 GB in the two stored
+  tables (measured), so check disk space before adding products.
 
 ## Open questions
 
-1. Store rolling `1m@1s` and `1h@1m` features, or compute them on read from stored
-   one-second rows?
-2. When to bring in PL, YM, RTY, ES, and NQ, all of which are on disk with specs.
+1. When to bring in PL, YM, RTY, ES, and NQ, all of which are on disk with specs. At about
+   27 GB per contract-year, all seven products would need about 200 GB a year.
+2. Store features as `real` to halve the candle table, giving up exact equality with
+   in-memory features?
 
 The TBBO fill safeguards are deferred until the core works and is tested; they are
 specified in [todo.md](todo.md#later-refinements-after-the-core-is-tested).

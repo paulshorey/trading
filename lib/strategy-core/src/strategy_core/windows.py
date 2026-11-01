@@ -62,6 +62,8 @@ class Candles:
 
 
 class RollingWindow:
+    STATE = ("tail", "seen")  # see `state.export_state`
+
     def __init__(self, spec: WindowSpec, calendar: SessionCalendar):
         self.spec, self.calendar = spec, calendar
         self.tail = BaseBars.empty(spec.step)

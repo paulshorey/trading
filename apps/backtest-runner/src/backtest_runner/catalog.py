@@ -90,6 +90,27 @@ def job_files(folder: Path) -> list[DbnFile]:
     return out
 
 
+def job_ranges(
+    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+) -> list[tuple[int, int]]:
+    """Requested `[start, end)` UTC nanoseconds of every downloaded job for a parent symbol.
+    Data inside a range without a file (a weekend) has no trades; outside, it is unknown."""
+    out = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("metadata.json")):
+            query = json.loads(path.read_text())["query"]
+            if (
+                query.get("schema") == schema
+                and query.get("dataset") == dataset
+                and parent in query.get("symbols", [])
+                and (path.parent / "manifest.json").is_file()
+            ):
+                out.append((int(query["start"]), int(query["end"])))
+    return sorted(out)
+
+
 def files_for(parent: str, dataset: str, schema: str = "tbbo") -> dict[date, DbnFile]:
     return {
         f.date: f for f in discover(schema=schema) if parent in f.parents and f.dataset == dataset

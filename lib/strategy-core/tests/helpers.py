@@ -13,7 +13,8 @@ def calendar(*hours: tuple[float, float]) -> SessionCalendar:
 
 
 def trades(rows: list[tuple]) -> Trades:
-    """Rows of (ts_event, price, size, side[, recv_delay_ns, bid, ask, bid_size, ask_size])."""
+    """Rows of (ts_event, price, size, side[, recv_delay_ns, bid, ask, bid_size, ask_size,
+    bid_count, ask_count])."""
     n = len(rows)
     out = {
         name: np.zeros(n, dtype) for name, dtype in zip(Trades.FIELDS, Trades.DTYPES, strict=True)
@@ -29,6 +30,8 @@ def trades(rows: list[tuple]) -> Trades:
         out["bid"][i], out["ask"][i] = bid, ask
         out["bid_size"][i] = rest[3] if len(rest) > 3 else 5
         out["ask_size"][i] = rest[4] if len(rest) > 4 else 5
+        out["bid_count"][i] = rest[5] if len(rest) > 5 else 1
+        out["ask_count"][i] = rest[6] if len(rest) > 6 else 1
     return Trades(**out)
 
 

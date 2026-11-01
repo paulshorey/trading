@@ -2,17 +2,21 @@
 
 Priority order: most important first. Check items off, and move lasting decisions
 into the [handoff](handoff.md) or the relevant design doc. Details of the current
-task live in [handoff: next task](handoff.md#next-task-store-one-second-rows-and-metrics-gc-and-si-first).
+task live in [handoff: next task](handoff.md#next-task-run-the-one-second-ingest-then-add-1h1m-rows).
 
 ## Now: make the core work and test it
 
-- [ ] **Merge PR #62.** Wait for the Codex re-review of the latest fixes, address any
-      findings, and merge into `main`.
+- [x] **Merge PR #62.** Merged into `main`.
 - [ ] **Download contract definitions.** Free, but submitting the job needs the
       account owner. Settings are in [data](data.md#what-we-have).
-- [ ] **Store one-second rows and metrics for GC and SI.** Per-second fields, migration
-      `0002`, and the ingest command, as in the handoff's next task. Every row carries
-      its index counter (`slot_ordinal`); windows and phases are arithmetic on it.
+- [x] **Implement one-second rows and metrics.** Per-second TBBO metrics, the stored
+      `1m@1s` candle with 85 features, migration `0002_second_rows`, and
+      `research ingest plan|run|status` ([ingestion](ingestion.md)).
+- [ ] **Run the GC and SI ingest.** `research db migrate`, then `research ingest run GC SI`
+      (about 46.5 million rows, 59 GB). Review `research ingest status` and the session
+      reports in `market.ingest_slice`.
+- [ ] **Store `1h@1m` rows.** `market.bar_1m` rolled up from `bar_1s` and
+      `market.candle_1h_1m` with the same features on the bias window, in the same ingest.
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
       Check run time and memory, rolls and warmup at every contract change, and the
       per-session quality reports. Run `research verify` on a week of GC and SI:
@@ -21,8 +25,9 @@ task live in [handoff: next task](handoff.md#next-task-store-one-second-rows-and
 - [ ] **Session quality policy.** Backtests currently include degraded sessions with
       only a report. Decide and implement a default: skip, or mark and exclude from
       ML rows. Examples are 2025-11-28 (CME outage; NQ, YM, and RTY records flag a
-      possibly wrong book) and the six other `degraded` dates. Record the status
-      with stored rows.
+      possibly wrong book) and the six other `degraded` dates. Stored rows record each
+      file's condition in `market.ingest_slice.source_files` and flagged trades per second
+      (`bad_book_trades`).
 - [ ] **Store runs, trades, and ML rows in PostgreSQL.** Replace `data/runs/*.json`
       with tables (spec, provenance, summary, trades) and persist the would-be-trade
       rows that runs now only summarize. Point the UI's run history at the database.

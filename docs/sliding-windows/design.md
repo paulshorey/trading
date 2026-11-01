@@ -2,7 +2,8 @@
 
 Status: sections 1–8 are implemented in `lib/strategy-core` (`bars.py`, `windows.py`,
 `kernels.py`, `features.py`, `engine.py`); see the [engine](../project/engine.md).
-Persisted candles (section 10) and the research comparison (section 11.7) are next.
+Stored `1m@1s` candles (section 10) are implemented ([ingestion](../project/ingestion.md));
+stored `1h@1m` candles and the research comparison (section 11.7) are next.
 Window specifications, metrics, and parameters are defined in Python code; the UI
 only displays results.
 
@@ -251,10 +252,10 @@ minutes.
 ## 10. Storage
 
 Store one row per scheduled-open second (base bars and their per-second metrics) in
-PostgreSQL, computed by the same code live sessions run. Rolling candles and per-phase
-indicators are derived from those rows and can be stored or recomputed; persist the
-exact inputs of every decision and trade, and the ML rows. See the
-[storage contract](../../lib/db-research/README.md).
+PostgreSQL, computed by the same code live sessions run, with the rolling `1m@1s` candle
+and its per-phase indicators beside it (`market.candle_1m_1s`; `1h@1m` next). Persist the
+exact inputs of every decision and trade, and the ML rows. See
+[ingestion](../project/ingestion.md) and the [storage contract](../../lib/db-research/README.md).
 
 ## 11. Validation
 

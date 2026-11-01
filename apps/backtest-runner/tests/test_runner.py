@@ -290,7 +290,7 @@ def test_run_spec_validation():
     good = {"product": "GC", "start": "2026-09-01", "end": "2026-09-02"}
     assert service.RunSpec.parse(good).warmup_sessions == 1
     for bad in [
-        {**good, "product": "ES"},
+        {**good, "product": "ZZ"},
         {**good, "contract": "GCZ6-GCG7"},
         {**good, "warmup_sessions": 11},
         {**good, "extra": 1},

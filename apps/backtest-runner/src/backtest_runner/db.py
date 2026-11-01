@@ -129,16 +129,17 @@ def migrate(conn: psycopg.Connection, folder: Path = MIGRATIONS) -> list[str]:
 
 
 def register_files(conn: psycopg.Connection, files: list[DbnFile]) -> int:
-    """Record downloaded Databento TBBO files in `market.source_file` (idempotent)."""
+    """Record downloaded Databento files in `market.source_file` (idempotent)."""
     with conn.transaction():
         for f in files:
             conn.execute(
                 """INSERT INTO market.source_file (dataset, schema_name, job_id, file_name,
                        utc_date, parents, byte_count, sha256, condition)
-                   VALUES (%s, 'tbbo', %s, %s, %s, %s, %s, %s, %s)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (job_id, file_name) DO UPDATE SET condition = EXCLUDED.condition""",
                 (
                     f.dataset,
+                    f.schema,
                     f.job_id,
                     f.path.name,
                     f.date,

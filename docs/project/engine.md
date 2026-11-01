@@ -32,17 +32,17 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 
 ## Code map
 
-| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                |
-| ----------------------------------------------- | ------------------------------------------------------------- |
-| `market.py`                                     | Products (GC, NQ), TBBO trade arrays, scheduled-open calendar |
-| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes              |
-| `windows.py`                                    | Rolling candles over the last 60 trading-time slots           |
-| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                   |
-| `features.py`                                   | Normalized feature pipeline and unit contract                 |
-| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline         |
-| `execution.py`                                  | Simulated fills against TBBO trades                           |
-| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter           |
-| `labels.py`                                     | One would-be trade per signal, for ML                         |
+| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| `market.py`                                     | Products (GC, SI, PL, ES, NQ, YM, RTY), TBBO trade arrays, calendar |
+| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                    |
+| `windows.py`                                    | Rolling candles over the last 60 trading-time slots                 |
+| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                         |
+| `features.py`                                   | Normalized feature pipeline and unit contract                       |
+| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline               |
+| `execution.py`                                  | Simulated fills against TBBO trades                                 |
+| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                 |
+| `labels.py`                                     | One would-be trade per signal, for ML                               |
 
 `apps/backtest-runner` adds the Databento file catalog, exchange calendars, the
 historical source (contract selection and rolls), run storage, the CLI, and the API.
@@ -125,9 +125,10 @@ match the run's configuration; fills always come from the DBN trades.
 
 - **Book between trades.** TBBO records the book only at trades. A market order fills
   at the next trade's pre-trade book, which in a quiet market can be seconds after
-  arrival: the sample's MGC entries waited a median 0.6–0.8 s and a 90th percentile of
-  3–5 s. Runs report fill-delay percentiles. GC and NQ trade far more often; if their
-  delays stay large, add Databento `mbp-1` (every top-of-book change) for execution.
+  arrival. In September 2026, GC entries filled a median 339 ms after the signal (90th
+  percentile 2.4 s) and SI entries a median 3.1 s (90th percentile 22 s). Runs report
+  fill-delay percentiles. For second-scale SI execution, add Databento `mbp-1` (every
+  top-of-book change).
 - **Queue position.** Limit fills require a trade through the price; no queue model.
 - **Live adapters.** Databento live ingestion, paper sessions, and broker execution
   are not implemented. They plug into the same chunk interface.

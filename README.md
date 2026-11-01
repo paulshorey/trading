@@ -1,8 +1,8 @@
 # Backtesting and trading bot development platform
 
 A developer platform for building, testing, and running short-horizon futures
-strategies and the machine-learning models behind them. It starts with CME GC (gold)
-and NQ (Nasdaq-100) and supports adding more products.
+strategies and the machine-learning models behind them. It prototypes with CME GC
+(gold) and SI (silver); a year of data for seven CME products is on disk.
 
 Strategies read Databento TBBO trades with their pre-trade bid and ask. A rolling
 `1h@1m` candle (the last hour, every minute) sets the direction bias; a rolling
@@ -44,8 +44,9 @@ uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 6
 pnpm lint && pnpm test && pnpm build
 ```
 
-The bundled sample (`data/sample/`, not in git) is one day of Micro Gold. GC and NQ
-history comes from Databento batch downloads; see the [data plan](docs/project/data.md).
+Market data is not in git: one year of Databento TBBO for GC, SI, PL, ES, NQ, YM, and
+RTY lives in `data/databento/tbbo/`, plus a one-day Micro Gold sample in `data/sample/`.
+See [historical data](docs/project/data.md) for the layout and verification.
 
 ## Documentation
 

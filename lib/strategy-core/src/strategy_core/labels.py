@@ -7,23 +7,24 @@ the future, so rows are built only from complete historical sessions. Rows overl
 time; keep `decision_ns` and `exit_ns` for purged, chronological splits.
 """
 
+from collections.abc import Iterable, Iterator
+
 import numpy as np
 
 from .execution import ExecView, Simulator
 from .features import FeatureFrame
 
 
-def candidate_outcomes(
+def iter_candidate_outcomes(
     sim: Simulator,
     contract: str,
     frame: FeatureFrame,
     signals: np.ndarray,
     view: ExecView,
-    max_rows: int | None = None,
-) -> list[dict]:
-    """`frame`, `signals`, and `view` come from one whole-session `Engine.process` call."""
-    rows: list[dict] = []
-    for i in np.flatnonzero(signals)[:max_rows]:
+) -> Iterator[dict]:
+    """Yield one would-be trade per signal row. `frame`, `signals`, and `view` come from one
+    whole-session `Engine.process` call."""
+    for i in np.flatnonzero(signals):
         atr = float(frame.context["atr"][i])
         if not np.isfinite(atr):
             continue
@@ -35,25 +36,48 @@ def candidate_outcomes(
         while trade is None and j < view.n:
             j, trade = sim.advance(view, j, pos)
         if trade is not None:
-            rows.append(trade)
-    return rows
+            yield trade
 
 
-def summarize_candidates(rows: list[dict]) -> dict:
-    if not rows:
-        return {"rows": 0}
-    pnl = np.array([r["pnl_usd"] for r in rows])
-    r = np.array([x["r_multiple"] for x in rows if x["r_multiple"] is not None])
-    return {
-        "rows": len(rows),
-        "win_rate": float(np.mean(pnl > 0)),
-        "avg_usd": float(pnl.mean()),
-        "avg_r": float(r.mean()) if len(r) else None,
-        "entry_delay_ms_p50": float(np.median([x["entry_delay_ms"] for x in rows])),
-        "exit_reasons": {
-            k: int(v)
-            for k, v in zip(
-                *np.unique([x["exit_reason"] for x in rows], return_counts=True), strict=True
-            )
-        },
-    }
+def candidate_outcomes(*args, **kwargs) -> list[dict]:
+    return list(iter_candidate_outcomes(*args, **kwargs))
+
+
+class CandidateSummary:
+    """Running statistics of would-be trades. Long runs fold rows in as they are produced
+    instead of keeping every row and its features."""
+
+    def __init__(self):
+        self.rows = self.wins = self.r_count = 0
+        self.usd = self.r_sum = 0.0
+        self.delays: list[float] = []  # one float per row, for the median
+        self.reasons: dict[str, int] = {}
+
+    def add(self, rows: Iterable[dict]) -> None:
+        for row in rows:
+            self.rows += 1
+            self.wins += row["pnl_usd"] > 0
+            self.usd += row["pnl_usd"]
+            if row["r_multiple"] is not None:
+                self.r_sum += row["r_multiple"]
+                self.r_count += 1
+            self.delays.append(row["entry_delay_ms"])
+            self.reasons[row["exit_reason"]] = self.reasons.get(row["exit_reason"], 0) + 1
+
+    def result(self) -> dict:
+        if not self.rows:
+            return {"rows": 0}
+        return {
+            "rows": self.rows,
+            "win_rate": self.wins / self.rows,
+            "avg_usd": self.usd / self.rows,
+            "avg_r": self.r_sum / self.r_count if self.r_count else None,
+            "entry_delay_ms_p50": float(np.median(self.delays)),
+            "exit_reasons": dict(sorted(self.reasons.items())),
+        }
+
+
+def summarize_candidates(rows: Iterable[dict]) -> dict:
+    summary = CandidateSummary()
+    summary.add(rows)
+    return summary.result()

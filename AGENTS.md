@@ -5,8 +5,9 @@ Developers configure, troubleshoot, and test custom metrics, strategies, and ML
 models trained on those metrics. Historical research comes first; paper and live
 trading will reuse strategy logic with a UI for monitoring and human overrides.
 
-Start with CME futures GC (gold) and NQ (Nasdaq-100); keep everything per product and
-per contract so more products can be added. Strategies predict only the next few
+Prototype with CME futures GC (gold) and SI (silver); one year of TBBO for GC, SI, PL,
+ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Keep everything per product and per
+contract so products can be added. Strategies predict only the next few
 minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
 the allowed direction. Validate Databento TBBO trades and their pre-trade top of book
 before deriving candles or dependent metrics and models.
@@ -54,7 +55,8 @@ Candles follow `docs/sliding-windows/`:
 
 Storage: DBN files are the permanent tick archive. PostgreSQL (local database
 `trading`, URL from `TRADING_DATABASE_URL`) holds everything derived: the file catalog,
-contracts, rolls, coverage, one-second rows with their metrics, runs, trades, ML rows,
+contracts, rolls, coverage, one-second rows with their metrics (one row for every
+scheduled-open second, including seconds without trades), runs, trades, ML rows,
 models, and live decisions. Compute stored rows with `strategy-core` code, the same
 code live sessions run, and record the builder version. Change the schema only through
 numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).

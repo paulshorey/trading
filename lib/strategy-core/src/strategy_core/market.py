@@ -42,9 +42,18 @@ class Product:
         )
 
 
+EQUITY_INDEX = "CME Globex Equity"  # ES, NQ, YM, RTY share the CME equity-index schedule
+
+# Tick sizes were checked against the downloaded TBBO prices; tick values follow the
+# contract multipliers (GC 100 oz, SI 5,000 oz, PL 50 oz, ES $50, NQ $20, YM $5, RTY $50).
 PRODUCTS = {
     "GC": Product("GC", "COMEX Gold", "GLBX.MDP3", 100_000_000, 10.0, "CMEGlobex_GC"),
-    "NQ": Product("NQ", "E-mini Nasdaq-100", "GLBX.MDP3", 250_000_000, 5.0, "CME Globex Equity"),
+    "SI": Product("SI", "COMEX Silver", "GLBX.MDP3", 5_000_000, 25.0, "CMEGlobex_SI"),
+    "PL": Product("PL", "NYMEX Platinum", "GLBX.MDP3", 100_000_000, 5.0, "CMEGlobex_PL"),
+    "ES": Product("ES", "E-mini S&P 500", "GLBX.MDP3", 250_000_000, 12.5, EQUITY_INDEX),
+    "NQ": Product("NQ", "E-mini Nasdaq-100", "GLBX.MDP3", 250_000_000, 5.0, EQUITY_INDEX),
+    "YM": Product("YM", "E-mini Dow ($5)", "GLBX.MDP3", 1_000_000_000, 5.0, EQUITY_INDEX),
+    "RTY": Product("RTY", "E-mini Russell 2000", "GLBX.MDP3", 100_000_000, 5.0, EQUITY_INDEX),
     # Micro Gold: only the bundled one-day sample uses it.
     "MGC": Product("MGC", "Micro Gold", "GLBX.MDP3", 100_000_000, 1.0, "CMEGlobex_GC"),
 }

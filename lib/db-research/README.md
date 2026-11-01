@@ -36,8 +36,10 @@ when one changes. Add a new migration instead.
 
 ## Design guidance for the next tables
 
-**One-second rows** (for example `market.bar_1s`): one row per scheduled-open second
-per contract, with a status (`observed`, `no_trades`, `missing`), OHLC and the times
+**One-second rows** (for example `market.bar_1s`): one row for every scheduled-open
+second per contract, including seconds without trades, so each sliding window is
+exactly 60 consecutive rows (decided November 1, 2026). Each row has a status
+(`observed`, `no_trades`, `missing`), OHLC and the times
 of the high and low, volume split by aggressor side, trade count, the price × size
 sum, running-delta extremes, and the per-second metrics from the research (CVD,
 spread, top-of-book size and imbalance at trades, and so on).

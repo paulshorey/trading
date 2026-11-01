@@ -6,7 +6,12 @@ from helpers import T0, calendar, coverage, trades
 from strategy_core.engine import Engine, MarketChunk, split_by_second
 from strategy_core.execution import ExecutionConfig, ExecView, Simulator
 from strategy_core.features import FeatureConfig, FeatureFrame
-from strategy_core.labels import candidate_outcomes
+from strategy_core.labels import (
+    CandidateSummary,
+    candidate_outcomes,
+    iter_candidate_outcomes,
+    summarize_candidates,
+)
 from strategy_core.market import HOUR, NS, PRODUCTS, UNDEF_PRICE, Trades
 from strategy_core.strategies import BiasPullback, Bracket, make_strategy
 from strategy_core.synthetic import random_trades
@@ -193,3 +198,21 @@ def test_strategy_validation_and_unknown_names():
     with pytest.raises(ValueError):
         ExecutionConfig(close_delay_ms=1500)
     assert isinstance(Trades.empty(), Trades)
+
+
+def test_streamed_candidate_summary_equals_the_full_list():
+    cal = calendar((0, 1))
+    t = random_trades(T0, T0 + HOUR, seed=9, rate=3)
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100, order_latency_ms=50)
+    strategy = make_strategy(
+        "bias_pullback", {"use_bias": False, "trigger_rsi": 45.0, "trigger_delta": -1.0}
+    )
+    engine = Engine(GC, cal, strategy, config, FeatureConfig(rsi_period=3, atr_period=3))
+    result = engine.process(session_chunk(cal, t, int(cal.opens[0]), int(cal.closes[0])))
+    sim = Simulator(GC, config, strategy.bracket, cal)
+    rows = candidate_outcomes(sim, "GCZ6", result.frame, result.signals, result.view)
+    streamed = CandidateSummary()
+    streamed.add(iter_candidate_outcomes(sim, "GCZ6", result.frame, result.signals, result.view))
+    assert len(rows) > 50
+    assert streamed.result() == summarize_candidates(rows)
+    assert streamed.result()["rows"] == len(rows)

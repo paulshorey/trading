@@ -18,11 +18,11 @@ live trading, on one engine. See the [engine](engine.md) for how the stages shar
 
 ## Next
 
-1. **Data.** One year of TBBO for GC, NQ, and other products is downloading. Add a
-   product spec for each new root, register the files, and review fill delays and
-   per-session data quality. Add `definition` records for contract metadata.
-2. **Ingestion.** Store one row per scheduled-open second per contract (OHLCV plus
-   per-second metrics) computed by `strategy-core`, then contracts, rolls, runs,
+1. **Data.** Done: one year of TBBO for GC, SI, PL, ES, NQ, YM, and RTY, verified and
+   registered ([details](data.md#what-we-have)). Next: download the free `definition`
+   records, and decide on `mbp-1` for SI execution.
+2. **Ingestion.** Starting with GC and SI, store one row for every scheduled-open
+   second per contract (OHLCV plus per-second metrics) computed by `strategy-core`, then contracts, rolls, runs,
    trades, and ML rows ([storage guidance](../../lib/db-research/README.md)).
 3. **Research comparison.** Run the [validation experiments](../sliding-windows/design.md#11-validation):
    phases, bias on and off, and rolling against clock candles, after costs.

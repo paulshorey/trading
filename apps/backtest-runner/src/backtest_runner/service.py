@@ -15,7 +15,7 @@ from strategy_core.bars import aggregate
 from strategy_core.engine import ChunkResult, Engine, MarketChunk, split_by_second
 from strategy_core.execution import ExecutionConfig, Simulator
 from strategy_core.features import FeatureConfig, FeatureFrame
-from strategy_core.labels import candidate_outcomes, summarize_candidates
+from strategy_core.labels import CandidateSummary, iter_candidate_outcomes
 from strategy_core.market import NS, PRODUCTS, SECOND, Product, SessionCalendar
 from strategy_core.strategies import Strategy, make_strategy
 
@@ -138,19 +138,21 @@ def backtest(body: dict, *, save: bool = True) -> dict:
     p = prepare(spec)
     engine = p.engine()
     sim = Simulator(p.product, p.execution, p.strategy.bracket, p.calendar)
-    candidates: list[dict] = []
+    candidates = CandidateSummary()  # streamed: rows are folded in, not kept
     started = time.perf_counter()
     seconds = 0
     for chunk in p.source.chunks():
         result = engine.process(chunk)
         seconds += len(result.frame)
         if chunk.tradable:
-            candidates += candidate_outcomes(
-                sim, chunk.contract, result.frame, result.signals, result.view
+            candidates.add(
+                iter_candidate_outcomes(
+                    sim, chunk.contract, result.frame, result.signals, result.view
+                )
             )
     out = engine.finish()
     elapsed = time.perf_counter() - started
-    out["candidates"] = summarize_candidates(candidates)
+    out["candidates"] = candidates.result()
     out["performance"] = {
         "seconds_processed": seconds,
         "elapsed_s": round(elapsed, 3),

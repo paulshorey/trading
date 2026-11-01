@@ -18,8 +18,9 @@ import databento as db
 
 ROOT = Path(__file__).resolve().parents[4]
 SEARCH = (ROOT / "data/databento", ROOT / "data/sample")
-FILE_DATE = re.compile(r"(\d{8})\.tbbo\.dbn(\.zst)?$")
+FILE_DATE = re.compile(r"(\d{8})\.([a-z0-9-]+)\.dbn(\.zst)?$")
 COVERED = ("available", "degraded")
+SCHEMAS = ("tbbo", "definition")  # trades with the pre-trade book; contract metadata
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ class DbnFile:
     sha256: str
     size: int
     condition: str  # Databento: available, degraded, pending, or missing
+    schema: str = "tbbo"
 
     @property
     def present(self) -> bool:
@@ -42,23 +44,25 @@ class DbnFile:
         return self.present and self.condition in COVERED
 
 
-def discover(roots: tuple[Path, ...] = SEARCH) -> list[DbnFile]:
-    """TBBO files from every job folder. Earlier roots win when jobs repeat a date."""
-    seen: dict[tuple[str, str, date], DbnFile] = {}
+def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
+    """Files of `schema` (None for all) from every job folder under `roots`, at any depth.
+    Earlier roots win when jobs repeat a date."""
+    seen: dict[tuple[str, str, str, date], DbnFile] = {}
     for root in roots:
         if not root.is_dir():
             continue
         for manifest_path in sorted(root.rglob("manifest.json")):
             for f in job_files(manifest_path.parent):
-                for parent in f.parents:
-                    seen.setdefault((f.dataset, parent, f.date), f)
+                if schema is None or f.schema == schema:
+                    for parent in f.parents:
+                        seen.setdefault((f.schema, f.dataset, parent, f.date), f)
     return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
 
 
 def job_files(folder: Path) -> list[DbnFile]:
     manifest = json.loads((folder / "manifest.json").read_text())
     query = json.loads((folder / "metadata.json").read_text())["query"]
-    if query.get("schema") != "tbbo" or query.get("stype_in") != "parent":
+    if query.get("schema") not in SCHEMAS or query.get("stype_in") != "parent":
         return []
     condition_path = folder / "condition.json"
     conditions = {}
@@ -80,13 +84,16 @@ def job_files(folder: Path) -> list[DbnFile]:
                 sha256=entry["hash"].removeprefix("sha256:"),
                 size=entry["size"],
                 condition=conditions.get(day.isoformat(), "missing"),
+                schema=query["schema"],
             )
         )
     return out
 
 
-def files_for(parent: str, dataset: str) -> dict[date, DbnFile]:
-    return {f.date: f for f in discover() if parent in f.parents and f.dataset == dataset}
+def files_for(parent: str, dataset: str, schema: str = "tbbo") -> dict[date, DbnFile]:
+    return {
+        f.date: f for f in discover(schema=schema) if parent in f.parents and f.dataset == dataset
+    }
 
 
 @cache
@@ -155,3 +162,31 @@ def unconfigured_parents() -> list[str]:
 
     known = {p.parent_symbol for p in PRODUCTS.values()}
     return sorted({parent for f in discover() for parent in f.parents} - known)
+
+
+def verify_all() -> dict:
+    """Check the size and SHA-256 of every present file against its job manifest."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    files = [f for f in discover(schema=None) if f.present]
+
+    def check(f: DbnFile) -> str | None:
+        try:
+            verify(f)
+        except ValueError as error:
+            return str(error)
+        return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        failures = [e for e in pool.map(check, files) if e]
+    conditions: dict[str, int] = {}
+    for f in files:
+        conditions[f.condition] = conditions.get(f.condition, 0) + 1
+    return {
+        "files": len(files),
+        "gigabytes": round(sum(f.size for f in files) / 1e9, 2),
+        "failures": failures,
+        "conditions": conditions,
+        "missing_from_disk": len([f for f in discover(schema=None) if not f.present]),
+        "schemas": sorted({f.schema for f in files}),
+    }

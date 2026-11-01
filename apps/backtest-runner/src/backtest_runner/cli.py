@@ -8,7 +8,8 @@ import psycopg
 def main() -> None:
     parser = argparse.ArgumentParser(prog="research", description="Trading research runner")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("catalog", help="List products and dates with TBBO files on disk")
+    p = sub.add_parser("catalog", help="List products and dates with TBBO files on disk")
+    p.add_argument("--verify", action="store_true", help="Check every file's size and SHA-256")
     p = sub.add_parser("backtest", help="Run a spec as fast as possible and save the result")
     p.add_argument("spec", type=Path)
     p.add_argument("--no-save", action="store_true")
@@ -33,10 +34,14 @@ def main() -> None:
         from . import catalog, service
 
         if args.command == "catalog":
-            result = {
-                "products": catalog.describe(),
-                "unconfigured_parents": catalog.unconfigured_parents(),
-            }
+            result = (
+                catalog.verify_all()
+                if args.verify
+                else {
+                    "products": catalog.describe(),
+                    "unconfigured_parents": catalog.unconfigured_parents(),
+                }
+            )
         elif args.command == "db":
             from . import db
 
@@ -48,7 +53,7 @@ def main() -> None:
                 else:
                     result = {
                         "registered": db.register_files(
-                            conn, [f for f in catalog.discover() if f.present]
+                            conn, [f for f in catalog.discover(schema=None) if f.present]
                         )
                     }
         elif args.command == "backtest":

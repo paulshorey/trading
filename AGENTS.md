@@ -49,9 +49,10 @@ Candles follow `docs/sliding-windows/`:
   base bars (1-minute or 1-second) aggregated from trades.
 - Count windows in trading time: scheduled closures from the instrument's exchange
   calendar add no slot. Never infer a closure from missing data; mark it as a gap.
-- Run each indicator per phase, on candles one full period apart (13:07, 12:07,
-  11:07, …). Never feed consecutive rolling candles into an indicator or add up
-  their overlapping volumes.
+- Run each indicator per phase, on candles exactly 60 rows apart. Phase is the
+  trading-time index (scheduled-open slots counted from a fixed origin) modulo 60,
+  never the clock, so early closes cannot misalign it. Never feed consecutive rolling
+  candles into an indicator or add up their overlapping volumes.
 - Treat adjacent candles as strongly correlated: one portfolio in backtests, and
   chronological, purged splits for ML.
 

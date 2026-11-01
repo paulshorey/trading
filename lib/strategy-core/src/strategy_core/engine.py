@@ -54,7 +54,7 @@ class Engine:
         self.feature_config = features or FeatureConfig()
         self.sim = Simulator(product, self.config, strategy.bracket, calendar)
         self.contract = ""
-        self.pipeline = FeaturePipeline(self.feature_config)
+        self.pipeline = FeaturePipeline(self.calendar, self.feature_config)
         self.pending: Position | None = None
         self.position: Position | None = None
         self.now = 0  # latest time the engine knows the position state for
@@ -156,7 +156,7 @@ class Engine:
             self.abandon("contract_roll")
         self.contract = contract
         self.contracts.append(contract)
-        self.pipeline = FeaturePipeline(self.feature_config)
+        self.pipeline = FeaturePipeline(self.calendar, self.feature_config)
         self.ts_floor = 0
 
     def abandon(self, reason: str) -> None:

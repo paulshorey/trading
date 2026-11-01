@@ -12,6 +12,11 @@ import numpy as np
 import pandas_market_calendars as mcal
 from strategy_core.market import Product, SessionCalendar
 
+# Trading-time ordinals (and so phases) count scheduled-open slots from the first session on
+# or after this date, the start of Databento's CME history. Every run, contract, and stored
+# row shares it; changing it relabels phases but changes no candle or indicator value.
+PHASE_ORIGIN = date(2010, 1, 1)
+
 
 @dataclass(frozen=True)
 class Session:
@@ -30,10 +35,10 @@ def load_sessions(
     """The calendar, `warmup` sessions before `start`, and trading sessions `start..end`."""
     if end < start:
         raise ValueError("end is before start")
+    if start < PHASE_ORIGIN:
+        raise ValueError(f"Sessions before {PHASE_ORIGIN} are not supported")
     cal = mcal.get_calendar(product.calendar)
-    schedule = cal.schedule(
-        start_date=start - timedelta(days=7 + 2 * warmup), end_date=end + timedelta(days=7)
-    )
+    schedule = cal.schedule(start_date=PHASE_ORIGIN, end_date=end + timedelta(days=7))
     opens, closes, sessions = [], [], []
     previous_close = None
     for day, row in schedule.iterrows():

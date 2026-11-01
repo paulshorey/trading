@@ -20,7 +20,6 @@ from strategy_core.windows import (
     GAP,
     WARMUP,
     RollingWindow,
-    WindowSpec,
 )
 
 KW = {"feed_latency": 0, "close_delay": 100_000_000}
@@ -35,8 +34,8 @@ def test_rolling_candles_equal_brute_force_aggregation_and_chunking_is_invisible
     t = random_trades(T0, T0 + 720 * NS, seed=1, rate=2)
     cov = np.array([[T0, T0 + 500 * NS], [T0 + 540 * NS, T0 + 720 * NS]], np.int64)
     b = second_bars(cal, t, cov, T0, T0 + 720 * NS)
-    batch = RollingWindow(FAST).update(b)
-    w = RollingWindow(FAST)
+    batch = RollingWindow(FAST, cal).update(b)
+    w = RollingWindow(FAST, cal)
     parts = [w.update(b.take(slice(i, i + 7))) for i in range(0, len(b), 7)]
     for name in ("open", "high", "low", "close", "volume", "vwap", "high_at", "status", "start"):
         joined = np.concatenate([getattr(p, name) for p in parts])
@@ -61,7 +60,7 @@ def test_empty_status_when_no_trades_in_window():
     cal = calendar((0, 0.1))
     t = random_trades(T0, T0 + 30 * NS, seed=2)
     b = second_bars(cal, t, np.array([[T0, T0 + 360 * NS]], np.int64), T0, T0 + 360 * NS)
-    c = RollingWindow(FAST).update(b)
+    c = RollingWindow(FAST, cal).update(b)
     assert c.status[200] == EMPTY and np.isnan(c.close[200])
 
 
@@ -73,7 +72,7 @@ def test_phase_series_equals_standard_hourly_candles_and_reference_rsi(phase):
     t = random_trades(T0, T0 + hours * HOUR, seed=5, rate=0.5)
     cov = np.array([[T0, T0 + hours * HOUR]], np.int64)
     minutes = aggregate(t, cal.slot_ends(T0, T0 + hours * HOUR, MINUTE), MINUTE, cov, **KW)[0]
-    wf = WindowFeatures(BIAS, FeatureConfig(rsi_period=5))
+    wf = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5))
     candles, f, _ = wf.update(minutes)
     sel = candles.phase == phase
     ends = candles.end[sel]
@@ -94,7 +93,7 @@ def test_features_are_scale_invariant_and_declare_normalized_units():
     cov = np.array([[T0, T0 + 6 * HOUR]], np.int64)
 
     def run(trades):
-        return FeaturePipeline(cfg).update(second_bars(cal, trades, cov, T0, T0 + 6 * HOUR))
+        return FeaturePipeline(cal, cfg).update(second_bars(cal, trades, cov, T0, T0 + 6 * HOUR))
 
     base = run(t)
     for scaled in (t.scaled(price_factor=3), t.scaled(size_factor=7)):
@@ -104,7 +103,7 @@ def test_features_are_scale_invariant_and_declare_normalized_units():
                 other.features[name], values, rtol=1e-9, atol=1e-9, equal_nan=True, err_msg=name
             )
     assert all(np.isfinite(base.features[k]).any() for k in base.features), "all-NaN feature"
-    specs = FeaturePipeline().specs()
+    specs = FeaturePipeline(cal).specs()
     assert {s.name for s in specs} == set(base.features)
     assert all(isinstance(s.unit, Unit) for s in specs)
     assert {u.value for _, u, _ in WINDOW_FEATURES} <= {u.value for u in Unit}
@@ -119,8 +118,8 @@ def test_features_are_causal_and_identical_in_any_chunking():
     t = random_trades(T0, T0 + 4 * HOUR, seed=11, rate=1)
     cov = np.array([[T0, T0 + 4 * HOUR]], np.int64)
     b = second_bars(cal, t, cov, T0, T0 + 4 * HOUR)
-    whole = FeaturePipeline(cfg).update(b)
-    p = FeaturePipeline(cfg)
+    whole = FeaturePipeline(cal, cfg).update(b)
+    p = FeaturePipeline(cal, cfg)
     sizes = [1, 59, 600, 1, 3000, 7]
     parts, i, k = [], 0, 0
     while i < len(b):
@@ -128,7 +127,7 @@ def test_features_are_causal_and_identical_in_any_chunking():
         i += sizes[k % len(sizes)]
         k += 1
     joined = parts[0].concat(parts)
-    prefix = FeaturePipeline(cfg).update(b.take(slice(0, len(b) // 2)))
+    prefix = FeaturePipeline(cal, cfg).update(b.take(slice(0, len(b) // 2)))
     for name, values in whole.features.items():
         np.testing.assert_array_equal(joined.features[name], values, err_msg=name)
         np.testing.assert_array_equal(prefix.features[name], values[: len(b) // 2], err_msg=name)
@@ -138,8 +137,37 @@ def test_features_are_causal_and_identical_in_any_chunking():
     assert age.min() == 0 and age.max() >= 59
 
 
-def test_window_spec_phase():
-    spec = WindowSpec("1h@1m", MINUTE, 60)
-    assert spec.phase(np.array([T0 + 23 * MINUTE, T0 + HOUR])).tolist() == [23, 0]
-    assert FAST.phase(np.array([T0 + 61 * NS])).tolist() == [1]
+def test_slot_ordinals_count_scheduled_slots_only():
+    cal = calendar((0, 1), (2, 3))  # one-hour closure between two one-hour sessions
+    ends = np.array([T0 + MINUTE, T0 + HOUR, T0 + 2 * HOUR + MINUTE, T0 + 3 * HOUR])
+    assert cal.slot_ordinals(ends, MINUTE).tolist() == [1, 60, 61, 120]
+    assert cal.slot_ordinals(np.array([T0 + 2 * HOUR + NS]), SECOND).tolist() == [3601]
+    assert (cal.slot_ordinals(ends, MINUTE) % 60).tolist() == [1, 0, 1, 0]  # clock minutes
+    with pytest.raises(ValueError, match="outside"):
+        cal.slot_ordinals(np.array([T0 + HOUR + MINUTE]), MINUTE)  # during the closure
     assert len(BaseBars.empty(SECOND)) == 0
+
+
+def test_phases_count_trading_time_across_an_early_close():
+    """Regression (PR #62 review): after a closure that is not a whole hour (an 18:15 early
+    close, reopening at 23:00), the previous same-phase bias candle is exactly 60 rows back,
+    adjacent and non-overlapping, never the candle with the same clock minute."""
+    cal = calendar((0, 18.25), (23, 40))
+    t = random_trades(T0, T0 + 40 * HOUR, seed=1, rate=0.5)
+    cov = np.array([[T0, T0 + 40 * HOUR]], np.int64)
+    minutes = aggregate(t, cal.slot_ends(T0, T0 + 40 * HOUR, MINUTE), MINUTE, cov, **KW).bars
+    wf = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5))
+    candles, f, _ = wf.update(minutes)
+    i = int(np.flatnonzero(candles.end == T0 + 23 * HOUR + MINUTE)[0])
+    assert candles.start[i] == T0 + 17 * HOUR + 16 * MINUTE  # 60 rows back, not 60 minutes
+    for k in range(60, len(candles)):  # same phase means exactly 60 rows apart
+        assert candles.phase[k] == candles.phase[k - 60]
+        assert len(set(candles.phase[k - 59 : k + 1])) == 60
+    assert candles.start[i] == candles.end[i - 60]  # adjacent periods across the closure
+    # RSI follows the chain of candles 60 rows apart, as a standard RSI on that series
+    chain = np.arange(i % 60, len(candles), 60)
+    ok = candles.status[chain] == COMPLETE
+    ref = wilder_rsi_reference(list(candles.close[chain][ok]), 5)
+    np.testing.assert_allclose(
+        f["1h@1m.rsi"][chain][ok], [np.nan if v is None else v for v in ref], equal_nan=True
+    )

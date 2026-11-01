@@ -3,6 +3,10 @@
 
 The window keeps the previous `slots - 1` bars between calls, so processing a whole
 session at once or one step at a time yields identical candles.
+
+A candle's phase is its trading-time ordinal modulo `slots` (see
+`SessionCalendar.slot_ordinals`), never the clock: the previous candle of the same phase
+is exactly `slots` rows earlier, adjacent and non-overlapping, across any closure.
 """
 
 from dataclasses import dataclass
@@ -11,7 +15,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from .bars import MISSING, OBSERVED, BaseBars
-from .market import MINUTE, PX, SECOND
+from .market import MINUTE, PX, SECOND, SessionCalendar
 
 COMPLETE, EMPTY, GAP, WARMUP = 0, 1, 2, 3
 STATUS_NAMES = ("complete", "empty", "gap", "warmup")
@@ -27,10 +31,6 @@ class WindowSpec:
     def period(self) -> int:
         return self.step * self.slots
 
-    def phase(self, end: np.ndarray) -> np.ndarray:
-        """Phase index: which of the `slots` interleaved standard-candle grids a candle ends on."""
-        return ((end % self.period) // self.step).astype(np.int64)
-
 
 FAST = WindowSpec("1m@1s", SECOND, 60)  # entry timing: last 60 seconds, every second
 BIAS = WindowSpec("1h@1m", MINUTE, 60)  # direction bias: last 60 minutes, every minute
@@ -42,7 +42,8 @@ class Candles:
 
     end: np.ndarray
     start: np.ndarray  # start of the oldest slot; end - start > period means it spans a closure
-    phase: np.ndarray
+    ordinal: np.ndarray  # trading-time index of the newest slot
+    phase: np.ndarray  # ordinal % slots
     status: np.ndarray
     open: np.ndarray
     high: np.ndarray
@@ -61,8 +62,8 @@ class Candles:
 
 
 class RollingWindow:
-    def __init__(self, spec: WindowSpec):
-        self.spec = spec
+    def __init__(self, spec: WindowSpec, calendar: SessionCalendar):
+        self.spec, self.calendar = spec, calendar
         self.tail = BaseBars.empty(spec.step)
         self.seen = 0  # scheduled-open slots received so far
 
@@ -125,10 +126,12 @@ class RollingWindow:
             return np.where(has, values / PX, nan)
 
         start = np.where(n_absent > 0, 0, ends[np.maximum(rows - w + 1, 0)] - spec.step)
+        ordinal = self.calendar.slot_ordinals(bars.end, spec.step)
         candles = Candles(
             end=bars.end,
             start=start,
-            phase=spec.phase(bars.end),
+            ordinal=ordinal,
+            phase=ordinal % w,
             status=status,
             open=px(open_[np.minimum(first, total - 1)]),
             high=px(hv.max(axis=1) if m else hv[:, 0]),

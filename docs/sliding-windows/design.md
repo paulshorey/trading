@@ -11,16 +11,17 @@ supplies the direction bias, read as of the latest completed minute.
 
 ## Terms
 
-| Term           | Meaning                                                                   |
-| -------------- | ------------------------------------------------------------------------- |
-| Window `W`     | Candle duration: 60 minutes for `1h@1m`, 60 seconds for `1m@1s`.          |
-| Step `S`       | Time between candles: 1 minute or 1 second. Both specs have `W/S = 60`.   |
-| Base bar       | A disjoint `S`-long bar built directly from trades; one window slot.      |
-| Trading time   | Steps when the market is scheduled open. Closed steps add no slot.        |
-| Rolling candle | The last 60 open-market slots, completed at `T`. Usually `[T−W, T)`.      |
-| Phase          | `(T mod W) / S`: minute of the hour or second of the minute.              |
-| Phase series   | Candles of one phase, one period apart. The input to standard indicators. |
-| Rolling stream | One output per step, cycling through phases. Read by charts and strategy. |
+| Term           | Meaning                                                                                         |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Window `W`     | Candle duration: 60 minutes for `1h@1m`, 60 seconds for `1m@1s`.                                |
+| Step `S`       | Time between candles: 1 minute or 1 second. Both specs have `W/S = 60`.                         |
+| Base bar       | A disjoint `S`-long bar built directly from trades; one window slot.                            |
+| Trading time   | Steps when the market is scheduled open. Closed steps add no slot.                              |
+| Rolling candle | The last 60 open-market slots, completed at `T`. Usually `[T−W, T)`.                            |
+| Ordinal        | Trading-time index: scheduled-open slots counted from a fixed origin.                           |
+| Phase          | `ordinal mod 60`; equals the clock minute or second until a closure that is not a whole period. |
+| Phase series   | Candles of one phase, one period apart. The input to standard indicators.                       |
+| Rolling stream | One output per step, cycling through phases. Read by charts and strategy.                       |
 
 ## 1. Base bars
 
@@ -72,24 +73,34 @@ it as a trade.
 
 ## 3. Phases
 
-For a candle completed at `T` (UTC nanoseconds since the epoch):
+Phases count trading time, never the clock. Every scheduled-open slot has an
+**ordinal**: the number of scheduled-open slots of its step that end at or before it,
+counted from a fixed origin (the first session on or after 2010-01-01). Closures add
+no ordinals, and every scheduled slot is a row, including slots without trades or data.
 
 ```text
-phase_index    = (T mod W) / S
-period_ordinal = T div W
+ordinal(T)     = scheduled-open slots ending in (origin, T]   (SessionCalendar.slot_ordinals)
+phase          = ordinal mod 60
+window(T)      = the 60 slots with ordinals ordinal(T) − 59 … ordinal(T)
+previous period = the candle at ordinal(T) − 60
 ```
+
+Same-phase candles are therefore always exactly 60 slots apart: adjacent,
+non-overlapping periods of open market, across any closure. In a stretch without an
+irregular closure since the origin, the phase equals the clock minute (`1h@1m`) or
+second (`1m@1s`):
 
 | Spec    | Candle completed | Phase | Previous same-phase candle |
 | ------- | ---------------- | ----- | -------------------------- |
 | `1h@1m` | 10:23:00         | 23    | 09:23:00                   |
 | `1m@1s` | 10:15:23         | 23    | 10:14:23                   |
 
-Within a phase, consecutive candles are adjacent, non-overlapping periods of open
-market. A closure skips ordinals: after the daily halt, phase 30's candle at 17:30
-follows the one at 15:30. Phase 0 equals standard session-chart candles, and phase
-`k` equals those candles shifted by `k` steps; both are test targets. Closures that
-are not whole periods are the one exception, described in
-[section 7](#7-closures-and-data-gaps).
+After the daily halt (a whole hour) the clock alignment holds: the 17:30 candle's
+previous same-phase candle ends at 15:30. After an early close that is not a whole
+hour, such as 18:15 UTC with a 23:00 reopen, the window ending 23:01 covers 17:16 to
+18:15 plus 23:00 to 23:01, and its previous same-phase candle ends at 17:16, 60 rows
+earlier. Phase labels shift relative to the clock from then on; values never depend on
+the labels or the origin.
 
 ## 4. Indicators per phase
 
@@ -193,12 +204,11 @@ These candles carry `spans_closure`. Their range includes any price gap across t
 closure, such as a weekend gap. Standard ATR includes the same gap through the
 previous close, but features and the inspector should still be able to see it.
 
-Phase stays tied to the clock so that phase 0 remains the standard hourly candle.
-The daily halt and weekend last whole hours, so same-phase candles stay exactly 60
-open minutes apart. An early close such as 12:15 CT does not: across that closure,
-each `1h@1m` phase series has a single gap or overlap shorter than an hour. Flag
-those candles with `irregular_closure`. This affects a few holidays a year and never
-`1m@1s`, whose closures are whole minutes.
+Because phases come from trading-time ordinals (section 3), same-phase candles stay
+exactly 60 slots apart across every closure, including early closes that are not whole
+hours. No candle needs special handling; only the phase labels shift relative to the
+clock after such a closure. `1m@1s` labels never shift, because closures are whole
+minutes.
 
 ### Other rules
 
@@ -253,8 +263,10 @@ Build in this order. Each step's tests must pass before the next step starts.
 3. **Window engine.** Each rolling candle equals a brute-force aggregation of trades
    over its 60 open-market steps. Batch, incremental, and chunked replays produce
    identical output.
-4. **Phases.** Phase 0 equals standard session-chart candles; phase `k` equals those
-   candles offset by `k` steps. Only flagged irregular-closure candles may differ.
+4. **Phases.** Same-phase candles are exactly 60 slots apart across every closure,
+   including an early close that is not a whole hour. In a stretch without such a
+   closure, phase 0 equals standard session-chart candles and phase `k` equals those
+   candles offset by `k` steps.
 5. **Indicators.** Each phase's SMA, RSI, EMA, ATR, and MACD equal the pinned
    reference on that phase's series. A restored checkpoint matches an uninterrupted
    run.

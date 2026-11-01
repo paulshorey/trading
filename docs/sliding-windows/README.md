@@ -60,10 +60,12 @@ the first minutes after it. `1m@1s` works the same way with 60 one-second slots.
 candles share 59 minutes, and their closes are just prices one minute apart. RSI(14)
 over consecutive rolling closes is simply a 1-minute RSI.
 
-Instead, an indicator reads candles one full hour apart. The candle ending at 13:07
-is compared with those ending at 12:07, 11:07, 10:07, and so on. That is an ordinary
-sequence of non-overlapping hourly candles that starts at :07 instead of :00. Its
-**phase** is 7, the minute of the hour at which its candles end.
+Instead, an indicator reads candles one full period of trading time apart: exactly
+60 rows earlier, 120, and so on. In an ordinary stretch, the candle ending at 13:07 is
+compared with those ending at 12:07, 11:07, 10:07: a sequence of non-overlapping
+hourly candles that starts at :07 instead of :00. Its **phase** is 7. Phases count
+scheduled-open minutes (an index that increments with every row and wraps at 60),
+not the clock, so closures never break the chain.
 
 | Time  | Phase | RSI(14) reads hourly candles ending at |
 | ----- | ----- | -------------------------------------- |
@@ -71,10 +73,13 @@ sequence of non-overlapping hourly candles that starts at :07 instead of :00. It
 | 13:07 | 7     | 13:07, 12:07, 11:07, …                 |
 | 13:08 | 8     | 13:08, 12:08, 11:08, …                 |
 
-`1h@1m` has 60 phases (minute of the hour); `1m@1s` has 60 (second of the minute).
-Each phase keeps its own indicator state, and only the phase ending now advances.
-RSI, EMA, ATR, and other formulas are unchanged; only their input sequence differs.
-Phase 0 reproduces standard clock-aligned candles, which gives a built-in check.
+`1h@1m` and `1m@1s` each have 60 phases. Each phase keeps its own indicator state,
+and only the phase ending now advances. RSI, EMA, ATR, and other formulas are
+unchanged; only their input sequence differs. Until a closure that is not a whole hour
+(a few early closes a year), phases equal clock minutes and phase 0 reproduces standard
+clock-aligned candles, which gives a built-in check. After one, an hourly window
+ending at 23:01 that follows an 18:15 close starts at 17:16, and its previous
+same-phase candle covers 16:16 to 17:16.
 
 ## What a strategy sees
 
@@ -133,8 +138,9 @@ scheduled open, using an exchange calendar; see
 ## Status
 
 Base bars, both rolling windows, per-phase indicators, and normalized features are
-implemented in `lib/strategy-core` and tested: phase 0 equals standard clock-aligned
-candles and indicators, and whole-session and second-by-second runs agree exactly.
+implemented in `lib/strategy-core` and tested: same-phase candles are exactly 60 rows
+apart across every closure, phase 0 equals standard clock-aligned candles where no
+early close intervenes, and whole-session and second-by-second runs agree exactly.
 On the sample day, RSI over consecutive rolling candles (the archived approach)
 correlated only 0.12 with the correct per-phase hourly RSI. Persisting candles and
 the research comparison are next; see the [engine](../project/engine.md).

@@ -173,6 +173,21 @@ class SessionCalendar:
                 parts.append(np.arange(lo + step, hi + 1, step, dtype=np.int64))
         return np.concatenate(parts) if parts else np.empty(0, np.int64)
 
+    def slot_ordinals(self, ends: np.ndarray, step: int) -> np.ndarray:
+        """Trading-time index of each scheduled-open slot `[T - step, T)`: how many slots of
+        `step` end at or before `T` since this calendar's first open. Closures add nothing,
+        so slots `n` ordinals apart are exactly `n` scheduled-open steps apart. With a
+        whole-hour origin, ordinal % 60 equals the clock minute until the first closure
+        that is not a whole number of hours."""
+        if MINUTE % step:
+            raise ValueError("Slot ordinals need a step that divides one minute")
+        index = np.searchsorted(self.closes, ends, side="left")
+        safe = np.minimum(index, len(self.closes) - 1)
+        if np.any(index >= len(self.closes)) or np.any(ends - step < self.opens[safe]):
+            raise ValueError("Slot is outside the calendar's scheduled-open intervals")
+        before = np.r_[0, np.cumsum((self.closes - self.opens) // step)[:-1]]
+        return before[safe] + (ends - self.opens[safe]) // step
+
     def close_after(self, times: np.ndarray) -> np.ndarray:
         """Scheduled close of the session containing each slot end (open < T <= close)."""
         index = np.searchsorted(self.closes, times, side="left")

@@ -91,13 +91,16 @@ class CandidateSummary:
         out = {"rows": self.rows, **self.not_closed}
         if not self.rows:
             return out
-        median_ms = int(np.searchsorted(np.cumsum(self.delays), (self.rows + 1) // 2))
+        # Average the two middle ranks (equal when the count is odd), as np.median does.
+        cumulative = np.cumsum(self.delays)
+        ranks = [(self.rows + 1) // 2, self.rows // 2 + 1]
+        median_ms = float(np.mean(np.searchsorted(cumulative, ranks)))
         return {
             **out,
             "win_rate": self.wins / self.rows,
             "avg_usd": self.usd / self.rows,
             "avg_r": self.r_sum / self.r_count if self.r_count else None,
-            "entry_delay_ms_p50": float(median_ms),  # to the millisecond
+            "entry_delay_ms_p50": median_ms,  # to the millisecond
             "exit_reasons": dict(sorted(self.reasons.items())),
         }
 

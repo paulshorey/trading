@@ -274,7 +274,9 @@ def test_candidates_never_vanish_and_the_delay_median_is_bounded():
     summary = CandidateSummary()
     summary.add([{**closed, "entry_delay_ms": d} for d in (100.4, 200.7, 300.2, 9e9)])
     assert summary.delays.size == 60_001  # fixed, whatever the number of rows
-    assert summary.result()["entry_delay_ms_p50"] == 200.0
+    assert summary.result()["entry_delay_ms_p50"] == 250.0  # mean of the two middle bins
+    summary.add([{**closed, "entry_delay_ms": 50.0}])
+    assert summary.result()["entry_delay_ms_p50"] == 200.0  # odd count: the middle bin
 
 
 def test_abandoned_positions_close_against_a_trade_after_the_entry():

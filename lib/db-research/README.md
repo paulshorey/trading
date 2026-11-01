@@ -4,7 +4,8 @@ Status: a local PostgreSQL 18 database, `trading`, managed by the numbered migra
 in [`migrations/`](migrations/). Applied: `0001_foundation` (schemas `market`,
 `research`, `ml`, and the Databento file registry `market.source_file`). Tables for
 contracts, one-second rows, metrics, runs, and ML rows come next. The earlier
-full-schema proposal ([`schema.sql`](schema.sql) and its queries) is reference only.
+full-schema proposal ([`schema.sql`](schema.sql) and its queries) is reference only;
+its clock-based `phase_index` is superseded by trading-time ordinals (below).
 
 ## Local setup
 
@@ -44,6 +45,14 @@ of the high and low, volume split by aggressor side, trade count, the price × s
 sum, running-delta extremes, and the per-second metrics from the research (CVD,
 spread, top-of-book size and imbalance at trades, and so on).
 
+- Store each row's trading-time index, `slot_ordinal` (`bigint`): the number of
+  scheduled-open slots of that step from the product calendar's fixed origin, as
+  computed by `SessionCalendar.slot_ordinals` (origin `PHASE_ORIGIN` in
+  `apps/backtest-runner/.../calendars.py`). It increments by one per row and ignores
+  closures. Then phase is `slot_ordinal % 60`, a sliding window is the 60 rows
+  `slot_ordinal - 59 … slot_ordinal`, and the previous same-phase candle is the row at
+  `slot_ordinal - 60`. Index `(contract_id, slot_ordinal)`. Contracts of a product share
+  ordinals because they share the calendar; one-minute rows get their own ordinals.
 - Compute rows with `strategy-core` (`bars.aggregate` and its extensions), the code a
   live session runs. Extend `BaseBars` and `Rollup` with new per-second fields and
   keep the chunk-invariance tests passing; never compute a metric in SQL.
@@ -51,7 +60,8 @@ spread, top-of-book size and imbalance at trades, and so on).
   index on `end_ns` if scans need it. Store prices and sizes as `bigint` (Databento
   fixed-point, 10⁻⁹) and metrics as `double precision`. Avoid `numeric` here.
 - Record the builder version per contract and session (code hash, `close_delay`,
-  `feed_latency`, source files), and reload a slice by deleting and copying it again.
+  `feed_latency`, calendar version and phase origin, source files), and reload a slice
+  by deleting and copying it again.
 - Stored raw aggregates may use price units; model features derived from them must
   be normalized (see `strategy_core.features.Unit`).
 - Measured: binary `COPY` of 44-column rows ran at about 400,000 rows per second and

@@ -15,7 +15,7 @@ import numpy as np
 
 from . import kernels
 from .bars import BaseBars, Rollup
-from .market import MINUTE, NS, SECOND
+from .market import MINUTE, NS, SECOND, SessionCalendar
 from .windows import BIAS, COMPLETE, FAST, Candles, RollingWindow, WindowSpec
 
 
@@ -97,9 +97,9 @@ class FeatureFrame:
 class WindowFeatures:
     """Rolling candles of one window spec and their per-phase indicators."""
 
-    def __init__(self, spec: WindowSpec, config: FeatureConfig):
+    def __init__(self, spec: WindowSpec, calendar: SessionCalendar, config: FeatureConfig):
         self.spec, self.config = spec, config
-        self.window = RollingWindow(spec)
+        self.window = RollingWindow(spec, calendar)
         p = spec.slots
         self.rsi = kernels.PhaseState(p, prev="nan", gain="zero", loss="zero", count="count")
         self.atr = kernels.PhaseState(p, prev="nan", atr="zero", count="count")
@@ -149,10 +149,10 @@ class FeaturePipeline:
     """Feature rows at every scheduled-open second: 1m@1s features of the candle ending now and
     1h@1m bias features of the latest completed minute, with that minute's age."""
 
-    def __init__(self, config: FeatureConfig | None = None):
+    def __init__(self, calendar: SessionCalendar, config: FeatureConfig | None = None):
         self.config = config or FeatureConfig()
-        self.fast = WindowFeatures(FAST, self.config)
-        self.bias = WindowFeatures(BIAS, self.config)
+        self.fast = WindowFeatures(FAST, calendar, self.config)
+        self.bias = WindowFeatures(BIAS, calendar, self.config)
         self.minutes = Rollup(SECOND, MINUTE)
         self.last_bias: dict[str, np.ndarray] | None = None  # one-row arrays
         self.last_bias_end = np.empty(0, np.int64)

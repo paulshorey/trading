@@ -19,8 +19,8 @@ live trading, on one engine. See the [engine](engine.md) for how the stages shar
 ## Next
 
 1. **Data.** Done: one year of TBBO for GC, SI, PL, ES, NQ, YM, and RTY, verified and
-   registered ([details](data.md#what-we-have)). Next: download the free `definition`
-   records, and decide on `mbp-1` for SI execution.
+   registered ([details](data.md#what-we-have)). TBBO is the only market data for every
+   product. Next: download the free `definition` records.
 2. **Ingestion.** Starting with GC and SI, store one row for every scheduled-open
    second per contract (OHLCV plus per-second metrics) computed by `strategy-core`, then contracts, rolls, runs,
    trades, and ML rows ([storage guidance](../../lib/db-research/README.md)).

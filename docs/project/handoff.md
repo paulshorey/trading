@@ -34,6 +34,7 @@ would-be trade: the inputs at the decision and the outcome after it.
 | DBN files are the tick archive; PostgreSQL holds everything derived                                                               | SQL research and fast backtests on stored rows; one consistent stack, no Parquet layer                                                            | [Data](data.md#storage), [storage](../../lib/db-research/README.md) |
 | Every scheduled-open second gets a row, including seconds without trades                                                          | Each sliding window is exactly 60 consecutive rows, with no skip logic. SI trades in only 20% of its seconds                                      | [Storage](../../lib/db-research/README.md)                          |
 | Stored rows are computed by `strategy-core`, the code live sessions run                                                           | Stored history and live features must be identical                                                                                                | [Storage](../../lib/db-research/README.md)                          |
+| TBBO only, the same rules for every product; no more detailed data                                                                | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI                   | [Data limits](engine.md#data-limits-tbbo-only)                      |
 | Use Databento `definition` records for contract metadata                                                                          | Free for this data (quoted $0.00); authoritative expiration, tick size, and multiplier; distinguishes raw symbols that repeat each decade         | [Data](data.md#what-we-have)                                        |
 | uv (Python 3.13), numba for per-phase loops, psycopg 3, numbered SQL migrations                                                   | Reproducible environments, fast batch runs, simple schema history                                                                                 | [README](../../README.md)                                           |
 | `research-web` is the only UI; its center is the trade inspector                                                                  | Checking backtest logic matters most now                                                                                                          | [Research UI](metric-explorer.md)                                   |
@@ -87,19 +88,21 @@ Things to know:
 - TBBO has only top-of-book data, at trades. "Depth" means the displayed size and
   order count at the best bid and ask (`bid_sz_00`, `ask_sz_00`, `bid_ct_00`,
   `ask_ct_00`). `Trades` does not yet carry the order counts; add them if needed.
-  Full depth requires MBP-10.
+  There is no depth beyond the best price.
 - CVD needs an explicit origin, such as the session open. Store per-second net delta
   and the running extremes; derive cumulative values from the origin. Unknown-side
   volume stays out of CVD and is reported separately.
-- Fill delays in September 2026: GC a median 339 ms after the signal (90th percentile
-  2.4 s); SI 3.1 s (90th percentile 22 s). Second-scale SI execution needs `mbp-1` to
-  be trustworthy.
+- TBBO shows the book only at trades. At random moments in September 2026, the next
+  SI trade came a median 5.9 s later (GC 1.7 s), and the ask had often moved 2+ ticks
+  by then. Store book fields with their age, and see the recommended fill changes in
+  [data limits](engine.md#data-limits-tbbo-only).
 - A contract-year is about 21 million scheduled seconds, roughly 8 GB at 44 columns
   before indexes.
 
 ## Open questions
 
-1. Buy `mbp-1` for SI (and other thin products) so fills use the book at order arrival?
+1. Adopt the recommended TBBO fill safeguards (worse-of-two-books fills, entries only
+   shortly after a trade, a one-tick-worse rerun)?
 2. Store rolling `1m@1s` and `1h@1m` features, or compute them on read from stored
    one-second rows?
 3. When to bring in PL, YM, RTY, ES, and NQ, all of which are on disk with specs.

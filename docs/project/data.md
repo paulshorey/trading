@@ -45,11 +45,11 @@ Verified on November 1, 2026 (`uv run research catalog --verify` plus a full dec
   K, N, U, Z; PL F, J, N, V; ES, NQ, YM, RTY quarterly, about the second Monday of the
   expiry month.
 
-**Fill delays (September 2026, baseline strategy):** GC orders filled a median 339 ms
-after the signal (90th percentile 2.4 s); SI a median 3.1 s (90th percentile 22 s).
-TBBO shows the book only at trades, so thin markets price fills from a book seconds
-later. Before trusting second-scale SI execution, add `mbp-1` (every top-of-book
-change) at least for SI.
+**TBBO only, for every product (decided November 1, 2026).** No more detailed
+Databento schema will be bought. TBBO is exact for every trade, but it shows the book
+only at trades, so simulated fills in thin markets are uncertain by a tick or two;
+see [data limits](engine.md#data-limits-tbbo-only) for measurements and design
+consequences.
 
 **Contract definitions (recommended, not yet downloaded):** Databento quoted $0.00 for
 a year of `definition` records for all seven parents. They give each contract's
@@ -60,7 +60,8 @@ DBN, zstd, split by day) into `data/databento/definition/`. The catalog recogniz
 `definition` jobs, and `research catalog --verify` checks them.
 
 TBBO lets the backtest charge the actual spread at each simulated order. It carries
-only top-of-book size and order count at trades; full depth requires MBP-10.
+only top-of-book size and order count at trades; there is no depth beyond the best
+price.
 
 Choose DBN rather than JSON or CSV: integer prices (units of 10⁻⁹), nanosecond
 timestamps, and a header with the query and the instrument ID of each contract on
@@ -156,9 +157,6 @@ rerunning the builder over the DBN files.
 
 1. **Roll rule.** Previous-session volume is the default. Open interest requires the
    `statistics` schema; a fixed number of days before expiry needs only definitions.
-2. **Execution data.** Whether to add `mbp-1` for SI (and other thin products) so
-   fills use the book at order arrival.
-
-References: [TBBO fields](https://databento.com/docs/schemas-and-data-formats/tbbo),
-[batch download options](https://databento.com/docs/portal/batch-download), and
-[DBN encoding](https://databento.com/docs/standards-and-conventions/databento-binary-encoding).
+   References: [TBBO fields](https://databento.com/docs/schemas-and-data-formats/tbbo),
+   [batch download options](https://databento.com/docs/portal/batch-download), and
+   [DBN encoding](https://databento.com/docs/standards-and-conventions/databento-binary-encoding).

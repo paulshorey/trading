@@ -9,8 +9,10 @@ Prototype with CME futures GC (gold) and SI (silver); one year of TBBO for GC, S
 ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Keep everything per product and per
 contract so products can be added. Strategies predict only the next few
 minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
-the allowed direction. Validate Databento TBBO trades and their pre-trade top of book
-before deriving candles or dependent metrics and models.
+the allowed direction. Market data is Databento TBBO only, under the same rules for
+every product: trades are exact, but the book is seen only at trades (see
+`docs/project/engine.md#data-limits-tbbo-only`). Validate TBBO trades and their
+pre-trade top of book before deriving candles or dependent metrics and models.
 
 ## Normalized features (required)
 

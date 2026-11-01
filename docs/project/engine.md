@@ -121,14 +121,50 @@ engine's code (`bars.aggregate` and its extensions). A backtest may read stored 
 instead of rebuilding them only when their builder version and assignment settings
 match the run's configuration; fills always come from the DBN trades.
 
+## Data limits: TBBO only
+
+Decision (November 1, 2026): every product uses Databento TBBO and nothing more
+detailed, under identical rules. TBBO records each trade with the best bid and ask
+just before it, and nothing between trades.
+
+**Exact:** every trade's price, size, aggressor side, and time. OHLCV, VWAP, buy and
+sell volume, CVD, trade counts and sizes, and sweeps through the book are exact at
+any resolution and in both rolling windows.
+
+**Limited:**
+
+- **Fill prices.** A real market order fills instantly against the book it meets; the
+  simulator sees the book only at the next trade. At random moments in September 2026:
+
+  | Product | Next trade (median, 90th pct) | Book older than 1 s | Ask moved across the gap: 0 / 1 / 2+ ticks | Spread / 1-minute range |
+  | ------- | ----------------------------- | ------------------- | ------------------------------------------ | ----------------------- |
+  | GC      | 1.7 s, 9.5 s                  | 64%                 | 19 / 31 / 50%                              | 2 / 16 ticks            |
+  | SI      | 5.9 s, 36 s                   | 85%                 | 17 / 29 / 54%                              | 2 / 7 ticks             |
+  | ES      | 0.9 s, 5.9 s                  | 48%                 | 58 / 42 / 1%                               | 1 / 5 ticks             |
+
+  Simulated fills are therefore uncertain by about 1–2 ticks in GC and SI and up to a
+  tick in ES. Edges smaller than that cannot be tested; target moves several times
+  larger, such as minute-scale holds with ATR-sized brackets. Runs report
+  `entry_delay_ms`, the time from the signal to the trade whose book priced the fill.
+  A real order would not wait; read it as how old the simulated price is.
+
+- **Limit orders.** There is no queue position or quote history. Targets fill only when
+  a trade prints beyond them, and passive or market-making strategies cannot be tested.
+- **Book features.** Spread, displayed size, order count, and imbalance exist only at
+  trades and only at the best price. In quiet seconds (80% of SI's seconds) they are as
+  old as the last trade, so store them with their age. There is no depth beyond the
+  best level and no record of cancellations.
+- **Uneven precision.** The rules are the same for every product, but busy contracts
+  are measured more precisely than thin ones; compare products with that in mind.
+- **Paper trading** on the live TBBO feed has the same blind spot. Only broker fills
+  show true execution.
+
+Recommended next, using the same rules for every product: fill each order at the worse
+of the last known and the next observed book; allow entries only shortly after a trade
+(one parameter, in seconds); report each entry's book movement in ticks; and rerun any
+promising result with fills one tick worse before trusting it.
+
 ## Known limits
 
-- **Book between trades.** TBBO records the book only at trades. A market order fills
-  at the next trade's pre-trade book, which in a quiet market can be seconds after
-  arrival. In September 2026, GC entries filled a median 339 ms after the signal (90th
-  percentile 2.4 s) and SI entries a median 3.1 s (90th percentile 22 s). Runs report
-  fill-delay percentiles. For second-scale SI execution, add Databento `mbp-1` (every
-  top-of-book change).
-- **Queue position.** Limit fills require a trade through the price; no queue model.
 - **Live adapters.** Databento live ingestion, paper sessions, and broker execution
   are not implemented. They plug into the same chunk interface.

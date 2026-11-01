@@ -128,10 +128,16 @@ def covered(ends: np.ndarray, step: int, coverage: np.ndarray) -> np.ndarray:
     return (coverage[i, 0] <= starts) & (ends <= coverage[i, 1])
 
 
-def assignment_times(trades: Trades, feed_latency: int, close_delay: int) -> np.ndarray:
+def assignment_ns(
+    ts_event: np.ndarray, ts_recv: np.ndarray, feed_latency: int, close_delay: int
+) -> np.ndarray:
     """Time used to place each trade in a slot: its event time, or the time it became
     available minus the slot close delay when it arrived after its slot had closed."""
-    return np.maximum(trades.ts_event, trades.ts_recv + feed_latency - close_delay)
+    return np.maximum(ts_event, ts_recv + feed_latency - close_delay)
+
+
+def assignment_times(trades: Trades, feed_latency: int, close_delay: int) -> np.ndarray:
+    return assignment_ns(trades.ts_event, trades.ts_recv, feed_latency, close_delay)
 
 
 class Aggregation(NamedTuple):

@@ -14,11 +14,20 @@ export function TradeInspector({ run, index }: { run: Run; index: number }) {
   const [error, setError] = useState("");
   const trade = run.trades[index];
   useEffect(() => {
+    // Cancel the previous trade's request so a slow response cannot replace this one.
+    const request = new AbortController();
     setWindow(null);
     setError("");
-    api<TradeWindow>(`runs/${run.id}/trades/${index}/bars`)
-      .then(setWindow)
-      .catch((e) => setError(String(e)));
+    api<TradeWindow>(`runs/${run.id}/trades/${index}/bars`, {
+      signal: request.signal,
+    })
+      .then((result) => {
+        if (!request.signal.aborted) setWindow(result);
+      })
+      .catch((e) => {
+        if (!request.signal.aborted) setError(String(e));
+      });
+    return () => request.abort();
   }, [run.id, index]);
   const marks = useMemo(() => {
     const long = trade.direction > 0;

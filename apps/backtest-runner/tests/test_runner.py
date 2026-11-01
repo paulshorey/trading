@@ -153,6 +153,24 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         )
 
 
+def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
+    """Regression (PR #62 review): a trade that arrives within the close delay after the close
+    still counts toward that session's volume, and files read only to choose the front
+    contract are part of the run's provenance."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    close = DAY0 + 20 * HOUR
+    session = Session(D1, DAY0, close, DAY0 - 4 * HOUR)
+    rows = [
+        (1, close - 10_000_000, b"B", 2000.0, 5, 30_000_000),  # received 20 ms after the close
+        (2, DAY0 + HOUR, b"B", 2010.0, 4),
+    ]
+    days = {D1: (records(rows), mappings({"GCZ6": 1, "GCG7": 2}, D1))}
+    source = HistoricalSource(GC, {D1: dbn_file(D1)}, [], [session], config, cache=FakeCache(days))
+    assert source.outright_volumes(session) == {"GCZ6": 5, "GCG7": 4}
+    assert list(source.used_files) == [f"{D1}.dbn"]
+
+
 def run_both_ways(calendar, chunks, config):
     """Whole-session and second-by-second engine runs, for parity checks."""
     whole, stepwise = (Engine(GC, calendar, make_strategy("bias_pullback"), config) for _ in "ab")

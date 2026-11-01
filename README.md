@@ -52,8 +52,9 @@ See [historical data](docs/project/data.md) for the layout and verification.
 
 - [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
 - [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
-- [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), and the
-  [handoff notes](docs/project/handoff.md) with decisions and next steps.
+- [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), the
+  [handoff notes](docs/project/handoff.md) with decisions and next steps, and the
+  prioritized [to-do list](docs/project/todo.md).
 - [Research UI](docs/project/metric-explorer.md) and the [storage contract](lib/db-research/README.md).
 
 ## Private phone access through Tailscale

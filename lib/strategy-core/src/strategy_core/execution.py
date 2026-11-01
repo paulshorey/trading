@@ -16,8 +16,8 @@ Timing model (see docs/project/engine.md):
   the fill trade's slot closes, never the earlier exchange time.
 
 Trades are scanned slot by slot, in receive order within a slot, which is how a live
-session releases them. The running maximum of event time makes "first trade at or
-after" identical whether trades arrive as a session or second by second.
+session releases them, so "first trade at or after" is identical whether trades
+arrive as a session or second by second.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -112,8 +112,16 @@ class ExecView:
         return cls(trades.take(order), slot_end + close_delay, ts_floor)
 
     def first_at_or_after(self, j: int, time: int) -> int:
-        """Index of the first trade from `j` whose event time is at or after `time`, else n."""
-        return j + int(np.searchsorted(self.ts_max[j:], time, side="left"))
+        """Index of the first trade from `j` whose own event time is at or after `time`, else n.
+
+        The running maximum gives a lower bound quickly (no earlier trade can qualify); the
+        scan then checks actual event times, so an event-time inversion can never match a
+        trade that happened before `time`."""
+        k = j + int(np.searchsorted(self.ts_max[j:], time, side="left"))
+        while k < self.n and self.t.ts_event[k] < time:
+            later = np.flatnonzero(self.t.ts_event[k:] >= time)
+            k = k + int(later[0]) if len(later) else self.n
+        return k
 
 
 @dataclass

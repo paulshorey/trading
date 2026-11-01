@@ -216,3 +216,18 @@ def test_streamed_candidate_summary_equals_the_full_list():
     assert len(rows) > 50
     assert streamed.result() == summarize_candidates(rows)
     assert streamed.result()["rows"] == len(rows)
+
+
+def test_fills_never_match_a_trade_that_happened_before_arrival():
+    """Regression (PR #62 review): with an event-time inversion, the running maximum of event
+    time must not make an earlier trade look like the first trade at or after arrival."""
+    rows = [
+        (T0 + 20 * S, 2000.0, 1, 1),  # consumed earlier
+        (T0 + 5 * S, 2000.1, 1, 1),  # received later but happened before the arrival
+        (T0 + 25 * S, 2000.2, 1, 1),
+    ]
+    t = trades(rows)
+    view = ExecView(t, t.ts_recv)
+    assert view.first_at_or_after(1, T0 + 15 * S) == 2
+    assert view.first_at_or_after(0, T0 + 15 * S) == 0
+    assert view.first_at_or_after(0, T0 + 30 * S) == 3

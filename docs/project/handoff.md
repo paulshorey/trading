@@ -1,7 +1,7 @@
 # Handoff: engine, data, and storage
 
 As of November 1, 2026. Read this first, then [AGENTS.md](../../AGENTS.md) and the
-[engine design](engine.md).
+[engine design](engine.md). Prioritized tasks are tracked in [todo.md](todo.md).
 
 ## Goal
 
@@ -101,16 +101,16 @@ Things to know:
 
 ## Open questions
 
-1. Adopt the recommended TBBO fill safeguards (worse-of-two-books fills, entries only
-   shortly after a trade, a one-tick-worse rerun)?
-2. Store rolling `1m@1s` and `1h@1m` features, or compute them on read from stored
+1. Store rolling `1m@1s` and `1h@1m` features, or compute them on read from stored
    one-second rows?
-3. When to bring in PL, YM, RTY, ES, and NQ, all of which are on disk with specs.
+2. When to bring in PL, YM, RTY, ES, and NQ, all of which are on disk with specs.
+
+The TBBO fill safeguards are deferred until the core works and is tested; they are
+specified in [todo.md](todo.md#later-refinements-after-the-core-is-tested).
 
 ## Known limits
 
 - There is no queue model for limit orders, and no live data or broker adapter yet.
-- PRs #56, #58, and #59 target the archived implementation and can be closed.
 
 ## Environment
 

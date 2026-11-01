@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import databento as db
 import numpy as np
-from strategy_core.bars import assignment_times
+from strategy_core.bars import assignment_ns, assignment_times
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
 from strategy_core.market import NS, UNDEF_PRICE, Product, Trades
@@ -158,13 +158,23 @@ class HistoricalSource:
         )
 
     def outright_volumes(self, session: Session) -> dict[str, int]:
+        """Volume per outright in a session, with the same membership rule as `session_trades`
+        (assignment time in `[after, close)`). Files read here count as run inputs."""
         volumes: dict[str, int] = {}
         for day, file in self.day_files(session):
             if file is None or not file.covered:
                 continue
             records, mappings = self.cache.get(file)
-            ts = records["ts_recv"].astype(np.int64)
-            in_session = (ts >= session.open) & (ts < session.close) & (records["action"] == b"T")
+            self.used_files[file.path.name] = file
+            assign = assignment_ns(
+                records["ts_event"].astype(np.int64),
+                records["ts_recv"].astype(np.int64),
+                self.config.feed_latency,
+                self.config.close_delay,
+            )
+            in_session = (
+                (assign >= session.after) & (assign < session.close) & (records["action"] == b"T")
+            )
             for symbol in mappings:
                 if not self.product.is_outright(symbol):
                     continue

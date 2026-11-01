@@ -78,10 +78,22 @@ export function RunForm({
   );
   const s = spec.strategy_params;
   const x = spec.execution;
+  // The automatic front month is chosen from the previous session's volume, so it needs at
+  // least one warmup session.
+  const withContract = (next: RunSpec, contract: string | null): RunSpec => ({
+    ...next,
+    contract,
+    warmup_sessions:
+      contract === null
+        ? Math.max(1, next.warmup_sessions)
+        : next.warmup_sessions,
+  });
   function selectProduct(root: string) {
     const p = catalog.find((c) => c.root === root);
     const last = p?.dates.filter((d) => d.present).at(-1)?.date ?? spec.end;
-    setSpec({ ...spec, product: root, start: last, end: last, contract: null });
+    setSpec(
+      withContract({ ...spec, product: root, start: last, end: last }, null),
+    );
   }
   return (
     <form onSubmit={onSubmit}>
@@ -113,7 +125,7 @@ export function RunForm({
           <select
             value={spec.contract ?? ""}
             onChange={(e) =>
-              setSpec({ ...spec, contract: e.target.value || null })
+              setSpec(withContract(spec, e.target.value || null))
             }
           >
             <option value="">Front month (previous-session volume)</option>

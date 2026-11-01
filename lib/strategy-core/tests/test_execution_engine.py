@@ -275,3 +275,26 @@ def test_candidates_never_vanish_and_the_delay_median_is_bounded():
     summary.add([{**closed, "entry_delay_ms": d} for d in (100.4, 200.7, 300.2, 9e9)])
     assert summary.delays.size == 60_001  # fixed, whatever the number of rows
     assert summary.result()["entry_delay_ms_p50"] == 200.0
+
+
+def test_abandoned_positions_close_against_a_trade_after_the_entry():
+    """Regression (PR #62 review): a later chunk holding only late, earlier-timestamped trades
+    must not become the end-of-data price of an open position."""
+    cal = calendar((0, 1))
+    open_ = int(cal.opens[0])
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100, order_latency_ms=50)
+    strategy = OneShot(bracket=Bracket(50.0, 50.0, 3600))
+    engine = Engine(GC, cal, strategy, config, FeatureConfig(rsi_period=3, atr_period=3))
+    first = random_trades(open_, open_ + 1200 * S, seed=12, rate=3)
+    engine.process(MarketChunk("GCZ6", open_, open_ + 1200 * S, first, coverage(cal), "test"))
+    assert engine.position is not None
+    entry_ns = engine.position.entry_ns
+    late_recv = open_ + 1230 * S
+    late = trades([(entry_ns - S, 2500.0, 1, 1, late_recv - (entry_ns - S))])
+    engine.process(
+        MarketChunk("GCZ6", open_ + 1200 * S, open_ + 1260 * S, late, coverage(cal), "test")
+    )
+    [trade] = engine.finish()["trades"]
+    assert trade["exit_reason"] == "end_of_data" and "abandoned" in trade["flags"]
+    assert entry_ns <= int(trade["exit_ns"]) < open_ + 1200 * S
+    assert trade["hold_s"] >= 0 and trade["exit_px"] < 2400

@@ -171,6 +171,26 @@ def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
     assert list(source.used_files) == [f"{D1}.dbn"]
 
 
+def test_front_contract_waits_for_complete_previous_session(monkeypatch):
+    """Regression (PR #62 review): a missing day file inside the previous session's scheduled
+    hours makes its volume unavailable, so partial totals never decide a roll."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    previous = Session(D1, DAY0 + 22 * HOUR, DAY0 + 45 * HOUR, DAY0 + 21 * HOUR)  # D1 and D2
+    session = Session(D3, DAY0 + 46 * HOUR, DAY0 + 69 * HOUR, DAY0 + 45 * HOUR)
+    ids = {"GCZ6": 1, "GCG7": 2}
+    days = {
+        D2: (records([(2, DAY0 + 30 * HOUR, b"B", 2010.0, 9)]), mappings(ids, D2)),
+        D3: (records([(1, DAY0 + 50 * HOUR, b"B", 2000.0, 1)]), mappings(ids, D3)),
+    }
+    files = {d: dbn_file(d) for d in days}  # D1 is missing
+    source = HistoricalSource(GC, files, [], [session], ExecutionConfig(), cache=FakeCache(days))
+    assert source.outright_volumes(previous) is None
+    with pytest.raises(ValueError, match="complete data"):
+        source.front_contract(previous, session)
+    assert source.front_contract(previous, session, current="GCZ6") == "GCZ6"
+    assert source.kept_front == {D3}
+
+
 def run_both_ways(calendar, chunks, config):
     """Whole-session and second-by-second engine runs, for parity checks."""
     whole, stepwise = (Engine(GC, calendar, make_strategy("bias_pullback"), config) for _ in "ab")

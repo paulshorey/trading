@@ -84,6 +84,7 @@ class HistoricalSource:
     cache: DayCache = field(default_factory=DayCache)
     quality: dict[str, dict] = field(default_factory=dict)
     used_files: dict[str, DbnFile] = field(default_factory=dict)
+    kept_front: set[date] = field(default_factory=set)  # rolls skipped for incomplete data
 
     def chunks(self) -> Iterator[MarketChunk]:
         sessions = [*self.warmup, *self.trading]
@@ -91,7 +92,9 @@ class HistoricalSource:
         previous = None
         for i in range(start, len(sessions)):
             s = sessions[i]
-            contract = self.contract or self.front_contract(sessions[i - 1] if i else None, s)
+            contract = self.contract or self.front_contract(
+                sessions[i - 1] if i else None, s, previous
+            )
             if contract != previous:
                 for w in sessions[max(i - len(self.warmup), 0) : i]:
                     yield self.session_chunk(contract, w, tradable=False)
@@ -142,27 +145,37 @@ class HistoricalSource:
         self.quality[label] = {
             **raw_quality(trades),
             "contract_unmapped_days": [d.isoformat() for d in unmapped],
+            "front_kept_for_incomplete_data": session.trade_date in self.kept_front,
         }
         return MarketChunk(contract, session.open, session.close, trades, coverage, label, tradable)
 
-    def front_contract(self, previous: Session | None, session: Session) -> str:
-        """The outright with the most volume in the previous session, switching at the open."""
-        if previous is not None:
-            volumes = self.outright_volumes(previous)
-            if volumes:
-                return max(volumes, key=volumes.get)
+    def front_contract(
+        self, previous: Session | None, session: Session, current: str | None = None
+    ) -> str:
+        """The outright with the most volume in the previous session, switching at the open.
+        Partial data never decides a roll: without complete volume the current contract is
+        kept, and with no current contract the run cannot start."""
+        volumes = self.outright_volumes(previous) if previous is not None else None
+        if volumes:
+            return max(volumes, key=volumes.get)
+        if current is not None:
+            self.kept_front.add(session.trade_date)
+            return current
         raise ValueError(
             f"Cannot choose the {self.product.root} front contract for {session.trade_date} "
-            "without the previous session's data; set `contract` (for example GCZ6) or add "
-            "a warmup session with data."
+            "without complete data for the previous session; set `contract` (for example "
+            "GCZ6) or add a warmup session with data."
         )
 
-    def outright_volumes(self, session: Session) -> dict[str, int]:
+    def outright_volumes(self, session: Session) -> dict[str, int] | None:
         """Volume per outright in a session, with the same membership rule as `session_trades`
-        (assignment time in `[after, close)`). Files read here count as run inputs."""
+        (assignment time in `[after, close)`), or None when a day file overlapping its
+        scheduled hours is missing or uncovered. Files read here count as run inputs."""
         volumes: dict[str, int] = {}
         for day, file in self.day_files(session):
             if file is None or not file.covered:
+                if utc_day(session.open) <= day <= utc_day(session.close - 1):
+                    return None
                 continue
             records, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file

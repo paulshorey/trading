@@ -60,7 +60,7 @@ class Engine:
         self.now = 0  # latest time the engine knows the position state for
         self.cooldown_until = 0
         self.ts_floor = 0
-        self.last: tuple | None = None  # (view, index) of the latest trade seen
+        self.last: tuple | None = None  # (view, index): latest trade after the open entry
         self.trades: list[dict] = []
         self.cancelled = 0
         self.signals = 0
@@ -94,9 +94,19 @@ class Engine:
         )
         if view.n:
             self.ts_floor = int(view.ts_max[-1])
-            self.last = (view, view.n - 1)
         closed = self.execute(view, frame, signals)
+        self.remember_last_trade(view)
         return ChunkResult(frame, signals, view, closed)
+
+    def remember_last_trade(self, view: ExecView) -> None:
+        """While a position is open, keep the latest trade at or after its entry across chunks,
+        so an end-of-data or roll close never prices against an earlier trade (receive order
+        can deliver late, earlier-timestamped trades in a later chunk)."""
+        if self.position is None or not view.n:
+            return
+        after = np.flatnonzero(view.t.ts_event >= self.position.entry_ns)
+        if len(after):
+            self.last = (view, int(after[-1]))
 
     def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:
         closed: list[dict] = []
@@ -150,18 +160,14 @@ class Engine:
         self.ts_floor = 0
 
     def abandon(self, reason: str) -> None:
-        """Close an open position at the latest seen trade's book (end of data or roll)."""
+        """Close an open position at the book of the latest trade after its entry (end of data
+        or roll)."""
         if self.pending is not None:
             self.cancelled += 1
             self.pending = None
         if self.position is not None and self.last is not None:
             view, k = self.last
-            # The latest trade that happened after the entry (receive order can deliver an
-            # earlier event last); the exit can never precede the position.
-            after = np.flatnonzero(view.t.ts_event[: k + 1] >= self.position.entry_ns)
-            k = int(after[-1]) if len(after) else k
             trade = self.sim.close(view, k, self.position, reason, None)
-            trade["exit_ns"] = str(max(int(trade["exit_ns"]), self.position.entry_ns))
             trade["flags"] = sorted({*trade["flags"], "abandoned"})
             self.trades.append(trade)
             self.position = None

@@ -13,13 +13,17 @@ live trading, on one engine. See the [engine](engine.md) for how the stages shar
 - One engine for whole-session backtests and second-by-second rehearsals, verified
   identical; TBBO-based fills, ATR brackets, one portfolio.
 - Per-signal would-be-trade outcomes (ML rows) and a UI to inspect runs and trades.
+- Local PostgreSQL 18 database `trading` with numbered migrations, a Databento file
+  registry, and database tests in CI.
 
 ## Next
 
-1. **Data.** Buy GC and NQ TBBO plus `definition` records: a few months first, then
-   the full history. Check fill delays and data quality per session.
-2. **Storage.** Revise and apply the [PostgreSQL schema](../../lib/db-research/README.md):
-   catalog, contracts, rolls, quality, runs, trades, ML rows, and models.
+1. **Data.** One year of TBBO for GC, NQ, and other products is downloading. Add a
+   product spec for each new root, register the files, and review fill delays and
+   per-session data quality. Add `definition` records for contract metadata.
+2. **Ingestion.** Store one row per scheduled-open second per contract (OHLCV plus
+   per-second metrics) computed by `strategy-core`, then contracts, rolls, runs,
+   trades, and ML rows ([storage guidance](../../lib/db-research/README.md)).
 3. **Research comparison.** Run the [validation experiments](../sliding-windows/design.md#11-validation):
    phases, bias on and off, and rolling against clock candles, after costs.
 4. **Metrics.** Add order-flow and structure metrics (CVD slope and divergence, sweeps,

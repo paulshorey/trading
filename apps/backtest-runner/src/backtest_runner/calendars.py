@@ -18,6 +18,7 @@ class Session:
     trade_date: date
     open: int
     close: int
+    after: int  # close of the previous session: the closure before this one starts here
 
 
 def load_sessions(
@@ -34,6 +35,7 @@ def load_sessions(
         start_date=start - timedelta(days=7 + 2 * warmup), end_date=end + timedelta(days=7)
     )
     opens, closes, sessions = [], [], []
+    previous_close = None
     for day, row in schedule.iterrows():
         o, c = row["market_open"].value, row["market_close"].value
         if "break_start" in schedule.columns and row["break_start"] < row["break_end"]:
@@ -42,7 +44,8 @@ def load_sessions(
         else:
             opens.append(o)
             closes.append(c)
-        sessions.append(Session(day.date(), o, c))
+        sessions.append(Session(day.date(), o, c, o if previous_close is None else previous_close))
+        previous_close = c
     calendar = SessionCalendar(
         f"{product.calendar} (pandas_market_calendars {version('pandas_market_calendars')})",
         np.array(opens, np.int64),

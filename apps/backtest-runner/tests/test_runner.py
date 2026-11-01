@@ -13,8 +13,11 @@ from backtest_runner import catalog, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import HistoricalSource, instrument_id, to_trades
+from strategy_core.bars import OBSERVED, aggregate
+from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import HOUR, NS, PRODUCTS
+from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, SessionCalendar
+from strategy_core.strategies import make_strategy
 
 GC = PRODUCTS["GC"]
 D1, D2, D3 = date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)
@@ -38,12 +41,13 @@ RECORD = np.dtype(
 
 
 def records(rows):
-    """Rows of (instrument_id, ts_event, side, price, size)."""
+    """Rows of (instrument_id, ts_event, side, price, size[, receive delay]), in receive order."""
     out = np.zeros(len(rows), RECORD)
-    for i, (iid, ts, side, price, size) in enumerate(rows):
+    for i, (iid, ts, side, price, size, *delay) in enumerate(rows):
         px = round(price * 1e9)
-        out[i] = (iid, ts, ts + 1000, b"T", side, px, size, px - 100_000_000, px, 3, 3, 0)
-    return out
+        recv = ts + (delay[0] if delay else 1000)
+        out[i] = (iid, ts, recv, b"T", side, px, size, px - 100_000_000, px, 3, 3, 0)
+    return out[np.argsort(out["ts_recv"], kind="stable")]
 
 
 def mappings(symbols: dict[str, int], day: date) -> dict:
@@ -72,10 +76,6 @@ def dbn_file(day: date) -> DbnFile:
     )
 
 
-class Present(DbnFile):
-    present = True
-
-
 def test_side_mapping_contract_ids_per_day_and_spreads_are_not_outrights():
     t = to_trades(
         records(
@@ -102,9 +102,9 @@ def test_side_mapping_contract_ids_per_day_and_spreads_are_not_outrights():
 def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypatch):
     monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
     sessions = [
-        Session(D1, DAY0, DAY0 + 20 * HOUR),
-        Session(D2, DAY0 + 24 * HOUR, DAY0 + 44 * HOUR),
-        Session(D3, DAY0 + 48 * HOUR, DAY0 + 68 * HOUR),
+        Session(D1, DAY0, DAY0 + 20 * HOUR, DAY0 - 4 * HOUR),
+        Session(D2, DAY0 + 24 * HOUR, DAY0 + 44 * HOUR, DAY0 + 20 * HOUR),
+        Session(D3, DAY0 + 48 * HOUR, DAY0 + 68 * HOUR, DAY0 + 44 * HOUR),
     ]
     ids = {"GCZ6": 1, "GCG7": 2, "GCZ6-GCG7": 3}
     days = {
@@ -136,7 +136,11 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         ("GCZ6", "2026-09-03 GCZ6", True),
     ]
     assert len(chunks[1].trades) == 1 and chunks[1].trades.side.tolist() == [1]
-    assert chunks[1].coverage.tolist() == [[DAY0 + 24 * HOUR, DAY0 + 48 * HOUR]]
+    # D2's session reads D1's file too (the closure before it starts on D1)
+    assert chunks[1].coverage.tolist() == [
+        [DAY0, DAY0 + 24 * HOUR],
+        [DAY0 + 24 * HOUR, DAY0 + 48 * HOUR],
+    ]
     explicit = HistoricalSource(
         GC, files, [], sessions[1:2], ExecutionConfig(), "GCZ6", cache=FakeCache(days)
     )
@@ -149,7 +153,73 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         )
 
 
-def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path):
+def run_both_ways(calendar, chunks, config):
+    """Whole-session and second-by-second engine runs, for parity checks."""
+    whole, stepwise = (Engine(GC, calendar, make_strategy("bias_pullback"), config) for _ in "ab")
+    for chunk in chunks:
+        whole.process(chunk)
+        for second in split_by_second(chunk, calendar, config):
+            stepwise.process(second)
+    return whole, stepwise
+
+
+def test_opening_trades_within_the_close_delay_and_closure_trades_are_kept(monkeypatch):
+    """Regression (PR #62 review): a trade received during [open, open + close_delay) belongs
+    to the first second, and a trade during the preceding closure is reported, not dropped."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    s1, s2 = DAY0, DAY0 + 2 * HOUR  # sessions [s1, s1 + 1h) and [s2, s2 + 1h)
+    calendar = SessionCalendar(
+        "test", np.array([s1, s2], np.int64), np.array([s1 + HOUR, s2 + HOUR], np.int64)
+    )
+    session = Session(D1, s2, s2 + HOUR, s1 + HOUR)
+    rows = [
+        (1, s1 + HOUR + 30 * 60 * NS, b"B", 2000.0, 7),  # during the scheduled closure
+        (1, s2 + 10_000_000, b"B", 2001.0, 3, 10_000_000),  # received 20 ms after the open
+        (1, s2 + 5 * NS, b"A", 2000.5, 1),
+    ]
+    days = {D1: (records(rows), mappings({"GCZ6": 1}, D1))}
+    source = HistoricalSource(
+        GC, {D1: dbn_file(D1)}, [], [session], config, "GCZ6", cache=FakeCache(days)
+    )
+    [chunk] = list(source.chunks())
+    assert len(chunk.trades) == 3
+    ends = calendar.slot_ends(chunk.start, chunk.end, SECOND)
+    agg = aggregate(
+        chunk.trades, ends, SECOND, chunk.coverage, feed_latency=0, close_delay=config.close_delay
+    )
+    assert agg.bars.status[0] == OBSERVED and agg.bars.volume[0] == 3
+    assert agg.report.outside_schedule == 1 and agg.report.trades == 2
+    assert source.quality[chunk.session]["trades"] == 3
+    whole, stepwise = run_both_ways(calendar, [chunk], config)
+    assert whole.reports == stepwise.reports
+    assert whole.reports[chunk.session].outside_schedule == 1
+
+
+def test_days_without_the_contract_are_missing_not_quiet(monkeypatch):
+    """Regression (PR #62 review): a file that does not list the contract leaves its day
+    uncovered (missing slots) and is reported, instead of looking like a day without trades."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    open_, close = DAY0 + 22 * HOUR, DAY0 + 26 * HOUR  # D1 22:00 to D2 02:00 UTC
+    calendar = SessionCalendar("test", np.array([open_], np.int64), np.array([close], np.int64))
+    session = Session(D2, open_, close, open_ - HOUR)
+    days = {
+        D1: (records([(1, open_ + 60 * NS, b"B", 2000.0, 1)]), mappings({"GCZ6": 1}, D1)),
+        D2: (records([(9, DAY0 + 25 * HOUR, b"B", 2000.0, 1)]), mappings({"GCG7": 9}, D2)),
+    }
+    files = {d: dbn_file(d) for d in days}
+    source = HistoricalSource(GC, files, [], [session], config, "GCZ6", cache=FakeCache(days))
+    [chunk] = list(source.chunks())
+    assert chunk.coverage.tolist() == [[DAY0, DAY0 + 24 * HOUR]]
+    assert source.quality[chunk.session]["contract_unmapped_days"] == ["2026-09-02"]
+    whole, stepwise = run_both_ways(calendar, [chunk], config)
+    report = whole.reports[chunk.session]
+    assert report.missing_slots == 2 * 3600  # every D2 second of the session
+    assert whole.reports == stepwise.reports
+
+
+def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypatch):
     folder = tmp_path / "GLBX.MDP3" / "JOB-1"
     folder.mkdir(parents=True)
     content = b"not really dbn"
@@ -185,6 +255,8 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path):
         json.dumps([{"date": "2026-09-01", "condition": "degraded"}])
     )
     [f] = catalog.discover((tmp_path,))
+    monkeypatch.setattr(catalog, "discover", lambda: [f])
+    assert catalog.unconfigured_parents() == []  # GC and NQ both have product specs
     assert (f.date, f.parents, f.condition, f.covered) == (
         D1,
         ("GC.FUT", "NQ.FUT"),

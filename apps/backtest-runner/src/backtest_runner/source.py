@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import databento as db
 import numpy as np
+from strategy_core.bars import assignment_times
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
 from strategy_core.market import NS, UNDEF_PRICE, Product, Trades
@@ -98,35 +99,50 @@ class HistoricalSource:
             yield self.session_chunk(contract, s, tradable=True)
 
     def day_files(self, session: Session) -> list[tuple[date, DbnFile | None]]:
-        first, last = utc_day(session.open), utc_day(session.close - 1)
+        """UTC day files that can hold the session's trades, from the closure before it to
+        late arrivals after its close."""
+        first = utc_day(session.after)
+        last = utc_day(session.close + self.config.close_delay)
         days = [first + timedelta(days=k) for k in range((last - first).days + 1)]
         return [(d, self.files.get(d)) for d in days]
 
-    def session_trades(self, symbol: str, session: Session) -> tuple[Trades, np.ndarray]:
-        """A contract's trades for a session, in receive order, and the covered intervals."""
-        parts, coverage = [], []
+    def session_trades(
+        self, symbol: str, session: Session
+    ) -> tuple[Trades, np.ndarray, list[date]]:
+        """A contract's trades for a session in receive order, its covered intervals, and the
+        days whose files do not list the contract.
+
+        A trade belongs to the session whose `[after, close)` holds its assignment time (the
+        rule in `strategy_core.bars`), so opening trades that arrive within the close delay
+        stay in the first second and trades during the preceding closure reach aggregation,
+        which reports them as outside the schedule. A day counts as covered only when its
+        file is usable and lists the contract."""
+        parts, coverage, unmapped = [], [], []
         for day, file in self.day_files(session):
             if file is None or not file.covered:
                 continue
             records, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
-            day_ns = int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
-            coverage.append((day_ns, day_ns + DAY))
             iid = instrument_id(mappings, symbol, day)
             if iid is None:
+                unmapped.append(day)
                 continue
+            day_ns = int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
+            coverage.append((day_ns, day_ns + DAY))
             sel = (records["instrument_id"] == iid) & (records["action"] == b"T")
             parts.append(to_trades(records[sel]))
         trades = Trades.concat(parts)
-        known = trades.ts_recv + self.config.feed_latency
-        delay = self.config.close_delay
-        inside = (known >= session.open + delay) & (known < session.close + delay)
-        return trades.take(inside), np.array(coverage, np.int64).reshape(-1, 2)
+        assign = assignment_times(trades, self.config.feed_latency, self.config.close_delay)
+        inside = (assign >= session.after) & (assign < session.close)
+        return trades.take(inside), np.array(coverage, np.int64).reshape(-1, 2), unmapped
 
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
-        trades, coverage = self.session_trades(contract, session)
+        trades, coverage, unmapped = self.session_trades(contract, session)
         label = f"{session.trade_date} {contract}" + ("" if tradable else " (warmup)")
-        self.quality[label] = raw_quality(trades)
+        self.quality[label] = {
+            **raw_quality(trades),
+            "contract_unmapped_days": [d.isoformat() for d in unmapped],
+        }
         return MarketChunk(contract, session.open, session.close, trades, coverage, label, tradable)
 
     def front_contract(self, previous: Session | None, session: Session) -> str:

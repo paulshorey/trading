@@ -52,10 +52,12 @@ Candles follow `docs/sliding-windows/`:
 - Treat adjacent candles as strongly correlated: one portfolio in backtests, and
   chronological, purged splits for ML.
 
-Storage: DBN files are the permanent tick archive; base bars and features are rebuilt
-from them in memory. PostgreSQL will hold the catalog, contracts, rolls, coverage,
-runs, trades, ML rows, models, and live decisions. Database setup is the next storage
-milestone; do not apply the proposed schema until it is revised.
+Storage: DBN files are the permanent tick archive. PostgreSQL (local database
+`trading`, URL from `TRADING_DATABASE_URL`) holds everything derived: the file catalog,
+contracts, rolls, coverage, one-second rows with their metrics, runs, trades, ML rows,
+models, and live decisions. Compute stored rows with `strategy-core` code, the same
+code live sessions run, and record the builder version. Change the schema only through
+numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 
 ## Research principles
 

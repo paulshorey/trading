@@ -20,19 +20,20 @@ trading can start before a strategy is final.
 | `apps/backtest-runner` | Databento catalog and source, calendars, runs, CLI (`research`), local API  |
 | `apps/research-web`    | Run setup, results, and the second-by-second trade inspector                |
 | `lib/research-charts`  | Reusable chart components                                                   |
-| `lib/db-research`      | Proposed PostgreSQL schema (not applied yet)                                |
+| `lib/db-research`      | PostgreSQL migrations and storage design (local database `trading`)         |
 | `data/`                | Databento job folders, the one-day sample, and saved runs (all gitignored)  |
 
 `archive/` is reference-only, excluded from active builds and deployments.
 
 ## Run locally
 
-Requirements: Node 20+, pnpm 10.28.1, and [uv](https://docs.astral.sh/uv/) 0.13+ (it
-installs Python 3.13 from `.python-version`).
+Requirements: Node 20+, pnpm 10.28.1, [uv](https://docs.astral.sh/uv/) 0.13+ (it
+installs Python 3.13 from `.python-version`), and PostgreSQL 18 for stored data.
 
 ```sh
 pnpm deps:install    # pnpm install --frozen-lockfile && uv sync --frozen
 pnpm dev             # research UI at http://127.0.0.1:4400, API on 8001
+uv run research db migrate   # local database `trading`; setup in lib/db-research
 ```
 
 ```sh
@@ -50,7 +51,8 @@ history comes from Databento batch downloads; see the [data plan](docs/project/d
 
 - [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
 - [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
-- [Historical data](docs/project/data.md) and [roadmap](docs/project/roadmap.md).
+- [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), and the
+  [handoff notes](docs/project/handoff.md) with decisions and next steps.
 - [Research UI](docs/project/metric-explorer.md) and the [storage contract](lib/db-research/README.md).
 
 ## Private phone access through Tailscale

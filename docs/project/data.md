@@ -60,31 +60,34 @@ TBBO records across 21 instruments:
 
 ## Storage
 
-**Decision: Databento's DBN files are the permanent tick archive, and PostgreSQL holds
-the relational data derived from them.** There is no intermediate Parquet or DuckDB
-layer, and no per-second series is stored.
+**Decision (revised October 31, 2026): DBN files are the permanent tick archive, and
+PostgreSQL holds everything derived from them, including one row per scheduled-open
+second per contract.** There is no Parquet or DuckDB layer.
 
-| Storage for ticks                  | One sample day | 6 years, upper bound |
-| ---------------------------------- | -------------- | -------------------- |
-| DBN uncompressed (Databento bills) | 17.5 MB        | ≈ 27 GB              |
-| DBN with zstd                      | 4.6 MB         | ≈ 7 GB               |
-| Lean PostgreSQL table, measured    | 39 MB          | ≈ 60 GB              |
+- **DBN files** keep every trade with its pre-trade book. Fills and any rebuild read
+  them. A day of MGC is 17.5 MB uncompressed (4.6 MB with zstd); GC and NQ trade more.
+- **One-second rows** (OHLCV plus per-second metrics such as aggressor flow, CVD,
+  spread, and top-of-book size and imbalance at trades) are computed by an ingestion
+  job and stored for SQL research, ML exports, and fast backtests. A contract-year is
+  about 21 million scheduled seconds. A measured binary `COPY` of 44-column rows wrote
+  about 400,000 rows per second at about 400 bytes per row before indexes, or about
+  a minute and 8 GB per contract-year. Store the front and next contracts from the
+  roll schedule, not every listed month.
+- **Relational data**: the file catalog with checksums, contracts, coverage, the roll
+  schedule, quality reports, runs, trades, ML rows, models, predictions, and live
+  decisions.
 
-(MGC figures; GC and NQ trade more.) Rebuilding one-second base bars from a day's DBN
-file takes tens of milliseconds, faster than reading them back from a database, and
-live sessions build the same bars from the live feed. One-second bars for one contract
-over 6 years would be about 128 million rows, so they stay in memory.
-
-PostgreSQL stores what is relational or sparse: the dataset and file catalog with
-checksums, contracts, coverage and closures, the roll schedule, quality reports, run
-definitions and results, trades, ML rows (one per signal), models, predictions, and
-live decisions. The [proposed schema](../../lib/db-research/README.md) needs the
-revisions listed there before it is applied.
+The ingestion job must compute rows with `strategy-core` code, the same code a live
+session runs on the live feed; never reimplement a metric in SQL or a separate
+script. Each stored row set records its builder version (code hash, assignment
+settings such as `close_delay`, and source files). See the
+[storage contract](../../lib/db-research/README.md) for the table design guidance.
 
 ## Ingestion pipeline
 
-Each stage reads the output of the one before and can be rerun. Stages 1–5 run in
-memory today, per backtest; persisting their outputs is the PostgreSQL milestone.
+Each stage reads the output of the one before and can be rerun. Stages 1–6 run in
+memory today, per backtest. Next, an ingestion job persists their outputs and the
+one-second rows; `research db register` already records downloaded files.
 
 1. **Register.** Verify each file against `manifest.json` (size and SHA-256). Dates
    whose `condition.json` entry is not `available` or `degraded` have no coverage.

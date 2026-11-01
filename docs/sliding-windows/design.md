@@ -234,10 +234,11 @@ those candles with `irregular_closure`. This affects a few holidays a year and n
 
 ## 10. Storage
 
-Compute candles and features in memory from the DBN files, in backtests and live
-sessions alike; recompute them for inspection. Persist the exact inputs of every
-decision and trade, and the ML rows. The [proposed PostgreSQL contract](../../lib/db-research/README.md)
-describes candle tables; its README lists the revisions needed before it is applied.
+Store one row per scheduled-open second (base bars and their per-second metrics) in
+PostgreSQL, computed by the same code live sessions run. Rolling candles and per-phase
+indicators are derived from those rows and can be stored or recomputed; persist the
+exact inputs of every decision and trade, and the ML rows. See the
+[storage contract](../../lib/db-research/README.md).
 
 ## 11. Validation
 

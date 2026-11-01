@@ -365,7 +365,7 @@ def trade_window(run_id: str, index: int, before_s: int = 240, after_s: int = 12
     session = next((s for s in sessions if s.open < signal <= s.close), None)
     if session is None:
         raise FileNotFoundError("session")
-    trades, coverage = p.source.session_trades(trade["contract"], session)
+    trades, coverage, _ = p.source.session_trades(trade["contract"], session)
     lo = max(session.open, (signal // NS - before_s) * NS)
     hi = min(session.close, (exit_ns // NS + after_s) * NS)
     ends = p.calendar.slot_ends(lo, hi, SECOND)

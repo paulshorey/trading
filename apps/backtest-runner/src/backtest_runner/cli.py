@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
+import psycopg
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="research", description="Trading research runner")
@@ -17,6 +19,8 @@ def main() -> None:
     p.add_argument("spec", type=Path)
     p.add_argument("--speed", type=float, default=60.0, help="1 = real time; 0 = no waiting")
     p.add_argument("--sessions", type=int, default=1)
+    p = sub.add_parser("db", help="PostgreSQL: status, migrate, or register downloaded files")
+    p.add_argument("action", choices=("status", "migrate", "register"))
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
@@ -29,7 +33,24 @@ def main() -> None:
         from . import catalog, service
 
         if args.command == "catalog":
-            result = catalog.describe()
+            result = {
+                "products": catalog.describe(),
+                "unconfigured_parents": catalog.unconfigured_parents(),
+            }
+        elif args.command == "db":
+            from . import db
+
+            with db.connect() as conn:
+                if args.action == "status":
+                    result = db.status(conn)
+                elif args.action == "migrate":
+                    result = {"applied": db.migrate(conn)}
+                else:
+                    result = {
+                        "registered": db.register_files(
+                            conn, [f for f in catalog.discover() if f.present]
+                        )
+                    }
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)
             result = {k: run[k] for k in ("id", "summary", "candidates", "performance")}
@@ -43,5 +64,5 @@ def main() -> None:
                 args.sessions,
             )
         print(json.dumps(result, indent=2, allow_nan=False))
-    except (ValueError, TypeError, KeyError, OSError) as error:
+    except (ValueError, TypeError, KeyError, OSError, psycopg.Error) as error:
         parser.exit(1, f"Error: {error}\n")

@@ -19,9 +19,10 @@ pnpm dev:tailscale:stop
 Omit `--background` for terminal output and Ctrl+C cleanup. Keep the Mac awake,
 online, and connected to Tailscale, and connect Tailscale on the S26 Ultra.
 
-Ordinary `pnpm dev` and Tailscale mode both use local web port 4400. The Python
-API uses loopback port 8001 (`pnpm api` for ordinary development; managed
-automatically in Tailscale mode). Both Vite modes proxy `/api` to that API. The
+Ordinary `pnpm dev` and Tailscale mode both use local web port 4400. With ordinary
+`pnpm dev` the Python API uses loopback port 8001 and Vite proxies `/api` to it.
+Under `~/git/local-dev`, the active manager, the API runs as `pnpm api --port 4401`
+and local-dev's Vite proxy sends `/api` to 4401; its `config.json` owns those ports. The
 private proxy translates only this exact private UI Origin to the accepted local
 UI origin on 4400; other origins remain rejected. Existing unmanaged processes
 on other ports are preserved. No backtest, dataset download, or broker operation

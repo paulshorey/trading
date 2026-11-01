@@ -19,8 +19,9 @@ from .strategies import Strategy
 
 @dataclass(frozen=True)
 class MarketChunk:
-    """Trades for one contract received while the slots ending in `(start, end]` closed:
-    receipt plus feed latency in `[start + close_delay, end + close_delay)`."""
+    """One contract's trades assigned to the scheduled slots ending in `(start, end]`, in
+    receive order. A session chunk also carries trades assigned to the closure before it;
+    aggregation reports those as outside the schedule and execution ignores them."""
 
     contract: str
     start: int

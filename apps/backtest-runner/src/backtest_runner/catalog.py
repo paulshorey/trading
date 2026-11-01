@@ -146,3 +146,12 @@ def describe() -> list[dict]:
             }
         )
     return out
+
+
+def unconfigured_parents() -> list[str]:
+    """Parent symbols on disk without a `strategy_core.market.PRODUCTS` entry. Add a Product
+    (tick size, tick value, exchange calendar) before using them."""
+    from strategy_core.market import PRODUCTS
+
+    known = {p.parent_symbol for p in PRODUCTS.values()}
+    return sorted({parent for f in discover() for parent in f.parents} - known)

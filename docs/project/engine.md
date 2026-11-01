@@ -20,10 +20,14 @@ backtest must reproduce the same decisions; differences expose timing assumption
 
 ## Strategy shape
 
-- **Bias, `1h@1m`:** the last 60 minutes, updated every minute. It only disqualifies a
-  direction. `1d@1h` could add a slower bias later.
-- **Entry timing, `1m@1s`:** the last 60 seconds, updated every second. It decides when
-  to act in an allowed direction. This is the primary decision timeframe.
+- **Bias, `1h@1m`:** the last 60 one-minute rows, recomputed every minute. It only
+  disqualifies a direction. `1d@1h` could add a slower bias later.
+- **Entry timing, `1m@1s`:** the last 60 one-second rows, recomputed every second. It
+  decides when to act in an allowed direction. This is the primary decision timeframe.
+
+Windows and phases count rows (scheduled-open slots with an index counter), never
+clock time; see [rows and index counters](../sliding-windows/README.md#rows-and-index-counters).
+
 - **Exit:** a bracket fixed at entry, sized in 1-minute ATRs: target, stop, and a
   maximum hold of minutes.
 
@@ -32,17 +36,17 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 
 ## Code map
 
-| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                      |
-| ----------------------------------------------- | ------------------------------------------------------------------- |
-| `market.py`                                     | Products (GC, SI, PL, ES, NQ, YM, RTY), TBBO trade arrays, calendar |
-| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                    |
-| `windows.py`                                    | Rolling candles over the last 60 trading-time slots                 |
-| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                         |
-| `features.py`                                   | Normalized feature pipeline and unit contract                       |
-| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline               |
-| `execution.py`                                  | Simulated fills against TBBO trades                                 |
-| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                 |
-| `labels.py`                                     | One would-be trade per signal, for ML                               |
+| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                                                               |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `market.py`                                     | Products (GC, SI, PL, ES, NQ, YM, RTY), TBBO trade arrays, calendar and row index counters (`slot_ordinals`) |
+| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                                                             |
+| `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                              |
+| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                  |
+| `features.py`                                   | Normalized feature pipeline and unit contract                                                                |
+| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                        |
+| `execution.py`                                  | Simulated fills against TBBO trades                                                                          |
+| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                          |
+| `labels.py`                                     | One would-be trade per signal, for ML                                                                        |
 
 `apps/backtest-runner` adds the Databento file catalog, exchange calendars, the
 historical source (contract selection and rolls), run storage, the CLI, and the API.

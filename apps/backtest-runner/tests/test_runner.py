@@ -191,6 +191,25 @@ def test_front_contract_waits_for_complete_previous_session(monkeypatch):
     assert source.kept_front == {D3}
 
 
+def test_roll_volume_ignores_closure_trades_and_needs_mapped_outrights(monkeypatch):
+    """Regression (PR #62 review): trades assigned to the closure before the session do not
+    count toward roll volume, and an overlapping day file that lists none of the product's
+    outrights makes the volume unavailable rather than zero."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    session = Session(D1, DAY0 + 2 * HOUR, DAY0 + 20 * HOUR, DAY0 + HOUR)
+    rows = [(1, DAY0 + 90 * 60 * NS, b"B", 2000.0, 50), (2, DAY0 + 3 * HOUR, b"B", 2010.0, 4)]
+    days = {D1: (records(rows), mappings({"GCZ6": 1, "GCG7": 2}, D1))}
+    source = HistoricalSource(
+        GC, {D1: dbn_file(D1)}, [], [session], ExecutionConfig(), cache=FakeCache(days)
+    )
+    assert source.outright_volumes(session) == {"GCG7": 4}  # the 50-lot closure trade is out
+    only_spreads = {D1: (records(rows), mappings({"GCZ6-GCG7": 1}, D1))}
+    source = HistoricalSource(
+        GC, {D1: dbn_file(D1)}, [], [session], ExecutionConfig(), cache=FakeCache(only_spreads)
+    )
+    assert source.outright_volumes(session) is None
+
+
 def run_both_ways(calendar, chunks, config):
     """Whole-session and second-by-second engine runs, for parity checks."""
     whole, stepwise = (Engine(GC, calendar, make_strategy("bias_pullback"), config) for _ in "ab")

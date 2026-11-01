@@ -6,11 +6,38 @@ As of November 1, 2026. Read this first, then [AGENTS.md](../../AGENTS.md) and t
 ## Goal
 
 Short-horizon futures strategies, researched on history and run live on the same
-code. A rolling `1h@1m` candle (the last hour, every minute) sets a direction bias
-that only rules out a direction; rolling `1m@1s` features (the last minute, every
-second) time entries; a bracket sized in ATRs exits within minutes. Prototype with
-GC (gold) and SI (silver), then add products. ML models learn from one row per
-would-be trade: the inputs at the decision and the outcome after it.
+code. A rolling `1h@1m` candle (the last 60 one-minute rows, every minute) sets a
+direction bias that only rules out a direction; rolling `1m@1s` features (the last 60
+one-second rows, every second) time entries; a bracket sized in ATRs exits within
+minutes. Prototype with GC (gold) and SI (silver), then add products. ML models learn
+from one row per would-be trade: the inputs at the decision and the outcome after it.
+
+## Core concept: index counters, not clock time
+
+This is the idea everything else rests on; read
+[rows and index counters](../sliding-windows/README.md#rows-and-index-counters) before
+changing candles, indicators, or tables.
+
+- Every scheduled-open second and minute is one row, including seconds and minutes
+  without trades or with missing data. Closures have no rows.
+- Each row has an index counter, `slot_ordinal`, that increases by one per row from a
+  fixed calendar origin (the first session on or after 2010-01-01). The same slot gets
+  the same index in every contract, ingestion batch, backtest, and live session.
+- For the row with index `o`: its rolling candle is rows `o − 59 … o`; its phase (the
+  original `minute_index` or `second_index`) is `o % 60`; indicators read the
+  same-phase candles at `o − 60, o − 120, …`; the previous step is `o − 1`. A minute
+  with index `m` holds the seconds with indexes `60m − 59 … 60m`.
+- Clock timestamps are kept on every row for charts and joins, but never decide
+  window members, phases, or "one period ago".
+
+Worked example: an early close at 18:15 UTC and a reopen at 23:00. The `1h@1m` candle
+at 23:01 covers 17:16–18:15 plus 23:00–23:01, and its previous same-phase candle covers
+16:16–17:16, exactly 60 rows earlier. A clock rule (same minute of the hour) would
+instead compare it with the 18:01 candle, overlapping by 45 minutes.
+
+Implemented in the engine (`SessionCalendar.slot_ordinals`, `windows.RollingWindow`;
+tests in `lib/strategy-core/tests/test_windows_features.py`). Not yet in the database:
+the one-second and one-minute tables must store `slot_ordinal` (next task, step 3).
 
 ## Where things stand
 
@@ -71,11 +98,13 @@ pnpm lint && pnpm test && pnpm build
    tests that require roll-ups to equal direct aggregation in any chunking.
    Calculate more than you need; experiments will decide what is useful.
 3. **Schema.** Add `0002_*.sql`: contracts (from definitions), the roll schedule,
-   builder versions, and a monthly-partitioned one-second table keyed on
-   `(contract_id, end_ns)` with a row for every scheduled-open second. Follow the
-   [storage guidance](../../lib/db-research/README.md).
+   builder versions, and monthly-partitioned one-second and one-minute tables with a
+   row for every scheduled-open slot, each carrying its `slot_ordinal` and phase
+   (`slot_ordinal % 60`), indexed on `(contract_id, slot_ordinal)`. Follow the
+   [storage guidance](../../lib/db-research/README.md), which sketches the table.
 4. **Ingest command.** For each product and session: `HistoricalSource.session_trades`,
-   then `bars.aggregate`, then binary `COPY`. Make each (contract, session) slice
+   then `bars.aggregate`, then `SessionCalendar.slot_ordinals` for each row's index,
+   then binary `COPY`. Make each (contract, session) slice
    idempotent (delete, then copy) and record the builder version (code hash,
    `close_delay`, `feed_latency`, files). Store front and next contracts only.
    Parallelize by product or day: a full-year decode of all seven products took 28 s

@@ -6,7 +6,9 @@ strategies, simulated execution, the engine, and ML labels. No file, network, or
 database access; adapters live in `apps/backtest-runner`.
 
 Features and signals use only normalized units (`features.Unit`); raw prices appear
-only in execution and P&L. Read the [engine design](../../docs/project/engine.md)
+only in execution and P&L. Windows and phases count rows through each slot's index
+counter (`SessionCalendar.slot_ordinals`), never clock time: a candle is the last 60
+rows, its phase is the index mod 60, and indicators read candles 60 rows apart. Read the [engine design](../../docs/project/engine.md)
 before changing timing or fills, and the [sliding-window design](../../docs/sliding-windows/design.md)
 before changing candles or indicators.
 

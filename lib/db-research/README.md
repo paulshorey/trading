@@ -37,22 +37,49 @@ when one changes. Add a new migration instead.
 
 ## Design guidance for the next tables
 
-**One-second rows** (for example `market.bar_1s`): one row for every scheduled-open
-second per contract, including seconds without trades, so each sliding window is
-exactly 60 consecutive rows (decided November 1, 2026). Each row has a status
-(`observed`, `no_trades`, `missing`), OHLC and the times
-of the high and low, volume split by aggressor side, trade count, the price × size
-sum, running-delta extremes, and the per-second metrics from the research (CVD,
-spread, top-of-book size and imbalance at trades, and so on).
+**One-second and one-minute rows** (for example `market.bar_1s` and `market.bar_1m`):
+one row for every scheduled-open slot per contract, including slots without trades or
+with missing data, so every sliding window is exactly 60 consecutive rows (decided
+November 1, 2026). Closures have no rows.
 
-- Store each row's trading-time index, `slot_ordinal` (`bigint`): the number of
-  scheduled-open slots of that step from the product calendar's fixed origin, as
-  computed by `SessionCalendar.slot_ordinals` (origin `PHASE_ORIGIN` in
-  `apps/backtest-runner/.../calendars.py`). It increments by one per row and ignores
-  closures. Then phase is `slot_ordinal % 60`, a sliding window is the 60 rows
-  `slot_ordinal - 59 … slot_ordinal`, and the previous same-phase candle is the row at
-  `slot_ordinal - 60`. Index `(contract_id, slot_ordinal)`. Contracts of a product share
-  ordinals because they share the calendar; one-minute rows get their own ordinals.
+The defining column is the row's **index counter**, `slot_ordinal` (`bigint`): the
+number of scheduled-open slots of that step since the product calendar's fixed origin
+(`SessionCalendar.slot_ordinals`, origin `PHASE_ORIGIN` in
+`apps/backtest-runner/src/backtest_runner/calendars.py`). It increases by exactly one
+per row and ignores closures and clock time. Everything about windows is arithmetic on
+it ([concept](../../docs/sliding-windows/README.md#rows-and-index-counters)):
+
+```text
+rolling candle of row o      rows o − 59 … o
+phase (minute_index, second_index)   o % 60
+same-phase candles for indicators    o − 60, o − 120, …
+previous step                        o − 1
+seconds inside minute m              60m − 59 … 60m
+```
+
+```sql
+CREATE TABLE market.bar_1m (            -- the same shape for market.bar_1s
+    contract_id   bigint   NOT NULL,
+    slot_ordinal  bigint   NOT NULL,     -- index counter: +1 per scheduled-open minute
+    phase         smallint GENERATED ALWAYS AS (slot_ordinal % 60) STORED,
+    end_ns        bigint   NOT NULL,     -- clock time: charts and joins, never windows
+    status        smallint NOT NULL,     -- observed, no trades, missing
+    -- OHLC, high/low times, volume by aggressor side, trade count, price x size sum,
+    -- running-delta extremes, and the researched per-slot metrics
+    PRIMARY KEY (contract_id, end_ns)
+) PARTITION BY RANGE (end_ns);
+CREATE INDEX ON market.bar_1m (contract_id, slot_ordinal);
+CREATE INDEX ON market.bar_1m (contract_id, phase, slot_ordinal DESC);
+```
+
+PostgreSQL requires a partitioned table's unique keys to include the partition key, so
+the key is `(contract_id, end_ns)`; `slot_ordinal` is one-to-one with `end_ns` per
+product, so it stays unique by construction. Contracts of a product share ordinals
+because they share the calendar. Each row also has a status (`observed`, `no_trades`,
+`missing`), OHLC and the times of the high and low, volume split by aggressor side,
+trade count, the price × size sum, running-delta extremes, and the per-slot metrics
+from the research (CVD, spread, top-of-book size and imbalance at trades, and so on).
+
 - Compute rows with `strategy-core` (`bars.aggregate` and its extensions), the code a
   live session runs. Extend `BaseBars` and `Rollup` with new per-second fields and
   keep the chunk-invariance tests passing; never compute a metric in SQL.

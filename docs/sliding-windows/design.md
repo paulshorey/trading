@@ -13,14 +13,14 @@ supplies the direction bias, read as of the latest completed minute.
 
 | Term           | Meaning                                                                                         |
 | -------------- | ----------------------------------------------------------------------------------------------- |
-| Window `W`     | Candle duration: 60 minutes for `1h@1m`, 60 seconds for `1m@1s`.                                |
-| Step `S`       | Time between candles: 1 minute or 1 second. Both specs have `W/S = 60`.                         |
-| Base bar       | A disjoint `S`-long bar built directly from trades; one window slot.                            |
+| Window `W`     | 60 rows: 60 scheduled-open minutes for `1h@1m`, 60 seconds for `1m@1s`.                         |
+| Step `S`       | One row: 1 minute or 1 second of scheduled-open time.                                           |
+| Base bar       | A disjoint `S`-long bar built directly from trades; one row and one window slot.                |
 | Trading time   | Steps when the market is scheduled open. Closed steps add no slot.                              |
-| Rolling candle | The last 60 open-market slots, completed at `T`. Usually `[T−W, T)`.                            |
-| Ordinal        | Trading-time index: scheduled-open slots counted from a fixed origin.                           |
+| Rolling candle | The last 60 rows (index `o − 59 … o`). Equals clock `[T−W, T)` only when no closure intervenes. |
+| Ordinal        | The row's index counter (`slot_ordinal`): scheduled-open slots counted from a fixed origin.     |
 | Phase          | `ordinal mod 60`; equals the clock minute or second until a closure that is not a whole period. |
-| Phase series   | Candles of one phase, one period apart. The input to standard indicators.                       |
+| Phase series   | Candles of one phase, 60 rows apart. The input to standard indicators.                          |
 | Rolling stream | One output per step, cycling through phases. Read by charts and strategy.                       |
 
 ## 1. Base bars
@@ -125,17 +125,23 @@ ending at `T`.
   trading time, so state simply continues.
 - **Cost.** Memory is `60 × indicator instances × instruments` small states.
 
-A history lookup returns one slot per expected end time, oldest first. The session
-calendar supplies the expected times, skipping closures:
+A history lookup reads rows by index, never by clock time. For the candle at index
+`o`, its phase series is the rows `o, o − 60, o − 120, …`, oldest first. Every
+scheduled slot has a row, so the list has no holes; a row's status says whether its
+candle is usable:
 
-```python
-phase_history(instrument, spec="1h@1m", end=T, count=15)
-# the 15 most recent open-market candles of T's phase, each with its status
+```sql
+-- Inputs of RSI(14) for the 1h@1m candle at minute index :o, from rolling candles stored
+-- one per minute row (or each rebuilt from base rows i − 59 … i). A base row's own close
+-- is not the rolling candle's close when that minute had no trades.
+SELECT slot_ordinal, end_ns, status, close FROM research.candles_1h_1m
+WHERE contract_id = :contract AND slot_ordinal <= :o AND slot_ordinal % 60 = :o % 60
+ORDER BY slot_ordinal DESC LIMIT 15;
 ```
 
-Lag is typed. `previous_period()` moves back `W` within a phase; `previous_step()`
-moves back `S` in the rolling stream. A plain `.shift(1)` on an interleaved table is
-a step lag, so it must not feed standard indicators.
+Lag is typed. `previous_period()` moves back 60 rows within a phase; `previous_step()`
+moves back one row in the rolling stream. A plain `.shift(1)` on an interleaved table
+is a step lag, so it must not feed standard indicators.
 
 ## 5. Highs, lows, and pivots
 

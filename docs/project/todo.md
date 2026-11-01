@@ -11,7 +11,8 @@ task live in [handoff: next task](handoff.md#next-task-store-one-second-rows-and
 - [ ] **Download contract definitions.** Free, but submitting the job needs the
       account owner. Settings are in [data](data.md#what-we-have).
 - [ ] **Store one-second rows and metrics for GC and SI.** Per-second fields, migration
-      `0002`, and the ingest command, as in the handoff's next task.
+      `0002`, and the ingest command, as in the handoff's next task. Every row carries
+      its index counter (`slot_ordinal`); windows and phases are arithmetic on it.
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
       Check run time and memory, rolls and warmup at every contract change, and the
       per-session quality reports. Run `research verify` on a week of GC and SI:

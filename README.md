@@ -5,8 +5,10 @@ strategies and the machine-learning models behind them. It prototypes with CME G
 (gold) and SI (silver); a year of data for seven CME products is on disk.
 
 Strategies read Databento TBBO trades with their pre-trade bid and ask. A rolling
-`1h@1m` candle (the last hour, every minute) sets the direction bias; a rolling
-`1m@1s` candle (the last minute, every second) times entries; a bracket sized in ATRs
+`1h@1m` candle (the last 60 one-minute rows, every minute) sets the direction bias; a
+rolling `1m@1s` candle (the last 60 one-second rows, every second) times entries.
+Windows count rows of scheduled trading time through an index counter on every row,
+never clock time, so closures never break them. A bracket sized in ATRs
 exits within minutes. Every feature is normalized: basis points, ATR multiples,
 ratios, oscillators, or time; never raw prices. The same engine runs backtests (as fast
 as possible) and second-by-second live-style sessions with identical results, so paper

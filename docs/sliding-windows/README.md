@@ -7,10 +7,14 @@ instead of a partial candle that began at the top of the hour. Indicators then
 compare a full current candle with full earlier candles, and hourly signals can
 update every minute. The project uses two windows:
 
-| Name    | Each candle covers  | New candle every | Built from         | Role                          |
-| ------- | ------------------- | ---------------- | ------------------ | ----------------------------- |
-| `1h@1m` | the last 60 minutes | minute           | 1-minute base bars | Bias: rules out a direction   |
-| `1m@1s` | the last 60 seconds | second           | 1-second base bars | Timing: decides when to enter |
+| Name    | Each candle covers          | New candle every | Built from           | Role                          |
+| ------- | --------------------------- | ---------------- | -------------------- | ----------------------------- |
+| `1h@1m` | the last 60 one-minute rows | minute           | one-minute base bars | Bias: rules out a direction   |
+| `1m@1s` | the last 60 one-second rows | second           | one-second base bars | Timing: decides when to enter |
+
+**The core rule: windows count rows, never clock time.** Every scheduled-open minute
+or second is one row with an index counter; see
+[rows and index counters](#rows-and-index-counters).
 
 ## The problem with clock-aligned candles
 
@@ -54,6 +58,34 @@ minute when the market is closed does not, so every candle holds exactly 60 minu
 of open market. After a closure, candles combine the last minutes before it with
 the first minutes after it. `1m@1s` works the same way with 60 one-second slots.
 
+## Rows and index counters
+
+Every scheduled-open minute (for `1h@1m`) and second (for `1m@1s`) is one row, whether
+or not anything traded and even when data is missing (the row's status says so).
+Closed periods have no rows. Each row carries an **index counter**, `slot_ordinal`,
+that increases by exactly one per row. Windows and phases are row arithmetic on that
+counter, never arithmetic on clock timestamps:
+
+| For the row with index `o`                                 | Rows                                                           |
+| ---------------------------------------------------------- | -------------------------------------------------------------- |
+| Its rolling candle                                         | `o − 59 … o` (the last 60 rows)                                |
+| Its phase (the original `minute_index` and `second_index`) | `o mod 60`                                                     |
+| The same-phase candle one period earlier                   | `o − 60` (then `o − 120`, `o − 180`, …: the indicator's input) |
+| The previous step of the rolling stream                    | `o − 1`                                                        |
+
+Example: an early close at 18:15 UTC and a reopen at 23:00. The candle at 23:01 covers
+17:16–18:15 plus 23:00–23:01, and its same-phase candle one period earlier covers
+16:16–17:16. Counting clock time instead would lose those 45 minutes or overlap them.
+
+The counter starts at a fixed origin on the exchange calendar (the first session on or
+after 2010-01-01), so every contract, ingestion batch, and live session assigns the
+same index to the same slot; `SessionCalendar.slot_ordinals` computes it. A minute row
+with index `m` holds the second rows `60m − 59 … 60m`, because closures always fall on
+whole minutes. Until the first closure that is not a whole hour, the phase equals the
+minute of the hour, so the examples below use clock times; after one, labels shift
+and only the counter is meaningful. Timestamps remain on every row for charts and
+joins, never for choosing window members.
+
 ## Indicators run on one phase at a time
 
 **Do not feed consecutive rolling candles into an indicator.** The 13:06 and 13:07
@@ -89,10 +121,10 @@ form a **rolling stream**: hourly RSI, ATR, and so on, updated every minute.
 
 Code must say which "previous value" it means:
 
-- **Previous period:** the same phase one hour earlier. Standard crossovers, higher
-  highs, divergences, and pivots use this.
-- **Previous step:** the previous minute's output, from a different phase. This
-  measures how the hourly picture changed in the last minute.
+- **Previous period:** the same phase one period earlier, 60 rows back. Standard
+  crossovers, higher highs, divergences, and pivots use this.
+- **Previous step:** the previous row's output, from a different phase. This measures
+  how the hourly picture changed in the last minute.
 
 ## What this gains
 

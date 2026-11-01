@@ -168,17 +168,31 @@ class HistoricalSource:
         )
 
     def outright_volumes(self, session: Session) -> dict[str, int] | None:
-        """Volume per outright in a session, with the same membership rule as `session_trades`
-        (assignment time in `[after, close)`), or None when a day file overlapping its
-        scheduled hours is missing or uncovered. Files read here count as run inputs."""
+        """Volume per outright from trades assigned to the session's scheduled hours
+        (`[open, close)`; closure records are excluded, as aggregation excludes them). Returns
+        None when a day file overlapping those hours is missing, uncovered, or lists none of
+        the product's outrights, so partial data never decides a roll. Files read here count
+        as run inputs. The CME calendars used here have no breaks inside a session."""
         volumes: dict[str, int] = {}
+        scheduled = (utc_day(session.open), utc_day(session.close - 1))
         for day, file in self.day_files(session):
+            overlaps = scheduled[0] <= day <= scheduled[1]
             if file is None or not file.covered:
-                if utc_day(session.open) <= day <= utc_day(session.close - 1):
+                if overlaps:
                     return None
                 continue
             records, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
+            ids = {
+                symbol: iid
+                for symbol in mappings
+                if self.product.is_outright(symbol)
+                and (iid := instrument_id(mappings, symbol, day)) is not None
+            }
+            if not ids:
+                if overlaps:
+                    return None
+                continue
             assign = assignment_ns(
                 records["ts_event"].astype(np.int64),
                 records["ts_recv"].astype(np.int64),
@@ -186,15 +200,11 @@ class HistoricalSource:
                 self.config.close_delay,
             )
             in_session = (
-                (assign >= session.after) & (assign < session.close) & (records["action"] == b"T")
+                (assign >= session.open) & (assign < session.close) & (records["action"] == b"T")
             )
-            for symbol in mappings:
-                if not self.product.is_outright(symbol):
-                    continue
-                iid = instrument_id(mappings, symbol, day)
-                if iid is not None:
-                    sel = in_session & (records["instrument_id"] == iid)
-                    volumes[symbol] = volumes.get(symbol, 0) + int(records["size"][sel].sum())
+            for symbol, iid in ids.items():
+                sel = in_session & (records["instrument_id"] == iid)
+                volumes[symbol] = volumes.get(symbol, 0) + int(records["size"][sel].sum())
         return {k: v for k, v in volumes.items() if v > 0}
 
 

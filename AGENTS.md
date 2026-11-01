@@ -22,6 +22,25 @@ trailing average, or elapsed time, declared with `strategy_core.features.Unit`. 
 prices belong only in data handling and execution: order prices, fills, and P&L. Every
 new feature must pass the scale-invariance test (all prices or all sizes multiplied).
 
+## Sliding windows count rows, not clock time (required)
+
+Every scheduled-open second and minute is one row, with or without trades and even
+when data is missing (its status says so); closures have no rows. Each row carries an
+index counter, `slot_ordinal`, that increases by one per row from a fixed calendar
+origin (`SessionCalendar.slot_ordinals`). For the row with index `o`:
+
+- its rolling `1m@1s` or `1h@1m` candle is built from rows `o − 59 … o`;
+- its phase (the `second_index` or `minute_index`) is `o % 60`;
+- indicators read the same-phase candles at `o − 60`, `o − 120`, …: never consecutive
+  rolling candles, and never overlapping volumes added up;
+- the previous step of the rolling stream is `o − 1`.
+
+Never choose window members, phases, or "one period ago" from clock timestamps: after
+an early close (18:15) and a reopen (23:00), the 23:01 candle starts at 17:16 and its
+previous same-phase candle covers 16:16–17:16. Never infer a closure from missing data.
+Treat adjacent candles as strongly correlated: one portfolio in backtests, and
+chronological, purged splits for ML. Details: `docs/sliding-windows/`.
+
 ## Code boundaries
 
 - `lib/strategy-core`: market data types, base bars, rolling windows, per-phase
@@ -29,7 +48,7 @@ new feature must pass the scale-invariance test (all prices or all sizes multipl
 - `apps/backtest-runner`: Databento catalog and source, exchange calendars, runs, CLI, API.
 - `apps/research-web`: run setup, results, and the trade inspector.
 - `lib/research-charts`: reusable frontend charts.
-- `lib/db-research`: proposed PostgreSQL schema; revise it before applying (see its README).
+- `lib/db-research`: PostgreSQL migrations and storage guidance (see its README).
 - `archive/`: reference-only snapshot of past decisions; do not deploy it or import it into active code.
 
 Keep calculations in Python and separate strategy decisions from data access,
@@ -43,23 +62,10 @@ Backtests, rehearsals, and future paper/live sessions run the same `Engine` on
 arrives. Results must be identical; `uv run research verify SPEC` checks this. Keep
 timing explicit (`docs/project/engine.md`): no decision may use data received after it.
 
-Candles follow `docs/sliding-windows/`:
-
-- Build `1h@1m` and `1m@1s` rolling candles at every step from the last 60 disjoint
-  base bars (1-minute or 1-second) aggregated from trades.
-- Count windows in trading time: scheduled closures from the instrument's exchange
-  calendar add no slot. Never infer a closure from missing data; mark it as a gap.
-- Run each indicator per phase, on candles exactly 60 rows apart. Phase is the
-  trading-time index (scheduled-open slots counted from a fixed origin) modulo 60,
-  never the clock, so early closes cannot misalign it. Never feed consecutive rolling
-  candles into an indicator or add up their overlapping volumes.
-- Treat adjacent candles as strongly correlated: one portfolio in backtests, and
-  chronological, purged splits for ML.
-
 Storage: DBN files are the permanent tick archive. PostgreSQL (local database
 `trading`, URL from `TRADING_DATABASE_URL`) holds everything derived: the file catalog,
-contracts, rolls, coverage, one-second rows with their metrics (one row for every
-scheduled-open second, including seconds without trades), runs, trades, ML rows,
+contracts, rolls, coverage, one-second and one-minute rows with their metrics (one row
+for every scheduled-open slot, each with its `slot_ordinal`), runs, trades, ML rows,
 models, and live decisions. Compute stored rows with `strategy-core` code, the same
 code live sessions run, and record the builder version. Change the schema only through
 numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).

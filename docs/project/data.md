@@ -96,8 +96,9 @@ second per contract.** There is no Parquet or DuckDB layer.
   spread, and top-of-book size and imbalance at trades) are computed by an ingestion
   job and stored for SQL research, ML exports, and fast backtests. **Every
   scheduled-open second gets a row, including seconds without trades** (status
-  `no_trades`; decided November 1, 2026), so a sliding window is always exactly 60
-  consecutive rows with no skip logic. SI has trades in only 20% of its seconds. A
+  `no_trades`; decided November 1, 2026), and every row carries its index counter
+  (`slot_ordinal`), so a sliding window is always exactly 60 consecutive rows with no
+  skip logic and phases never depend on the clock. SI has trades in only 20% of its seconds. A
   contract-year is about 21 million scheduled seconds. A measured binary `COPY` of 44-column rows wrote
   about 400,000 rows per second at about 400 bytes per row before indexes, or about
   a minute and 8 GB per contract-year. Store the front and next contracts from the

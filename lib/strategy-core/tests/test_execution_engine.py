@@ -253,3 +253,25 @@ def test_trades_before_the_entry_never_trigger_or_fill_exits():
     assert out["exit_reason"] == "stop" and out["exit_ns"] == str(T0 + 62 * S)
     assert out["exit_px"] == pytest.approx(1999.4) and out["pnl_ticks"] == pytest.approx(-7)
     assert int(out["exit_ns"]) >= int(out["entry_ns"])
+
+
+def test_candidates_never_vanish_and_the_delay_median_is_bounded():
+    """Regression (PR #62 review): unfilled and still-open candidates yield marker rows that
+    the summary counts, and the delay median uses a fixed histogram."""
+    sim = Simulator(GC, CFG, Bracket(5.0, 5.0, 600), CAL)
+    frame = FeatureFrame(
+        np.array([T0 + 60 * S, T0 + 3000 * S], np.int64),
+        {"x": np.array([0.0, 1.0])},
+        {"atr": np.array([0.5, 0.5])},
+    )
+    t = trades([(T0 + 60_200_000_000, 2000.0, 1, 1), (T0 + 61 * S, 2000.1, 1, 1)])
+    view = ExecView(t, t.ts_recv)
+    rows = candidate_outcomes(sim, "GCZ6", frame, np.array([1, 1], np.int8), view)
+    assert [r["exit_reason"] for r in rows] == ["censored", "unfilled"]
+    assert rows[0]["entry_ns"] == str(T0 + 60_200_000_000) and rows[1]["entry_ns"] is None
+    assert summarize_candidates(rows) == {"rows": 0, "unfilled": 1, "censored": 1}
+    closed = {"exit_reason": "target", "pnl_usd": 1.0, "r_multiple": 1.0}
+    summary = CandidateSummary()
+    summary.add([{**closed, "entry_delay_ms": d} for d in (100.4, 200.7, 300.2, 9e9)])
+    assert summary.delays.size == 60_001  # fixed, whatever the number of rows
+    assert summary.result()["entry_delay_ms_p50"] == 200.0

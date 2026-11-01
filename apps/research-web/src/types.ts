@@ -103,6 +103,8 @@ export interface FeatureSpec {
 }
 export interface Candidates {
   rows: number;
+  unfilled?: number;
+  censored?: number;
   win_rate?: number;
   avg_usd?: number;
   avg_r?: number | null;

@@ -112,7 +112,9 @@ invariance.
 `labels.candidate_outcomes` simulates every signal row independently with the
 engine's fills and bracket. Each row has the exact normalized features at the
 decision and the outcome (P&L in ticks and dollars, R multiple, exit reason, best and
-worst excursion, hold time). Rows overlap in time; keep `decision_ns` and `exit_ns`
+worst excursion, hold time). Signals that never fill or are still open when the
+session's data ends yield marker rows (`unfilled`, `censored`) instead of vanishing.
+Rows overlap in time; keep `decision_ns` and `exit_ns`
 for purged, chronological splits. Runs report a summary now; rows go to PostgreSQL
 with the ingestion milestone.
 

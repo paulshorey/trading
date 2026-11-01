@@ -211,6 +211,13 @@ function App() {
                               .join(", ") || "—"}
                           </td>
                         </tr>
+                        <tr>
+                          <td>Not closed</td>
+                          <td>
+                            {run.candidates.unfilled ?? 0} unfilled,{" "}
+                            {run.candidates.censored ?? 0} open at session end
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>

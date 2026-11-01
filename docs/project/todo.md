@@ -25,6 +25,10 @@ task live in [handoff: next task](handoff.md#next-task-store-one-second-rows-and
 - [ ] **Store runs, trades, and ML rows in PostgreSQL.** Replace `data/runs/*.json`
       with tables (spec, provenance, summary, trades) and persist the would-be-trade
       rows that runs now only summarize. Point the UI's run history at the database.
+      Then make the trade inspector rebuild candles from the run's own inputs, or warn when
+      the code or data fingerprint differs from the run's provenance; today it rebuilds
+      with the current code (deferred from the PR #62 review, since the fingerprint changes
+      with almost every edit during prototyping).
 - [ ] **Make the data audit a command.** The November 1 checks (record types, receive
       order, event-time inversions, implied tick sizes, trades outside the calendar,
       Databento flags, front contract by day) were a one-off script. Add them to

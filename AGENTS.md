@@ -92,6 +92,17 @@ For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentat
 changes, check accuracy and links. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
 
+## Local database: agents may write to it
+
+The PostgreSQL database `trading` (`127.0.0.1:5432`, Homebrew `postgresql@18`) is the
+local development database; every derived row in it can be rebuilt from the DBN files, and
+there is no production database yet. When a task needs it, agents apply migrations
+(`uv run research db migrate`), register files, and run `research ingest`, without asking
+first. An applied migration can never change, so get it right in tests first (they use
+throwaway `trading_test_*` databases), then apply it to `trading` once the code that needs
+it is final. Ask before dropping or truncating tables, or deleting rows other than through
+`research ingest`. Report what you ran.
+
 # Research and report
 
 If something goes wrong, stop the affected operation and report relevant findings, data, and logs.

@@ -34,7 +34,8 @@ throwaway `trading_test_*` databases; CI runs them against a `postgres:18` servi
 Add `NNNN_short_name.sql` with the next number. `research db migrate` applies each
 pending file once, in order, in a transaction, and records its SHA-256 in
 `meta.schema_migration`. Never edit an applied file; the runner refuses to continue
-when one changes. Add a new migration instead.
+when one changes. Add a new migration instead. Agents apply migrations to the local
+database when their code needs them ([AGENTS.md](../../AGENTS.md#local-database-agents-may-write-to-it)).
 
 ## One-second and one-minute rows
 

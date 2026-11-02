@@ -382,3 +382,32 @@ def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(
             "GROUP BY 1, 2 ORDER BY 1"
         ).fetchall()
         assert fronts == [(date(2026, 9, 1), "GCZ6", 82_800), (date(2026, 9, 4), "GCG7", 82_800)]
+
+
+def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, world, monkeypatch):
+    """Regression (PR #63 review): cached session volumes are reused only while the code and
+    settings that computed them are unchanged, and the builder version covers the ingestion
+    code that selects, feeds, and writes rows."""
+    cache, data = world
+    logs = []
+    options = {"url": database, "cache": cache, "log": logs.append, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+
+    def scans() -> list[str]:
+        logs.clear()
+        ingest.plan(["GC"], data=first, **options)
+        return [line for line in logs if "scanned volumes" in line]
+
+    assert scans() == ["GC: scanned volumes of 3/3 sessions"]
+    assert scans() == []  # unchanged files and code: reused
+    monkeypatch.setattr(ingest, "scan_identity", lambda: "f" * 64)
+    assert scans() == ["GC: scanned volumes of 3/3 sessions"]  # other code: scanned again
+    with db.connect(database) as conn:
+        assert conn.execute("SELECT DISTINCT scan_sha256 FROM market.session_scan").fetchall() == [
+            ("f" * 64,)
+        ]
+    for name in ("ingest", "store", "catalog", "source", "calendars"):
+        assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.BUILDER_FILES
+    assert all((ingest.ROOT / rel).is_file() for rel in ingest.BUILDER_FILES + ingest.SCAN_FILES)

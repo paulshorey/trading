@@ -93,12 +93,15 @@ ones: a session in a gap between downloads is stored as rows without data covera
 (`status` 0), never skipped, and is rebuilt once the gap is downloaded. The first session
 after a gap chooses its front contract afresh.
 
-**Builder version.** `market.builder` records a SHA-256 of the files that compute stored
-values (`BUILDER_FILES` in `ingest.py`), the trade-assignment timing, feature settings, the
-calendar and phase origin, numeric package versions, and the column list. Any change
-makes stored rows `stale`, including comment-only edits to those files: rebuild before
-extending. Every session's `market.ingest_slice` row keeps the builder, source files with
-checksums, the quality report, and the checkpoint.
+**Builder version.** `market.builder` records a SHA-256 of the files that determine stored
+values (`BUILDER_FILES` in `ingest.py`: the calculations in `strategy-core`, and the
+calendar, file, source, ingestion, and storage modules), the trade-assignment timing,
+feature settings, the calendar and phase origin, numeric package versions, and the column
+list. Any change makes stored rows `stale`, including comment-only edits to those files:
+rebuild before extending. Every session's `market.ingest_slice` row keeps the builder,
+source files with checksums, the quality report, and the checkpoint. Cached session volumes
+carry their own digest (`scan_sha256`, from `SCAN_FILES` and the timing settings) and are
+read again from the DBN files when it changes, so rolls always come from current code.
 
 ## Continuous series per product
 

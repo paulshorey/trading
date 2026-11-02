@@ -26,6 +26,7 @@ CREATE TABLE market.session_scan (
     close_ns bigint NOT NULL,
     complete boolean NOT NULL,
     source_files jsonb NOT NULL,
+    scan_sha256 text NOT NULL,  -- code and settings that computed the volumes
     scanned_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (product, trade_date)
 );

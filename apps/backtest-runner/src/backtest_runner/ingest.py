@@ -56,8 +56,13 @@ EXECUTION = ExecutionConfig()  # stored rows use the backtest defaults for trade
 FEATURES = FeatureConfig()
 LEAD_SESSIONS = 5
 LOCK_SPACE = 7_311  # pg advisory lock namespace for contracts being built
+CORE = "lib/strategy-core/src/strategy_core"
+RUNNER = "apps/backtest-runner/src/backtest_runner"
+# Code that determines stored values: the calculations, and how ingestion selects files and
+# sessions, feeds them to the builder, restores checkpoints, and writes rows (this module).
+# Editing any of these files makes stored rows `stale` until they are rebuilt.
 BUILDER_FILES = tuple(
-    f"lib/strategy-core/src/strategy_core/{name}.py"
+    f"{CORE}/{name}.py"
     for name in (
         "bars",
         "features",
@@ -70,7 +75,13 @@ BUILDER_FILES = tuple(
         "window_metrics",
         "windows",
     )
-) + tuple(f"apps/backtest-runner/src/backtest_runner/{n}.py" for n in ("calendars", "source"))
+) + tuple(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "ingest", "source", "store"))
+# Code that determines the cached session volumes, and so the roll schedule
+SCAN_FILES = (
+    f"{CORE}/bars.py",
+    f"{CORE}/market.py",
+    *(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "source")),
+)
 PACKAGES = ("numpy", "numba", "databento", "pandas_market_calendars")
 RUNNABLE = ("new", "extend", "repair", "rebuild")
 Log = Callable[[str], None]
@@ -157,6 +168,19 @@ def session_files(source: HistoricalSource, s: Session) -> list[dict]:
     ]
 
 
+def scan_identity() -> str:
+    """Digest of the code and settings that compute session volumes: a cached scan is reused
+    only while it matches, so rolls never come from volumes computed another way."""
+    digest = hashlib.sha256()
+    for rel in SCAN_FILES:
+        digest.update(rel.encode())
+        digest.update((ROOT / rel).read_bytes())
+    digest.update(
+        f"{EXECUTION.feed_latency} {EXECUTION.close_delay} {version('databento')}".encode()
+    )
+    return digest.hexdigest()
+
+
 def contract_id(conn: psycopg.Connection, product: Product, symbol: str, on: date) -> int:
     month = product.contract_month(symbol, on)
     row = conn.execute(
@@ -188,15 +212,19 @@ def builder_id(conn: psycopg.Connection, identity: dict) -> int:
 def scan_sessions(
     conn: psycopg.Connection, source: HistoricalSource, sessions: list[Session], log: Log
 ) -> int:
-    """Read outright volumes of sessions not yet scanned, or whose files changed."""
+    """Read outright volumes of sessions not yet scanned, scanned from other files, or scanned
+    by other code or settings (`scan_identity`)."""
     product = source.product
-    known = dict(
-        conn.execute(
-            "SELECT trade_date, source_files FROM market.session_scan WHERE product = %s",
+    identity = scan_identity()
+    known = {
+        day: (files, sha)
+        for day, files, sha in conn.execute(
+            """SELECT trade_date, source_files, scan_sha256 FROM market.session_scan
+               WHERE product = %s""",
             (product.root,),
-        ).fetchall()
-    )
-    todo = [s for s in sessions if known.get(s.trade_date) != session_files(source, s)]
+        )
+    }
+    todo = [s for s in sessions if known.get(s.trade_date) != (session_files(source, s), identity)]
     for i, s in enumerate(todo, 1):
         volumes = source.outright_volumes(s)
         with conn.transaction():
@@ -206,7 +234,7 @@ def scan_sessions(
             )
             conn.execute(
                 """INSERT INTO market.session_scan (product, trade_date, open_ns, close_ns,
-                       complete, source_files) VALUES (%s, %s, %s, %s, %s, %s)""",
+                       complete, source_files, scan_sha256) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (
                     product.root,
                     s.trade_date,
@@ -214,6 +242,7 @@ def scan_sessions(
                     s.close,
                     volumes is not None,
                     Jsonb(session_files(source, s)),
+                    identity,
                 ),
             )
             for symbol, volume in (volumes or {}).items():

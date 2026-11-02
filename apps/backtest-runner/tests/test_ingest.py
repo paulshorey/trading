@@ -402,6 +402,20 @@ def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, w
 
     assert scans() == ["GC: scanned volumes of 3/3 sessions"]
     assert scans() == []  # unchanged files and code: reused
+    # Regression (PR #63 review): a calendar package upgrade can move session hours
+    real = ingest.version
+    monkeypatch.setattr(
+        ingest, "version", lambda p: "99.0" if p == "pandas_market_calendars" else real(p)
+    )
+    assert scans() == ["GC: scanned volumes of 3/3 sessions"]
+    assert scans() == []
+    with db.connect(database) as conn:  # a session scanned over other hours is read again
+        conn.execute(
+            "UPDATE market.session_scan SET close_ns = close_ns - 60000000000 "
+            "WHERE trade_date = '2026-09-02'"
+        )
+        conn.commit()
+    assert scans() == ["GC: scanned volumes of 1/1 sessions"]
     monkeypatch.setattr(ingest, "scan_identity", lambda: "f" * 64)
     assert scans() == ["GC: scanned volumes of 3/3 sessions"]  # other code: scanned again
     with db.connect(database) as conn:

@@ -88,6 +88,13 @@ FIELDS = (
     # Displayed size (D)
     Field("bid_depth_sum", SUM, INT, "depth_trades", "Sum of displayed bid sizes at trades"),
     Field("ask_depth_sum", SUM, INT, "depth_trades", "Sum of displayed ask sizes at trades"),
+    Field(
+        "depth_at",
+        LAST,
+        INT,
+        "depth_trades",
+        "Assignment time of the last trade with usable displayed sizes",
+    ),
     Field("last_bid_size", LAST, INT, "depth_trades", "Last displayed bid size"),
     Field("last_ask_size", LAST, INT, "depth_trades", "Last displayed ask size"),
     Field("imbalance_sum", SUM, FLOAT, "depth_trades", "Sum of bid / (bid + ask) displayed size"),
@@ -112,6 +119,20 @@ FIELDS = (
         "Sum of size x side x (bid - ask) / (bid + ask) displayed size",
     ),
     # Displayed order counts (C)
+    Field(
+        "order_bid_size_sum",
+        SUM,
+        INT,
+        "order_trades",
+        "Sum of displayed bid sizes at trades with usable order counts",
+    ),
+    Field(
+        "order_ask_size_sum",
+        SUM,
+        INT,
+        "order_trades",
+        "Sum of displayed ask sizes at trades with usable order counts",
+    ),
     Field("bid_orders_sum", SUM, INT, "order_trades", "Sum of displayed bid order counts"),
     Field("ask_orders_sum", SUM, INT, "order_trades", "Sum of displayed ask order counts"),
     Field(
@@ -209,6 +230,7 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     imbalance = np.where(depth, (bsz - asz) / total, 0.0)
     put("bid_depth_sum", np.where(depth, bsz, 0))
     put("ask_depth_sum", np.where(depth, asz, 0))
+    last("depth_at", agg.at, depth)
     last("last_bid_size", bsz, depth)
     last("last_ask_size", asz, depth)
     put("imbalance_sum", share)
@@ -222,6 +244,8 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     put("alignment_sum", np.where(depth & known, q * side * imbalance, 0.0))
 
     nb, na = t.bid_count, t.ask_count
+    put("order_bid_size_sum", np.where(orders, bsz, 0))  # same trades as the order counts
+    put("order_ask_size_sum", np.where(orders, asz, 0))
     put("bid_orders_sum", np.where(orders, nb, 0))
     put("ask_orders_sum", np.where(orders, na, 0))
     put("order_imbalance_sum", np.where(orders, nb / np.where(orders, nb + na, 1), 0.0))

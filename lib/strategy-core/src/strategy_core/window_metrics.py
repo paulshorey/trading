@@ -37,6 +37,7 @@ CARRY = {
     "bid_size": np.int64,
     "ask_size": np.int64,
     "imbalance": np.float64,
+    "depth_at": np.int64,
     "has_depth": np.int8,
     "trade_at": np.int64,
     "has_trade": np.int8,
@@ -50,6 +51,7 @@ AS_OF = (
     "book_bid_size",
     "book_ask_size",
     "book_imbalance",
+    "book_depth_at",
     "has_depth",
     "last_trade_at",
     "has_trade",
@@ -177,7 +179,8 @@ class MetricWindow:
                 "has_depth",
                 {"book_bid_size": ("last_bid_size", "bid_size")}
                 | {"book_ask_size": ("last_ask_size", "ask_size")}
-                | {"book_imbalance": ("imbalance_last", "imbalance")},
+                | {"book_imbalance": ("imbalance_last", "imbalance")}
+                | {"book_depth_at": ("depth_at", "depth_at")},
             ),
             (
                 cur["trades"] > 0,

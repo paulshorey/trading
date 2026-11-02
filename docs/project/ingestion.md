@@ -12,7 +12,7 @@ sessions run:
 | Table                 | One row per second holds                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
 | `market.bar_1s`       | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, book sampled at trades |
-| `market.candle_1m_1s` | The rolling `1m@1s` candle of rows `o − 59 … o`, and 86 normalized features of it                       |
+| `market.candle_1m_1s` | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                       |
 
 Both are keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters), and `phase` is a
@@ -32,7 +32,7 @@ Once, after pulling this code:
 
 ```sh
 brew services start postgresql@18
-uv run research db migrate              # applies 0002, 0003, and 0004
+uv run research db migrate              # applies 0002_second_rows
 uv run research ingest plan GC SI       # what would be built; stores no second rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
 uv run research ingest status           # series coverage, contracts, sizes, recent runs
@@ -162,9 +162,8 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
   sessions (248,400 rows) in 0.17 s of query time, around the July 30 roll from GCQ6 to GCZ6.
 - **Size:** `bar_1s` 325 bytes per row and `candle_1m_1s` 951 bytes per row on disk,
   including indexes: about 27 GB per contract-year, or **about 59 GB for a year of GC and
-  SI**. Check free disk space before adding products. Storing features as `real` instead of
-  `double precision` would roughly halve the candle table, at the cost of exact equality
-  with in-memory features.
+  SI**. Features stay `double precision` (decided November 2, 2026), so stored features
+  equal in-memory and live values exactly.
 
 ## Row rules
 
@@ -177,7 +176,8 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
   trades have NULL prices; a book statistic is NULL when no trade in the second had a usable
   book (the handoff's validity subsets: P quotes, D displayed sizes, C order counts, K known
   side). Features are NULL unless the candle is complete (60 covered seconds with a trade);
-  the latest-book features (`trade_age_s`, `book_age_s`, `book_spread_bps`, `book_imbalance`) are also
+  the latest-book features (`trade_age_s`, `book_age_s`, `depth_age_s`, `book_spread_bps`,
+  `book_imbalance`) are also
   defined for windows without trades.
 - **Session CVD** (`bar_1s.session_cvd`) runs from the calendar session's open and is NULL
   from the first missing second of that session on. Unknown-side volume stays out of it.
@@ -191,24 +191,24 @@ Definitions, units, and NULL rules are in the code and the column comments:
 `strategy_core/metrics.py` (per second), `window_metrics.py` (over the window), and
 `indicators.py` and `features.py` (features).
 
-| Handoff entries                                                                               | Stored as                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                |
-| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                  |
-| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                       |
-| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                                             |
-| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                           |
-| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`; `trade_age_s`, `book_age_s`, `book_*`                   |
-| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                         |
-| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`           |
-| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                                                  |
-| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                       |
-| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                    |
-| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                               |
-| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`     |
-| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                   |
-| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr` |
-| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                  |
+| Handoff entries                                                                               | Stored as                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                            |
+| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                              |
+| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                   |
+| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                                                         |
+| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                       |
+| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*` |
+| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                     |
+| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`                       |
+| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_bid_size_sum`, `order_ask_size_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                  |
+| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                                   |
+| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                                |
+| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                                           |
+| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                 |
+| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                               |
+| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`             |
+| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                              |
 
 Indicators on the candle follow the [per-phase rule](../sliding-windows/design.md#4-indicators-per-phase):
 recursive ones (EMA, MACD, Wilder RSI, ATR, ADX) keep one state per phase, and lookback

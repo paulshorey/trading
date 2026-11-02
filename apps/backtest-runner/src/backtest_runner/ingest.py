@@ -667,6 +667,11 @@ def run(
                         log(f"FAILED {result['contract']}: {result['error']}\n{result['trace']}")
         failed = [r for r in results if "error" in r]
         status = "done" if not failed else "partial" if len(failed) < len(results) else "failed"
+        if len(failed) < len(results):  # fresh planner statistics for the new rows
+            with db.connect(url) as conn:
+                conn.autocommit = True
+                conn.execute("ANALYZE market.bar_1s, market.candle_1m_1s")
+            log("Analyzed market.bar_1s and market.candle_1m_1s")
     finally:
         with db.connect(url) as conn:
             conn.execute(

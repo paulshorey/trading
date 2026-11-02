@@ -156,9 +156,10 @@ def test_book_age_follows_the_last_trade_with_a_usable_book():
     rows = [
         (T0 + 100_000_000, 10.0, 1, 1, 1000, 9.9, 10.0, 5, 5),  # usable book
         (T0 + NS + 200_000_000, 10.0, 1, 1, 1000, 10.2, 10.0, 5, 5),  # crossed book
+        (T0 + 3 * NS + 300_000_000, 10.0, 1, 1, 1000, 9.9, 10.0, 0, 0),  # prices, no sizes
     ]
     cal = calendar((0, 1))
-    ends = cal.slot_ends(T0, T0 + 3 * NS, SECOND)
+    ends = cal.slot_ends(T0, T0 + 5 * NS, SECOND)
     t = trades(rows)
     agg = aggregate(t, ends, SECOND, coverage(cal), **KW)
     m = second_metrics(t, agg)
@@ -167,3 +168,20 @@ def test_book_age_follows_the_last_trade_with_a_usable_book():
     assert win["last_trade_at"][1] == T0 + NS + 200_000_000
     assert win["book_at"][1] == win["book_at"][2] == T0 + 100_000_000
     assert win["book_bid"][2] == round(9.9 * PX)
+    # Regression (PR #63 review): displayed sizes have their own validity and their own age
+    assert win["book_at"][4] == T0 + 3 * NS + 300_000_000
+    assert win["book_depth_at"][4] == T0 + 100_000_000
+    assert m["depth_at"][3] == 0 and m["depth_trades"][3] == 0
+
+
+def test_size_per_order_uses_the_trades_with_order_counts():
+    """Regression (PR #63 review): displayed sizes and order counts are summed over the same
+    trades, so a trade with sizes but no usable counts changes neither."""
+    rows = [
+        (T0 + 100, 10.0, 1, 1, 1000, 9.9, 10.0, 6, 4, 2, 1),
+        (T0 + 200, 10.0, 1, 1, 1000, 9.9, 10.0, 50, 40, 0, 0),  # sizes, no order counts
+    ]
+    _, m = one_second(rows)
+    assert (m["bid_depth_sum"][0], m["ask_depth_sum"][0]) == (56, 44)
+    assert (m["order_bid_size_sum"][0], m["order_ask_size_sum"][0]) == (6, 4)
+    assert (m["bid_orders_sum"][0], m["ask_orders_sum"][0], m["order_trades"][0]) == (2, 1, 1)

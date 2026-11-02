@@ -67,14 +67,15 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
     ("alignment", U_RATIO, "Volume-weighted side x displayed imbalance, -1..1"),
     ("take_ratio", U_RATIO, "Buy share of trade size / opposite displayed size, 0..1"),
     ("order_imbalance", U_RATIO, "Mean bid / (bid + ask) displayed order count, 0..1"),
-    ("order_size_log_ratio", U_LOG, "log(mean bid size per order / mean ask size per order)"),
+    ("order_size_log_ratio", U_LOG, "log(bid size per order / ask size per order), pooled"),
     ("quote_ratio", U_RATIO, "Trades with a usable pre-trade book / trades"),
     ("bad_book_ratio", U_RATIO, "Trades flagged maybe-bad-book by Databento / trades"),
     # Latest observation, with its age (also defined for windows without trades)
     ("trade_age_s", U_SECONDS, "Seconds from the last trade to the row's end"),
     ("book_age_s", U_SECONDS, "Seconds from the last trade with a usable book to the row's end"),
+    ("depth_age_s", U_SECONDS, "Seconds from the last trade with usable displayed sizes"),
     ("book_spread_bps", U_BPS, "Spread of the last sampled book, relative to its midpoint"),
-    ("book_imbalance", U_RATIO, "Bid / (bid + ask) displayed size of the last sampled book"),
+    ("book_imbalance", U_RATIO, "Bid / (bid + ask) of the last usable displayed sizes"),
     # Session so far (calendar session; undefined after missing data in the session)
     ("session_elapsed_s", U_SECONDS, "Scheduled seconds since the session opened"),
     ("session_ret_bps", U_BPS, "Close - session's first trade price, relative to the latter"),
@@ -120,7 +121,7 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
     ("delta_ratio_15", U_RATIO, "Buy - sell volume / sided volume over the last 15 periods"),
     ("flow_price_corr", U_RATIO, "Correlation of period close changes and delta ratios (20)"),
 )
-AS_OF_FEATURES = ("trade_age_s", "book_age_s", "book_spread_bps", "book_imbalance")
+AS_OF_FEATURES = ("trade_age_s", "book_age_s", "depth_age_s", "book_spread_bps", "book_imbalance")
 DEPTH = 26  # same-phase candles kept: Aroon(25) needs 26
 
 
@@ -324,7 +325,10 @@ class CandleIndicators:
         f["take_ratio"] = div(win["buy_take_sum"], takes)
         f["order_imbalance"] = div(win["order_imbalance_sum"], win["order_trades"])
         with np.errstate(divide="ignore", invalid="ignore"):
-            per_order = div(div(bd, win["bid_orders_sum"]), div(ad, win["ask_orders_sum"]))
+            # sizes and order counts summed over the same trades (usable order counts)
+            bid_per_order = div(win["order_bid_size_sum"], win["bid_orders_sum"])
+            ask_per_order = div(win["order_ask_size_sum"], win["ask_orders_sum"])
+            per_order = div(bid_per_order, ask_per_order)
             f["order_size_log_ratio"] = np.where(per_order > 0, np.log(per_order), np.nan)
         f["quote_ratio"] = div(qt, c.trades)
         f["bad_book_ratio"] = div(win["bad_book_trades"], c.trades)
@@ -334,6 +338,10 @@ class CandleIndicators:
         f["trade_age_s"] = np.where(has_trade, (c.end - win["last_trade_at"]) / NS, np.nan)
         # TBBO shows the book only at trades: a trade with an unusable book does not refresh it
         f["book_age_s"] = np.where(has_book, (c.end - win["book_at"]) / NS, np.nan)
+        # displayed sizes have their own validity, so the imbalance carries its own age
+        f["depth_age_s"] = np.where(
+            win["has_depth"] > 0, (c.end - win["book_depth_at"]) / NS, np.nan
+        )
         bid, ask = win["book_bid"] / PX, win["book_ask"] / PX
         f["book_spread_bps"] = np.where(has_book, div(ask - bid, (ask + bid) / 2) * 1e4, np.nan)
         f["book_imbalance"] = np.where(win["has_depth"] > 0, win["book_imbalance"], np.nan)

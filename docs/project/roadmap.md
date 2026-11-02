@@ -22,7 +22,7 @@ live trading, on one engine. See the [engine](engine.md) for how the stages shar
    registered ([details](data.md#what-we-have)). TBBO is the only market data for every
    product. Next: download the free `definition` records.
 2. **Ingestion.** Implemented: one row for every scheduled-open second per contract
-   (exact per-second TBBO metrics) and its `1m@1s` candle with 86 features, contracts, and
+   (exact per-second TBBO metrics) and its `1m@1s` candle with 87 features, contracts, and
    rolls, computed by `strategy-core` ([ingestion](ingestion.md)). Next: run it for GC and
    SI, add `1h@1m` rows, then runs, trades, and ML rows
    ([storage guidance](../../lib/db-research/README.md)).

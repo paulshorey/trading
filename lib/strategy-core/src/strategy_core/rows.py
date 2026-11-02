@@ -54,11 +54,19 @@ WIDE = {
     "last_bid",
     "last_ask",
     "quote_at",
+    "depth_at",
     "eff_spread_sum",
     "bid_depth_sum",
     "ask_depth_sum",
+    "order_bid_size_sum",
+    "order_ask_size_sum",
 }
-RENAME = {"first_at": "first_at_ns", "last_at": "last_at_ns", "quote_at": "quote_at_ns"}
+RENAME = {
+    "first_at": "first_at_ns",
+    "last_at": "last_at_ns",
+    "quote_at": "quote_at_ns",
+    "depth_at": "depth_at_ns",
+}
 FIELD_OF_COLUMN = {RENAME.get(f.name, f.name): f for f in FIELDS}
 PRICE = "Databento fixed-point price (1e-9)"
 

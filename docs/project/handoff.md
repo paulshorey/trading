@@ -95,14 +95,14 @@ These are fundamental; changing any of them changes every stored value.
 
 ## Where things stand
 
-| Area     | State                                                                                                                                   |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer merged (PR #62). Ingestion and the continuous series in draft PR #63  |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered |
-| Database | PostgreSQL 18 database `trading`: `0001_foundation` applied; `0002_second_rows` pending until `research db migrate`                     |
-| Ingest   | `research ingest plan, run, status` tested on synthetic data and real sessions in throwaway databases; not yet run on `trading`         |
-| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                         |
-| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                        |
+| Area     | State                                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Code     | Engine, windows, features, fills, ML rows, UI, and database layer merged (PR #62). Ingestion and the continuous series in draft PR #63     |
+| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered    |
+| Database | PostgreSQL 18 database `trading`: `0001_foundation` and `0002_second_rows` applied (November 2, 2026); tables empty until the first ingest |
+| Ingest   | `research ingest plan, run, status` tested on synthetic data and real sessions in throwaway databases; not yet run on `trading`            |
+| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                            |
+| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                           |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:

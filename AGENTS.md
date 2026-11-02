@@ -104,3 +104,5 @@ Consider what was recently done, what's in progress, and how it contributes to t
 Decide and recommend what to do next.
 
 # Goal: Develop reproducible strategies from historical research through live trading
+
+# Read the handoff and documentation: `docs/project/handoff.md`

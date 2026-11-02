@@ -241,6 +241,9 @@ minutes.
 
 ## 9. Machine learning
 
+- Train one model for all contracts and phases. Every row's features and outcome come
+  from one contract; rows from all contracts' front sessions are pooled, and no row
+  spans a roll ([training across contracts](../project/handoff.md#training-across-contracts-decided-november-2-2026)).
 - Train one model, not 60. Each decision row holds the current phase's features,
   their statuses, and their ages. Store the phase as provenance; using it as an
   input is a separate experiment.

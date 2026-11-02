@@ -2,7 +2,7 @@
 
 Priority order: most important first. Check items off, and move lasting decisions
 into the [handoff](handoff.md) or the relevant design doc. Details of the current
-task live in [handoff: next task](handoff.md#next-task-run-the-one-second-ingest-then-add-1h1m-rows).
+task live in [handoff: next steps](handoff.md#next-steps).
 
 ## Now: make the core work and test it
 
@@ -49,9 +49,12 @@ task live in [handoff: next task](handoff.md#next-task-run-the-one-second-ingest
       clock candles, after costs ([design §11](../sliding-windows/design.md#11-validation)).
 - [ ] **Strategy candidates.** Replace the `bias_pullback` baseline with researched
       strategies built on the stored metrics.
-- [ ] **ML training.** Train on the would-be-trade rows with purged walk-forward splits
-      (gradient-boosted trees with a logistic baseline). Backtest out-of-sample
-      predictions on newer sessions, and evaluate a final holdout once.
+- [ ] **ML training.** One model on would-be-trade rows pooled from every contract's
+      front sessions, each row within one contract
+      ([training across contracts](handoff.md#training-across-contracts-decided-november-2-2026)).
+      Purged walk-forward splits (gradient-boosted trees with a logistic baseline);
+      backtest out-of-sample predictions on newer sessions, and evaluate a final holdout
+      once.
 - [ ] **UI views.** A session explorer and run comparison
       ([research UI](metric-explorer.md#next)).
 

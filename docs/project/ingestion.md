@@ -228,6 +228,25 @@ Not stored yet; each can be added later by rebuilding from the DBN files:
   candlestick patterns, generic transforms (A26), and past-outcome context (A40). Labels
   (Appendix B) belong with the ML rows.
 
+### Adding a metric or feature
+
+Every stored value is computed from the DBN files, which are kept permanently
+([data/README.md](../../data/README.md)), so any statistic can be added later:
+
+1. **Per-second statistic:** add a `Field` to `metrics.FIELDS` (how it merges: sum, max,
+   min, first, or last, and which count makes it valid) and compute it in
+   `second_metrics`. Its window value follows from the merge kind.
+   **Candle feature:** add it to `indicators.FEATURES` with a normalized unit and compute
+   it in `CandleIndicators.update`.
+2. The column registry in `strategy_core/rows.py` picks both up. Add a numbered migration
+   with `ALTER TABLE ... ADD COLUMN`, and recreate the `market.continuous_*` views in it
+   (they select `table.*`).
+3. Existing tests cover the new value automatically: windows against direct aggregation,
+   scale invariance, chunking and checkpoints, and the registry against the migrated
+   tables. Add a hand-checked case for the formula.
+4. `uv run research db migrate`, then `uv run research ingest run GC SI --rebuild`: the
+   builder hash changed, so stored rows are `stale` until rebuilt.
+
 ## Differences from the handoff
 
 1. **Bar clock.** Trades are assigned by event time with the engine's close delay, not

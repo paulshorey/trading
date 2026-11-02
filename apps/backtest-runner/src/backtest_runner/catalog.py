@@ -1,9 +1,10 @@
 """Databento batch-download folders: discovery, checksums, and per-date availability.
 
 Keep each job folder exactly as delivered (`manifest.json`, `metadata.json`,
-`condition.json`, and the data files) under `data/databento/<dataset>/<job_id>/`.
+`condition.json`, and the data files) under `data/databento/`, for example
+`data/databento/tbbo/GC--2025-11--2026-10/`; jobs are found at any depth (data/README.md).
 `data/sample/` holds the bundled one-day sample. DBN files are the permanent tick
-archive; derived bars are rebuilt from them in memory.
+archive; backtests rebuild bars from them and `research ingest` stores rows built from them.
 """
 
 import hashlib

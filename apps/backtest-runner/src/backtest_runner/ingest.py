@@ -169,15 +169,15 @@ def session_files(source: HistoricalSource, s: Session) -> list[dict]:
 
 
 def scan_identity() -> str:
-    """Digest of the code and settings that compute session volumes: a cached scan is reused
-    only while it matches, so rolls never come from volumes computed another way."""
+    """Digest of the code, settings, and packages that compute session volumes, including the
+    exchange calendar, which sets each session's hours. A cached scan is reused only while it
+    matches, so rolls never come from volumes computed another way."""
     digest = hashlib.sha256()
     for rel in SCAN_FILES:
         digest.update(rel.encode())
         digest.update((ROOT / rel).read_bytes())
-    digest.update(
-        f"{EXECUTION.feed_latency} {EXECUTION.close_delay} {version('databento')}".encode()
-    )
+    packages = " ".join(f"{p}={version(p)}" for p in ("databento", "pandas_market_calendars"))
+    digest.update(f"{EXECUTION.feed_latency} {EXECUTION.close_delay} {packages}".encode())
     return digest.hexdigest()
 
 
@@ -212,19 +212,23 @@ def builder_id(conn: psycopg.Connection, identity: dict) -> int:
 def scan_sessions(
     conn: psycopg.Connection, source: HistoricalSource, sessions: list[Session], log: Log
 ) -> int:
-    """Read outright volumes of sessions not yet scanned, scanned from other files, or scanned
-    by other code or settings (`scan_identity`)."""
+    """Read outright volumes of sessions not yet scanned, or scanned from other files, by other
+    code or settings (`scan_identity`), or over other session hours."""
     product = source.product
     identity = scan_identity()
     known = {
-        day: (files, sha)
-        for day, files, sha in conn.execute(
-            """SELECT trade_date, source_files, scan_sha256 FROM market.session_scan
-               WHERE product = %s""",
+        day: (files, sha, open_ns, close_ns)
+        for day, files, sha, open_ns, close_ns in conn.execute(
+            """SELECT trade_date, source_files, scan_sha256, open_ns, close_ns
+               FROM market.session_scan WHERE product = %s""",
             (product.root,),
         )
     }
-    todo = [s for s in sessions if known.get(s.trade_date) != (session_files(source, s), identity)]
+    todo = [
+        s
+        for s in sessions
+        if known.get(s.trade_date) != (session_files(source, s), identity, s.open, s.close)
+    ]
     for i, s in enumerate(todo, 1):
         volumes = source.outright_volumes(s)
         with conn.transaction():

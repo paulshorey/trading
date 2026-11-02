@@ -160,15 +160,16 @@ class HistoricalSource:
     def front_contract(
         self, previous: Session | None, session: Session, current: str | None = None
     ) -> str:
-        """The outright with the most volume in the previous session, switching at the open.
-        Partial data never decides a roll: without complete volume the current contract is
-        kept, and with no current contract the run cannot start."""
+        """The outright with the most volume in the previous session, switching at the open
+        and only to a later delivery month (`next_front`). Partial data never decides a roll:
+        without complete volume the current contract is kept, and with no current contract
+        the run cannot start."""
         volumes = self.outright_volumes(previous) if previous is not None else None
-        if volumes:
-            return front_of(volumes)
-        if current is not None:
+        front, basis = next_front(self.product, volumes, current, session.trade_date)
+        if basis == "kept":
             self.kept_front.add(session.trade_date)
-            return current
+        if front is not None:
+            return front
         raise ValueError(
             f"Cannot choose the {self.product.root} front contract for {session.trade_date} "
             "without complete data for the previous session; set `contract` (for example "
@@ -219,6 +220,30 @@ class HistoricalSource:
 def front_of(volumes: dict[str, int]) -> str:
     """The outright with the most volume; an exact tie goes to the first symbol in order."""
     return max(sorted(volumes), key=volumes.get)
+
+
+def next_front(
+    product: Product, volumes: dict[str, int] | None, current: str | None, on: date
+) -> tuple[str | None, str]:
+    """The roll rule shared by backtests and stored rows: the front contract of the session
+    on `on` and why. `volumes` are the previous session's outright volumes, or None when its
+    data is incomplete. The front only moves to a later delivery month, so the most volume
+    returning to an expiring month never rolls back.
+
+    Bases: `previous_session` (most volume), `forward_only` (the most volume was an earlier
+    month; the current front is kept), `kept` (incomplete data), or "" with no front."""
+    if volumes:
+        best = front_of(volumes)
+        if (
+            current is not None
+            and best != current
+            and product.contract_month(best, on) < product.contract_month(current, on)
+        ):
+            return current, "forward_only"
+        return best, "previous_session"
+    if current is not None:
+        return current, "kept"
+    return None, ""
 
 
 def raw_quality(t: Trades) -> dict:

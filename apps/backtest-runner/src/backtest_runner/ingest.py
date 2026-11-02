@@ -43,14 +43,14 @@ from psycopg.types.json import Jsonb
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
 from strategy_core.features import FeatureConfig
-from strategy_core.market import MONTH_CODES, NS, PRODUCTS, Product
+from strategy_core.market import NS, PRODUCTS, Product
 from strategy_core.rows import ROWS_VERSION, SecondRowBuilder
 from strategy_core.state import from_bytes, to_bytes
 
 from . import catalog, db, store
 from .calendars import PHASE_ORIGIN, Session, load_sessions
 from .catalog import ROOT, DbnFile
-from .source import DayCache, HistoricalSource, front_of, raw_quality
+from .source import DayCache, HistoricalSource, front_of, next_front, raw_quality
 
 EXECUTION = ExecutionConfig()  # stored rows use the backtest defaults for trade assignment
 FEATURES = FeatureConfig()
@@ -106,17 +106,6 @@ def builder_identity(product: Product, calendar_name: str) -> dict:
     }
 
 
-def contract_month(product: Product, symbol: str, on: date) -> date:
-    """Delivery month of a raw symbol seen on `on`: GCZ6 traded in 2026 is December 2026.
-    One-digit years repeat each decade; the nearest decade that is not long expired wins."""
-    rest = symbol.removeprefix(product.root)
-    month, digits = MONTH_CODES.index(rest[0]) + 1, rest[1:]
-    if len(digits) == 2:
-        return date(2000 + int(digits), month, 1)
-    year = on.year - on.year % 10 + int(digits)
-    return date(year + 10 if year < on.year - 1 else year, month, 1)
-
-
 @dataclass
 class ProductData:
     """A product's DBN files and the downloaded `[start, end)` ranges of its jobs."""
@@ -169,7 +158,7 @@ def session_files(source: HistoricalSource, s: Session) -> list[dict]:
 
 
 def contract_id(conn: psycopg.Connection, product: Product, symbol: str, on: date) -> int:
-    month = contract_month(product, symbol, on)
+    month = product.contract_month(symbol, on)
     row = conn.execute(
         """INSERT INTO market.contract (product, raw_symbol, contract_month, dataset, tick_size,
                tick_value) VALUES (%s, %s, %s, %s, %s, %s)
@@ -266,9 +255,9 @@ def session_volumes(conn: psycopg.Connection, product: Product) -> tuple[dict, d
 def update_rolls(
     conn: psycopg.Connection, product: Product, calendar: list[Session], downloaded: list[Session]
 ) -> dict[date, str]:
-    """Front contract per downloaded session: most volume in the complete previous session
-    (the backtest rule), else the current front is kept; the first session with data uses its
-    own volume (not causal, and marked so). Returns {trade_date: symbol}."""
+    """Front contract per downloaded session by the backtest rule (`source.next_front`: most
+    volume in the complete previous session, forward only, else kept). The first session with
+    data uses its own volume (not causal, and marked so). Returns {trade_date: symbol}."""
     volumes, complete, ids = session_volumes(conn, product)
     previous = {s.trade_date: calendar[i - 1].trade_date for i, s in enumerate(calendar) if i}
     front: dict[date, tuple[str, str]] = {}
@@ -276,14 +265,12 @@ def update_rolls(
     for s in downloaded:
         before = previous.get(s.trade_date)
         prev_volumes = volumes.get(before) if before and complete.get(before) else None
-        if prev_volumes:
-            current, basis = front_of(prev_volumes), "previous_session"
-        elif current is not None:
-            basis = "kept"
-        elif complete.get(s.trade_date) and volumes.get(s.trade_date):
-            current, basis = front_of(volumes[s.trade_date]), "same_session"
-        else:
+        found, basis = next_front(product, prev_volumes, current, s.trade_date)
+        if found is None and complete.get(s.trade_date) and volumes.get(s.trade_date):
+            found, basis = front_of(volumes[s.trade_date]), "same_session"
+        if found is None:
             continue
+        current = found
         front[s.trade_date] = (current, basis)
     with conn.transaction():
         conn.execute("DELETE FROM market.roll WHERE product = %s", (product.root,))
@@ -717,7 +704,8 @@ def summarize(plans: list[dict]) -> dict:
 
 
 def status(url: str | None = None) -> dict:
-    """Stored contracts with their sessions, rows, builders, and table sizes."""
+    """The continuous series per product (front sessions stored, rolls), stored contracts with
+    their sessions, rows, and builders, table sizes, and recent runs."""
     with db.connect(url) as conn:
         require_migrated(conn)
         stored = conn.execute(
@@ -744,6 +732,24 @@ def status(url: str | None = None) -> dict:
             }
             for product, symbol, n, first, last, rows, observed, missing, builders, at in stored
         ]
+        continuous = [
+            {
+                "product": product,
+                "front_sessions": int(n),
+                "stored_sessions": int(stored_n),
+                "first": first.isoformat(),
+                "last": last.isoformat(),
+                "missing": [d.isoformat() for d in (missing or [])],
+                "contracts": contracts_rolled or [],
+            }
+            for product, n, stored_n, first, last, missing, contracts_rolled in conn.execute(
+                """SELECT product, count(*), count(first_ordinal), min(trade_date), max(trade_date),
+                          (array_agg(trade_date ORDER BY trade_date)
+                              FILTER (WHERE first_ordinal IS NULL))[1:10],
+                          array_agg(contract ORDER BY trade_date) FILTER (WHERE rolled)
+                   FROM market.front_session GROUP BY product ORDER BY product"""
+            )
+        ]
         sizes = {
             name: int(
                 conn.execute(
@@ -762,6 +768,7 @@ def status(url: str | None = None) -> dict:
             )
         ]
     return {
+        "continuous": continuous,  # per product: front sessions stored (first 10 missing)
         "contracts": contracts,
         "table_gigabytes": {k: round(v / 1e9, 2) for k, v in sizes.items()},
         "recent_runs": runs,

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from backtest_runner import db, ingest, store
 from backtest_runner.catalog import DbnFile
-from backtest_runner.source import HistoricalSource
+from backtest_runner.source import HistoricalSource, next_front
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
 from strategy_core.rows import BASE_COLUMNS, FEATURE_COLUMNS, SecondRowBuilder, Table
@@ -87,6 +87,14 @@ def test_registry_matches_the_migrated_tables(database):
         db.migrate(conn)
         for name, columns in store.TABLES.items():
             assert store.table_columns(conn, name) == {c.name: c.sql for c in columns}, name
+            view = store.table_columns(conn, f"continuous_{name}")  # the series of each product
+            assert view == {c.name: c.sql for c in columns} | {
+                "product": "text",
+                "trade_date": "date",
+                "contract": "text",
+                "roll_basis": "text",
+                "rolled": "boolean",
+            }, name
         store.apply_comments(conn)
         comment = conn.execute(
             "SELECT col_description('market.candle_1m_1s'::regclass, attnum) FROM pg_attribute "
@@ -110,11 +118,17 @@ def test_encoding_rejects_values_that_do_not_fit():
         store.encode(BASE_COLUMNS, Table(values, {}), 1)
 
 
-def test_contract_months():
-    assert ingest.contract_month(GC, "GCZ6", date(2026, 11, 1)) == date(2026, 12, 1)
-    assert ingest.contract_month(GC, "GCG7", date(2026, 11, 1)) == date(2027, 2, 1)
-    assert ingest.contract_month(GC, "GCF0", date(2029, 12, 1)) == date(2030, 1, 1)
-    assert ingest.contract_month(GC, "GCZ26", date(2026, 1, 5)) == date(2026, 12, 1)
+def test_contract_months_and_forward_only_rolls():
+    assert GC.contract_month("GCZ6", date(2026, 11, 1)) == date(2026, 12, 1)
+    assert GC.contract_month("GCG7", date(2026, 11, 1)) == date(2027, 2, 1)
+    assert GC.contract_month("GCF0", date(2029, 12, 1)) == date(2030, 1, 1)
+    assert GC.contract_month("GCZ26", date(2026, 1, 5)) == date(2026, 12, 1)
+    on = date(2026, 9, 1)
+    assert next_front(GC, {"GCZ6": 9, "GCQ6": 5}, "GCQ6", on) == ("GCZ6", "previous_session")
+    assert next_front(GC, {"GCZ6": 5, "GCQ6": 9}, "GCZ6", on) == ("GCZ6", "forward_only")
+    assert next_front(GC, {"GCQ6": 1}, None, on) == ("GCQ6", "previous_session")
+    assert next_front(GC, None, "GCQ6", on) == ("GCQ6", "kept")
+    assert next_front(GC, None, None, on) == (None, "")
 
 
 def read(conn, table: str, cid: int, columns: list[str], every: int = 1) -> dict[str, np.ndarray]:
@@ -187,6 +201,7 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert candles == 2 * 165_600
         slices = conn.execute("SELECT count(*), sum(row_count) FROM market.ingest_slice").fetchone()
         assert slices == (4, 4 * 82_800)
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
 
     # Unchanged inputs: nothing to do
     again = ingest.run(["GC"], workers=1, data=first, **options)
@@ -198,6 +213,8 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
     result = ingest.run(["GC"], workers=1, data=second, **options)
     actions = {c["contract"]: c["action"] for c in result["products"][0]["contracts"]}
     assert actions == {"GCZ6": "current", "GCG7": "extend"}
+    with db.connect(database) as conn:
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7", "GCG7"])
     dates = [date(2026, 9, 2), date(2026, 9, 3), date(2026, 9, 4)]
     expected = in_memory(cache, second, "GCG7", dates)
     with db.connect(database) as conn:
@@ -257,8 +274,41 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
     assert {c["action"] for c in plans["contracts"]} == {"stale"}
     status = ingest.status(database)
     assert {c["contract"] for c in status["contracts"]} == {"GCZ6", "GCG7"}
+    [series] = status["continuous"]
+    assert (series["product"], series["front_sessions"], series["stored_sessions"]) == ("GC", 4, 4)
+    assert series["contracts"] == ["GCZ6", "GCG7"] and series["missing"] == []
     assert status["table_gigabytes"]["bar_1s"] > 0
     assert any("GCG7 2026-09-04" in line for line in logs)
+
+
+def assert_continuous(conn, fronts: list[str]) -> None:
+    """The product series has one row per scheduled second, each session from its front
+    contract, with the index counter continuing across the roll."""
+    sessions = conn.execute(
+        """SELECT trade_date, contract, rolled, count(*), min(slot_ordinal), max(slot_ordinal),
+                  count(DISTINCT contract_id)
+           FROM market.continuous_candle_1m_1s WHERE product = 'GC' GROUP BY 1, 2, 3 ORDER BY 1"""
+    ).fetchall()
+    assert [s[1] for s in sessions] == fronts
+    assert [s[2] for s in sessions] == [
+        i == 0 or fronts[i] != fronts[i - 1] for i in range(len(fronts))
+    ]
+    assert all(s[3] == 82_800 and s[5] - s[4] + 1 == 82_800 and s[6] == 1 for s in sessions)
+    ordinals = [
+        r[0]
+        for r in conn.execute(
+            "SELECT slot_ordinal FROM market.continuous_bar_1s WHERE product = 'GC' ORDER BY 1"
+        )
+    ]
+    assert len(ordinals) == len(set(ordinals)) == 82_800 * len(fronts)
+    # each row equals its contract's stored row
+    mismatch = conn.execute(
+        """SELECT count(*) FROM market.continuous_bar_1s c
+           JOIN market.bar_1s b USING (contract_id, slot_ordinal, end_ns)
+           WHERE c.product = 'GC' AND (c.close, c.volume, c.session_cvd)
+                 IS DISTINCT FROM (b.close, b.volume, b.session_cvd)"""
+    ).fetchone()[0]
+    assert mismatch == 0
 
 
 def test_diff_rules():

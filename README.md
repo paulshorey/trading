@@ -43,7 +43,7 @@ uv run research catalog                                              # data on d
 uv run research backtest apps/backtest-runner/examples/mgc-sample.json
 uv run research verify apps/backtest-runner/examples/mgc-sample.json # live path = backtest
 uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
-uv run research ingest plan GC SI    # stored one-second rows: plan, run, status
+uv run research ingest plan GC SI    # stored one-second rows; one series per product
 pnpm lint && pnpm test && pnpm build
 ```
 

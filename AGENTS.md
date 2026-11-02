@@ -6,8 +6,10 @@ models trained on those metrics. Historical research comes first; paper and live
 trading will reuse strategy logic with a UI for monitoring and human overrides.
 
 Prototype with CME futures GC (gold) and SI (silver); one year of TBBO for GC, SI, PL,
-ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Keep everything per product and per
-contract so products can be added. Strategies predict only the next few
+ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Compute and store everything per
+contract, so products can be added; each product also reads as one permanent series
+(`market.continuous_*`) that takes every session's rows from its front contract. Never
+merge trades or prices of different delivery months. Strategies predict only the next few
 minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
 the allowed direction. Market data is Databento TBBO only, under the same rules for
 every product: trades are exact, but the book is seen only at trades (see

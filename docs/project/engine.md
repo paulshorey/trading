@@ -77,8 +77,8 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
    and the hold timer start then.
 
 One position at a time; no entries and a forced exit `flat_before_close_s` before each
-scheduled close. Contracts roll at a session open (previous-session volume) after the
-new contract's warmup sessions. Every run records these settings as assumptions.
+scheduled close. Contracts roll at a session open (previous-session volume, only to a later
+delivery month) after the new contract's warmup sessions. Every run records these settings as assumptions.
 
 ## Normalized features
 

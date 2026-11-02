@@ -132,12 +132,13 @@ scheduled slot has a row, so the list has no holes; a row's status says whether 
 candle is usable:
 
 ```sql
--- Inputs of RSI(14) for the 1h@1m candle at minute index :o, from rolling candles stored
--- one per minute row (or each rebuilt from base rows i − 59 … i). A base row's own close
--- is not the rolling candle's close when that minute had no trades.
-SELECT slot_ordinal, end_ns, status, close FROM research.candles_1h_1m
-WHERE contract_id = :contract AND slot_ordinal <= :o AND slot_ordinal % 60 = :o % 60
-ORDER BY slot_ordinal DESC LIMIT 15;
+-- Inputs of RSI(14) for the 1m@1s candle at index :o: the same phase 60 rows apart, of one
+-- contract. Bound the range so the primary key is used. A base row's own close is not the
+-- rolling candle's close when that second had no trades.
+SELECT slot_ordinal, end_ns, status, close FROM market.candle_1m_1s
+WHERE contract_id = :contract AND slot_ordinal BETWEEN :o - 60 * 14 AND :o
+  AND slot_ordinal % 60 = :o % 60
+ORDER BY slot_ordinal;
 ```
 
 Lag is typed. `previous_period()` moves back 60 rows within a phase; `previous_step()`
@@ -223,7 +224,9 @@ minutes.
 - Resetting indicators at each daily halt would make hourly RSI(14) unavailable for
   the first 15 hours of every session; trading time avoids this.
 - Futures keep actual contract identities. Warm up a new contract's states before
-  trading it, or reset them explicitly at the roll.
+  trading it, or reset them explicitly at the roll. A product's continuous series takes
+  each session from its front contract with that contract's own states, never a merge
+  of contracts ([continuous series](../project/ingestion.md#continuous-series-per-product)).
 
 ## 8. Backtesting
 

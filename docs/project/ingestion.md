@@ -18,7 +18,12 @@ Both are keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the r
 [index counter](../sliding-windows/README.md#rows-and-index-counters), and `phase` is a
 virtual column, `slot_ordinal % 60`. Partitions are monthly on `end_ns`. Join the tables on
 `(contract_id, slot_ordinal)`. Column descriptions and units are stored as PostgreSQL
-comments (`\d+ market.candle_1m_1s`). The rolling `1h@1m` tables are the
+comments (`\d+ market.candle_1m_1s`).
+
+Rows are stored per contract. Each product also reads as **one permanent series**,
+`product = 'GC'`, through the views `market.continuous_bar_1s` and
+`market.continuous_candle_1m_1s`: every session's rows from that session's front contract
+([continuous series](#continuous-series-per-product)). The rolling `1h@1m` tables are the
 [next step](#next).
 
 ## Run it
@@ -27,10 +32,10 @@ Once, after pulling this code:
 
 ```sh
 brew services start postgresql@18
-uv run research db migrate              # applies 0002_second_rows
+uv run research db migrate              # applies 0002_second_rows, 0003_continuous_series
 uv run research ingest plan GC SI       # what would be built; stores no second rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
-uv run research ingest status           # stored contracts, sessions, sizes, recent runs
+uv run research ingest status           # series coverage, contracts, sizes, recent runs
 ```
 
 `plan` reads every session's outright volumes from the DBN files once (about 15 s for a
@@ -78,10 +83,10 @@ every later value, so the plan reports `needs_rebuild` and waits for `--rebuild`
 | `needs_rebuild` | New sessions before the first stored one, or its files changed: needs `--rebuild`          |
 | `rebuild`       | With `--rebuild`: delete the contract's rows and build the span again                      |
 
-**Spans.** Every contract that is ever the front contract (the backtest roll rule: most
-volume in the previous session, `market.roll`) is stored from `--lead-sessions` sessions
-before it first becomes front through its last front session, so indicators are warm at
-each roll. Only sessions whose scheduled hours lie inside a downloaded job range count.
+**Spans.** Every contract that is ever the front contract (the [roll rule](#continuous-series-per-product),
+`market.roll`) is stored from `--lead-sessions` sessions before it first becomes front
+through its last front session, so its indicators are warm when the continuous series
+switches to it. Only sessions whose scheduled hours lie inside a downloaded job range count.
 
 **Builder version.** `market.builder` records a SHA-256 of the files that compute stored
 values (`BUILDER_FILES` in `ingest.py`), the trade-assignment timing, feature settings, the
@@ -89,6 +94,54 @@ calendar and phase origin, numeric package versions, and the column list. Any ch
 makes stored rows `stale`, including comment-only edits to those files: rebuild before
 extending. Every session's `market.ingest_slice` row keeps the builder, source files with
 checksums, the quality report, and the checkpoint.
+
+## Continuous series per product
+
+`market.continuous_bar_1s` and `market.continuous_candle_1m_1s` give each product one
+series across contract rolls, with the columns of the stored tables plus `product`,
+`trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
+over the per-contract tables (`market.front_session` maps sessions to contracts), so they
+take no storage and always follow the roll schedule.
+
+- **One contract per session, never merged.** Delivery months trade at different prices
+  (gold's months differ by the cost of carry, often hundreds of ticks), so mixing their
+  trades would create false ranges and moves, and their books differ. Choosing the busiest
+  contract second by second would flip between price levels near a roll.
+- **The roll rule is the backtest's** (`source.next_front`): the front contract has the
+  most volume in the previous complete session, switches at a session open, and only moves
+  to a later delivery month. On the current data all seven products roll once per cycle and
+  never back. The first session of the data uses its own volume (`roll_basis` =
+  `same_session`, not causal).
+- **One row per scheduled second.** Contracts of a product share the calendar, so
+  `slot_ordinal` continues across rolls and the series has every index exactly once.
+- **No artificial roll moves in features.** Each row's candle and features come from its
+  own contract's history; the new front contract was stored from 5 sessions before its roll,
+  so its indicators are warm and no feature sees the price difference between months. Raw
+  prices (OHLC, VWAP) do jump at a roll: `contract` names the source, and `rolled` is true
+  on each new contract's first session. Compute anything from raw prices within one
+  contract; a window over `continuous_bar_1s` rows would mix contracts across a roll, while
+  the stored candles never do.
+- **Coverage.** `research ingest status` reports, per product, the front sessions stored and
+  the first missing ones.
+
+```sql
+-- The last hour of GC 1m@1s features, whichever contract was front
+SELECT end_ns, contract, rsi, ema21_atr, spread_bps
+FROM market.continuous_candle_1m_1s
+WHERE product = 'GC' AND slot_ordinal BETWEEN :o - 3599 AND :o
+ORDER BY slot_ordinal;
+
+-- One contract's same-phase candles (the inputs of a per-phase indicator). Bound the
+-- range so the primary key is used; an unbounded `slot_ordinal % 60` filter scans.
+SELECT slot_ordinal, close FROM market.candle_1m_1s
+WHERE contract_id = :c AND slot_ordinal BETWEEN :o - 60 * 14 AND :o
+  AND slot_ordinal % 60 = :o % 60
+ORDER BY slot_ordinal;
+```
+
+Backtests use the same roll rule but warm a new contract by replaying `warmup_sessions`
+(default 1), so their features can differ from the stored series for a while after a roll;
+letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
 
@@ -100,6 +153,8 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
 - **Speed:** a 23-hour session (82,800 rows) takes about 0.35 s to compute, 0.5 s to
   encode, and 1.4 s in all with the database writes, per worker. The whole year should take
   minutes with several workers; not measured.
+- **Continuous series:** an hour of GC from `continuous_candle_1m_1s` in 7 ms, three
+  sessions (248,400 rows) in 0.17 s of query time, around the July 30 roll from GCQ6 to GCZ6.
 - **Size:** `bar_1s` 325 bytes per row and `candle_1m_1s` 951 bytes per row on disk,
   including indexes: about 27 GB per contract-year, or **about 59 GB for a year of GC and
   SI**. Check free disk space before adding products. Storing features as `real` instead of
@@ -194,6 +249,9 @@ Not stored yet; each can be added later by rebuilding from the DBN files:
 8. **Revisions.** One stored version per contract and session; a rebuild replaces it and the
    builder records what built it. Immutable as-seen decision rows come with live sessions.
 9. **Side switches** count consecutive trades within a second; price paths bridge seconds.
+10. **Continuous series.** As the handoff requires, rows are computed per contract; the
+    product series is a mapping over them (one front contract per session), never an
+    aggregation across contracts.
 
 ## Tests
 
@@ -205,7 +263,9 @@ parity with plain references (RSI, EMA, stochastic, Bollinger, Donchian, regress
 efficiency ratio, ADX). `apps/backtest-runner/tests/test_ingest.py`: the schema equals the
 registry, binary COPY range checks, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
-build), repair after a file changes, rebuild, and stale detection.
+build), repair after a file changes, rebuild, and stale detection; the continuous series
+has one row per second, each session from its front contract, across the roll. Rolls only
+move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 

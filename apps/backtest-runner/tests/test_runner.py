@@ -108,7 +108,7 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         Session(D2, DAY0 + 24 * HOUR, DAY0 + 44 * HOUR, DAY0 + 20 * HOUR),
         Session(D3, DAY0 + 48 * HOUR, DAY0 + 68 * HOUR, DAY0 + 44 * HOUR),
     ]
-    ids = {"GCZ6": 1, "GCG7": 2, "GCZ6-GCG7": 3}
+    ids = {"GCG7": 1, "GCZ6": 2, "GCZ6-GCG7": 3}  # D1 busiest is GCZ6, D2 busiest GCG7
     days = {
         D1: (
             records(
@@ -132,10 +132,10 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
     )
     chunks = list(source.chunks())
     assert [(c.contract, c.session, c.tradable) for c in chunks] == [
-        ("GCG7", "2026-09-01 GCG7 (warmup)", False),  # D1's busiest outright; the spread is ignored
-        ("GCG7", "2026-09-02 GCG7", True),
-        ("GCZ6", "2026-09-02 GCZ6 (warmup)", False),  # rolled on D2's volume: re-warm D2
-        ("GCZ6", "2026-09-03 GCZ6", True),
+        ("GCZ6", "2026-09-01 GCZ6 (warmup)", False),  # D1's busiest outright; the spread is ignored
+        ("GCZ6", "2026-09-02 GCZ6", True),
+        ("GCG7", "2026-09-02 GCG7 (warmup)", False),  # rolled on D2's volume: re-warm D2
+        ("GCG7", "2026-09-03 GCG7", True),
     ]
     assert len(chunks[1].trades) == 1 and chunks[1].trades.side.tolist() == [1]
     # D2's session reads D1's file too (the closure before it starts on D1)
@@ -144,15 +144,21 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         [DAY0 + 24 * HOUR, DAY0 + 48 * HOUR],
     ]
     explicit = HistoricalSource(
-        GC, files, [], sessions[1:2], ExecutionConfig(), "GCZ6", cache=FakeCache(days)
+        GC, files, [], sessions[1:2], ExecutionConfig(), "GCG7", cache=FakeCache(days)
     )
-    assert [c.contract for c in explicit.chunks()] == ["GCZ6"]
+    assert [c.contract for c in explicit.chunks()] == ["GCG7"]
     with pytest.raises(ValueError, match="front contract"):
         list(
             HistoricalSource(
                 GC, files, [], sessions[:1], ExecutionConfig(), cache=FakeCache(days)
             ).chunks()
         )
+    backward = {"GCZ6": 1, "GCG7": 2, "GCZ6-GCG7": 3}  # D2's busiest is now the earlier month
+    back_days = {d: (r, mappings(backward, d)) for d, (r, _) in days.items()}
+    source = HistoricalSource(
+        GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(back_days)
+    )
+    assert [c.contract for c in source.chunks()] == ["GCG7", "GCG7", "GCG7"]  # forward only
 
 
 def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):

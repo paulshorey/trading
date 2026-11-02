@@ -7,6 +7,7 @@ execution (order prices, fills, P&L); features and model inputs are normalized
 """
 
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 
@@ -42,6 +43,18 @@ class Product:
         return (
             rest != symbol and 2 <= len(rest) <= 3 and rest[0] in MONTH_CODES and rest[1:].isdigit()
         )
+
+    def contract_month(self, symbol: str, on: date) -> date:
+        """Delivery month of an outright seen trading on `on`: GCZ6 in 2026 is December 2026.
+        One-digit years repeat each decade; the nearest decade not long expired wins."""
+        if not self.is_outright(symbol):
+            raise ValueError(f"{symbol!r} is not a {self.root} outright")
+        rest = symbol.removeprefix(self.root)
+        month, digits = MONTH_CODES.index(rest[0]) + 1, rest[1:]
+        if len(digits) == 2:
+            return date(2000 + int(digits), month, 1)
+        year = on.year - on.year % 10 + int(digits)
+        return date(year + 10 if year < on.year - 1 else year, month, 1)
 
 
 EQUITY_INDEX = "CME Globex Equity"  # ES, NQ, YM, RTY share the CME equity-index schedule

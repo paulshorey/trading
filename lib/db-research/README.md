@@ -2,9 +2,10 @@
 
 Status: a local PostgreSQL 18 database, `trading`, managed by the numbered migrations
 in [`migrations/`](migrations/): `0001_foundation` (schemas `market`, `research`, `ml`,
-and the Databento file registry `market.source_file`) and `0002_second_rows` (contracts,
-rolls, ingestion bookkeeping, and the one-second tables written by `research ingest`; see
-[ingestion](../../docs/project/ingestion.md)). Runs and ML rows come next. The earlier
+and the Databento file registry `market.source_file`), `0002_second_rows` (contracts,
+rolls, ingestion bookkeeping, and the one-second tables written by `research ingest`), and
+`0003_continuous_series` (forward-only roll bases and the per-product continuous views); see
+[ingestion](../../docs/project/ingestion.md). Runs and ML rows come next. The earlier
 full-schema proposal ([`schema.sql`](schema.sql) and its queries) is reference only;
 its clock-based `phase_index` is superseded by trading-time ordinals (below).
 
@@ -107,6 +108,13 @@ by product, raw symbol, and delivery month (raw symbols repeat each decade); exp
 come from Databento `definition` records once they are loaded. Instrument IDs are resolved
 per date from the files. `market.roll` holds the front contract per session and
 `market.session_volume` the volumes it was chosen from.
+
+**Continuous series** (implemented): `market.front_session` maps each product session to its
+front contract and that session's stored index counters; `market.continuous_bar_1s` and
+`market.continuous_candle_1m_1s` select those rows, so each product reads as one series with
+one row per scheduled second. They are views (`table.*` plus product columns): recreate them
+in the migration that adds columns to the tables. Bound `slot_ordinal` in queries so the
+primary key is used.
 
 **Runs, trades, and ML rows**: a run row with the spec and provenance (code hash,
 data files, calendar version); closed trades; and one ML row per signal, holding the

@@ -128,8 +128,11 @@ roll schedule, and per-session quality reports ([ingestion](ingestion.md)).
    (`CMEGlobex_GC`, `CMEGlobex_SI`, `CMEGlobex_PL`, and `CME Globex Equity` for the
    equity-index products), including early closes.
 4. **Rolls.** The front contract is the outright with the most volume in the previous
-   session, switching at the session open, after warmup sessions on the new contract.
-   An explicit contract overrides it.
+   session, switching at the session open and only to a later delivery month, after warmup
+   sessions on the new contract. An explicit contract overrides it. Stored rows give each
+   product one continuous series that follows these rolls
+   ([continuous series](ingestion.md#continuous-series-per-product)); delivery months are
+   never merged, because their prices differ.
 5. **Base bars.** One row per scheduled-open second (and minute) with status
    `observed`, `no_trades`, or `missing`. Late trades follow the
    [timing model](engine.md#timing-model).

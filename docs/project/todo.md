@@ -12,9 +12,12 @@ task live in [handoff: next task](handoff.md#next-task-run-the-one-second-ingest
 - [x] **Implement one-second rows and metrics.** Per-second TBBO metrics, the stored
       `1m@1s` candle with 85 features, migration `0002_second_rows`, and
       `research ingest plan|run|status` ([ingestion](ingestion.md)).
+- [x] **One continuous series per product.** `market.continuous_bar_1s` and
+      `market.continuous_candle_1m_1s` take each session from its front contract;
+      rolls only move forward, in backtests too (`0003_continuous_series`).
 - [ ] **Run the GC and SI ingest.** `research db migrate`, then `research ingest run GC SI`
-      (about 46.5 million rows, 59 GB). Review `research ingest status` and the session
-      reports in `market.ingest_slice`.
+      (about 46.5 million rows, 59 GB). Review `research ingest status` (continuous
+      coverage) and the session reports in `market.ingest_slice`.
 - [ ] **Store `1h@1m` rows.** `market.bar_1m` rolled up from `bar_1s` and
       `market.candle_1h_1m` with the same features on the bias window, in the same ingest.
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
@@ -73,9 +76,9 @@ task live in [handoff: next task](handoff.md#next-task-run-the-one-second-ingest
     fills one tick worse; report both results and flag those that flip.
   - **Done when** every rule has unit tests and whole-session versus second-by-second
     parity still holds.
-- [ ] **Roll warmup.** Compute the next contract's features in parallel before the roll
-      instead of replaying warmup sessions; stored rows for front and next contracts
-      make this natural.
+- [ ] **Roll warmup.** Backtests replay `warmup_sessions` on a new contract, while stored
+      rows warm it for 5 sessions before the roll. Let backtests read the continuous series
+      so both see the same features.
 - [ ] **More products.** Add PL, YM, RTY, ES, and NQ once GC and SI ingestion is proven;
       all are on disk with specs.
 - [ ] **Slower bias.** Optionally a `1d@1h` window.

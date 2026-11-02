@@ -148,3 +148,22 @@ def test_window_metrics_equal_direct_aggregation_in_any_chunking():
     ok = last_row >= 0
     np.testing.assert_array_equal(whole["book_bid"][ok], m["last_bid"][last_row[ok]])
     np.testing.assert_array_equal(whole["last_trade_at"][ok], m["last_at"][last_row[ok]])
+
+
+def test_book_age_follows_the_last_trade_with_a_usable_book():
+    """Regression (PR #63 review): a trade with a crossed book refreshes the trade time but not
+    the sampled book, so the book carries its own observation time."""
+    rows = [
+        (T0 + 100_000_000, 10.0, 1, 1, 1000, 9.9, 10.0, 5, 5),  # usable book
+        (T0 + NS + 200_000_000, 10.0, 1, 1, 1000, 10.2, 10.0, 5, 5),  # crossed book
+    ]
+    cal = calendar((0, 1))
+    ends = cal.slot_ends(T0, T0 + 3 * NS, SECOND)
+    t = trades(rows)
+    agg = aggregate(t, ends, SECOND, coverage(cal), **KW)
+    m = second_metrics(t, agg)
+    assert m["quote_at"][0] == T0 + 100_000_000 and m["quote_trades"][1] == 0
+    win = MetricWindow(60).update(agg.bars, m)
+    assert win["last_trade_at"][1] == T0 + NS + 200_000_000
+    assert win["book_at"][1] == win["book_at"][2] == T0 + 100_000_000
+    assert win["book_bid"][2] == round(9.9 * PX)

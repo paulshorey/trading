@@ -10,11 +10,12 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **Download contract definitions.** Free, but submitting the job needs the
       account owner. Settings are in [data](data.md#what-we-have).
 - [x] **Implement one-second rows and metrics.** Per-second TBBO metrics, the stored
-      `1m@1s` candle with 85 features, migration `0002_second_rows`, and
+      `1m@1s` candle with 86 features, migration `0002_second_rows`, and
       `research ingest plan|run|status` ([ingestion](ingestion.md)).
 - [x] **One continuous series per product.** `market.continuous_bar_1s` and
       `market.continuous_candle_1m_1s` take each session from its front contract;
-      rolls only move forward, in backtests too (`0003_continuous_series`).
+      rolls only move forward, in backtests too (`0003_continuous_series`; `0004_book_age`
+      adds the age of the sampled book).
 - [ ] **Run the GC and SI ingest.** `research db migrate`, then `research ingest run GC SI`
       (about 46.5 million rows, 59 GB). Review `research ingest status` (continuous
       coverage) and the session reports in `market.ingest_slice`.

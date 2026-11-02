@@ -72,6 +72,13 @@ FIELDS = (
     Field("last_bid", LAST, INT, "quote_trades", "Last sampled bid"),
     Field("last_ask", LAST, INT, "quote_trades", "Last sampled ask"),
     Field(
+        "quote_at",
+        LAST,
+        INT,
+        "quote_trades",
+        "Assignment time of the last trade with a usable book",
+    ),
+    Field(
         "eff_spread_sum",
         SUM,
         INT,
@@ -194,6 +201,7 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     put("mid2_low", np.where(quote, mid2, BIG), np.minimum)
     last("last_bid", bid, quote)
     last("last_ask", ask, quote)
+    last("quote_at", agg.at, quote)
     put("eff_spread_sum", np.where(quote & known, q * side * (2 * p - bid - ask), 0))
 
     total = np.where(depth, bsz + asz, 1)

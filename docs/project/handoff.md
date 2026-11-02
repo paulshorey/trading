@@ -95,19 +95,19 @@ These are fundamental; changing any of them changes every stored value.
 
 ## Where things stand
 
-| Area     | State                                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer merged (PR #62). Ingestion and the continuous series in draft PR #63           |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered          |
-| Database | PostgreSQL 18 database `trading`: `0001_foundation` applied; `0002_second_rows` and `0003_continuous_series` pending until `research db migrate` |
-| Ingest   | `research ingest plan, run, status` tested on synthetic data and real sessions in throwaway databases; not yet run on `trading`                  |
-| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                  |
-| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                 |
+| Area     | State                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Code     | Engine, windows, features, fills, ML rows, UI, and database layer merged (PR #62). Ingestion and the continuous series in draft PR #63                             |
+| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                            |
+| Database | PostgreSQL 18 database `trading`: `0001_foundation` applied; `0002_second_rows`, `0003_continuous_series`, and `0004_book_age` pending until `research db migrate` |
+| Ingest   | `research ingest plan, run, status` tested on synthetic data and real sessions in throwaway databases; not yet run on `trading`                                    |
+| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                    |
+| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                   |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:
 spread, displayed size and orders, imbalance, effective spread); `market.candle_1m_1s`
-holds the rolling `1m@1s` candle and 85 normalized features. Measured on real data: 1.4 s
+holds the rolling `1m@1s` candle and 86 normalized features. Measured on real data: 1.4 s
 per 23-hour session per worker, and about 59 GB for a year of GC and SI (27 GB per
 contract-year). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
@@ -173,7 +173,8 @@ status` (every front session stored) and the session reports for the `degraded` 
 ## Things to know
 
 - TBBO shows the book only at trades. In quiet SI seconds (80% of them) the book is as old
-  as the last trade; features carry that age (`trade_age_s`). At random moments in
+  as the last trade; features carry that age (`trade_age_s`, and `book_age_s` for the last
+  trade with a usable book). At random moments in
   September 2026 the next SI trade came a median 5.9 s later (GC 1.7 s). Fill safeguards
   are specified in [todo.md](todo.md#later-refinements-after-the-core-is-tested).
 - CVD needs an origin: rows store per-second net delta and its extremes, and

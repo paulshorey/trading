@@ -72,6 +72,7 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
     ("bad_book_ratio", U_RATIO, "Trades flagged maybe-bad-book by Databento / trades"),
     # Latest observation, with its age (also defined for windows without trades)
     ("trade_age_s", U_SECONDS, "Seconds from the last trade to the row's end"),
+    ("book_age_s", U_SECONDS, "Seconds from the last trade with a usable book to the row's end"),
     ("book_spread_bps", U_BPS, "Spread of the last sampled book, relative to its midpoint"),
     ("book_imbalance", U_RATIO, "Bid / (bid + ask) displayed size of the last sampled book"),
     # Session so far (calendar session; undefined after missing data in the session)
@@ -119,7 +120,7 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
     ("delta_ratio_15", U_RATIO, "Buy - sell volume / sided volume over the last 15 periods"),
     ("flow_price_corr", U_RATIO, "Correlation of period close changes and delta ratios (20)"),
 )
-AS_OF_FEATURES = ("trade_age_s", "book_spread_bps", "book_imbalance")
+AS_OF_FEATURES = ("trade_age_s", "book_age_s", "book_spread_bps", "book_imbalance")
 DEPTH = 26  # same-phase candles kept: Aroon(25) needs 26
 
 
@@ -331,6 +332,8 @@ class CandleIndicators:
         # Latest observation as of the row's end
         has_trade, has_book = win["has_trade"] > 0, win["has_book"] > 0
         f["trade_age_s"] = np.where(has_trade, (c.end - win["last_trade_at"]) / NS, np.nan)
+        # TBBO shows the book only at trades: a trade with an unusable book does not refresh it
+        f["book_age_s"] = np.where(has_book, (c.end - win["book_at"]) / NS, np.nan)
         bid, ask = win["book_bid"] / PX, win["book_ask"] / PX
         f["book_spread_bps"] = np.where(has_book, div(ask - bid, (ask + bid) / 2) * 1e4, np.nan)
         f["book_imbalance"] = np.where(win["has_depth"] > 0, win["book_imbalance"], np.nan)

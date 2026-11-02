@@ -12,7 +12,7 @@ sessions run:
 | Table                 | One row per second holds                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
 | `market.bar_1s`       | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, book sampled at trades |
-| `market.candle_1m_1s` | The rolling `1m@1s` candle of rows `o − 59 … o`, and 85 normalized features of it                       |
+| `market.candle_1m_1s` | The rolling `1m@1s` candle of rows `o − 59 … o`, and 86 normalized features of it                       |
 
 Both are keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters), and `phase` is a
@@ -32,7 +32,7 @@ Once, after pulling this code:
 
 ```sh
 brew services start postgresql@18
-uv run research db migrate              # applies 0002_second_rows, 0003_continuous_series
+uv run research db migrate              # applies 0002, 0003, and 0004
 uv run research ingest plan GC SI       # what would be built; stores no second rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
 uv run research ingest status           # series coverage, contracts, sizes, recent runs
@@ -70,6 +70,8 @@ changed, from the checkpoint before it.
 The first stored session of a contract is where its indicator states start. Adding earlier
 sessions later (older downloads, `--lead-sessions` larger, an earlier `--start`) changes
 every later value, so the plan reports `needs_rebuild` and waits for `--rebuild`.
+`--start` and `--end` limit which new sessions are added; a repair or rebuild always covers
+the contract's whole stored chain, so no stored session is dropped.
 
 ### What the plan decides
 
@@ -86,7 +88,10 @@ every later value, so the plan reports `needs_rebuild` and waits for `--rebuild`
 **Spans.** Every contract that is ever the front contract (the [roll rule](#continuous-series-per-product),
 `market.roll`) is stored from `--lead-sessions` sessions before it first becomes front
 through its last front session, so its indicators are warm when the continuous series
-switches to it. Only sessions whose scheduled hours lie inside a downloaded job range count.
+switches to it. Spans cover every scheduled session between the first and last downloaded
+ones: a session in a gap between downloads is stored as rows without data coverage
+(`status` 0), never skipped, and is rebuilt once the gap is downloaded. The first session
+after a gap chooses its front contract afresh.
 
 **Builder version.** `market.builder` records a SHA-256 of the files that compute stored
 values (`BUILDER_FILES` in `ingest.py`), the trade-assignment timing, feature settings, the
@@ -172,7 +177,7 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
   trades have NULL prices; a book statistic is NULL when no trade in the second had a usable
   book (the handoff's validity subsets: P quotes, D displayed sizes, C order counts, K known
   side). Features are NULL unless the candle is complete (60 covered seconds with a trade);
-  the latest-book features (`trade_age_s`, `book_spread_bps`, `book_imbalance`) are also
+  the latest-book features (`trade_age_s`, `book_age_s`, `book_spread_bps`, `book_imbalance`) are also
   defined for windows without trades.
 - **Session CVD** (`bar_1s.session_cvd`) runs from the calendar session's open and is NULL
   from the first missing second of that session on. Unknown-side volume stays out of it.
@@ -193,7 +198,7 @@ Definitions, units, and NULL rules are in the code and the column comments:
 | `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                       |
 | `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                                             |
 | `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                           |
-| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes; `trade_age_s`, `book_*`                                                |
+| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`; `trade_age_s`, `book_age_s`, `book_*`                   |
 | Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                         |
 | Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`           |
 | Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                                                  |

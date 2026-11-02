@@ -169,7 +169,7 @@ class MetricWindow:
                 "has_quote",
                 "has_book",
                 {"book_bid": ("last_bid", "bid"), "book_ask": ("last_ask", "ask")}
-                | {"book_at": ("last_at", "quote_at")},
+                | {"book_at": ("quote_at", "quote_at")},
             ),
             (
                 cur["depth_trades"] > 0,

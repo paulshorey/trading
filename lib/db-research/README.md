@@ -4,7 +4,8 @@ Status: a local PostgreSQL 18 database, `trading`, managed by the numbered migra
 in [`migrations/`](migrations/): `0001_foundation` (schemas `market`, `research`, `ml`,
 and the Databento file registry `market.source_file`), `0002_second_rows` (contracts,
 rolls, ingestion bookkeeping, and the one-second tables written by `research ingest`), and
-`0003_continuous_series` (forward-only roll bases and the per-product continuous views); see
+`0003_continuous_series` (forward-only roll bases and the per-product continuous views), and
+`0004_book_age` (the sampled book's observation time and age); see
 [ingestion](../../docs/project/ingestion.md). Runs and ML rows come next. The earlier
 full-schema proposal ([`schema.sql`](schema.sql) and its queries) is reference only;
 its clock-based `phase_index` is superseded by trading-time ordinals (below).

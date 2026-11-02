@@ -1,6 +1,7 @@
 """Ingestion into PostgreSQL: schema, binary COPY, planning, checkpoints, and repairs."""
 
 from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 
 import numpy as np
@@ -332,3 +333,52 @@ def test_diff_rules():
     assert action == "needs_rebuild"  # an earlier session than the stored ones
     span, i, _, action, _ = ingest.diff(s[1:3], s, stored, 1, files, False)
     assert (len(span), i, action) == (3, 3, "current")  # keeps the earlier stored chain
+    # Regression (PR #63 review): a rebuild or repair covers the whole stored chain, so a later
+    # --start or an earlier --end never deletes stored sessions without rebuilding them
+    span, i, delete_from, action, _ = ingest.diff(s[2:], s, stored, 2, files, True)
+    assert (len(span), i, delete_from, action) == (5, 0, s[0].trade_date, "rebuild")
+    span, i, delete_from, action, _ = ingest.diff(s[:2], s, stored, 1, changed, False)
+    assert (len(span), i, delete_from, action) == (3, 1, s[1].trade_date, "repair")
+
+
+def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(database, world):
+    """Regression (PR #63 review). Two downloads with a hole between them: sessions in the hole
+    are stored as rows without coverage, so a contract's index counter never jumps, and the
+    first session after the hole chooses its own front instead of keeping the old one."""
+    cache, _ = world
+    files = {d: dbn(d) for d in DAYS if d != date(2026, 9, 2)}  # the hole: no 2026-09-02 file
+    ranges = [
+        (day_ns(date(2026, 8, 31)), day_ns(date(2026, 9, 2))),
+        (day_ns(date(2026, 9, 3)), day_ns(date(2026, 9, 5))),
+    ]
+    data = {"GC": ingest.ProductData(GC, files, ranges)}
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 3}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    plans = ingest.plan(["GC", "GC"], data=data, **options)  # a repeated product is planned once
+    assert len(plans) == 1 and plans[0]["downloaded_sessions"] == 2  # 09-01 and 09-04
+    result = ingest.run(["GC", "GC"], workers=1, data=data, **options)
+    assert result["status"] == "done", result
+    with db.connect(database) as conn:
+        rolls = conn.execute(
+            "SELECT r.trade_date, c.raw_symbol, r.basis FROM market.roll r "
+            "JOIN market.contract c ON c.id = r.contract_id ORDER BY 1"
+        ).fetchall()
+        assert rolls == [
+            (date(2026, 9, 1), "GCZ6", "same_session"),
+            (date(2026, 9, 4), "GCG7", "same_session"),  # not GCZ6 kept across the hole
+        ]
+        slices = conn.execute(
+            """SELECT s.trade_date, s.first_ordinal, s.last_ordinal, s.missing
+               FROM market.ingest_slice s JOIN market.contract c ON c.id = s.contract_id
+               WHERE c.raw_symbol = 'GCG7' ORDER BY 1"""
+        ).fetchall()
+        assert [x[0] for x in slices] == [date(2026, 9, d) for d in (1, 2, 3, 4)]
+        assert all(b[1] == a[2] + 1 for a, b in pairwise(slices))  # no index jump
+        # 09-02 is covered only from its 22:00 UTC open to midnight; 09-03 lacks its first 2 hours
+        assert [x[3] for x in slices] == [0, 75_600, 7_200, 0]
+        fronts = conn.execute(
+            "SELECT trade_date, contract, count(*) FROM market.continuous_bar_1s "
+            "GROUP BY 1, 2 ORDER BY 1"
+        ).fetchall()
+        assert fronts == [(date(2026, 9, 1), "GCZ6", 82_800), (date(2026, 9, 4), "GCG7", 82_800)]

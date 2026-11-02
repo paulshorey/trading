@@ -256,14 +256,18 @@ def update_rolls(
     conn: psycopg.Connection, product: Product, calendar: list[Session], downloaded: list[Session]
 ) -> dict[date, str]:
     """Front contract per downloaded session by the backtest rule (`source.next_front`: most
-    volume in the complete previous session, forward only, else kept). The first session with
-    data uses its own volume (not causal, and marked so). Returns {trade_date: symbol}."""
+    volume in the complete previous session, forward only, else kept). The first session of
+    each downloaded range uses its own volume (not causal, and marked so), so a contract from
+    before a download gap is never carried over it. Returns {trade_date: symbol}."""
     volumes, complete, ids = session_volumes(conn, product)
     previous = {s.trade_date: calendar[i - 1].trade_date for i, s in enumerate(calendar) if i}
+    have = {s.trade_date for s in downloaded}
     front: dict[date, tuple[str, str]] = {}
     current = None
     for s in downloaded:
         before = previous.get(s.trade_date)
+        if before not in have:  # first session of a downloaded range: choose afresh
+            current = None
         prev_volumes = volumes.get(before) if before and complete.get(before) else None
         found, basis = next_front(product, prev_volumes, current, s.trade_date)
         if found is None and complete.get(s.trade_date) and volumes.get(s.trade_date):
@@ -303,7 +307,7 @@ class ContractPlan:
 
 
 def spans(
-    downloaded: list[Session],
+    period: list[Session],
     front: dict[date, str],
     volumes: dict[date, dict[str, int]],
     *,
@@ -312,20 +316,22 @@ def spans(
     end: date | None,
     lead: int,
 ) -> dict[str, list[Session]]:
-    index = {s.trade_date: i for i, s in enumerate(downloaded)}
+    """Consecutive scheduled sessions to store per contract. `period` holds every session from
+    the first to the last downloaded one, so a span never skips one: sessions in a gap between
+    downloads become rows without data coverage (missing), never a jump in the index counter,
+    and are rebuilt when the gap is downloaded."""
+    index = {s.trade_date: i for i, s in enumerate(period)}
     out: dict[str, list[Session]] = {}
     if contract:
-        traded = [s for s in downloaded if volumes.get(s.trade_date, {}).get(contract)]
+        traded = [s for s in period if volumes.get(s.trade_date, {}).get(contract)]
         if traded:
-            out[contract] = downloaded[
-                index[traded[0].trade_date] : index[traded[-1].trade_date] + 1
-            ]
+            out[contract] = period[index[traded[0].trade_date] : index[traded[-1].trade_date] + 1]
     else:
         by_contract: dict[str, list[int]] = {}
         for day, symbol in front.items():
             by_contract.setdefault(symbol, []).append(index[day])
         for symbol, idx in by_contract.items():
-            out[symbol] = downloaded[max(min(idx) - lead, 0) : max(idx) + 1]
+            out[symbol] = period[max(min(idx) - lead, 0) : max(idx) + 1]
     for symbol in list(out):
         out[symbol] = [
             s
@@ -339,22 +345,24 @@ def spans(
 
 def diff(
     span: list[Session],
-    downloaded: list[Session],
+    period: list[Session],
     stored: list[tuple],
     builder: int,
     expected: dict[date, list[dict]],
     rebuild: bool,
 ) -> tuple[list[Session], int, date | None, str, str]:
-    """(span, start index, delete-from date, action, reason) for one contract."""
+    """(span, start index, delete-from date, action, reason) for one contract. The span grows
+    to cover every stored session first, so a rebuild or repair never drops stored sessions
+    outside `--start` or `--end`."""
     if not stored:
         return span, 0, None, "new", ""
-    first_stored = stored[0][0]
+    first_stored, last_stored = stored[0][0], stored[-1][0]
+    lo, hi = min(first_stored, span[0].trade_date), max(last_stored, span[-1].trade_date)
+    span = [s for s in period if lo <= s.trade_date <= hi]
     if any(b != builder for _, b, _ in stored):
         if rebuild:
             return span, 0, first_stored, "rebuild", "stored by other code or settings"
         return span, len(span), None, "stale", "stored by other code or settings; use --rebuild"
-    if first_stored < span[0].trade_date:  # keep the earlier stored chain: extend the span back
-        span = [s for s in downloaded if first_stored <= s.trade_date <= span[-1].trade_date]
     files = {d: f for d, _, f in stored}
     i = 0
     while i < len(span) and files.get(span[i].trade_date) == expected[span[i].trade_date]:
@@ -396,10 +404,13 @@ def plan_product(
     scan_sessions(conn, source, downloaded, log)
     front = update_rolls(conn, product, calendar, downloaded)
     volumes, _, _ = session_volumes(conn, product)
-    expected = {s.trade_date: session_files(source, s) for s in downloaded}
+    period = [
+        s for s in calendar if downloaded and downloaded[0].open <= s.open <= downloaded[-1].open
+    ]
+    expected = {s.trade_date: session_files(source, s) for s in period}
     plans = []
     for symbol, span in spans(
-        downloaded, front, volumes, contract=contract, start=start, end=end, lead=lead
+        period, front, volumes, contract=contract, start=start, end=end, lead=lead
     ).items():
         cid = contract_id(conn, product, symbol, span[-1].trade_date)
         stored = conn.execute(
@@ -408,7 +419,7 @@ def plan_product(
             (cid,),
         ).fetchall()
         span, i, delete_from, action, reason = diff(
-            span, downloaded, stored, builder, expected, rebuild
+            span, period, stored, builder, expected, rebuild
         )
         todo = span[i:] if action in RUNNABLE else []
         plans.append(
@@ -571,6 +582,7 @@ def plan(
     cache: DayCache | None = None,
     log: Log = stderr,
 ) -> list[dict]:
+    products = list(dict.fromkeys(products))  # `GC GC` must not plan every contract twice
     if contract is not None and len(products) != 1:
         raise ValueError("--contract needs exactly one product")
     if type(lead) is not int or not 0 <= lead <= 60:
@@ -609,6 +621,7 @@ def run(
     **options,
 ) -> dict:
     url = url or db.database_url()
+    products = list(dict.fromkeys(products))
     plans = plan(products, url=url, data=data, cache=cache, log=log, **options)
     sources = data or {p: ProductData.load(p) for p in products}
     tasks = [(p, c) for p in plans for c in p["contracts"] if c.todo]

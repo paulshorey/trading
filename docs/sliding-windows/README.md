@@ -174,8 +174,9 @@ implemented in `lib/strategy-core` and tested: same-phase candles are exactly 60
 apart across every closure, phase 0 equals standard clock-aligned candles where no
 early close intervenes, and whole-session and second-by-second runs agree exactly.
 On the sample day, RSI over consecutive rolling candles (the archived approach)
-correlated only 0.12 with the correct per-phase hourly RSI. Persisting candles and
-the research comparison are next; see the [engine](../project/engine.md).
+correlated only 0.12 with the correct per-phase hourly RSI. `1m@1s` candles and their
+features are stored per second ([ingestion](../project/ingestion.md)); stored `1h@1m`
+candles and the research comparison are next.
 
 ## Further reading
 

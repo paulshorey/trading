@@ -2,7 +2,8 @@
 
 Status: sections 1–8 are implemented in `lib/strategy-core` (`bars.py`, `windows.py`,
 `kernels.py`, `features.py`, `engine.py`); see the [engine](../project/engine.md).
-Persisted candles (section 10) and the research comparison (section 11.7) are next.
+Stored `1m@1s` candles (section 10) are implemented ([ingestion](../project/ingestion.md));
+stored `1h@1m` candles and the research comparison (section 11.7) are next.
 Window specifications, metrics, and parameters are defined in Python code; the UI
 only displays results.
 
@@ -131,12 +132,13 @@ scheduled slot has a row, so the list has no holes; a row's status says whether 
 candle is usable:
 
 ```sql
--- Inputs of RSI(14) for the 1h@1m candle at minute index :o, from rolling candles stored
--- one per minute row (or each rebuilt from base rows i − 59 … i). A base row's own close
--- is not the rolling candle's close when that minute had no trades.
-SELECT slot_ordinal, end_ns, status, close FROM research.candles_1h_1m
-WHERE contract_id = :contract AND slot_ordinal <= :o AND slot_ordinal % 60 = :o % 60
-ORDER BY slot_ordinal DESC LIMIT 15;
+-- Inputs of RSI(14) for the 1m@1s candle at index :o: the same phase 60 rows apart, of one
+-- contract. Bound the range so the primary key is used. A base row's own close is not the
+-- rolling candle's close when that second had no trades.
+SELECT slot_ordinal, end_ns, status, close FROM market.candle_1m_1s
+WHERE contract_id = :contract AND slot_ordinal BETWEEN :o - 60 * 14 AND :o
+  AND slot_ordinal % 60 = :o % 60
+ORDER BY slot_ordinal;
 ```
 
 Lag is typed. `previous_period()` moves back 60 rows within a phase; `previous_step()`
@@ -222,7 +224,9 @@ minutes.
 - Resetting indicators at each daily halt would make hourly RSI(14) unavailable for
   the first 15 hours of every session; trading time avoids this.
 - Futures keep actual contract identities. Warm up a new contract's states before
-  trading it, or reset them explicitly at the roll.
+  trading it, or reset them explicitly at the roll. A product's continuous series takes
+  each session from its front contract with that contract's own states, never a merge
+  of contracts ([continuous series](../project/ingestion.md#continuous-series-per-product)).
 
 ## 8. Backtesting
 
@@ -237,6 +241,9 @@ minutes.
 
 ## 9. Machine learning
 
+- Train one model for all contracts and phases. Every row's features and outcome come
+  from one contract; rows from all contracts' front sessions are pooled, and no row
+  spans a roll ([training across contracts](../project/handoff.md#training-across-contracts-decided-november-2-2026)).
 - Train one model, not 60. Each decision row holds the current phase's features,
   their statuses, and their ages. Store the phase as provenance; using it as an
   input is a separate experiment.
@@ -251,10 +258,10 @@ minutes.
 ## 10. Storage
 
 Store one row per scheduled-open second (base bars and their per-second metrics) in
-PostgreSQL, computed by the same code live sessions run. Rolling candles and per-phase
-indicators are derived from those rows and can be stored or recomputed; persist the
-exact inputs of every decision and trade, and the ML rows. See the
-[storage contract](../../lib/db-research/README.md).
+PostgreSQL, computed by the same code live sessions run, with the rolling `1m@1s` candle
+and its per-phase indicators beside it (`market.candle_1m_1s`; `1h@1m` next). Persist the
+exact inputs of every decision and trade, and the ML rows. See
+[ingestion](../project/ingestion.md) and the [storage contract](../../lib/db-research/README.md).
 
 ## 11. Validation
 

@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import json
 import threading
@@ -13,10 +14,18 @@ from backtest_runner import catalog, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import HistoricalSource, instrument_id, to_trades
-from strategy_core.bars import OBSERVED, aggregate
+from strategy_core.bars import MISSING, OBSERVED, aggregate
 from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, SessionCalendar
+from strategy_core.market import (
+    HOUR,
+    NS,
+    PRODUCTS,
+    SECOND,
+    UNDEF_PRICE,
+    UNDEF_SIZE,
+    SessionCalendar,
+)
 from strategy_core.strategies import make_strategy
 
 GC = PRODUCTS["GC"]
@@ -35,6 +44,8 @@ RECORD = np.dtype(
         ("ask_px_00", "i8"),
         ("bid_sz_00", "u4"),
         ("ask_sz_00", "u4"),
+        ("bid_ct_00", "u4"),
+        ("ask_ct_00", "u4"),
         ("flags", "u1"),
     ]
 )
@@ -46,7 +57,7 @@ def records(rows):
     for i, (iid, ts, side, price, size, *delay) in enumerate(rows):
         px = round(price * 1e9)
         recv = ts + (delay[0] if delay else 1000)
-        out[i] = (iid, ts, recv, b"T", side, px, size, px - 100_000_000, px, 3, 3, 0)
+        out[i] = (iid, ts, recv, b"T", side, px, size, px - 100_000_000, px, 3, 3, 1, 1, 0)
     return out[np.argsort(out["ts_recv"], kind="stable")]
 
 
@@ -106,7 +117,7 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         Session(D2, DAY0 + 24 * HOUR, DAY0 + 44 * HOUR, DAY0 + 20 * HOUR),
         Session(D3, DAY0 + 48 * HOUR, DAY0 + 68 * HOUR, DAY0 + 44 * HOUR),
     ]
-    ids = {"GCZ6": 1, "GCG7": 2, "GCZ6-GCG7": 3}
+    ids = {"GCG7": 1, "GCZ6": 2, "GCZ6-GCG7": 3}  # D1 busiest is GCZ6, D2 busiest GCG7
     days = {
         D1: (
             records(
@@ -130,10 +141,10 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
     )
     chunks = list(source.chunks())
     assert [(c.contract, c.session, c.tradable) for c in chunks] == [
-        ("GCG7", "2026-09-01 GCG7 (warmup)", False),  # D1's busiest outright; the spread is ignored
-        ("GCG7", "2026-09-02 GCG7", True),
-        ("GCZ6", "2026-09-02 GCZ6 (warmup)", False),  # rolled on D2's volume: re-warm D2
-        ("GCZ6", "2026-09-03 GCZ6", True),
+        ("GCZ6", "2026-09-01 GCZ6 (warmup)", False),  # D1's busiest outright; the spread is ignored
+        ("GCZ6", "2026-09-02 GCZ6", True),
+        ("GCG7", "2026-09-02 GCG7 (warmup)", False),  # rolled on D2's volume: re-warm D2
+        ("GCG7", "2026-09-03 GCG7", True),
     ]
     assert len(chunks[1].trades) == 1 and chunks[1].trades.side.tolist() == [1]
     # D2's session reads D1's file too (the closure before it starts on D1)
@@ -142,15 +153,21 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         [DAY0 + 24 * HOUR, DAY0 + 48 * HOUR],
     ]
     explicit = HistoricalSource(
-        GC, files, [], sessions[1:2], ExecutionConfig(), "GCZ6", cache=FakeCache(days)
+        GC, files, [], sessions[1:2], ExecutionConfig(), "GCG7", cache=FakeCache(days)
     )
-    assert [c.contract for c in explicit.chunks()] == ["GCZ6"]
+    assert [c.contract for c in explicit.chunks()] == ["GCG7"]
     with pytest.raises(ValueError, match="front contract"):
         list(
             HistoricalSource(
                 GC, files, [], sessions[:1], ExecutionConfig(), cache=FakeCache(days)
             ).chunks()
         )
+    backward = {"GCZ6": 1, "GCG7": 2, "GCZ6-GCG7": 3}  # D2's busiest is now the earlier month
+    back_days = {d: (r, mappings(backward, d)) for d, (r, _) in days.items()}
+    source = HistoricalSource(
+        GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(back_days)
+    )
+    assert [c.contract for c in source.chunks()] == ["GCG7", "GCG7", "GCG7"]  # forward only
 
 
 def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
@@ -169,6 +186,129 @@ def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
     source = HistoricalSource(GC, {D1: dbn_file(D1)}, [], [session], config, cache=FakeCache(days))
     assert source.outright_volumes(session) == {"GCZ6": 5, "GCG7": 4}
     assert list(source.used_files) == [f"{D1}.dbn"]
+
+
+def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
+    """Regression (PR #63 review): a record with an undefined price or no size never reaches
+    aggregation or roll volumes; each session reports how many it rejected."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    session = Session(D1, DAY0, DAY0 + 20 * HOUR, DAY0 - 4 * HOUR)
+    rows = [
+        (1, DAY0 + HOUR, b"B", 2000.0, 5),
+        (1, DAY0 + HOUR + 1, b"B", 2000.0, 7),  # undefined price below
+        (1, DAY0 + HOUR + 2, b"A", 2000.0, 9),  # zero size below
+        (1, DAY0 + HOUR + 3, b"A", -1.5, 2),  # a negative price is a valid futures price
+        (1, DAY0 + HOUR + 4, b"B", 2000.0, 3),  # Databento's undefined size below
+    ]
+    r = records(rows)
+    r["price"][1] = UNDEF_PRICE
+    r["size"][2] = 0
+    r["size"][4] = UNDEF_SIZE
+    days = {D1: (r, mappings({"GCZ6": 1}, D1))}
+    source = HistoricalSource(
+        GC, {D1: dbn_file(D1)}, [], [session], config, "GCZ6", cache=FakeCache(days)
+    )
+    trades, _, _, rejected = source.session_trades("GCZ6", session)
+    assert trades.size.tolist() == [5, 2]
+    assert rejected == {"undefined_price": 1, "nonpositive_size": 1, "undefined_size": 1}
+    assert source.outright_volumes(session) == {"GCZ6": 7}
+    [chunk] = list(source.chunks())
+    assert source.quality[chunk.session]["rejected_trades"] == rejected
+
+
+def write_job(
+    root: Path, job_id: str, start: int | str, end: int | str, condition: str = "available"
+) -> None:
+    folder = root / job_id
+    folder.mkdir(parents=True)
+    name, content = "glbx-mdp3-20260901.tbbo.dbn.zst", job_id.encode()
+    (folder / name).write_bytes(content)
+    digest = "sha256:" + hashlib.sha256(content).hexdigest()
+    files = [{"filename": name, "size": len(content), "hash": digest}]
+    (folder / "manifest.json").write_text(json.dumps({"job_id": job_id, "files": files}))
+    query = {"dataset": "GLBX.MDP3", "schema": "tbbo", "symbols": ["GC.FUT"]}
+    query |= {"stype_in": "parent", "start": start, "end": end}
+    (folder / "metadata.json").write_text(json.dumps({"query": query}))
+    (folder / "condition.json").write_text(
+        json.dumps([{"date": "2026-09-01", "condition": condition}])
+    )
+
+
+def test_job_timestamps_are_read_as_integers_or_iso_8601(tmp_path):
+    """Regression (PR #63 review): downloaded metadata.json files hold integer nanoseconds,
+    but the batch API reports ISO 8601 strings; both give the same job range."""
+    noon = DAY0 + 12 * HOUR
+    assert catalog.to_ns(noon) == catalog.to_ns(str(noon)) == noon
+    assert catalog.to_ns("2026-09-01T12:00:00.000000000Z") == noon
+    assert catalog.to_ns("2026-09-01T12:00:00.000000123Z") == noon + 123
+    assert catalog.to_ns("2026-09-01T07:00:00-05:00") == noon
+    assert catalog.to_ns("2026-09-01") == DAY0
+    with pytest.raises(ValueError, match="Unrecognized"):
+        catalog.to_ns("yesterday")
+    write_job(tmp_path, "ISO", "2026-09-01T12:00:00.000000000Z", "2026-09-02T00:00:00Z")
+    [f] = catalog.discover((tmp_path,))
+    assert f.window == (noon, DAY0 + 86_400 * NS)
+    assert catalog.job_ranges("GC.FUT", "GLBX.MDP3", roots=(tmp_path,)) == [
+        (noon, DAY0 + 86_400 * NS)
+    ]
+
+
+def test_a_usable_copy_of_a_repeated_day_replaces_an_unusable_one(tmp_path):
+    """Regression (PR #63 review): when a job is downloaded again over the same window because
+    the first copy is pending, missing, or absent, the usable copy is read."""
+    day = (DAY0, DAY0 + 86_400 * NS)
+    write_job(tmp_path, "A", *day, condition="pending")
+    write_job(tmp_path, "B", *day)
+    write_job(tmp_path, "C", *day)  # a second usable copy does not replace the first
+    files = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+    assert files[D1].job_id == "B"
+    assert [f.job_id for f in catalog.discover((tmp_path,))] == ["B"]
+    (tmp_path / "B" / "glbx-mdp3-20260901.tbbo.dbn.zst").unlink()  # absent on disk
+    assert catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1].job_id == "C"
+
+
+def test_an_unusable_copy_never_blocks_a_usable_part_of_a_day(tmp_path):
+    """Regression (PR #63 review): the split-day refusal applies to two usable files only; a
+    pending whole-day job does not block a usable job for part of the day, whose uncovered
+    part is then missing."""
+    write_job(tmp_path, "A", DAY0, DAY0 + 86_400 * NS, condition="pending")
+    write_job(tmp_path, "B", DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)
+    f = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1]
+    assert f.job_id == "B" and f.window == (DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)
+
+
+def test_jobs_covering_different_parts_of_a_day_are_refused(tmp_path):
+    """Regression (PR #63 review): one file is read per day, so two jobs that each cover part
+    of the same UTC day are refused instead of half read; identical days are duplicates."""
+    write_job(tmp_path, "A", DAY0 - 86_400 * NS, DAY0 + 86_400 * NS)
+    write_job(tmp_path, "B", DAY0, DAY0 + 86_400 * NS)  # the same day, whole: a duplicate
+    files = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+    assert [(d, f.job_id) for d, f in files.items()] == [(D1, "A")]
+    write_job(tmp_path, "C", DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)  # only the afternoon
+    with pytest.raises(ValueError, match="different parts of this day"):
+        catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+
+
+def test_file_coverage_stops_at_its_job_range(monkeypatch):
+    """Regression (PR #63 review): a job that starts partway through a UTC day delivers only
+    that part of it, so earlier seconds are missing, not quiet, and the day's volume is partial."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    session = Session(D1, DAY0, DAY0 + 20 * HOUR, DAY0 - 4 * HOUR)
+    noon = DAY0 + 12 * HOUR
+    days = {D1: (records([(1, DAY0 + 13 * HOUR, b"B", 2000.0, 5)]), mappings({"GCZ6": 1}, D1))}
+    file = dataclasses.replace(dbn_file(D1), start_ns=noon)
+    source = HistoricalSource(GC, {D1: file}, [], [session], config, "GCZ6", cache=FakeCache(days))
+    trades, coverage, _, _ = source.session_trades("GCZ6", session)
+    assert coverage.tolist() == [[noon, DAY0 + 24 * HOUR]]
+    cal = SessionCalendar("t", np.array([DAY0], np.int64), np.array([DAY0 + 20 * HOUR], np.int64))
+    ends = cal.slot_ends(DAY0, DAY0 + 20 * HOUR, SECOND)
+    bars = aggregate(trades, ends, SECOND, coverage, feed_latency=0, close_delay=config.close_delay)
+    status = bars.bars.status
+    assert (status[ends <= noon] == MISSING).all() and (status[ends > noon] != MISSING).all()
+    assert source.outright_volumes(session) is None  # the morning is unknown: no roll decision
+    assert source.session_volumes(session, partial=True) == ({"GCZ6": 5}, False)
 
 
 def test_front_contract_waits_for_complete_previous_session(monkeypatch):
@@ -304,6 +444,8 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
                     "schema": "tbbo",
                     "symbols": ["GC.FUT", "NQ.FUT"],
                     "stype_in": "parent",
+                    "start": DAY0 + 6 * HOUR,  # a job may start partway through a day
+                    "end": DAY0 + 24 * HOUR,
                 }
             }
         )
@@ -312,6 +454,7 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
         json.dumps([{"date": "2026-09-01", "condition": "degraded"}])
     )
     [f] = catalog.discover((tmp_path,))
+    assert (f.start_ns, f.end_ns) == (DAY0 + 6 * HOUR, DAY0 + 24 * HOUR)  # the requested range
     monkeypatch.setattr(catalog, "discover", lambda: [f])
     assert catalog.unconfigured_parents() == []  # GC and NQ both have product specs
     assert (f.date, f.parents, f.condition, f.covered) == (

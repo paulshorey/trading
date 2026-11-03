@@ -1,16 +1,17 @@
 """Databento batch-download folders: discovery, checksums, and per-date availability.
 
 Keep each job folder exactly as delivered (`manifest.json`, `metadata.json`,
-`condition.json`, and the data files) under `data/databento/<dataset>/<job_id>/`.
+`condition.json`, and the data files) under `data/databento/`, for example
+`data/databento/tbbo/GC--2025-11--2026-10/`; jobs are found at any depth (data/README.md).
 `data/sample/` holds the bundled one-day sample. DBN files are the permanent tick
-archive; derived bars are rebuilt from them in memory.
+archive; backtests rebuild bars from them and `research ingest` stores rows built from them.
 """
 
 import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from functools import cache
 from pathlib import Path
 
@@ -20,6 +21,34 @@ ROOT = Path(__file__).resolve().parents[4]
 SEARCH = (ROOT / "data/databento", ROOT / "data/sample")
 FILE_DATE = re.compile(r"(\d{8})\.([a-z0-9-]+)\.dbn(\.zst)?$")
 COVERED = ("available", "degraded")
+DAY_NS = 86_400 * 1_000_000_000
+ISO = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?"
+    r"(Z|[+-]\d{2}:?\d{2})?"
+)
+
+
+def to_ns(value: int | str) -> int:
+    """A job's `start` or `end` in UTC nanoseconds. Downloaded `metadata.json` files hold
+    integer nanoseconds; the batch API reports ISO 8601 strings such as
+    `2022-06-06T12:00:00.000000000Z`. Both are accepted, at full nanosecond precision."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    text = str(value).strip()
+    if text.lstrip("-").isdigit():
+        return int(text)
+    m = ISO.fullmatch(text)
+    if not m:
+        raise ValueError(f"Unrecognized job timestamp {value!r}")
+    y, mo, d, h, mi, sec, frac, zone = m.groups()
+    moment = datetime(int(y), int(mo), int(d), int(h or 0), int(mi or 0), int(sec or 0), tzinfo=UTC)
+    if zone and zone != "Z":
+        sign = 1 if zone[0] == "+" else -1
+        hours, minutes = int(zone[1:3]), int(zone[-2:])
+        moment -= sign * timedelta(hours=hours, minutes=minutes)
+    return int(moment.timestamp()) * 1_000_000_000 + int((frac or "").ljust(9, "0") or 0)
+
+
 SCHEMAS = ("tbbo", "definition")  # trades with the pre-trade book; contract metadata
 
 
@@ -34,6 +63,8 @@ class DbnFile:
     size: int
     condition: str  # Databento: available, degraded, pending, or missing
     schema: str = "tbbo"
+    start_ns: int | None = None  # the job's requested [start, end), UTC ns: a file covers only
+    end_ns: int | None = None  # its day inside it (None: the whole day)
 
     @property
     def present(self) -> bool:
@@ -43,20 +74,50 @@ class DbnFile:
     def covered(self) -> bool:
         return self.present and self.condition in COVERED
 
+    @property
+    def window(self) -> tuple[int, int]:
+        """The `[start, end)` UTC nanoseconds this file covers: its day inside its job's
+        requested range. A job that starts or ends partway through a day delivers only that
+        part of it."""
+        lo = int(datetime(self.date.year, self.date.month, self.date.day, tzinfo=UTC).timestamp())
+        lo *= 1_000_000_000
+        hi = lo + DAY_NS
+        if self.start_ns is not None:
+            lo = max(lo, self.start_ns)
+        if self.end_ns is not None:
+            hi = min(hi, self.end_ns)
+        return lo, hi
+
 
 def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
     """Files of `schema` (None for all) from every job folder under `roots`, at any depth.
     Earlier roots win when jobs repeat a date."""
     seen: dict[tuple[str, str, str, date], DbnFile] = {}
+    for f in all_files(roots, schema):
+        for parent in f.parents:
+            key = (f.schema, f.dataset, parent, f.date)
+            if key not in seen or replaces(seen[key], f):
+                seen[key] = f
+    return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
+
+
+def replaces(kept: DbnFile, other: DbnFile) -> bool:
+    """A later file for the same day replaces the kept one only when the kept one is unusable
+    (absent, pending, or missing) and the other is usable: a re-downloaded job wins over a
+    failed one, even over another part of the day, and otherwise earlier roots and job
+    folders win. The part of a day a usable file does not cover is missing."""
+    return other.covered and not kept.covered
+
+
+def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
+    """Every file of `schema` (None for all) in every job, earlier roots first."""
+    out = []
     for root in roots:
         if not root.is_dir():
             continue
         for manifest_path in sorted(root.rglob("manifest.json")):
-            for f in job_files(manifest_path.parent):
-                if schema is None or f.schema == schema:
-                    for parent in f.parents:
-                        seen.setdefault((f.schema, f.dataset, parent, f.date), f)
-    return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
+            out += [f for f in job_files(manifest_path.parent) if schema in (None, f.schema)]
+    return out
 
 
 def job_files(folder: Path) -> list[DbnFile]:
@@ -85,15 +146,54 @@ def job_files(folder: Path) -> list[DbnFile]:
                 size=entry["size"],
                 condition=conditions.get(day.isoformat(), "missing"),
                 schema=query["schema"],
+                start_ns=to_ns(query["start"]) if query.get("start") is not None else None,
+                end_ns=to_ns(query["end"]) if query.get("end") is not None else None,
             )
         )
     return out
 
 
-def files_for(parent: str, dataset: str, schema: str = "tbbo") -> dict[date, DbnFile]:
-    return {
-        f.date: f for f in discover(schema=schema) if parent in f.parents and f.dataset == dataset
-    }
+def job_ranges(
+    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+) -> list[tuple[int, int]]:
+    """Requested `[start, end)` UTC nanoseconds of every downloaded job for a parent symbol.
+    Data inside a range without a file (a weekend) has no trades; outside, it is unknown."""
+    out = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("metadata.json")):
+            query = json.loads(path.read_text())["query"]
+            if (
+                query.get("schema") == schema
+                and query.get("dataset") == dataset
+                and parent in query.get("symbols", [])
+                and (path.parent / "manifest.json").is_file()
+            ):
+                out.append((to_ns(query["start"]), to_ns(query["end"])))
+    return sorted(out)
+
+
+def files_for(
+    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+) -> dict[date, DbnFile]:
+    """One file per UTC day for a parent symbol: the first root's usable file (`replaces`).
+    Backtests and ingestion read one file per day, so two usable files covering different
+    parts of a day are refused rather than half read; an unusable copy never blocks a usable
+    one."""
+    out: dict[date, DbnFile] = {}
+    for f in all_files(roots, schema):
+        if parent not in f.parents or f.dataset != dataset:
+            continue
+        kept = out.setdefault(f.date, f)
+        if replaces(kept, f):
+            out[f.date] = f
+        elif kept.covered and f.covered and kept.window != f.window:
+            raise ValueError(
+                f"{parent} {f.date}: jobs {kept.job_id} and {f.job_id} cover different parts of "
+                "this day, but one file is read per day; download the day in a single job"
+            )
+    return out
 
 
 @cache

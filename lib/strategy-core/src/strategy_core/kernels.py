@@ -105,6 +105,7 @@ class PhaseState:
     """Named per-phase state arrays for one indicator instance."""
 
     def __init__(self, phases: int, **arrays: str):
+        self.STATE = tuple(arrays)
         for name, kind in arrays.items():
             if kind == "nan":
                 value = np.full(phases, np.nan)

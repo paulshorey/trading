@@ -43,5 +43,7 @@ def random_trades(
         ask=ask,
         bid_size=rng.integers(1, 10, n).astype(np.int64),
         ask_size=rng.integers(1, 10, n).astype(np.int64),
+        bid_count=rng.integers(1, 4, n).astype(np.int64),
+        ask_count=rng.integers(1, 4, n).astype(np.int64),
         flags=np.zeros(n, np.uint8),
     )

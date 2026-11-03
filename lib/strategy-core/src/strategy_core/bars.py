@@ -145,6 +145,7 @@ class Aggregation(NamedTuple):
     report: AggregationReport
     order: np.ndarray  # indices of the trades used, by slot, then receive order
     slot_end: np.ndarray  # end of each used trade's slot
+    at: np.ndarray  # assignment time of each used trade (see `assignment_ns`)
 
 
 def aggregate(
@@ -164,10 +165,11 @@ def aggregate(
     none = np.empty(0, np.int64)
     if len(trades) == 0 or len(ends) == 0:
         report.outside_schedule = len(trades)
-        return Aggregation(bars, report, none, none)
+        return Aggregation(bars, report, none, none, none)
 
     assign = assignment_times(trades, feed_latency, close_delay)
-    report.late_trades = int(np.sum(assign > trades.ts_event))
+    # late: assigned to a later slot than its event time's (a small delay within the slot is not)
+    report.late_trades = int(np.sum(assign // step > trades.ts_event // step))
     slot = np.searchsorted(ends, assign, side="right")
     inside = slot < len(ends)
     inside[inside] &= ends[slot[inside]] - step <= assign[inside]
@@ -186,7 +188,7 @@ def aggregate(
     report.volume = int(size.sum())
     report.unknown_side_volume = int(size[side == 0].sum())
     if not len(order):
-        return Aggregation(bars, report, none, none)
+        return Aggregation(bars, report, none, none, none)
 
     starts = np.flatnonzero(np.r_[True, s[1:] != s[:-1]])
     stops = np.r_[starts[1:], len(s)]
@@ -213,7 +215,7 @@ def aggregate(
     bars.delta_high[rows] = np.maximum(np.maximum.reduceat(running, starts), 0)
     bars.delta_low[rows] = np.minimum(np.minimum.reduceat(running, starts), 0)
     report.observed_slots = len(starts)
-    return Aggregation(bars, report, order, ends[s])
+    return Aggregation(bars, report, order, ends[s], at)
 
 
 class Rollup:

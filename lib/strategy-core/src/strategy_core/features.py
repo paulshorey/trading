@@ -97,6 +97,8 @@ class FeatureFrame:
 class WindowFeatures:
     """Rolling candles of one window spec and their per-phase indicators."""
 
+    STATE = ("window", "rsi", "atr", "chg", "vol")
+
     def __init__(self, spec: WindowSpec, calendar: SessionCalendar, config: FeatureConfig):
         self.spec, self.config = spec, config
         self.window = RollingWindow(spec, calendar)

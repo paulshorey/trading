@@ -7,6 +7,7 @@ execution (order prices, fills, P&L); features and model inputs are normalized
 """
 
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 
@@ -16,6 +17,9 @@ SECOND = NS
 MINUTE = 60 * NS
 HOUR = 3600 * NS
 UNDEF_PRICE = np.iinfo(np.int64).max  # Databento sentinel for an absent price
+UNDEF_SIZE = int(np.iinfo(np.uint32).max)  # Databento sentinel for an absent size or count
+F_MAYBE_BAD_BOOK = 1 << 2  # Databento flag: an unrecoverable gap; the book may be wrong
+F_BAD_TS_RECV = 1 << 3  # Databento flag: ts_recv is inaccurate
 MONTH_CODES = "FGHJKMNQUVXZ"
 
 
@@ -41,6 +45,18 @@ class Product:
             rest != symbol and 2 <= len(rest) <= 3 and rest[0] in MONTH_CODES and rest[1:].isdigit()
         )
 
+    def contract_month(self, symbol: str, on: date) -> date:
+        """Delivery month of an outright seen trading on `on`: GCZ6 in 2026 is December 2026.
+        One-digit years repeat each decade; the nearest decade not long expired wins."""
+        if not self.is_outright(symbol):
+            raise ValueError(f"{symbol!r} is not a {self.root} outright")
+        rest = symbol.removeprefix(self.root)
+        month, digits = MONTH_CODES.index(rest[0]) + 1, rest[1:]
+        if len(digits) == 2:
+            return date(2000 + int(digits), month, 1)
+        year = on.year - on.year % 10 + int(digits)
+        return date(year + 10 if year < on.year - 1 else year, month, 1)
+
 
 EQUITY_INDEX = "CME Globex Equity"  # ES, NQ, YM, RTY share the CME equity-index schedule
 
@@ -62,7 +78,8 @@ PRODUCTS = {
 @dataclass(frozen=True)
 class Trades:
     """TBBO trades for one contract in receive order, each with the best bid and ask
-    immediately before it. `side` is +1 buyer aggressor, -1 seller aggressor, 0 unknown."""
+    immediately before it: prices, displayed sizes, and displayed order counts.
+    `side` is +1 buyer aggressor, -1 seller aggressor, 0 unknown."""
 
     ts_event: np.ndarray
     ts_recv: np.ndarray
@@ -73,6 +90,8 @@ class Trades:
     ask: np.ndarray
     bid_size: np.ndarray
     ask_size: np.ndarray
+    bid_count: np.ndarray
+    ask_count: np.ndarray
     flags: np.ndarray
 
     FIELDS = (
@@ -85,6 +104,8 @@ class Trades:
         "ask",
         "bid_size",
         "ask_size",
+        "bid_count",
+        "ask_count",
         "flags",
     )
     DTYPES = (
@@ -93,6 +114,8 @@ class Trades:
         np.int64,
         np.int64,
         np.int8,
+        np.int64,
+        np.int64,
         np.int64,
         np.int64,
         np.int64,
@@ -137,6 +160,8 @@ class Trades:
             ask,
             self.bid_size * size_factor,
             self.ask_size * size_factor,
+            self.bid_count,
+            self.ask_count,
             self.flags,
         )
 

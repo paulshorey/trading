@@ -6,8 +6,10 @@ models trained on those metrics. Historical research comes first; paper and live
 trading will reuse strategy logic with a UI for monitoring and human overrides.
 
 Prototype with CME futures GC (gold) and SI (silver); one year of TBBO for GC, SI, PL,
-ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Keep everything per product and per
-contract so products can be added. Strategies predict only the next few
+ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Compute and store everything per
+contract, so products can be added; each product also reads as one permanent series
+(`market.continuous_*`) that takes every session's rows from its front contract. Never
+merge trades or prices of different delivery months. Strategies predict only the next few
 minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
 the allowed direction. Market data is Databento TBBO only, under the same rules for
 every product: trades are exact, but the book is seen only at trades (see
@@ -90,6 +92,19 @@ For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentat
 changes, check accuracy and links. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
 
+## Local database: agents may write to it
+
+The PostgreSQL database `trading` (`127.0.0.1:5432`, Homebrew `postgresql@18`) is the
+local development database; every derived row in it can be rebuilt from the DBN files, and
+there is no production database yet. When a task needs it, agents apply migrations
+(`uv run research db migrate`), register files, and run `research ingest`, without asking
+first. An applied migration can never change, so get it right in tests first (they use
+throwaway `trading_test_*` databases), then apply it to `trading` once the code that needs
+it is final. Branches without an applied migration's file cannot run `research db` or
+`research ingest` until they include it, so merge such a branch promptly and tell other
+agents to rebase. Ask before dropping or truncating tables, or deleting rows other than
+through `research ingest`. Report what you ran.
+
 # Research and report
 
 If something goes wrong, stop the affected operation and report relevant findings, data, and logs.
@@ -102,3 +117,5 @@ Consider what was recently done, what's in progress, and how it contributes to t
 Decide and recommend what to do next.
 
 # Goal: Develop reproducible strategies from historical research through live trading
+
+# Read the handoff and documentation: `docs/project/handoff.md`

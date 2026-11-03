@@ -1,10 +1,10 @@
 # Historical data
 
 Status: the DBN file catalog, contract selection, session calendars, one-second and
-one-minute base bars, and per-session quality checks are implemented in memory
-(`apps/backtest-runner`). PostgreSQL holds the file catalog; one-second rows come
-next. The bars feed the window
-engine described in the [sliding-window design](../sliding-windows/design.md).
+one-minute base bars, and per-session quality checks are implemented
+(`apps/backtest-runner`). PostgreSQL holds the file catalog, and `research ingest` stores
+one-second rows and `1m@1s` candle features ([ingestion](ingestion.md)). The bars feed the
+window engine described in the [sliding-window design](../sliding-windows/design.md).
 
 ## What we have
 
@@ -99,10 +99,10 @@ second per contract.** There is no Parquet or DuckDB layer.
   `no_trades`; decided November 1, 2026), and every row carries its index counter
   (`slot_ordinal`), so a sliding window is always exactly 60 consecutive rows with no
   skip logic and phases never depend on the clock. SI has trades in only 20% of its seconds. A
-  contract-year is about 21 million scheduled seconds. A measured binary `COPY` of 44-column rows wrote
-  about 400,000 rows per second at about 400 bytes per row before indexes, or about
-  a minute and 8 GB per contract-year. Store the front and next contracts from the
-  roll schedule, not every listed month.
+  contract-year is about 21 million scheduled seconds; with the stored metrics and the
+  `1m@1s` features it takes about 27 GB (measured, [ingestion](ingestion.md#measured)).
+  Each front contract is stored from a few sessions before it becomes front, not every
+  listed month.
 - **Relational data**: the file catalog with checksums, contracts, coverage, the roll
   schedule, quality reports, runs, trades, ML rows, models, predictions, and live
   decisions.
@@ -115,12 +115,13 @@ settings such as `close_delay`, and source files). See the
 
 ## Ingestion pipeline
 
-Each stage reads the output of the one before and can be rerun. Stages 1–6 run in
-memory today, per backtest. Next, an ingestion job persists their outputs and the
-one-second rows; `research db register` already records downloaded files.
+Each stage reads the output of the one before and can be rerun. Backtests run stages 1–6
+in memory; `research ingest` runs them per contract and stores the one-second rows, the
+roll schedule, and per-session quality reports ([ingestion](ingestion.md)).
 
 1. **Register.** Verify each file against `manifest.json` (size and SHA-256). Dates
-   whose `condition.json` entry is not `available` or `degraded` have no coverage.
+   whose `condition.json` entry is not `available` or `degraded` have no coverage, and a
+   file covers only the part of its day inside the job's requested range.
 2. **Contracts.** Resolve each raw symbol to its instrument ID per date from the file's
    symbol mappings; IDs are unique only within a day. Spreads are excluded. Loading
    `definition` records (expiration, tick size, multiplier) comes next.
@@ -128,14 +129,18 @@ one-second rows; `research db register` already records downloaded files.
    (`CMEGlobex_GC`, `CMEGlobex_SI`, `CMEGlobex_PL`, and `CME Globex Equity` for the
    equity-index products), including early closes.
 4. **Rolls.** The front contract is the outright with the most volume in the previous
-   session, switching at the session open, after warmup sessions on the new contract.
-   An explicit contract overrides it.
+   session, switching at the session open and only to a later delivery month, after warmup
+   sessions on the new contract. An explicit contract overrides it. Stored rows give each
+   product one continuous series that follows these rolls
+   ([continuous series](ingestion.md#continuous-series-per-product)); delivery months are
+   never merged, because their prices differ.
 5. **Base bars.** One row per scheduled-open second (and minute) with status
    `observed`, `no_trades`, or `missing`. Late trades follow the
    [timing model](engine.md#timing-model).
 6. **Quality report.** Per session: trades, volume, unknown-side share, late trades,
    trades outside the schedule or coverage, missing slots, event-time inversions,
-   trades outside the pre-trade book, and Databento quality flags.
+   trades outside the pre-trade book, Databento quality flags, and rejected trade records
+   (undefined price or no size; they are never aggregated).
 
 ### Base bar fields
 
@@ -151,8 +156,10 @@ explicit origin, such as the session open. Unknown-side volume is excluded and
 reported separately; in MGC it is mostly spread legs. Classifying it from the
 pre-trade bid and ask would be a separately named metric, not part of CVD.
 
-Spread, sweep, and displayed-size fields come later, when a metric needs them, by
-rerunning the builder over the DBN files.
+Stored rows add the TBBO metrics of the [handoff](tbbo-engineering-handoff.md): sweeps,
+trade sizes, the price path, and the book sampled at trades (spread, displayed size and
+order counts, imbalance, effective spread), each with its validity count
+(`strategy_core/metrics.py`).
 
 ## Open decisions
 

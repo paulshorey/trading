@@ -15,12 +15,19 @@ import numpy as np
 from strategy_core.bars import assignment_ns, assignment_times
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import NS, UNDEF_PRICE, Product, Trades
+from strategy_core.market import (
+    F_BAD_TS_RECV,
+    F_MAYBE_BAD_BOOK,
+    NS,
+    UNDEF_PRICE,
+    UNDEF_SIZE,
+    Product,
+    Trades,
+)
 
 from .calendars import Session
 from .catalog import DbnFile, verify
 
-F_BAD_TS_RECV, F_MAYBE_BAD_BOOK = 1 << 3, 1 << 2
 SIDES = {b"B": 1, b"A": -1}  # Databento: B = buyer aggressor, A = seller aggressor
 DAY = 86_400 * NS
 
@@ -65,12 +72,18 @@ def to_trades(records: np.ndarray) -> Trades:
         ask=records["ask_px_00"].astype(np.int64),
         bid_size=records["bid_sz_00"].astype(np.int64),
         ask_size=records["ask_sz_00"].astype(np.int64),
+        bid_count=records["bid_ct_00"].astype(np.int64),
+        ask_count=records["ask_ct_00"].astype(np.int64),
         flags=records["flags"].astype(np.uint8),
     )
 
 
 def utc_day(ns: int) -> date:
     return datetime.fromtimestamp(ns // NS, UTC).date()
+
+
+def day_ns(day: date) -> int:
+    return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
 
 
 @dataclass
@@ -111,9 +124,13 @@ class HistoricalSource:
 
     def session_trades(
         self, symbol: str, session: Session
-    ) -> tuple[Trades, np.ndarray, list[date]]:
-        """A contract's trades for a session in receive order, its covered intervals, and the
-        days whose files do not list the contract.
+    ) -> tuple[Trades, np.ndarray, list[date], dict[str, int]]:
+        """A contract's trades for a session in receive order, its covered intervals, the days
+        whose files do not list the contract, and the session's rejected trade records. A
+        file covers its UTC day only inside its job's requested range (`DbnFile.window`).
+
+        A trade record is accepted only with a defined price and a positive, defined size (a
+        price may be zero or negative); rejected records are counted, never aggregated.
 
         A trade belongs to the session whose `[after, close)` holds its assignment time (the
         rule in `strategy_core.bars`), so opening trades that arrive within the close delay
@@ -130,20 +147,31 @@ class HistoricalSource:
             if iid is None:
                 unmapped.append(day)
                 continue
-            day_ns = int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
-            coverage.append((day_ns, day_ns + DAY))
+            window = file.window  # the day, bounded by the job's requested range
+            if window[0] >= window[1]:
+                continue
+            coverage.append(window)
             sel = (records["instrument_id"] == iid) & (records["action"] == b"T")
             parts.append(to_trades(records[sel]))
         trades = Trades.concat(parts)
         assign = assignment_times(trades, self.config.feed_latency, self.config.close_delay)
         inside = (assign >= session.after) & (assign < session.close)
-        return trades.take(inside), np.array(coverage, np.int64).reshape(-1, 2), unmapped
+        undefined, empty = trades.price == UNDEF_PRICE, trades.size <= 0
+        unset = trades.size == UNDEF_SIZE  # Databento's sentinel for an absent size
+        rejected = {
+            "undefined_price": int(np.sum(inside & undefined)),
+            "nonpositive_size": int(np.sum(inside & empty)),
+            "undefined_size": int(np.sum(inside & unset)),
+        }
+        keep = inside & ~undefined & ~empty & ~unset
+        return trades.take(keep), np.array(coverage, np.int64).reshape(-1, 2), unmapped, rejected
 
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
-        trades, coverage, unmapped = self.session_trades(contract, session)
+        trades, coverage, unmapped, rejected = self.session_trades(contract, session)
         label = f"{session.trade_date} {contract}" + ("" if tradable else " (warmup)")
         self.quality[label] = {
             **raw_quality(trades),
+            "rejected_trades": rejected,
             "contract_unmapped_days": [d.isoformat() for d in unmapped],
             "front_kept_for_incomplete_data": session.trade_date in self.kept_front,
         }
@@ -152,15 +180,16 @@ class HistoricalSource:
     def front_contract(
         self, previous: Session | None, session: Session, current: str | None = None
     ) -> str:
-        """The outright with the most volume in the previous session, switching at the open.
-        Partial data never decides a roll: without complete volume the current contract is
-        kept, and with no current contract the run cannot start."""
+        """The outright with the most volume in the previous session, switching at the open
+        and only to a later delivery month (`next_front`). Partial data never decides a roll:
+        without complete volume the current contract is kept, and with no current contract
+        the run cannot start."""
         volumes = self.outright_volumes(previous) if previous is not None else None
-        if volumes:
-            return max(volumes, key=volumes.get)
-        if current is not None:
+        front, basis = next_front(self.product, volumes, current, session.trade_date)
+        if basis == "kept":
             self.kept_front.add(session.trade_date)
-            return current
+        if front is not None:
+            return front
         raise ValueError(
             f"Cannot choose the {self.product.root} front contract for {session.trade_date} "
             "without complete data for the previous session; set `contract` (for example "
@@ -170,17 +199,38 @@ class HistoricalSource:
     def outright_volumes(self, session: Session) -> dict[str, int] | None:
         """Volume per outright from trades assigned to the session's scheduled hours
         (`[open, close)`; closure records are excluded, as aggregation excludes them). Returns
-        None when a day file overlapping those hours is missing, uncovered, or lists none of
-        the product's outrights, so partial data never decides a roll. Files read here count
-        as run inputs. The CME calendars used here have no breaks inside a session."""
+        None when a day file overlapping those hours is missing, uncovered, covers only part of
+        them, or lists none of the product's outrights, so partial data never decides a roll.
+        Files read here count as run inputs. The CME calendars used here have no breaks inside
+        a session."""
+        volumes, complete = self.session_volumes(session)
+        return volumes if complete else None
+
+    def session_volumes(
+        self, session: Session, *, partial: bool = False
+    ) -> tuple[dict[str, int], bool]:
+        """Outright volumes of the session's scheduled hours and whether the data is complete.
+        Without `partial`, reading stops at the first incomplete day (as `outright_volumes`
+        needs); with it, the available days are summed, for a contract's own extent."""
         volumes: dict[str, int] = {}
-        scheduled = (utc_day(session.open), utc_day(session.close - 1))
+        complete = True
         for day, file in self.day_files(session):
-            overlaps = scheduled[0] <= day <= scheduled[1]
-            if file is None or not file.covered:
+            lo, hi = day_ns(day), day_ns(day) + DAY
+            scheduled = (max(lo, session.open), min(hi, session.close))
+            overlaps = scheduled[0] < scheduled[1]
+            usable = file is not None and file.covered
+            if usable:
+                window = file.window
+                usable = window[0] < window[1]
+            if not usable or (
+                overlaps and not (window[0] <= scheduled[0] and scheduled[1] <= window[1])
+            ):
                 if overlaps:
-                    return None
-                continue
+                    complete = False
+                    if not partial:
+                        return {}, False
+                if not usable:
+                    continue
             records, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
             ids = {
@@ -191,7 +241,9 @@ class HistoricalSource:
             }
             if not ids:
                 if overlaps:
-                    return None
+                    complete = False
+                    if not partial:
+                        return {}, False
                 continue
             assign = assignment_ns(
                 records["ts_event"].astype(np.int64),
@@ -200,12 +252,46 @@ class HistoricalSource:
                 self.config.close_delay,
             )
             in_session = (
-                (assign >= session.open) & (assign < session.close) & (records["action"] == b"T")
+                (assign >= session.open)
+                & (assign < session.close)
+                & (records["action"] == b"T")
+                & (records["price"] != UNDEF_PRICE)  # the same accepted trades as aggregation
+                & (records["size"] > 0)
+                & (records["size"] != UNDEF_SIZE)
             )
             for symbol, iid in ids.items():
                 sel = in_session & (records["instrument_id"] == iid)
                 volumes[symbol] = volumes.get(symbol, 0) + int(records["size"][sel].sum())
-        return {k: v for k, v in volumes.items() if v > 0}
+        return {k: v for k, v in volumes.items() if v > 0}, complete
+
+
+def front_of(volumes: dict[str, int]) -> str:
+    """The outright with the most volume; an exact tie goes to the first symbol in order."""
+    return max(sorted(volumes), key=volumes.get)
+
+
+def next_front(
+    product: Product, volumes: dict[str, int] | None, current: str | None, on: date
+) -> tuple[str | None, str]:
+    """The roll rule shared by backtests and stored rows: the front contract of the session
+    on `on` and why. `volumes` are the previous session's outright volumes, or None when its
+    data is incomplete. The front only moves to a later delivery month, so the most volume
+    returning to an expiring month never rolls back.
+
+    Bases: `previous_session` (most volume), `forward_only` (the most volume was an earlier
+    month; the current front is kept), `kept` (incomplete data), or "" with no front."""
+    if volumes:
+        best = front_of(volumes)
+        if (
+            current is not None
+            and best != current
+            and product.contract_month(best, on) < product.contract_month(current, on)
+        ):
+            return current, "forward_only"
+        return best, "previous_session"
+    if current is not None:
+        return current, "kept"
+    return None, ""
 
 
 def raw_quality(t: Trades) -> dict:

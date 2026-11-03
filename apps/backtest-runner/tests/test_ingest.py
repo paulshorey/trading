@@ -275,7 +275,10 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
     plans = ingest.summarize(ingest.plan(["GC"], data=changed, **options))["products"][0]
     assert {c["action"] for c in plans["contracts"]} == {"stale"}
     status = ingest.status(database)
-    assert {c["contract"] for c in status["contracts"]} == {"GCZ6", "GCG7"}
+    assert {(c["contract"], c["delivery"]) for c in status["contracts"]} == {
+        ("GCZ6", "2026-12"),
+        ("GCG7", "2027-02"),
+    }
     [series] = status["continuous"]
     assert (series["product"], series["front_sessions"], series["stored_sessions"]) == ("GC", 4, 4)
     assert series["contracts"] == ["GCZ6", "GCG7"] and series["missing"] == []
@@ -311,6 +314,27 @@ def assert_continuous(conn, fronts: list[str]) -> None:
                  IS DISTINCT FROM (b.close, b.volume, b.session_cvd)"""
     ).fetchone()[0]
     assert mismatch == 0
+
+
+def test_spans_keep_each_delivery_of_a_repeated_symbol_apart():
+    """Regression (PR #63 review): one-digit-year symbols repeat each decade, so GCZ6 traded in
+    2016 and in 2026 are two contracts, with two spans, also for an explicit --contract."""
+    from backtest_runner.calendars import Session
+
+    days = [date(2016, 11, d) for d in (1, 2, 3)] + [date(2026, 11, d) for d in (2, 3, 4)]
+    period = [Session(d, i, i + 1, i) for i, d in enumerate(days)]
+    front = {d: "GCZ6" for d in days}
+    out = ingest.spans(GC, period, front, {}, contract=None, start=None, end=None, lead=1)
+    assert {k: [s.trade_date for s in v] for k, v in out.items()} == {
+        ("GCZ6", date(2016, 12, 1)): days[:3],
+        ("GCZ6", date(2026, 12, 1)): days[2:],  # one lead session, then its own
+    }
+    volumes = {d: {"GCZ6": 5} for d in days}
+    out = ingest.spans(GC, period, {}, volumes, contract="GCZ6", start=None, end=None, lead=1)
+    assert {k: len(v) for k, v in out.items()} == {
+        ("GCZ6", date(2016, 12, 1)): 3,
+        ("GCZ6", date(2026, 12, 1)): 3,
+    }
 
 
 def test_diff_rules():

@@ -186,7 +186,11 @@ def scan_identity() -> str:
 
 
 def contract_id(conn: psycopg.Connection, product: Product, symbol: str, on: date) -> int:
-    month = product.contract_month(symbol, on)
+    return contract_id_for(conn, product, symbol, product.contract_month(symbol, on))
+
+
+def contract_id_for(conn: psycopg.Connection, product: Product, symbol: str, month: date) -> int:
+    """The contract with this raw symbol and delivery month (symbols repeat each decade)."""
     row = conn.execute(
         """INSERT INTO market.contract (product, raw_symbol, contract_month, dataset, tick_size,
                tick_value) VALUES (%s, %s, %s, %s, %s, %s)
@@ -349,6 +353,7 @@ class ContractPlan:
     action: str  # new, extend, repair, rebuild, current, stale, needs_rebuild
     reason: str = ""
     rows: int = 0  # scheduled seconds to build
+    delivery: str = ""  # delivery month, YYYY-MM: one-digit-year symbols repeat each decade
 
     @property
     def todo(self) -> int:
@@ -356,6 +361,7 @@ class ContractPlan:
 
 
 def spans(
+    product: Product,
     period: list[Session],
     front: dict[date, str],
     volumes: dict[date, dict[str, int]],
@@ -364,31 +370,34 @@ def spans(
     start: date | None,
     end: date | None,
     lead: int,
-) -> dict[str, list[Session]]:
-    """Consecutive scheduled sessions to store per contract. `period` holds every session from
-    the first to the last downloaded one, so a span never skips one: sessions in a gap between
-    downloads become rows without data coverage (missing), never a jump in the index counter,
-    and are rebuilt when the gap is downloaded."""
+) -> dict[tuple[str, date], list[Session]]:
+    """Consecutive scheduled sessions to store per contract, keyed by raw symbol and delivery
+    month: one-digit-year symbols repeat each decade (GCZ6 is December 2016 and 2026), and
+    each delivery is its own contract. `period` holds every session from the first to the
+    last downloaded one, so a span never skips one: sessions in a gap between downloads
+    become rows without data coverage (missing), never a jump in the index counter, and are
+    rebuilt when the gap is downloaded."""
     index = {s.trade_date: i for i, s in enumerate(period)}
-    out: dict[str, list[Session]] = {}
+    days: dict[tuple[str, date], list[int]] = {}
     if contract:
-        traded = [s for s in period if volumes.get(s.trade_date, {}).get(contract)]
-        if traded:
-            out[contract] = period[index[traded[0].trade_date] : index[traded[-1].trade_date] + 1]
+        for s in period:
+            if volumes.get(s.trade_date, {}).get(contract):
+                key = (contract, product.contract_month(contract, s.trade_date))
+                days.setdefault(key, []).append(index[s.trade_date])
     else:
-        by_contract: dict[str, list[int]] = {}
         for day, symbol in front.items():
-            by_contract.setdefault(symbol, []).append(index[day])
-        for symbol, idx in by_contract.items():
-            out[symbol] = period[max(min(idx) - lead, 0) : max(idx) + 1]
-    for symbol in list(out):
-        out[symbol] = [
+            key = (symbol, product.contract_month(symbol, day))
+            days.setdefault(key, []).append(index[day])
+    out: dict[tuple[str, date], list[Session]] = {}
+    for key, idx in days.items():
+        first = min(idx) if contract else max(min(idx) - lead, 0)
+        span = [
             s
-            for s in out[symbol]
+            for s in period[first : max(idx) + 1]
             if (start is None or s.trade_date >= start) and (end is None or s.trade_date <= end)
         ]
-        if not out[symbol]:
-            del out[symbol]
+        if span:
+            out[key] = span
     return out
 
 
@@ -463,10 +472,10 @@ def plan_product(
     ]
     expected = {s.trade_date: session_files(source, s) for s in period}
     plans = []
-    for symbol, span in spans(
-        period, front, volumes, contract=contract, start=start, end=end, lead=lead
+    for (symbol, month), span in spans(
+        product, period, front, volumes, contract=contract, start=start, end=end, lead=lead
     ).items():
-        cid = contract_id(conn, product, symbol, span[-1].trade_date)
+        cid = contract_id_for(conn, product, symbol, month)
         stored = conn.execute(
             """SELECT trade_date, builder_id, source_files FROM market.ingest_slice
                WHERE contract_id = %s ORDER BY trade_date""",
@@ -488,6 +497,7 @@ def plan_product(
                 action,
                 reason,
                 sum((s.close - s.open) // NS for s in todo),
+                delivery=f"{month:%Y-%m}",
             )
         )
     plans.sort(key=lambda p: (p.sessions[0], p.contract))
@@ -758,6 +768,7 @@ def summarize(plans: list[dict]) -> dict:
         contracts = [
             {
                 "contract": c.contract,
+                "delivery": c.delivery,
                 "action": c.action,
                 "sessions": len(c.sessions),
                 "first": c.sessions[0],
@@ -777,35 +788,39 @@ def summarize(plans: list[dict]) -> dict:
     }
 
 
+def stored_contract(row: tuple) -> dict:
+    """One `status` entry from the per-contract aggregate of `market.ingest_slice`."""
+    product, symbol, month, n, first, last, rows, observed, missing, builders, at = row
+    return {
+        "product": product,
+        "contract": symbol,
+        "delivery": f"{month:%Y-%m}",
+        "sessions": int(n),
+        "first": first.isoformat(),
+        "last": last.isoformat(),
+        "rows": int(rows),
+        "with_trades": round(float(observed) / float(rows), 3) if rows else None,
+        "missing_rows": int(missing),
+        "builders": builders,
+        "last_ingested": at.isoformat(),
+    }
+
+
 def status(url: str | None = None) -> dict:
     """The continuous series per product (front sessions stored, rolls), stored contracts with
     their sessions, rows, and builders, table sizes, and recent runs."""
     with db.connect(url) as conn:
         require_migrated(conn)
         stored = conn.execute(
-            """SELECT c.product, c.raw_symbol, count(*), min(s.trade_date), max(s.trade_date),
-                          sum(s.row_count), sum(s.observed), sum(s.missing),
+            """SELECT c.product, c.raw_symbol, c.contract_month, count(*), min(s.trade_date),
+                          max(s.trade_date), sum(s.row_count), sum(s.observed), sum(s.missing),
                           array_agg(DISTINCT left(b.sha256, 12)), max(s.ingested_at)
                    FROM market.ingest_slice s
                    JOIN market.contract c ON c.id = s.contract_id
                    JOIN market.builder b ON b.id = s.builder_id
-                   GROUP BY 1, 2 ORDER BY 1, 4"""
+                   GROUP BY c.id, 1, 2, 3 ORDER BY 1, 5"""
         ).fetchall()
-        contracts = [
-            {
-                "product": product,
-                "contract": symbol,
-                "sessions": int(n),
-                "first": first.isoformat(),
-                "last": last.isoformat(),
-                "rows": int(rows),
-                "with_trades": round(float(observed) / float(rows), 3) if rows else None,
-                "missing_rows": int(missing),
-                "builders": builders,
-                "last_ingested": at.isoformat(),
-            }
-            for product, symbol, n, first, last, rows, observed, missing, builders, at in stored
-        ]
+        contracts = [stored_contract(row) for row in stored]
         continuous = [
             {
                 "product": product,

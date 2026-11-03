@@ -88,7 +88,8 @@ the contract's whole stored chain, so no stored session is dropped.
 **Spans.** Every contract that is ever the front contract (the [roll rule](#continuous-series-per-product),
 `market.roll`) is stored from `--lead-sessions` sessions before it first becomes front
 through its last front session, so its indicators are warm when the continuous series
-switches to it. Spans cover every scheduled session between the first and last downloaded
+switches to it. Contracts are keyed by symbol and delivery month, since one-digit-year
+symbols repeat each decade (GCZ6 is December 2016 and December 2026). Spans cover every scheduled session between the first and last downloaded
 ones: a session in a gap between downloads is stored as rows without data coverage
 (`status` 0), never skipped, and is rebuilt once the gap is downloaded. The first session
 after a gap chooses its front contract afresh.

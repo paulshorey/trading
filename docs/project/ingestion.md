@@ -120,8 +120,10 @@ take no storage and always follow the roll schedule.
 - **The roll rule is the backtest's** (`source.next_front`): the front contract has the
   most volume in the previous complete session, switches at a session open, and only moves
   to a later delivery month. On the current data all seven products roll once per cycle and
-  never back. The first session of the data uses its own volume (`roll_basis` =
-  `same_session`, not causal).
+  never back. The opening sessions of each downloaded range have no usable previous session:
+  they use their own volume, even if partial, or with none the range's first front
+  (`roll_basis` = `same_session`, not causal). Sessions without any volume in their range
+  get no front; `plan` and `run` list them as `unresolved_sessions`.
 - **One row per scheduled second.** Contracts of a product share the calendar, so
   `slot_ordinal` continues across rolls and the series has every index exactly once.
 - **No artificial roll moves in features.** Each row's candle and features come from its
@@ -173,7 +175,9 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
 ## Row rules
 
 - **Every scheduled-open second is a row**, including seconds without trades (`status` 1)
-  or without data coverage (`status` 0). Closures have no rows.
+  or without data coverage (`status` 0). Closures have no rows. A file covers its UTC day
+  only inside its job's requested range, so a job that starts or ends partway through a day
+  leaves the rest of that day missing, not quiet.
 - **Accepted trades only.** A trade record needs a defined price and a positive size (zero
   and negative prices are valid futures prices). Rejected records never reach rows or roll
   volumes; each session counts them (`rejected_trades` in `market.ingest_slice.report`).

@@ -1,3 +1,4 @@
+import dataclasses
 import hashlib
 import json
 import threading
@@ -13,7 +14,7 @@ from backtest_runner import catalog, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import HistoricalSource, instrument_id, to_trades
-from strategy_core.bars import OBSERVED, aggregate
+from strategy_core.bars import MISSING, OBSERVED, aggregate
 from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
 from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, UNDEF_PRICE, SessionCalendar
@@ -206,6 +207,27 @@ def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
     assert source.quality[chunk.session]["rejected_trades"] == rejected
 
 
+def test_file_coverage_stops_at_its_job_range(monkeypatch):
+    """Regression (PR #63 review): a job that starts partway through a UTC day delivers only
+    that part of it, so earlier seconds are missing, not quiet, and the day's volume is partial."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    session = Session(D1, DAY0, DAY0 + 20 * HOUR, DAY0 - 4 * HOUR)
+    noon = DAY0 + 12 * HOUR
+    days = {D1: (records([(1, DAY0 + 13 * HOUR, b"B", 2000.0, 5)]), mappings({"GCZ6": 1}, D1))}
+    file = dataclasses.replace(dbn_file(D1), start_ns=noon)
+    source = HistoricalSource(GC, {D1: file}, [], [session], config, "GCZ6", cache=FakeCache(days))
+    trades, coverage, _, _ = source.session_trades("GCZ6", session)
+    assert coverage.tolist() == [[noon, DAY0 + 24 * HOUR]]
+    cal = SessionCalendar("t", np.array([DAY0], np.int64), np.array([DAY0 + 20 * HOUR], np.int64))
+    ends = cal.slot_ends(DAY0, DAY0 + 20 * HOUR, SECOND)
+    bars = aggregate(trades, ends, SECOND, coverage, feed_latency=0, close_delay=config.close_delay)
+    status = bars.bars.status
+    assert (status[ends <= noon] == MISSING).all() and (status[ends > noon] != MISSING).all()
+    assert source.outright_volumes(session) is None  # the morning is unknown: no roll decision
+    assert source.session_volumes(session, partial=True) == ({"GCZ6": 5}, False)
+
+
 def test_front_contract_waits_for_complete_previous_session(monkeypatch):
     """Regression (PR #62 review): a missing day file inside the previous session's scheduled
     hours makes its volume unavailable, so partial totals never decide a roll."""
@@ -339,6 +361,8 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
                     "schema": "tbbo",
                     "symbols": ["GC.FUT", "NQ.FUT"],
                     "stype_in": "parent",
+                    "start": DAY0 + 6 * HOUR,  # a job may start partway through a day
+                    "end": DAY0 + 24 * HOUR,
                 }
             }
         )
@@ -347,6 +371,7 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
         json.dumps([{"date": "2026-09-01", "condition": "degraded"}])
     )
     [f] = catalog.discover((tmp_path,))
+    assert (f.start_ns, f.end_ns) == (DAY0 + 6 * HOUR, DAY0 + 24 * HOUR)  # the requested range
     monkeypatch.setattr(catalog, "discover", lambda: [f])
     assert catalog.unconfigured_parents() == []  # GC and NQ both have product specs
     assert (f.date, f.parents, f.condition, f.covered) == (

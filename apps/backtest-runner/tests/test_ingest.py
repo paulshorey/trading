@@ -427,3 +427,47 @@ def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, w
     for name in ("ingest", "catalog", "source", "calendars"):  # scans are versioned the same way
         assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.SCAN_FILES
     assert all((ingest.ROOT / rel).is_file() for rel in ingest.BUILDER_FILES + ingest.SCAN_FILES)
+
+
+def test_incomplete_range_openings_keep_a_front_and_explicit_contracts_keep_partial_edges(
+    database, world
+):
+    """Regression (PR #63 review). A downloaded range whose first session has incomplete data
+    still gets a front contract (from its own partial volume, or else the range's first
+    front), so the continuous series keeps the session; partial volumes also bound an
+    explicit contract's span; a range without any volume is reported, not silently dropped."""
+    cache, _ = world
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    ranges = [(day_ns(date(2026, 8, 31)), day_ns(date(2026, 9, 5)))]
+
+    def plan(missing_days, contract=None, ranges=ranges):
+        files = {d: dbn(d) for d in DAYS if d not in missing_days}
+        data = {"GC": ingest.ProductData(GC, files, ranges)}
+        [p] = ingest.plan(
+            ["GC"], url=database, data=data, cache=cache, log=lambda line: None, lead=1,
+            contract=contract,
+        )  # fmt: skip
+        with db.connect(database) as conn:
+            rolls = conn.execute(
+                "SELECT r.trade_date, c.raw_symbol, r.basis FROM market.roll r "
+                "JOIN market.contract c ON c.id = r.contract_id ORDER BY 1"
+            ).fetchall()
+        return p, [(d.day, s, b) for d, s, b in rolls]
+
+    # 08-31 is missing, so the 09-01 session (opening 08-31 22:00 UTC) has partial volume only
+    p, rolls = plan({date(2026, 8, 31)})
+    assert rolls[0] == (1, "GCZ6", "same_session") and len(rolls) == 4
+    assert p["unresolved_sessions"] == []
+    p, _ = plan({date(2026, 8, 31)}, contract="GCZ6")
+    [z6] = p["contracts"]
+    assert z6.sessions[0] == "2026-09-01"  # its partial first session is kept
+
+    # 08-31 and 09-01 are missing: 09-01 has no volume, so it takes the range's first front
+    p, rolls = plan({date(2026, 8, 31), date(2026, 9, 1)})
+    assert rolls[:2] == [(1, "GCG7", "same_session"), (2, "GCG7", "same_session")]
+
+    # a range without any file: its sessions are reported as unresolved
+    empty = [(day_ns(date(2026, 8, 31)), day_ns(date(2026, 9, 3)))]
+    p, rolls = plan(set(DAYS), ranges=empty)
+    assert p["unresolved_sessions"] == ["2026-09-01", "2026-09-02"] and rolls == []

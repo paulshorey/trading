@@ -35,6 +35,8 @@ class DbnFile:
     size: int
     condition: str  # Databento: available, degraded, pending, or missing
     schema: str = "tbbo"
+    start_ns: int | None = None  # the job's requested [start, end), UTC ns: a file covers only
+    end_ns: int | None = None  # its day inside it (None: the whole day)
 
     @property
     def present(self) -> bool:
@@ -86,6 +88,8 @@ def job_files(folder: Path) -> list[DbnFile]:
                 size=entry["size"],
                 condition=conditions.get(day.isoformat(), "missing"),
                 schema=query["schema"],
+                start_ns=int(query["start"]) if query.get("start") is not None else None,
+                end_ns=int(query["end"]) if query.get("end") is not None else None,
             )
         )
     return out

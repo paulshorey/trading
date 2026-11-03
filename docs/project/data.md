@@ -120,7 +120,8 @@ in memory; `research ingest` runs them per contract and stores the one-second ro
 roll schedule, and per-session quality reports ([ingestion](ingestion.md)).
 
 1. **Register.** Verify each file against `manifest.json` (size and SHA-256). Dates
-   whose `condition.json` entry is not `available` or `degraded` have no coverage.
+   whose `condition.json` entry is not `available` or `degraded` have no coverage, and a
+   file covers only the part of its day inside the job's requested range.
 2. **Contracts.** Resolve each raw symbol to its instrument ID per date from the file's
    symbol mappings; IDs are unique only within a day. Spreads are excluded. Loading
    `definition` records (expiration, tick size, multiplier) comes next.

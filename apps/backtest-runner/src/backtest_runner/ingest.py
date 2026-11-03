@@ -232,7 +232,8 @@ def scan_sessions(
         if known.get(s.trade_date) != (session_files(source, s), identity, s.open, s.close)
     ]
     for i, s in enumerate(todo, 1):
-        volumes = source.outright_volumes(s)
+        # partial volumes are kept (a contract's extent); rolls use complete sessions only
+        volumes, complete = source.session_volumes(s, partial=True)
         with conn.transaction():
             conn.execute(
                 "DELETE FROM market.session_scan WHERE product = %s AND trade_date = %s",
@@ -246,12 +247,12 @@ def scan_sessions(
                     s.trade_date,
                     s.open,
                     s.close,
-                    volumes is not None,
+                    complete,
                     Jsonb(session_files(source, s)),
                     identity,
                 ),
             )
-            for symbol, volume in (volumes or {}).items():
+            for symbol, volume in volumes.items():
                 conn.execute(
                     """INSERT INTO market.session_volume (product, trade_date, contract_id, volume)
                        VALUES (%s, %s, %s, %s)""",
@@ -289,28 +290,39 @@ def session_volumes(conn: psycopg.Connection, product: Product) -> tuple[dict, d
 
 def update_rolls(
     conn: psycopg.Connection, product: Product, calendar: list[Session], downloaded: list[Session]
-) -> dict[date, str]:
+) -> tuple[dict[date, str], list[date]]:
     """Front contract per downloaded session by the backtest rule (`source.next_front`: most
-    volume in the complete previous session, forward only, else kept). The first session of
-    each downloaded range uses its own volume (not causal, and marked so), so a contract from
-    before a download gap is never carried over it. Returns {trade_date: symbol}."""
+    volume in the complete previous session, forward only, else kept).
+
+    Each downloaded range starts afresh, so a contract from before a download gap is never
+    carried over it. A range's opening sessions have no usable previous session: they use
+    their own volume, even if partial, and with none at all the range's first decided front
+    (`same_session`: not causal, and marked so). Returns {trade_date: symbol} and the
+    sessions whose front cannot be decided (no volume anywhere in their range)."""
     volumes, complete, ids = session_volumes(conn, product)
     previous = {s.trade_date: calendar[i - 1].trade_date for i, s in enumerate(calendar) if i}
     have = {s.trade_date for s in downloaded}
     front: dict[date, tuple[str, str]] = {}
-    current = None
+    current, pending, unresolved = None, [], []
     for s in downloaded:
         before = previous.get(s.trade_date)
         if before not in have:  # first session of a downloaded range: choose afresh
             current = None
+            unresolved += pending
+            pending = []
         prev_volumes = volumes.get(before) if before and complete.get(before) else None
         found, basis = next_front(product, prev_volumes, current, s.trade_date)
-        if found is None and complete.get(s.trade_date) and volumes.get(s.trade_date):
+        if found is None and volumes.get(s.trade_date):  # its own volume, even if partial
             found, basis = front_of(volumes[s.trade_date]), "same_session"
         if found is None:
+            pending.append(s.trade_date)  # no volume yet: take the range's first front
             continue
+        for day in pending:
+            front[day] = (found, "same_session")
+        pending = []
         current = found
         front[s.trade_date] = (current, basis)
+    unresolved += pending
     with conn.transaction():
         conn.execute("DELETE FROM market.roll WHERE product = %s", (product.root,))
         for day, (symbol, basis) in front.items():
@@ -320,7 +332,7 @@ def update_rolls(
                    VALUES (%s, %s, %s, %s)""",
                 (product.root, day, cid, basis),
             )
-    return {d: f for d, (f, _) in front.items()}
+    return {d: f for d, (f, _) in sorted(front.items())}, unresolved
 
 
 @dataclass
@@ -437,7 +449,12 @@ def plan_product(
         product, data.files, [], downloaded, EXECUTION, None, cache or DayCache()
     )
     scan_sessions(conn, source, downloaded, log)
-    front = update_rolls(conn, product, calendar, downloaded)
+    front, unresolved = update_rolls(conn, product, calendar, downloaded)
+    if unresolved:
+        log(
+            f"{product.root}: no front contract for {len(unresolved)} sessions without any "
+            f"volume in their downloaded range, first {unresolved[0]}; they are not stored"
+        )
     volumes, _, _ = session_volumes(conn, product)
     period = [
         s for s in calendar if downloaded and downloaded[0].open <= s.open <= downloaded[-1].open
@@ -480,6 +497,7 @@ def plan_product(
         "first_session": downloaded[0].trade_date.isoformat() if downloaded else None,
         "last_session": downloaded[-1].trade_date.isoformat() if downloaded else None,
         "front_sessions": len(front),
+        "unresolved_sessions": [d.isoformat() for d in unresolved],
         "contracts": plans,
     }
 

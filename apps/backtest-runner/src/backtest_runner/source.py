@@ -81,6 +81,21 @@ def utc_day(ns: int) -> date:
     return datetime.fromtimestamp(ns // NS, UTC).date()
 
 
+def day_ns(day: date) -> int:
+    return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
+
+
+def file_window(file: DbnFile, day: date) -> tuple[int, int]:
+    """The `[start, end)` a day file covers: its UTC day inside the job's requested range. A
+    job that starts or ends partway through a day delivers only that part of it."""
+    lo, hi = day_ns(day), day_ns(day) + DAY
+    if file.start_ns is not None:
+        lo = max(lo, file.start_ns)
+    if file.end_ns is not None:
+        hi = min(hi, file.end_ns)
+    return lo, hi
+
+
 @dataclass
 class HistoricalSource:
     product: Product
@@ -121,7 +136,8 @@ class HistoricalSource:
         self, symbol: str, session: Session
     ) -> tuple[Trades, np.ndarray, list[date], dict[str, int]]:
         """A contract's trades for a session in receive order, its covered intervals, the days
-        whose files do not list the contract, and the session's rejected trade records.
+        whose files do not list the contract, and the session's rejected trade records. A
+        file covers its UTC day only inside its job's requested range (`file_window`).
 
         A trade record is accepted only with a defined price and a positive size (a price may
         be zero or negative); rejected records are counted, never aggregated.
@@ -141,8 +157,10 @@ class HistoricalSource:
             if iid is None:
                 unmapped.append(day)
                 continue
-            day_ns = int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
-            coverage.append((day_ns, day_ns + DAY))
+            window = file_window(file, day)  # the day, bounded by the job's requested range
+            if window[0] >= window[1]:
+                continue
+            coverage.append(window)
             sel = (records["instrument_id"] == iid) & (records["action"] == b"T")
             parts.append(to_trades(records[sel]))
         trades = Trades.concat(parts)
@@ -189,17 +207,38 @@ class HistoricalSource:
     def outright_volumes(self, session: Session) -> dict[str, int] | None:
         """Volume per outright from trades assigned to the session's scheduled hours
         (`[open, close)`; closure records are excluded, as aggregation excludes them). Returns
-        None when a day file overlapping those hours is missing, uncovered, or lists none of
-        the product's outrights, so partial data never decides a roll. Files read here count
-        as run inputs. The CME calendars used here have no breaks inside a session."""
+        None when a day file overlapping those hours is missing, uncovered, covers only part of
+        them, or lists none of the product's outrights, so partial data never decides a roll.
+        Files read here count as run inputs. The CME calendars used here have no breaks inside
+        a session."""
+        volumes, complete = self.session_volumes(session)
+        return volumes if complete else None
+
+    def session_volumes(
+        self, session: Session, *, partial: bool = False
+    ) -> tuple[dict[str, int], bool]:
+        """Outright volumes of the session's scheduled hours and whether the data is complete.
+        Without `partial`, reading stops at the first incomplete day (as `outright_volumes`
+        needs); with it, the available days are summed, for a contract's own extent."""
         volumes: dict[str, int] = {}
-        scheduled = (utc_day(session.open), utc_day(session.close - 1))
+        complete = True
         for day, file in self.day_files(session):
-            overlaps = scheduled[0] <= day <= scheduled[1]
-            if file is None or not file.covered:
+            lo, hi = day_ns(day), day_ns(day) + DAY
+            scheduled = (max(lo, session.open), min(hi, session.close))
+            overlaps = scheduled[0] < scheduled[1]
+            usable = file is not None and file.covered
+            if usable:
+                window = file_window(file, day)
+                usable = window[0] < window[1]
+            if not usable or (
+                overlaps and not (window[0] <= scheduled[0] and scheduled[1] <= window[1])
+            ):
                 if overlaps:
-                    return None
-                continue
+                    complete = False
+                    if not partial:
+                        return {}, False
+                if not usable:
+                    continue
             records, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
             ids = {
@@ -210,7 +249,9 @@ class HistoricalSource:
             }
             if not ids:
                 if overlaps:
-                    return None
+                    complete = False
+                    if not partial:
+                        return {}, False
                 continue
             assign = assignment_ns(
                 records["ts_event"].astype(np.int64),
@@ -228,7 +269,7 @@ class HistoricalSource:
             for symbol, iid in ids.items():
                 sel = in_session & (records["instrument_id"] == iid)
                 volumes[symbol] = volumes.get(symbol, 0) + int(records["size"][sel].sum())
-        return {k: v for k, v in volumes.items() if v > 0}
+        return {k: v for k, v in volumes.items() if v > 0}, complete
 
 
 def front_of(volumes: dict[str, int]) -> str:

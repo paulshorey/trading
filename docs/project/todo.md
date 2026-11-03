@@ -15,9 +15,9 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **One continuous series per product.** `market.continuous_bar_1s` and
       `market.continuous_candle_1m_1s` take each session from its front contract;
       rolls only move forward, in backtests too.
-- [ ] **Run the GC and SI ingest.** `research db migrate`, then `research ingest run GC SI`
-      (about 46.5 million rows, 59 GB). Review `research ingest status` (continuous
-      coverage) and the session reports in `market.ingest_slice`.
+- [x] **Run the GC and SI ingest.** Completed November 3: 11 min 2 s, 8 workers,
+      46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
+      degraded reports and the GCZ6 roll checked ([results](handoff.md#first-ingest-gc-and-si)).
 - [ ] **Store `1h@1m` rows.** `market.bar_1m` rolled up from `bar_1s` and
       `market.candle_1h_1m` with the same features on the bias window, in the same ingest.
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.

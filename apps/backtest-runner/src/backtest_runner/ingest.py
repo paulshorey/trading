@@ -76,11 +76,13 @@ BUILDER_FILES = tuple(
         "windows",
     )
 ) + tuple(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "ingest", "source", "store"))
-# Code that determines the cached session volumes, and so the roll schedule
+# Code that determines the cached session volumes, and so the roll schedule: how volumes are
+# summed (source.py), over which hours and files, and how scans are judged complete and stored
+# (scan_sessions in this module). Editing any of them rescans every session, about 15 s.
 SCAN_FILES = (
     f"{CORE}/bars.py",
     f"{CORE}/market.py",
-    *(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "source")),
+    *(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "ingest", "source")),
 )
 PACKAGES = ("numpy", "numba", "databento", "pandas_market_calendars")
 RUNNABLE = ("new", "extend", "repair", "rebuild")

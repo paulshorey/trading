@@ -424,4 +424,6 @@ def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, w
         ]
     for name in ("ingest", "store", "catalog", "source", "calendars"):
         assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.BUILDER_FILES
+    for name in ("ingest", "catalog", "source", "calendars"):  # scans are versioned the same way
+        assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.SCAN_FILES
     assert all((ingest.ROOT / rel).is_file() for rel in ingest.BUILDER_FILES + ingest.SCAN_FILES)

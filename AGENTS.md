@@ -100,8 +100,10 @@ there is no production database yet. When a task needs it, agents apply migratio
 (`uv run research db migrate`), register files, and run `research ingest`, without asking
 first. An applied migration can never change, so get it right in tests first (they use
 throwaway `trading_test_*` databases), then apply it to `trading` once the code that needs
-it is final. Ask before dropping or truncating tables, or deleting rows other than through
-`research ingest`. Report what you ran.
+it is final. Branches without an applied migration's file cannot run `research db` or
+`research ingest` until they include it, so merge such a branch promptly and tell other
+agents to rebase. Ask before dropping or truncating tables, or deleting rows other than
+through `research ingest`. Report what you ran.
 
 # Research and report
 

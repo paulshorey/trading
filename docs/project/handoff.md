@@ -1,6 +1,6 @@
 # Handoff
 
-As of November 2, 2026. Start here, then read [AGENTS.md](../../AGENTS.md). Tasks are
+As of November 3, 2026. Start here, then read [AGENTS.md](../../AGENTS.md). Tasks are
 tracked in [todo.md](todo.md); this page explains the architecture, the decisions behind
 it, and where the work stands.
 
@@ -95,14 +95,14 @@ These are fundamental; changing any of them changes every stored value.
 
 ## Where things stand
 
-| Area     | State                                                                                                                                                                                                               |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer merged (PR #62). Ingestion and the continuous series in draft PR #63                                                                              |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                             |
-| Database | PostgreSQL 18 database `trading`: migrations `0001`–`0003` applied (November 2, 2026); tables empty until the first ingest. Branches without `0003_side_bridges` cannot run `research db` until they include PR #63 |
-| Ingest   | `research ingest plan, run, status` tested on synthetic data and real sessions in throwaway databases; not yet run on `trading`                                                                                     |
-| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                     |
-| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                    |
+| Area     | State                                                                                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62), and one-second ingestion with the continuous series (PR #63), all merged into `main`                            |
+| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                     |
+| Database | PostgreSQL 18 database `trading`: migrations `0001`–`0003` applied; the row tables are empty until the first ingest. Branches older than PR #63 must merge `main` before `research db` runs |
+| Ingest   | Ready, not yet run on `trading`: [first ingest](#first-ingest-gc-and-si) is the next action                                                                                                 |
+| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                             |
+| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                            |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:
@@ -112,6 +112,58 @@ per 23-hour session per worker, and about 59 GB for a year of GC and SI (27 GB p
 contract-year). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
 by rebuilding from the DBN files ([how](ingestion.md#adding-a-metric-or-feature)).
+
+## First ingest (GC and SI)
+
+The next action. It reads the DBN files and writes about 46.5 million rows (about 59 GB);
+every run can be interrupted and rerun, and rerunning never stores a session twice.
+
+```sh
+cd ~/git/trading && git checkout main && git pull   # the code that built the rows
+uv run research db status                           # 0001-0003 applied
+uv run research ingest plan GC SI                   # computes; stores no rows
+caffeinate -i uv run research ingest run GC SI 2> ~/ingest-gc-si.log
+uv run research ingest status
+```
+
+**Expect** from `plan`: 6 contracts per product (GC Z5, G6, J6, M6, Q6, Z6; SI Z5, H6, K6, N6,
+U6, Z6), 564 sessions, 46,503,000 rows, and `unresolved_sessions` empty. `run` logs one line
+per session to the log file and ends with `published the front contract of 257/257 sessions`
+for each product; its JSON summary has `"status": "done"`. A full run was not timed: about
+1.4 s per session per worker suggests several minutes.
+
+**If it succeeds**, check, then record the results here and in
+[ingestion: measured](ingestion.md#measured) (run time, table sizes):
+
+1. `research ingest status`: per product 257 of 257 front sessions stored, `missing` empty,
+   and table sizes of about 15 GB (`bar_1s`) and 44 GB (`candle_1m_1s`).
+2. The session reports of the `degraded` dates, starting with the 2025-11-28 CME outage:
+   `SELECT c.raw_symbol, s.trade_date, s.missing, s.report->'raw'->'maybe_bad_book_flag',
+s.report->'rejected_trades' FROM market.ingest_slice s JOIN market.contract c ON c.id =
+s.contract_id WHERE s.trade_date IN ('2025-11-28', '2026-03-16', '2026-04-10');`
+3. A spot check of the series around a roll (GC switches to GCZ6 on 2026-07-30): features
+   are filled on complete candles, `rolled` is true on that session, and raw prices jump
+   to the new month.
+4. Then continue with [next steps](#next-steps), item 2.
+
+**If it fails** (non-zero exit, `"status": "partial"` or `"failed"`, or a `FAILED` line in
+the log), stop and read the log and `research ingest status` (recent runs keep the error).
+Stored sessions stay intact and readable: each session is written in one transaction, so
+fixing the cause and rerunning `ingest run GC SI` resumes where it stopped.
+
+| Symptom                                    | Cause and remedy                                                                  |
+| ------------------------------------------ | --------------------------------------------------------------------------------- |
+| `Database migrations not applied`          | `uv run research db migrate`                                                      |
+| `... is being built by another ingest run` | Another run holds that contract; wait for it or stop it                           |
+| `No space left on device` or a COPY error  | Free disk space, then rerun                                                       |
+| `Checksum mismatch` for a file             | Re-download that file's job; `research catalog --verify` lists the failures       |
+| `... cover different parts of this day`    | Two jobs split a UTC day; download that day in one job                            |
+| Plan shows `stale` or `needs_rebuild`      | Code or earlier files changed since rows were built; rerun with `--rebuild`       |
+| `unresolved_sessions` is not empty         | Those sessions have no volume in their download; check their files and conditions |
+| Anything else, or values that look wrong   | Stop; report the log excerpt, contract, and session; do not delete rows by hand   |
+
+All stored rows can be rebuilt from the DBN files (`--rebuild`), so a failure never needs
+manual database repair.
 
 ## Decisions
 
@@ -148,10 +200,7 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 
 ## Next steps
 
-1. **Merge PR #63** after review, then **run the ingest**: `research db migrate`,
-   `research ingest run GC SI` (46.5 million rows, about 59 GB). Check `research ingest
-status` (every front session stored) and the session reports for the `degraded` dates,
-   such as the 2025-11-28 CME outage.
+1. **Run the [first ingest](#first-ingest-gc-and-si)** for GC and SI and check it.
 2. **`1h@1m` rows**: `market.bar_1m` rolled up from `bar_1s` and `market.candle_1h_1m`
    with the same features on the bias window; give minute tables a longer warm-up if
    slow hourly indicators are added.
@@ -170,6 +219,11 @@ status` (every front session stored) and the session reports for the `degraded` 
    (simulated bracket trade or fixed-horizon return)?
 
 ## Things to know
+
+- Review findings on the ingest planner have reached rare edge cases. The bar for changes:
+  fix what can silently corrupt stored values or the series; refuse loudly for unusual
+  setups (as for split-day downloads); decline hypotheticals with a test that shows why.
+  Prefer rebuilding a contract (cheap: minutes) over more incremental-repair logic.
 
 - TBBO shows the book only at trades. In quiet SI seconds (80% of them) the book is as old
   as the last trade; features carry that age (`trade_age_s`; `book_age_s` and `depth_age_s`

@@ -17,7 +17,8 @@ products. Code finds jobs by searching `databento/` for `manifest.json` at any d
 (`apps/backtest-runner/src/backtest_runner/catalog.py`), so add new downloads as new job
 folders beside the existing ones and keep them unchanged. One file is read per UTC day:
 if two jobs cover different parts of the same day, `research` refuses to run, so download
-whole days, or that day again in one job. Then:
+whole days, or that day again in one job. A job downloaded again over the same days replaces
+an earlier copy that is pending, missing, or absent. Then:
 
 ```sh
 uv run research catalog --verify   # sizes and SHA-256 against each manifest

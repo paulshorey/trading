@@ -17,7 +17,15 @@ from backtest_runner.source import HistoricalSource, instrument_id, to_trades
 from strategy_core.bars import MISSING, OBSERVED, aggregate
 from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, UNDEF_PRICE, SessionCalendar
+from strategy_core.market import (
+    HOUR,
+    NS,
+    PRODUCTS,
+    SECOND,
+    UNDEF_PRICE,
+    UNDEF_SIZE,
+    SessionCalendar,
+)
 from strategy_core.strategies import make_strategy
 
 GC = PRODUCTS["GC"]
@@ -191,23 +199,27 @@ def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
         (1, DAY0 + HOUR + 1, b"B", 2000.0, 7),  # undefined price below
         (1, DAY0 + HOUR + 2, b"A", 2000.0, 9),  # zero size below
         (1, DAY0 + HOUR + 3, b"A", -1.5, 2),  # a negative price is a valid futures price
+        (1, DAY0 + HOUR + 4, b"B", 2000.0, 3),  # Databento's undefined size below
     ]
     r = records(rows)
     r["price"][1] = UNDEF_PRICE
     r["size"][2] = 0
+    r["size"][4] = UNDEF_SIZE
     days = {D1: (r, mappings({"GCZ6": 1}, D1))}
     source = HistoricalSource(
         GC, {D1: dbn_file(D1)}, [], [session], config, "GCZ6", cache=FakeCache(days)
     )
     trades, _, _, rejected = source.session_trades("GCZ6", session)
     assert trades.size.tolist() == [5, 2]
-    assert rejected == {"undefined_price": 1, "nonpositive_size": 1}
+    assert rejected == {"undefined_price": 1, "nonpositive_size": 1, "undefined_size": 1}
     assert source.outright_volumes(session) == {"GCZ6": 7}
     [chunk] = list(source.chunks())
     assert source.quality[chunk.session]["rejected_trades"] == rejected
 
 
-def write_job(root: Path, job_id: str, start: int | str, end: int | str) -> None:
+def write_job(
+    root: Path, job_id: str, start: int | str, end: int | str, condition: str = "available"
+) -> None:
     folder = root / job_id
     folder.mkdir(parents=True)
     name, content = "glbx-mdp3-20260901.tbbo.dbn.zst", job_id.encode()
@@ -218,6 +230,9 @@ def write_job(root: Path, job_id: str, start: int | str, end: int | str) -> None
     query = {"dataset": "GLBX.MDP3", "schema": "tbbo", "symbols": ["GC.FUT"]}
     query |= {"stype_in": "parent", "start": start, "end": end}
     (folder / "metadata.json").write_text(json.dumps({"query": query}))
+    (folder / "condition.json").write_text(
+        json.dumps([{"date": "2026-09-01", "condition": condition}])
+    )
 
 
 def test_job_timestamps_are_read_as_integers_or_iso_8601(tmp_path):
@@ -237,6 +252,20 @@ def test_job_timestamps_are_read_as_integers_or_iso_8601(tmp_path):
     assert catalog.job_ranges("GC.FUT", "GLBX.MDP3", roots=(tmp_path,)) == [
         (noon, DAY0 + 86_400 * NS)
     ]
+
+
+def test_a_usable_copy_of_a_repeated_day_replaces_an_unusable_one(tmp_path):
+    """Regression (PR #63 review): when a job is downloaded again over the same window because
+    the first copy is pending, missing, or absent, the usable copy is read."""
+    day = (DAY0, DAY0 + 86_400 * NS)
+    write_job(tmp_path, "A", *day, condition="pending")
+    write_job(tmp_path, "B", *day)
+    write_job(tmp_path, "C", *day)  # a second usable copy does not replace the first
+    files = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+    assert files[D1].job_id == "B"
+    assert [f.job_id for f in catalog.discover((tmp_path,))] == ["B"]
+    (tmp_path / "B" / "glbx-mdp3-20260901.tbbo.dbn.zst").unlink()  # absent on disk
+    assert catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1].job_id == "C"
 
 
 def test_jobs_covering_different_parts_of_a_day_are_refused(tmp_path):

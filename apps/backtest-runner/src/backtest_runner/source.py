@@ -20,6 +20,7 @@ from strategy_core.market import (
     F_MAYBE_BAD_BOOK,
     NS,
     UNDEF_PRICE,
+    UNDEF_SIZE,
     Product,
     Trades,
 )
@@ -128,8 +129,8 @@ class HistoricalSource:
         whose files do not list the contract, and the session's rejected trade records. A
         file covers its UTC day only inside its job's requested range (`DbnFile.window`).
 
-        A trade record is accepted only with a defined price and a positive size (a price may
-        be zero or negative); rejected records are counted, never aggregated.
+        A trade record is accepted only with a defined price and a positive, defined size (a
+        price may be zero or negative); rejected records are counted, never aggregated.
 
         A trade belongs to the session whose `[after, close)` holds its assignment time (the
         rule in `strategy_core.bars`), so opening trades that arrive within the close delay
@@ -156,11 +157,13 @@ class HistoricalSource:
         assign = assignment_times(trades, self.config.feed_latency, self.config.close_delay)
         inside = (assign >= session.after) & (assign < session.close)
         undefined, empty = trades.price == UNDEF_PRICE, trades.size <= 0
+        unset = trades.size == UNDEF_SIZE  # Databento's sentinel for an absent size
         rejected = {
             "undefined_price": int(np.sum(inside & undefined)),
             "nonpositive_size": int(np.sum(inside & empty)),
+            "undefined_size": int(np.sum(inside & unset)),
         }
-        keep = inside & ~undefined & ~empty
+        keep = inside & ~undefined & ~empty & ~unset
         return trades.take(keep), np.array(coverage, np.int64).reshape(-1, 2), unmapped, rejected
 
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
@@ -254,6 +257,7 @@ class HistoricalSource:
                 & (records["action"] == b"T")
                 & (records["price"] != UNDEF_PRICE)  # the same accepted trades as aggregation
                 & (records["size"] > 0)
+                & (records["size"] != UNDEF_SIZE)
             )
             for symbol, iid in ids.items():
                 sel = in_session & (records["instrument_id"] == iid)

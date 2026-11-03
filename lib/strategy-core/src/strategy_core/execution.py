@@ -25,7 +25,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from .market import NS, UNDEF_PRICE, Product, SessionCalendar, Trades
+from .market import NS, UNDEF_PRICE, UNDEF_SIZE, Product, SessionCalendar, Trades
 from .strategies import Bracket
 
 MS = 1_000_000
@@ -186,7 +186,10 @@ class Simulator:
             price = int(t.price[k])
         else:
             price = ask if side > 0 else bid
-        if contracts > (t.ask_size[k] if side > 0 else t.bid_size[k]):
+        shown = int(t.ask_size[k] if side > 0 else t.bid_size[k])
+        if shown >= UNDEF_SIZE:  # an undefined displayed size shows nothing: pay the penalty
+            shown = 0
+        if contracts > shown:
             flags.append("beyond_displayed_size")
             price += side * self.config.depth_penalty_ticks * self.product.tick_size
         return price

@@ -95,8 +95,17 @@ def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> l
     seen: dict[tuple[str, str, str, date], DbnFile] = {}
     for f in all_files(roots, schema):
         for parent in f.parents:
-            seen.setdefault((f.schema, f.dataset, parent, f.date), f)
+            key = (f.schema, f.dataset, parent, f.date)
+            if key not in seen or replaces(seen[key], f):
+                seen[key] = f
     return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
+
+
+def replaces(kept: DbnFile, other: DbnFile) -> bool:
+    """A later copy of the same day and window replaces the kept one only when the kept one is
+    unusable (absent, pending, or missing) and the other is usable: a re-downloaded job wins
+    over a failed one, and otherwise earlier roots and job folders win."""
+    return other.window == kept.window and other.covered and not kept.covered
 
 
 def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
@@ -168,14 +177,17 @@ def files_for(
     parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
 ) -> dict[date, DbnFile]:
     """One file per UTC day for a parent symbol. Jobs that repeat a day must cover the same
-    part of it (the first root's file is used); backtests and ingestion read one file per day,
-    so jobs covering different parts of a day are refused rather than half read."""
+    part of it (the first root's usable file is used, `replaces`); backtests and ingestion
+    read one file per day, so jobs covering different parts of a day are refused rather than
+    half read."""
     out: dict[date, DbnFile] = {}
     for f in all_files(roots, schema):
         if parent not in f.parents or f.dataset != dataset:
             continue
         kept = out.setdefault(f.date, f)
-        if kept.window != f.window:
+        if replaces(kept, f):
+            out[f.date] = f
+        elif kept.window != f.window:
             raise ValueError(
                 f"{parent} {f.date}: jobs {kept.job_id} and {f.job_id} cover different parts of "
                 "this day, but one file is read per day; download the day in a single job"

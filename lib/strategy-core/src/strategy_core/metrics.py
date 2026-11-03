@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .bars import Aggregation
-from .market import F_MAYBE_BAD_BOOK, UNDEF_PRICE, Trades
+from .market import F_MAYBE_BAD_BOOK, UNDEF_PRICE, UNDEF_SIZE, Trades
 
 SUM, MAX, MIN, FIRST, LAST = "sum", "max", "min", "first", "last"
 
@@ -176,9 +176,13 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     quote[quote] &= t.bid[quote] <= t.ask[quote]
     bid = np.where(quote, t.bid, 0)
     ask = np.where(quote, t.ask, 0)
-    bsz, asz = t.bid_size, t.ask_size
-    depth = quote & (bsz >= 0) & (asz >= 0) & (bsz + asz > 0)
-    orders = depth & (t.bid_count >= 0) & (t.ask_count >= 0) & (t.bid_count + t.ask_count > 0)
+    bsz, asz, nb, na = t.bid_size, t.ask_size, t.bid_count, t.ask_count
+
+    def defined(x):  # a displayed size or count, not Databento's undefined sentinel
+        return (x >= 0) & (x < UNDEF_SIZE)
+
+    depth = quote & defined(bsz) & defined(asz) & (bsz + asz > 0)
+    orders = depth & defined(nb) & defined(na) & (nb + na > 0)
     known = side != 0
 
     def put(name: str, values: np.ndarray, ufunc=np.add) -> None:
@@ -253,7 +257,6 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     put("sell_take_sum", np.where(take_sell, q / np.where(take_sell, bsz, 1), 0.0))
     put("alignment_sum", np.where(depth & known, q * side * imbalance, 0.0))
 
-    nb, na = t.bid_count, t.ask_count
     put("order_bid_size_sum", np.where(orders, bsz, 0))  # same trades as the order counts
     put("order_ask_size_sum", np.where(orders, asz, 0))
     put("bid_orders_sum", np.where(orders, nb, 0))

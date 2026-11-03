@@ -17,6 +17,7 @@ SECOND = NS
 MINUTE = 60 * NS
 HOUR = 3600 * NS
 UNDEF_PRICE = np.iinfo(np.int64).max  # Databento sentinel for an absent price
+UNDEF_SIZE = int(np.iinfo(np.uint32).max)  # Databento sentinel for an absent size or count
 F_MAYBE_BAD_BOOK = 1 << 2  # Databento flag: an unrecoverable gap; the book may be wrong
 F_BAD_TS_RECV = 1 << 3  # Databento flag: ts_recv is inaccurate
 MONTH_CODES = "FGHJKMNQUVXZ"

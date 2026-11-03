@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from helpers import T0, calendar, coverage, trades
 from strategy_core.bars import Aggregation, AggregationReport, BaseBars, aggregate
-from strategy_core.market import NS, PX, SECOND
+from strategy_core.market import NS, PX, SECOND, UNDEF_SIZE
 from strategy_core.metrics import FIELDS, FIRST, LAST, MAX, MIN, second_metrics
 from strategy_core.synthetic import random_trades
 from strategy_core.window_metrics import MetricWindow
@@ -175,6 +175,20 @@ def test_book_age_follows_the_last_trade_with_a_usable_book():
     assert win["book_at"][4] == T0 + 3 * NS + 300_000_000
     assert win["book_depth_at"][4] == T0 + 100_000_000
     assert m["depth_at"][3] == 0 and m["depth_trades"][3] == 0
+
+
+def test_undefined_sizes_and_counts_are_not_book_observations():
+    """Regression (PR #63 review): Databento's undefined size (u32 max) in a displayed size or
+    order count is no observation, never a huge book."""
+    rows = [
+        (T0 + 100, 10.0, 1, 1, 1000, 9.9, 10.0, 6, 4, 2, 1),
+        (T0 + 200, 10.0, 1, 1, 1000, 9.9, 10.0, UNDEF_SIZE, 4, 2, 1),  # no bid size
+        (T0 + 300, 10.0, 1, 1, 1000, 9.9, 10.0, 5, 5, UNDEF_SIZE, 1),  # no bid order count
+    ]
+    _, m = one_second(rows)
+    assert (m["quote_trades"][0], m["depth_trades"][0], m["order_trades"][0]) == (3, 2, 1)
+    assert (m["bid_depth_sum"][0], m["last_bid_size"][0]) == (11, 5)
+    assert (m["bid_orders_sum"][0], m["order_bid_size_sum"][0]) == (2, 6)
 
 
 def test_size_per_order_uses_the_trades_with_order_counts():

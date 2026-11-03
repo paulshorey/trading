@@ -12,7 +12,7 @@ from strategy_core.labels import (
     iter_candidate_outcomes,
     summarize_candidates,
 )
-from strategy_core.market import HOUR, NS, PRODUCTS, UNDEF_PRICE, Trades
+from strategy_core.market import HOUR, NS, PRODUCTS, UNDEF_PRICE, UNDEF_SIZE, Trades
 from strategy_core.strategies import BiasPullback, Bracket, make_strategy
 from strategy_core.synthetic import random_trades
 
@@ -83,6 +83,10 @@ def test_short_time_exit_and_depth_penalty():
     assert out["entry_px"] == pytest.approx(1999.9)  # sold 3 at the 2-lot bid: one tick worse
     assert "beyond_displayed_size" in out["flags"]
     assert out["pnl_ticks"] == pytest.approx(-3) and out["pnl_usd"] == pytest.approx(-90 - 15)
+    # Regression (PR #63 review): Databento's undefined size shows nothing, never a deep book
+    unset = [(*rows[0][:7], UNDEF_SIZE, 9), *rows[1:]]
+    _, out = simulate(unset, direction=-1, bracket=Bracket(5.0, 5.0, 5), config=config)
+    assert out["entry_px"] == pytest.approx(1999.9) and "beyond_displayed_size" in out["flags"]
 
 
 def test_session_close_forces_exit_and_missing_book_falls_back_to_trade_price():

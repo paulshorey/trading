@@ -102,10 +102,11 @@ def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> l
 
 
 def replaces(kept: DbnFile, other: DbnFile) -> bool:
-    """A later copy of the same day and window replaces the kept one only when the kept one is
-    unusable (absent, pending, or missing) and the other is usable: a re-downloaded job wins
-    over a failed one, and otherwise earlier roots and job folders win."""
-    return other.window == kept.window and other.covered and not kept.covered
+    """A later file for the same day replaces the kept one only when the kept one is unusable
+    (absent, pending, or missing) and the other is usable: a re-downloaded job wins over a
+    failed one, even over another part of the day, and otherwise earlier roots and job
+    folders win. The part of a day a usable file does not cover is missing."""
+    return other.covered and not kept.covered
 
 
 def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
@@ -176,10 +177,10 @@ def job_ranges(
 def files_for(
     parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
 ) -> dict[date, DbnFile]:
-    """One file per UTC day for a parent symbol. Jobs that repeat a day must cover the same
-    part of it (the first root's usable file is used, `replaces`); backtests and ingestion
-    read one file per day, so jobs covering different parts of a day are refused rather than
-    half read."""
+    """One file per UTC day for a parent symbol: the first root's usable file (`replaces`).
+    Backtests and ingestion read one file per day, so two usable files covering different
+    parts of a day are refused rather than half read; an unusable copy never blocks a usable
+    one."""
     out: dict[date, DbnFile] = {}
     for f in all_files(roots, schema):
         if parent not in f.parents or f.dataset != dataset:
@@ -187,7 +188,7 @@ def files_for(
         kept = out.setdefault(f.date, f)
         if replaces(kept, f):
             out[f.date] = f
-        elif kept.window != f.window:
+        elif kept.covered and f.covered and kept.window != f.window:
             raise ValueError(
                 f"{parent} {f.date}: jobs {kept.job_id} and {f.job_id} cover different parts of "
                 "this day, but one file is read per day; download the day in a single job"

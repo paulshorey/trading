@@ -268,6 +268,16 @@ def test_a_usable_copy_of_a_repeated_day_replaces_an_unusable_one(tmp_path):
     assert catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1].job_id == "C"
 
 
+def test_an_unusable_copy_never_blocks_a_usable_part_of_a_day(tmp_path):
+    """Regression (PR #63 review): the split-day refusal applies to two usable files only; a
+    pending whole-day job does not block a usable job for part of the day, whose uncovered
+    part is then missing."""
+    write_job(tmp_path, "A", DAY0, DAY0 + 86_400 * NS, condition="pending")
+    write_job(tmp_path, "B", DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)
+    f = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1]
+    assert f.job_id == "B" and f.window == (DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)
+
+
 def test_jobs_covering_different_parts_of_a_day_are_refused(tmp_path):
     """Regression (PR #63 review): one file is read per day, so two jobs that each cover part
     of the same UTC day are refused instead of half read; identical days are duplicates."""

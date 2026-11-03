@@ -10,7 +10,8 @@ Planning, per product:
 1. **Sessions**: scheduled sessions whose hours lie inside the downloaded job ranges.
 2. **Volumes and rolls**: each session's outright volumes are read once from the DBN files
    and cached (`market.session_scan`, `market.session_volume`); the front contract of each
-   session follows the backtest rule (most volume in the previous session), `market.roll`.
+   session follows the backtest rule (most volume in the previous session). Planning only
+   computes it; `run` publishes it to `market.roll` where the matching rows are stored.
 3. **Spans**: every contract that is ever front is stored from `lead_sessions` before its
    first front session through its last, so its indicators are warm when it becomes front.
    An explicit `--contract` is stored for every session in which it traded.
@@ -294,9 +295,9 @@ def session_volumes(conn: psycopg.Connection, product: Product) -> tuple[dict, d
     return volumes, complete, ids
 
 
-def update_rolls(
+def front_schedule(
     conn: psycopg.Connection, product: Product, calendar: list[Session], downloaded: list[Session]
-) -> tuple[dict[date, str], list[date]]:
+) -> tuple[dict[date, tuple[str, str]], list[date]]:
     """Front contract per downloaded session by the backtest rule (`source.next_front`: most
     volume in the complete previous session, forward only, else kept).
 
@@ -304,8 +305,9 @@ def update_rolls(
     carried over it. A range's opening sessions have no usable previous session: they use
     their own volume, even if partial, and with none at all the range's first decided front
     (`same_session`: not causal, and marked so). Returns {trade_date: symbol} and the
-    sessions whose front cannot be decided (no volume anywhere in their range)."""
-    volumes, complete, ids = session_volumes(conn, product)
+    sessions whose front cannot be decided (no volume anywhere in their range). Nothing is
+    written: `publish_rolls` publishes the schedule once matching rows are stored."""
+    volumes, complete, _ = session_volumes(conn, product)
     previous = {s.trade_date: calendar[i - 1].trade_date for i, s in enumerate(calendar) if i}
     have = {s.trade_date for s in downloaded}
     front: dict[date, tuple[str, str]] = {}
@@ -329,16 +331,36 @@ def update_rolls(
         current = found
         front[s.trade_date] = (current, basis)
     unresolved += pending
+    return dict(sorted(front.items())), unresolved
+
+
+def publish_rolls(
+    conn: psycopg.Connection, product: Product, schedule: dict[date, tuple[str, str]]
+) -> int:
+    """Publish the front contract of each session to `market.roll`, which the continuous views
+    read, only where that contract's rows for the session are stored. Until then a session
+    keeps its previous entry, so planning, a failed build, or a rebuild in progress never
+    takes a readable session out of the series or points it at rows that do not exist yet.
+    Returns the number of sessions published."""
+    published = 0
     with conn.transaction():
-        conn.execute("DELETE FROM market.roll WHERE product = %s", (product.root,))
-        for day, (symbol, basis) in front.items():
-            cid = ids.get((symbol, day)) or contract_id(conn, product, symbol, day)
+        for day, (symbol, basis) in schedule.items():
+            cid = contract_id(conn, product, symbol, day)
+            stored = conn.execute(
+                "SELECT 1 FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s",
+                (cid, day),
+            ).fetchone()
+            if stored is None:
+                continue
             conn.execute(
                 """INSERT INTO market.roll (product, trade_date, contract_id, basis)
-                   VALUES (%s, %s, %s, %s)""",
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (product, trade_date)
+                   DO UPDATE SET contract_id = EXCLUDED.contract_id, basis = EXCLUDED.basis""",
                 (product.root, day, cid, basis),
             )
-    return {d: f for d, (f, _) in sorted(front.items())}, unresolved
+            published += 1
+    return published
 
 
 @dataclass
@@ -460,7 +482,8 @@ def plan_product(
         product, data.files, [], downloaded, EXECUTION, None, cache or DayCache()
     )
     scan_sessions(conn, source, downloaded, log)
-    front, unresolved = update_rolls(conn, product, calendar, downloaded)
+    schedule, unresolved = front_schedule(conn, product, calendar, downloaded)
+    front = {d: symbol for d, (symbol, _) in schedule.items()}
     if unresolved:
         log(
             f"{product.root}: no front contract for {len(unresolved)} sessions without any "
@@ -509,6 +532,7 @@ def plan_product(
         "first_session": downloaded[0].trade_date.isoformat() if downloaded else None,
         "last_session": downloaded[-1].trade_date.isoformat() if downloaded else None,
         "front_sessions": len(front),
+        "schedule": schedule,  # published by `run` (publish_rolls), never by planning
         "unresolved_sessions": [d.isoformat() for d in unresolved],
         "contracts": plans,
     }
@@ -694,6 +718,7 @@ def run(
     tasks.sort(key=lambda t: -t[1].rows)  # largest first balances the workers
     summary = summarize(plans)
     if not tasks:
+        publish(plans, url, log)
         return {**summary, "run_id": None, "results": []}
     with db.connect(url) as conn:
         dates = [s for _, c in tasks for s in c.sessions[c.start :]]
@@ -759,7 +784,18 @@ def run(
                 ),
             )
     results = [{k: v for k, v in r.items() if k != "trace"} for r in results]  # logged above
+    publish(plans, url, log)  # rolls whose rows now exist, after a full or partial build
     return {**summary, "run_id": run_id, "status": status, "results": results}
+
+
+def publish(plans: list[dict], url: str, log: Log) -> None:
+    with db.connect(url) as conn:
+        conn.autocommit = True
+        for p in plans:
+            n = publish_rolls(conn, PRODUCTS[p["product"]], p["schedule"])
+            log(
+                f"{p['product']}: published the front contract of {n}/{len(p['schedule'])} sessions"
+            )
 
 
 def summarize(plans: list[dict]) -> dict:
@@ -780,7 +816,8 @@ def summarize(plans: list[dict]) -> dict:
             }
             for c in p["contracts"]
         ]
-        products.append({k: v for k, v in p.items() if k != "contracts"} | {"contracts": contracts})
+        kept = {k: v for k, v in p.items() if k not in ("contracts", "schedule")}
+        products.append(kept | {"contracts": contracts})
     return {
         "products": products,
         "todo_sessions": sum(c["todo"] for p in products for c in p["contracts"]),

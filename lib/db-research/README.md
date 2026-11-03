@@ -108,7 +108,8 @@ from the research (CVD, spread, top-of-book size and imbalance at trades, and so
 **Contracts and rolls** (implemented): `market.contract` has one row per contract keyed
 by product, raw symbol, and delivery month (raw symbols repeat each decade); expirations
 come from Databento `definition` records once they are loaded. Instrument IDs are resolved
-per date from the files. `market.roll` holds the front contract per session and
+per date from the files. `market.roll` holds the published front contract per session
+(written by `research ingest run` once that contract's rows are stored) and
 `market.session_volume` the volumes it was chosen from.
 
 **Continuous series** (implemented): `market.front_session` maps each product session to its

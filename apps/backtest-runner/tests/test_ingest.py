@@ -181,6 +181,8 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
     )
     assert (by["GCG7"]["first"], by["GCG7"]["last"]) == ("2026-09-02", "2026-09-03")  # lead 1
     assert by["GCZ6"]["rows"] == 2 * 82_800  # every scheduled second of two 23-hour sessions
+    with db.connect(database) as conn:  # planning publishes nothing to the continuous series
+        assert conn.execute("SELECT count(*) FROM market.roll").fetchone()[0] == 0
 
     result = ingest.run(["GC"], workers=1, data=first, **options)
     assert result["status"] == "done", result
@@ -203,6 +205,11 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert candles == 2 * 165_600
         slices = conn.execute("SELECT count(*), sum(row_count) FROM market.ingest_slice").fetchone()
         assert slices == (4, 4 * 82_800)
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+        # Regression (PR #63 review): a front without stored rows is not published; the
+        # session keeps its readable entry
+        schedule = {date(2026, 9, 1): ("GCG7", "previous_session")}
+        assert ingest.publish_rolls(conn, GC, schedule) == 0
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
 
     # Unchanged inputs: nothing to do
@@ -479,12 +486,7 @@ def test_incomplete_range_openings_keep_a_front_and_explicit_contracts_keep_part
             ["GC"], url=database, data=data, cache=cache, log=lambda line: None, lead=1,
             contract=contract,
         )  # fmt: skip
-        with db.connect(database) as conn:
-            rolls = conn.execute(
-                "SELECT r.trade_date, c.raw_symbol, r.basis FROM market.roll r "
-                "JOIN market.contract c ON c.id = r.contract_id ORDER BY 1"
-            ).fetchall()
-        return p, [(d.day, s, b) for d, s, b in rolls]
+        return p, [(d.day, s, b) for d, (s, b) in p["schedule"].items()]  # planned, unpublished
 
     # 08-31 is missing, so the 09-01 session (opening 08-31 22:00 UTC) has partial volume only
     p, rolls = plan({date(2026, 8, 31)})

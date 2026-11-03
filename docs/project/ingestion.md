@@ -39,8 +39,9 @@ uv run research ingest status           # series coverage, contracts, sizes, rec
 ```
 
 `plan` reads every session's outright volumes from the DBN files once (about 15 s for a
-year of GC and SI) and caches them with the roll schedule. `run` does the same planning and
-then builds one process per contract (`--workers`, default cores − 2). Each session commits
+year of GC and SI) and caches them, and computes the roll schedule without publishing it, so
+a plan changes nothing that queries read. `run` does the same planning and then builds one
+process per contract (`--workers`, default cores − 2). Each session commits
 its rows and its checkpoint together, so `run` can be interrupted and rerun at any time:
 it continues where it stopped and never adds a session twice.
 
@@ -112,7 +113,10 @@ the DBN files when either changes, so rolls always come from current code and ca
 series across contract rolls, with the columns of the stored tables plus `product`,
 `trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
 over the per-contract tables (`market.front_session` maps sessions to contracts), so they
-take no storage and always follow the roll schedule.
+take no storage. `run` publishes each session's front contract to `market.roll` only once
+that contract's rows for the session are stored; until then the session keeps its previous
+entry, so a failed or interrupted build never removes a readable session or points it at
+missing rows.
 
 - **One contract per session, never merged.** Delivery months trade at different prices
   (gold's months differ by the cost of carry, often hundreds of ticks), so mixing their

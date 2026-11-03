@@ -227,6 +227,11 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 4. **Contract definitions**: download the free `definition` job into
    `data/databento/definition/` (needs the account owner) and load expirations.
 
+For the separate pivot-indicator research task, read the
+[next-agent handoff](pivot-detection-handoff.md) and its saved research. The next step
+is a concrete event contract and bounded indicator benchmark proposal; the methods
+remain unimplemented and unvalidated on GC/SI.
+
 ## Open questions
 
 1. When to add PL, YM, RTY, ES, and NQ (about 27 GB per contract-year each)?

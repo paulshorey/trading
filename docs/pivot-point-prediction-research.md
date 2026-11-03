@@ -1,5 +1,12 @@
 # Early pivot (swing high/low) prediction: research notes
 
+Historical proposal, November 2, 2026. Use the newer
+[reviewed findings](research/pivots/2026-11-03-reviewed-findings.md) and
+[next-agent handoff](project/pivot-detection-handoff.md) for current recommendations.
+They correct this proposal's future-label leakage claim, trade-label reuse, timeout
+handling, and profitability selection gate. The original text is retained below as
+research history, not an implementation specification.
+
 Researched 2026-11-02. Question: which Python algorithm or ML library should predict high/low
 pivot points as early as possible from price/volume series, within this project's
 constraints (TBBO-only data, `1m@1s` / `1h@1m` rolling rows, normalized features, purged

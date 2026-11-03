@@ -1,8 +1,8 @@
 # One-second ingestion
 
-Status (November 3, 2026): merged (PR #63) and tested on synthetic and real sessions in
-throwaway databases; migrations are applied, but the ingest has not been run on `trading`
-yet. The [handoff](handoff.md#first-ingest-gc-and-si) has the first-run checklist. Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+Status (November 3, 2026): GC and SI are stored in local database `trading`; the first
+full run completed and passed coverage, quality-report, and roll checks
+([results](handoff.md#first-ingest-gc-and-si), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -165,20 +165,29 @@ letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
 
-On November 1, 2026, in a throwaway database with the real files (no rows were written to
-`trading`):
+On November 3, 2026, run #1 on local PostgreSQL 18 database `trading`, built from
+`main` commit `738fd6a` (GC builder `a1e91462c0e0`, SI builder `62d8aa4402a4`):
 
-- **Plan for GC and SI, one year:** 257 sessions each; front months GC Z5, G6, J6, M6, Q6,
-  Z6 and SI Z5, H6, K6, N6, U6, Z6; 12 contracts, 564 contract-sessions, 46.5 million rows.
-- **Speed:** a 23-hour session (82,800 rows) takes about 0.35 s to compute, 0.5 s to
-  encode, and 1.4 s in all with the database writes, per worker. The whole year should take
-  minutes with several workers; not measured.
-- **Continuous series:** an hour of GC from `continuous_candle_1m_1s` in 7 ms, three
-  sessions (248,400 rows) in 0.17 s of query time, around the July 30 roll from GCQ6 to GCZ6.
-- **Size:** `bar_1s` 325 bytes per row and `candle_1m_1s` 951 bytes per row on disk,
-  including indexes: about 27 GB per contract-year, or **about 59 GB for a year of GC and
-  SI**. Features stay `double precision` (decided November 2, 2026), so stored features
-  equal in-memory and live values exactly.
+- **Full year:** 257 front sessions per product; 12 contracts, 564 contract-sessions
+  including warm-up; 46,503,000 rows **per table**, 93,006,000 across both tables.
+  All front sessions are published, with no missing rows. A fresh plan reports all
+  contracts `current` and no work remaining.
+- **Wall time:** 661.594 s (11 min 2 s), 8 workers, including planning and final
+  `ANALYZE`. Timing comes from the local process record; the database run itself records
+  659.857 s. The earlier single-worker 1.4 s/session benchmark did not predict this
+  full-run duration with concurrent workers.
+- **Size including indexes:** `bar_1s` 14.91 GB and `candle_1m_1s` 42.74 GB, total
+  **57.65 GB** (decimal GB). Free disk after the run: 254 GiB.
+- **Checks:** inspected all stored reports referencing degraded files and checked the
+  July 30 GCQ6-to-GCZ6 roll, including warm features at the open. Degraded metadata
+  remains a research-quality warning; complete file coverage does not certify a session
+  for training. Details and local evidence paths are in the [handoff](handoff.md#first-ingest-gc-and-si).
+
+Earlier throwaway-database measurements (November 1) found about 0.35 s to compute,
+0.5 s to encode, and 1.4 s including writes for one 23-hour session per worker.
+An hour of `continuous_candle_1m_1s` queried in 7 ms; three sessions (248,400 rows)
+in 0.17 s. Features remain `double precision`, so stored features equal in-memory and
+live values exactly; the completed run did not retime those query benchmarks.
 
 ## Row rules
 
@@ -316,10 +325,8 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. Run the ingest for GC and SI and check `ingest status` and the per-session reports,
-   especially 2025-11-28 and the other `degraded` dates.
-2. **`1h@1m` rows**: `market.bar_1m` rolled up from `bar_1s` (the metric fields merge by
+1. **`1h@1m` rows**: `market.bar_1m` rolled up from `bar_1s` (the metric fields merge by
    their kinds, as `bars.combine` does for OHLCV) and `market.candle_1h_1m` with the same
    features on the `BIAS` window spec, as a second builder in the same ingest.
-3. Let backtests read stored rows when the builder matches the run.
-4. Load Databento `definition` records into `market.contract` (expirations).
+2. Let backtests read stored rows when the builder matches the run.
+3. Load Databento `definition` records into `market.contract` (expirations).

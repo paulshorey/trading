@@ -1,8 +1,8 @@
 # One-second ingestion
 
-Status (November 1, 2026): implemented and tested on synthetic and real sessions in
-throwaway databases. It has not been run on the `trading` database yet; see
-[run it](#run-it). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+Status (November 3, 2026): merged (PR #63) and tested on synthetic and real sessions in
+throwaway databases; migrations are applied, but the ingest has not been run on `trading`
+yet. The [handoff](handoff.md#first-ingest-gc-and-si) has the first-run checklist. Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract

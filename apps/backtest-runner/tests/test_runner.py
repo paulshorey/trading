@@ -16,7 +16,7 @@ from backtest_runner.source import HistoricalSource, instrument_id, to_trades
 from strategy_core.bars import OBSERVED, aggregate
 from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
-from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, SessionCalendar
+from strategy_core.market import HOUR, NS, PRODUCTS, SECOND, UNDEF_PRICE, SessionCalendar
 from strategy_core.strategies import make_strategy
 
 GC = PRODUCTS["GC"]
@@ -177,6 +177,33 @@ def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
     source = HistoricalSource(GC, {D1: dbn_file(D1)}, [], [session], config, cache=FakeCache(days))
     assert source.outright_volumes(session) == {"GCZ6": 5, "GCG7": 4}
     assert list(source.used_files) == [f"{D1}.dbn"]
+
+
+def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
+    """Regression (PR #63 review): a record with an undefined price or no size never reaches
+    aggregation or roll volumes; each session reports how many it rejected."""
+    monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    session = Session(D1, DAY0, DAY0 + 20 * HOUR, DAY0 - 4 * HOUR)
+    rows = [
+        (1, DAY0 + HOUR, b"B", 2000.0, 5),
+        (1, DAY0 + HOUR + 1, b"B", 2000.0, 7),  # undefined price below
+        (1, DAY0 + HOUR + 2, b"A", 2000.0, 9),  # zero size below
+        (1, DAY0 + HOUR + 3, b"A", -1.5, 2),  # a negative price is a valid futures price
+    ]
+    r = records(rows)
+    r["price"][1] = UNDEF_PRICE
+    r["size"][2] = 0
+    days = {D1: (r, mappings({"GCZ6": 1}, D1))}
+    source = HistoricalSource(
+        GC, {D1: dbn_file(D1)}, [], [session], config, "GCZ6", cache=FakeCache(days)
+    )
+    trades, _, _, rejected = source.session_trades("GCZ6", session)
+    assert trades.size.tolist() == [5, 2]
+    assert rejected == {"undefined_price": 1, "nonpositive_size": 1}
+    assert source.outright_volumes(session) == {"GCZ6": 7}
+    [chunk] = list(source.chunks())
+    assert source.quality[chunk.session]["rejected_trades"] == rejected
 
 
 def test_front_contract_waits_for_complete_previous_session(monkeypatch):

@@ -174,6 +174,10 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
 
 - **Every scheduled-open second is a row**, including seconds without trades (`status` 1)
   or without data coverage (`status` 0). Closures have no rows.
+- **Accepted trades only.** A trade record needs a defined price and a positive size (zero
+  and negative prices are valid futures prices). Rejected records never reach rows or roll
+  volumes; each session counts them (`rejected_trades` in `market.ingest_slice.report`).
+  None of the 325 million trade records on disk was rejected (checked November 2, 2026).
 - **Trade assignment** uses the engine's [timing model](engine.md#timing-model) with the
   backtest defaults (`close_delay` 100 ms, `feed_latency` 5 ms): event time, or the slot
   open when the trade arrived after its slot had closed.

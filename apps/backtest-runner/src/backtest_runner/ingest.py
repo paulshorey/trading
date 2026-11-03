@@ -544,7 +544,7 @@ def build_contract(
             rows_builder.restore(from_bytes(state[0]))
         for s in span[plan["start"] :]:
             t0 = time.time()
-            trades, coverage, unmapped = source.session_trades(symbol, s)
+            trades, coverage, unmapped, rejected = source.session_trades(symbol, s)
             label = f"{s.trade_date} {symbol}"
             rows = rows_builder.process(
                 MarketChunk(symbol, s.open, s.close, trades, coverage, label)
@@ -553,6 +553,7 @@ def build_contract(
             report = {
                 "aggregation": asdict(rows.report),
                 "raw": raw_quality(trades),
+                "rejected_trades": rejected,
                 "contract_unmapped_days": [d.isoformat() for d in unmapped],
             }
             with conn.transaction():

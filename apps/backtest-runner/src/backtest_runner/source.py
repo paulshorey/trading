@@ -119,9 +119,12 @@ class HistoricalSource:
 
     def session_trades(
         self, symbol: str, session: Session
-    ) -> tuple[Trades, np.ndarray, list[date]]:
-        """A contract's trades for a session in receive order, its covered intervals, and the
-        days whose files do not list the contract.
+    ) -> tuple[Trades, np.ndarray, list[date], dict[str, int]]:
+        """A contract's trades for a session in receive order, its covered intervals, the days
+        whose files do not list the contract, and the session's rejected trade records.
+
+        A trade record is accepted only with a defined price and a positive size (a price may
+        be zero or negative); rejected records are counted, never aggregated.
 
         A trade belongs to the session whose `[after, close)` holds its assignment time (the
         rule in `strategy_core.bars`), so opening trades that arrive within the close delay
@@ -145,13 +148,20 @@ class HistoricalSource:
         trades = Trades.concat(parts)
         assign = assignment_times(trades, self.config.feed_latency, self.config.close_delay)
         inside = (assign >= session.after) & (assign < session.close)
-        return trades.take(inside), np.array(coverage, np.int64).reshape(-1, 2), unmapped
+        undefined, empty = trades.price == UNDEF_PRICE, trades.size <= 0
+        rejected = {
+            "undefined_price": int(np.sum(inside & undefined)),
+            "nonpositive_size": int(np.sum(inside & empty)),
+        }
+        keep = inside & ~undefined & ~empty
+        return trades.take(keep), np.array(coverage, np.int64).reshape(-1, 2), unmapped, rejected
 
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
-        trades, coverage, unmapped = self.session_trades(contract, session)
+        trades, coverage, unmapped, rejected = self.session_trades(contract, session)
         label = f"{session.trade_date} {contract}" + ("" if tradable else " (warmup)")
         self.quality[label] = {
             **raw_quality(trades),
+            "rejected_trades": rejected,
             "contract_unmapped_days": [d.isoformat() for d in unmapped],
             "front_kept_for_incomplete_data": session.trade_date in self.kept_front,
         }
@@ -209,7 +219,11 @@ class HistoricalSource:
                 self.config.close_delay,
             )
             in_session = (
-                (assign >= session.open) & (assign < session.close) & (records["action"] == b"T")
+                (assign >= session.open)
+                & (assign < session.close)
+                & (records["action"] == b"T")
+                & (records["price"] != UNDEF_PRICE)  # the same accepted trades as aggregation
+                & (records["size"] > 0)
             )
             for symbol, iid in ids.items():
                 sel = in_session & (records["instrument_id"] == iid)

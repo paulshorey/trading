@@ -138,7 +138,8 @@ roll schedule, and per-session quality reports ([ingestion](ingestion.md)).
    [timing model](engine.md#timing-model).
 6. **Quality report.** Per session: trades, volume, unknown-side share, late trades,
    trades outside the schedule or coverage, missing slots, event-time inversions,
-   trades outside the pre-trade book, and Databento quality flags.
+   trades outside the pre-trade book, Databento quality flags, and rejected trade records
+   (undefined price or no size; they are never aggregated).
 
 ### Base bar fields
 

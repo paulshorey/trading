@@ -157,7 +157,7 @@ def in_memory(cache, data, symbol: str, dates: list[date]):
     parts = []
     for d in dates:
         s = by_date[d]
-        trades, cov, _ = source.session_trades(symbol, s)
+        trades, cov, _, _ = source.session_trades(symbol, s)
         parts.append(b.process(MarketChunk(symbol, s.open, s.close, trades, cov)))
     return parts
 

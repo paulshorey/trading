@@ -335,10 +335,15 @@ def front_schedule(
 
 
 def publish_rolls(
-    conn: psycopg.Connection, product: Product, schedule: dict[date, tuple[str, str]]
+    conn: psycopg.Connection,
+    product: Product,
+    schedule: dict[date, tuple[str, str]],
+    builder: int,
+    expected: dict[date, list[dict]],
 ) -> int:
     """Publish the front contract of each session to `market.roll`, which the continuous views
-    read, only where that contract's rows for the session are stored. Until then a session
+    read, only where that contract's rows for the session are current: stored by `builder` from
+    the session's current files (`expected`), never stale rows. Until then a session
     keeps its previous entry, so planning, a failed build, or a rebuild in progress never
     takes a readable session out of the series or points it at rows that do not exist yet.
     Returns the number of sessions published."""
@@ -347,10 +352,11 @@ def publish_rolls(
         for day, (symbol, basis) in schedule.items():
             cid = contract_id(conn, product, symbol, day)
             stored = conn.execute(
-                "SELECT 1 FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s",
+                """SELECT builder_id, source_files FROM market.ingest_slice
+                   WHERE contract_id = %s AND trade_date = %s""",
                 (cid, day),
             ).fetchone()
-            if stored is None:
+            if stored is None or tuple(stored) != (builder, expected.get(day)):
                 continue
             conn.execute(
                 """INSERT INTO market.roll (product, trade_date, contract_id, basis)
@@ -371,7 +377,7 @@ class ContractPlan:
     sessions: list[str]  # trade dates of the contract's span, in order
     stored: int  # sessions stored by the current builder from the current files
     start: int  # index of the first session to build
-    delete_from: str | None  # stored sessions from this trade date on are replaced
+    delete_from: str | None  # stored sessions from this trade date on are replaced, one by one
     action: str  # new, extend, repair, rebuild, current, stale, needs_rebuild
     reason: str = ""
     rows: int = 0  # scheduled seconds to build
@@ -431,33 +437,39 @@ def diff(
     expected: dict[date, list[dict]],
     rebuild: bool,
 ) -> tuple[list[Session], int, date | None, str, str]:
-    """(span, start index, delete-from date, action, reason) for one contract. The span grows
+    """(span, start index, first replaced date, action, reason) for one contract. The span grows
     to cover every stored session first, so a rebuild or repair never drops stored sessions
-    outside `--start` or `--end`."""
+    outside `--start` or `--end`. A session is current when stored by this builder from its
+    current files; building starts at the first one that is not, from the checkpoint before
+    it, and replaces stored sessions one at a time, so an interrupted rebuild resumes there."""
     if not stored:
         return span, 0, None, "new", ""
     first_stored, last_stored = stored[0][0], stored[-1][0]
     lo, hi = min(first_stored, span[0].trade_date), max(last_stored, span[-1].trade_date)
     span = [s for s in period if lo <= s.trade_date <= hi]
-    if any(b != builder for _, b, _ in stored):
-        if rebuild:
-            return span, 0, first_stored, "rebuild", "stored by other code or settings"
-        return span, len(span), None, "stale", "stored by other code or settings; use --rebuild"
-    files = {d: f for d, _, f in stored}
+    slices = {d: (b, f) for d, b, f in stored}
     i = 0
-    while i < len(span) and files.get(span[i].trade_date) == expected[span[i].trade_date]:
+    while i < len(span) and slices.get(span[i].trade_date) == (
+        builder,
+        expected[span[i].trade_date],
+    ):
         i += 1
     if i == len(span):
         return span, i, None, "current", ""
-    later = any(d >= span[i].trade_date for d in files)
-    if i == 0:
-        why = "a session before the stored ones, or the first session's files changed"
+    rest = [d for d in slices if d >= span[i].trade_date]
+    if not rest:
+        return span, i, None, "extend", ""
+    stale = any(slices[d][0] != builder for d in rest)
+    if stale or i == 0:
+        why = (
+            "stored by other code or settings"
+            if stale
+            else "a session before the stored ones, or the first session's files changed"
+        )
         if rebuild:
-            return span, 0, first_stored, "rebuild", why
-        return span, len(span), None, "needs_rebuild", why + "; use --rebuild"
-    if later:
-        return span, i, span[i].trade_date, "repair", "files changed or sessions missing"
-    return span, i, None, "extend", ""
+            return span, i, span[i].trade_date, "rebuild", why
+        return span, len(span), None, "stale" if stale else "needs_rebuild", why + "; use --rebuild"
+    return span, i, span[i].trade_date, "repair", "files changed or sessions missing"
 
 
 def plan_product(
@@ -533,6 +545,7 @@ def plan_product(
         "last_session": downloaded[-1].trade_date.isoformat() if downloaded else None,
         "front_sessions": len(front),
         "schedule": schedule,  # published by `run` (publish_rolls), never by planning
+        "expected": expected,  # each session's current files, for publish_rolls
         "unresolved_sessions": [d.isoformat() for d in unresolved],
         "contracts": plans,
     }
@@ -575,19 +588,6 @@ def build_contract(
         locked = conn.execute("SELECT pg_try_advisory_lock(%s, %s)", (LOCK_SPACE, cid)).fetchone()
         if not locked[0]:
             raise RuntimeError(f"{symbol} is being built by another ingest run")
-        if plan["delete_from"]:
-            with conn.transaction():
-                first = conn.execute(
-                    """SELECT min(first_ordinal) FROM market.ingest_slice
-                       WHERE contract_id = %s AND trade_date >= %s""",
-                    (cid, plan["delete_from"]),
-                ).fetchone()[0]
-                if first is not None:
-                    store.delete_rows(conn, cid, int(first))
-                conn.execute(
-                    "DELETE FROM market.ingest_slice WHERE contract_id = %s AND trade_date >= %s",
-                    (cid, plan["delete_from"]),
-                )
         if plan["start"] > 0:
             state = conn.execute(
                 "SELECT state FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s",
@@ -610,7 +610,16 @@ def build_contract(
                 "rejected_trades": rejected,
                 "contract_unmapped_days": [d.isoformat() for d in unmapped],
             }
-            with conn.transaction():
+            with conn.transaction():  # replace this session's stored rows and slice atomically
+                lo, hi = int(base["slot_ordinal"][0]), int(base["slot_ordinal"][-1])
+                old = conn.execute(
+                    """DELETE FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s
+                       RETURNING first_ordinal, last_ordinal""",
+                    (cid, s.trade_date),
+                ).fetchone()
+                if old is not None:
+                    lo, hi = min(lo, int(old[0])), max(hi, int(old[1]))
+                store.delete_rows(conn, cid, lo, hi)
                 store.write_rows(conn, cid, rows)
                 conn.execute(
                     """INSERT INTO market.ingest_slice (contract_id, trade_date, builder_id, run_id,
@@ -792,7 +801,9 @@ def publish(plans: list[dict], url: str, log: Log) -> None:
     with db.connect(url) as conn:
         conn.autocommit = True
         for p in plans:
-            n = publish_rolls(conn, PRODUCTS[p["product"]], p["schedule"])
+            n = publish_rolls(
+                conn, PRODUCTS[p["product"]], p["schedule"], p["builder_id"], p["expected"]
+            )
             log(
                 f"{p['product']}: published the front contract of {n}/{len(p['schedule'])} sessions"
             )
@@ -816,7 +827,7 @@ def summarize(plans: list[dict]) -> dict:
             }
             for c in p["contracts"]
         ]
-        kept = {k: v for k, v in p.items() if k not in ("contracts", "schedule")}
+        kept = {k: v for k, v in p.items() if k not in ("contracts", "schedule", "expected")}
         products.append(kept | {"contracts": contracts})
     return {
         "products": products,

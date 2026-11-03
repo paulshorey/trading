@@ -76,15 +76,18 @@ the contract's whole stored chain, so no stored session is dropped.
 
 ### What the plan decides
 
-| Action          | Meaning                                                                                    |
-| --------------- | ------------------------------------------------------------------------------------------ |
-| `new`           | Nothing stored: build every session of the span                                            |
-| `extend`        | Stored sessions are current; build the new ones from the last checkpoint                   |
-| `repair`        | A stored session's files changed: rebuild it and later sessions from the checkpoint before |
-| `current`       | Nothing to do                                                                              |
-| `stale`         | Stored by other code or settings (the builder hash differs): needs `--rebuild`             |
-| `needs_rebuild` | New sessions before the first stored one, or its files changed: needs `--rebuild`          |
-| `rebuild`       | With `--rebuild`: delete the contract's rows and build the span again                      |
+Stored sessions are replaced one at a time, each in one transaction, so a failed or
+interrupted build leaves the remaining sessions on their previous, readable rows.
+
+| Action          | Meaning                                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------------------- |
+| `new`           | Nothing stored: build every session of the span                                                            |
+| `extend`        | Stored sessions are current; build the new ones from the last checkpoint                                   |
+| `repair`        | A stored session's files changed: rebuild it and later sessions from the checkpoint before                 |
+| `current`       | Nothing to do                                                                                              |
+| `stale`         | Stored by other code or settings (the builder hash differs): needs `--rebuild`                             |
+| `needs_rebuild` | New sessions before the first stored one, or its files changed: needs `--rebuild`                          |
+| `rebuild`       | With `--rebuild`: rebuild from the first session that is not current; an interrupted rebuild resumes there |
 
 **Spans.** Every contract that is ever the front contract (the [roll rule](#continuous-series-per-product),
 `market.roll`) is stored from `--lead-sessions` sessions before it first becomes front

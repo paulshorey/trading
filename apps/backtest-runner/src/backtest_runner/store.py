@@ -85,14 +85,14 @@ def write_rows(conn: psycopg.Connection, contract_id: int, rows: SecondRows) -> 
     copy_table(conn, "candle_1m_1s", rows.candle, contract_id)
 
 
-def delete_rows(conn: psycopg.Connection, contract_id: int, from_ordinal: int) -> None:
-    """Delete a contract's rows from one index counter on (both tables)."""
+def delete_rows(conn: psycopg.Connection, contract_id: int, first: int, last: int) -> None:
+    """Delete a contract's rows with index counters `first ... last` (both tables)."""
     for name in TABLES:
         conn.execute(
-            sql.SQL("DELETE FROM {} WHERE contract_id = %s AND slot_ordinal >= %s").format(
-                sql.Identifier("market", name)
-            ),
-            (contract_id, from_ordinal),
+            sql.SQL(
+                "DELETE FROM {} WHERE contract_id = %s AND slot_ordinal BETWEEN %s AND %s"
+            ).format(sql.Identifier("market", name)),
+            (contract_id, first, last),
         )
 
 

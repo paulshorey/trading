@@ -208,9 +208,21 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
         # Regression (PR #63 review): a front without stored rows is not published; the
         # session keeps its readable entry
+        [now] = ingest.plan(["GC"], data=first, **options)
+        current = (now["builder_id"], now["expected"])
         schedule = {date(2026, 9, 1): ("GCG7", "previous_session")}
-        assert ingest.publish_rolls(conn, GC, schedule) == 0
+        assert ingest.publish_rolls(conn, GC, schedule, *current) == 0
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+        # Regression (PR #63 review): stale rows (another builder) are never published
+        other = conn.execute(
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings) "
+            "VALUES (repeat('c', 64), 'GC', 'x', '{}') RETURNING id"
+        ).fetchone()[0]
+        where = "WHERE trade_date = '2026-09-03'"
+        conn.execute(f"UPDATE market.ingest_slice SET builder_id = %s {where}", (other,))
+        assert ingest.publish_rolls(conn, GC, {date(2026, 9, 3): ("GCG7", "kept")}, *current) == 0
+        conn.execute(f"UPDATE market.ingest_slice SET builder_id = %s {where}", (current[0],))
+        conn.commit()
 
     # Unchanged inputs: nothing to do
     again = ingest.run(["GC"], workers=1, data=first, **options)
@@ -371,6 +383,12 @@ def test_diff_rules():
     assert (len(span), i, delete_from, action) == (5, 0, s[0].trade_date, "rebuild")
     span, i, delete_from, action, _ = ingest.diff(s[:2], s, stored, 1, changed, False)
     assert (len(span), i, delete_from, action) == (3, 1, s[1].trade_date, "repair")
+    # Regression (PR #63 review): an interrupted rebuild resumes after its current prefix
+    mixed = [(x.trade_date, 2 if k < 2 else 1, files[x.trade_date]) for k, x in enumerate(s[:4])]
+    _, i, delete_from, action, _ = ingest.diff(s, s, mixed, 2, files, True)
+    assert (i, delete_from, action) == (2, s[2].trade_date, "rebuild")
+    _, _, _, action, _ = ingest.diff(s, s, mixed, 2, files, False)
+    assert action == "stale"
 
 
 def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(database, world):
@@ -504,3 +522,43 @@ def test_incomplete_range_openings_keep_a_front_and_explicit_contracts_keep_part
     empty = [(day_ns(date(2026, 8, 31)), day_ns(date(2026, 9, 3)))]
     p, rolls = plan(set(DAYS), ranges=empty)
     assert p["unresolved_sessions"] == ["2026-09-01", "2026-09-02"] and rolls == []
+
+
+def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypatch):
+    """Regression (PR #63 review): stored sessions are replaced one at a time, each in one
+    transaction, so a build that fails partway leaves the rest on their previous rows."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    assert ingest.run(["GC"], workers=1, data=first, **options)["status"] == "done"
+    with db.connect(database) as conn:
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+        conn.execute(  # rows from other code: every contract must be rebuilt
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings) "
+            "VALUES (repeat('b', 64), 'GC', 'x', '{}')"
+        )
+        conn.execute(
+            "UPDATE market.ingest_slice SET builder_id = "
+            "(SELECT id FROM market.builder WHERE sha256 = repeat('b', 64))"
+        )
+        conn.commit()
+    real, calls = store.write_rows, []
+
+    def failing(conn, cid, rows):
+        calls.append(cid)
+        if len(calls) == 2:
+            raise RuntimeError("disk full")
+        return real(conn, cid, rows)
+
+    monkeypatch.setattr(store, "write_rows", failing)
+    result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
+    assert result["status"] in ("partial", "failed")
+    with db.connect(database) as conn:
+        rows = conn.execute("SELECT count(*) FROM market.bar_1s").fetchone()[0]
+        assert rows == 4 * 82_800  # no session lost its rows
+        builders = conn.execute(
+            "SELECT count(DISTINCT builder_id) FROM market.ingest_slice"
+        ).fetchone()[0]
+        assert builders == 2  # replaced sessions next to old ones, each whole

@@ -207,7 +207,7 @@ def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
     assert source.quality[chunk.session]["rejected_trades"] == rejected
 
 
-def write_job(root: Path, job_id: str, start: int, end: int) -> None:
+def write_job(root: Path, job_id: str, start: int | str, end: int | str) -> None:
     folder = root / job_id
     folder.mkdir(parents=True)
     name, content = "glbx-mdp3-20260901.tbbo.dbn.zst", job_id.encode()
@@ -218,6 +218,25 @@ def write_job(root: Path, job_id: str, start: int, end: int) -> None:
     query = {"dataset": "GLBX.MDP3", "schema": "tbbo", "symbols": ["GC.FUT"]}
     query |= {"stype_in": "parent", "start": start, "end": end}
     (folder / "metadata.json").write_text(json.dumps({"query": query}))
+
+
+def test_job_timestamps_are_read_as_integers_or_iso_8601(tmp_path):
+    """Regression (PR #63 review): downloaded metadata.json files hold integer nanoseconds,
+    but the batch API reports ISO 8601 strings; both give the same job range."""
+    noon = DAY0 + 12 * HOUR
+    assert catalog.to_ns(noon) == catalog.to_ns(str(noon)) == noon
+    assert catalog.to_ns("2026-09-01T12:00:00.000000000Z") == noon
+    assert catalog.to_ns("2026-09-01T12:00:00.000000123Z") == noon + 123
+    assert catalog.to_ns("2026-09-01T07:00:00-05:00") == noon
+    assert catalog.to_ns("2026-09-01") == DAY0
+    with pytest.raises(ValueError, match="Unrecognized"):
+        catalog.to_ns("yesterday")
+    write_job(tmp_path, "ISO", "2026-09-01T12:00:00.000000000Z", "2026-09-02T00:00:00Z")
+    [f] = catalog.discover((tmp_path,))
+    assert f.window == (noon, DAY0 + 86_400 * NS)
+    assert catalog.job_ranges("GC.FUT", "GLBX.MDP3", roots=(tmp_path,)) == [
+        (noon, DAY0 + 86_400 * NS)
+    ]
 
 
 def test_jobs_covering_different_parts_of_a_day_are_refused(tmp_path):

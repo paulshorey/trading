@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from functools import cache
 from pathlib import Path
 
@@ -22,6 +22,33 @@ SEARCH = (ROOT / "data/databento", ROOT / "data/sample")
 FILE_DATE = re.compile(r"(\d{8})\.([a-z0-9-]+)\.dbn(\.zst)?$")
 COVERED = ("available", "degraded")
 DAY_NS = 86_400 * 1_000_000_000
+ISO = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?"
+    r"(Z|[+-]\d{2}:?\d{2})?"
+)
+
+
+def to_ns(value: int | str) -> int:
+    """A job's `start` or `end` in UTC nanoseconds. Downloaded `metadata.json` files hold
+    integer nanoseconds; the batch API reports ISO 8601 strings such as
+    `2022-06-06T12:00:00.000000000Z`. Both are accepted, at full nanosecond precision."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    text = str(value).strip()
+    if text.lstrip("-").isdigit():
+        return int(text)
+    m = ISO.fullmatch(text)
+    if not m:
+        raise ValueError(f"Unrecognized job timestamp {value!r}")
+    y, mo, d, h, mi, sec, frac, zone = m.groups()
+    moment = datetime(int(y), int(mo), int(d), int(h or 0), int(mi or 0), int(sec or 0), tzinfo=UTC)
+    if zone and zone != "Z":
+        sign = 1 if zone[0] == "+" else -1
+        hours, minutes = int(zone[1:3]), int(zone[-2:])
+        moment -= sign * timedelta(hours=hours, minutes=minutes)
+    return int(moment.timestamp()) * 1_000_000_000 + int((frac or "").ljust(9, "0") or 0)
+
+
 SCHEMAS = ("tbbo", "definition")  # trades with the pre-trade book; contract metadata
 
 
@@ -109,8 +136,8 @@ def job_files(folder: Path) -> list[DbnFile]:
                 size=entry["size"],
                 condition=conditions.get(day.isoformat(), "missing"),
                 schema=query["schema"],
-                start_ns=int(query["start"]) if query.get("start") is not None else None,
-                end_ns=int(query["end"]) if query.get("end") is not None else None,
+                start_ns=to_ns(query["start"]) if query.get("start") is not None else None,
+                end_ns=to_ns(query["end"]) if query.get("end") is not None else None,
             )
         )
     return out
@@ -133,7 +160,7 @@ def job_ranges(
                 and parent in query.get("symbols", [])
                 and (path.parent / "manifest.json").is_file()
             ):
-                out.append((int(query["start"]), int(query["end"])))
+                out.append((to_ns(query["start"]), to_ns(query["end"])))
     return sorted(out)
 
 

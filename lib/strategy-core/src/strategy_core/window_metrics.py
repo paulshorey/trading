@@ -5,8 +5,10 @@ Sums add, extremes take the extreme of valid rows, and first and last values com
 earliest and latest row with a valid observation, so a window equals the direct aggregation
 of its trades. Two statistics need more than their per-second values:
 
-- **Price path.** Within-second paths plus one bridge from each observed second's open to the
-  previous observed close, excluding the bridge into the window's first observed second.
+- **Price path and side transitions.** Within-second counts plus one bridge per observed
+  second from the previous observed second's last trade to its first trade (price change;
+  a side pair when both sides are known), excluding the bridge into the window's first
+  observed second, so a window equals the direct count over its trades.
 - **CVD extremes.** Running buy - sell volume from the window start, from each second's net
   delta and its own extremes (`BaseBars.delta_high`, `delta_low`).
 
@@ -27,9 +29,10 @@ from .metrics import FIELDS, FIRST, MAX, MIN, SUM
 
 BIG = np.iinfo(np.int64).max
 BAR_INPUTS = ("status", "open", "close", "buy", "sell", "trades", "delta_high", "delta_low")
-BRIDGES = ("bridge_abs", "bridge_up", "bridge_down")
+BRIDGES = ("bridge_abs", "bridge_up", "bridge_down", "bridge_pair", "bridge_switch")
 CARRY = {
     "close": np.int64,
+    "side": np.int64,
     "has_close": np.int8,
     "bid": np.int64,
     "ask": np.int64,
@@ -127,6 +130,8 @@ class MetricWindow:
             ("path_abs", "bridge_abs"),
             ("upticks", "bridge_up"),
             ("downticks", "bridge_down"),
+            ("side_pairs", "bridge_pair"),
+            ("side_switches", "bridge_switch"),
         ):
             inner = window_sum(x[bridge]) - np.where(any_obs, x[bridge][safe], 0)
             out[name] = out[name] + inner
@@ -144,23 +149,30 @@ class MetricWindow:
         return out
 
     def _bridges(self, cur: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        """Bridge from each observed second's open to the previous observed close."""
+        """Bridges from the previous observed second's last trade to each observed second's
+        first: the price change, and a side pair (and switch) when both sides are known."""
         obs = cur["status"] == OBSERVED
         m = len(obs)
         c = self.carry
         last = np.maximum.accumulate(np.where(obs, np.arange(m), -1))
         before = np.r_[-1, last[:-1]] if m else last
         known = before >= 0
-        prev = np.where(known, cur["close"][np.maximum(before, 0)], c["close"])
+        safe = np.maximum(before, 0)
+        prev = np.where(known, cur["close"][safe], c["close"])
+        prev_side = np.where(known, cur["last_side"][safe], c["side"])
         has = obs & (known | bool(c["has_close"]))
         if m and last[-1] >= 0:
             c["close"] = np.asarray(cur["close"][last[-1]])
+            c["side"] = np.asarray(cur["last_side"][last[-1]], np.int64)
             c["has_close"] = np.asarray(1, np.int8)
         gap = cur["open"] - prev
+        pair = has & (prev_side != 0) & (cur["first_side"] != 0)
         return {
             "bridge_abs": np.where(has, np.abs(gap), 0),
             "bridge_up": (has & (gap > 0)).astype(np.int64),
             "bridge_down": (has & (gap < 0)).astype(np.int64),
+            "bridge_pair": pair.astype(np.int64),
+            "bridge_switch": (pair & (prev_side != cur["first_side"])).astype(np.int64),
         }
 
     def _as_of(self, cur: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

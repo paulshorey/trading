@@ -52,6 +52,8 @@ FIELDS = (
     Field("downticks", SUM, INT, "", "Consecutive-trade price decreases"),
     Field("side_pairs", SUM, INT, "", "Consecutive trade pairs with both aggressor sides known"),
     Field("side_switches", SUM, INT, "", "Known-side pairs whose aggressor side changed"),
+    Field("first_side", FIRST, INT, "trades", "Side of the first trade: 1 buy, -1 sell, 0 unknown"),
+    Field("last_side", LAST, INT, "trades", "Side of the last trade: 1 buy, -1 sell, 0 unknown"),
     # Sweeps: printed beyond the pre-trade opposite best
     Field("sweep_buy_volume", SUM, INT, "", "Buyer volume printed above the pre-trade ask"),
     Field("sweep_sell_volume", SUM, INT, "", "Seller volume printed below the pre-trade bid"),
@@ -201,6 +203,8 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     pair = same & known & np.r_[False, known[:-1]]
     put("side_pairs", pair.astype(np.int64))
     put("side_switches", (pair & (side != np.r_[0, side[:-1]])).astype(np.int64))
+    first("first_side", side, np.ones(n, bool))  # windows bridge pairs across seconds with these
+    last("last_side", side, np.ones(n, bool))
 
     put("sweep_buy_volume", np.where(quote & (side > 0) & (p > ask), q, 0))
     put("sweep_sell_volume", np.where(quote & (side < 0) & (p < bid), q, 0))

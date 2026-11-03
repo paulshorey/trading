@@ -96,6 +96,7 @@ def test_path_sweeps_switches_and_sizes():
     assert (m["size_sq"][0], m["max_size"][0]) == (4 + 9 + 1 + 16 + 1, 4)
     assert (m["buy_trades"][0], m["sell_trades"][0]) == (2, 2)
     assert (m["first_at"][0], m["last_at"][0]) == (T0 + 10, T0 + 50)
+    assert (m["first_side"][0], m["last_side"][0]) == (1, -1)
 
 
 def direct(t, kept: np.ndarray, at: np.ndarray, end: int) -> dict[str, np.ndarray]:
@@ -124,7 +125,6 @@ def test_window_metrics_equal_direct_aggregation_in_any_chunking():
         )
 
     row_of_trade = np.searchsorted(ends, agg.slot_end)
-    within_second = {"side_pairs", "side_switches"}  # these do not bridge seconds
     checked = 0
     for i in range(59, len(ends)):
         sel = (row_of_trade >= i - 59) & (row_of_trade <= i)
@@ -132,8 +132,6 @@ def test_window_metrics_equal_direct_aggregation_in_any_chunking():
             continue
         ref = direct(t, agg.order[sel], agg.at[sel], ends[i])
         for f in FIELDS:
-            if f.name in within_second:
-                continue
             got, want = whole[f.name][i], ref[f.name][0]
             if f.kind in (MAX, MIN, FIRST, LAST) and f.valid and ref.get(f.valid, [1])[0] == 0:
                 continue

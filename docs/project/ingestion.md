@@ -32,7 +32,7 @@ Once, after pulling this code:
 
 ```sh
 brew services start postgresql@18
-uv run research db migrate              # applies 0002_second_rows
+uv run research db migrate              # applies pending migrations (0002, 0003)
 uv run research ingest plan GC SI       # what would be built; stores no second rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
 uv run research ingest status           # series coverage, contracts, sizes, recent runs
@@ -210,7 +210,7 @@ Definitions, units, and NULL rules are in the code and the column comments:
 | `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                            |
 | `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                              |
 | `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                   |
-| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                                                         |
+| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                              |
 | `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                       |
 | Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*` |
 | Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                     |
@@ -286,10 +286,9 @@ Every stored value is computed from the DBN files, which are kept permanently
    spreads, depth, and the effective-spread numerator are exact integers.
 8. **Revisions.** One stored version per contract and session; a rebuild replaces it and the
    builder records what built it. Immutable as-seen decision rows come with live sessions.
-9. **Side switches** count consecutive trades within a second; price paths bridge seconds.
-10. **Continuous series.** As the handoff requires, rows are computed per contract; the
-    product series is a mapping over them (one front contract per session), never an
-    aggregation across contracts.
+9. **Continuous series.** As the handoff requires, rows are computed per contract; the
+   product series is a mapping over them (one front contract per session), never an
+   aggregation across contracts.
 
 ## Tests
 

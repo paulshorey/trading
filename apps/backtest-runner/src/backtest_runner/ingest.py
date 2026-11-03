@@ -162,9 +162,11 @@ class ProductData:
 
 
 def session_files(source: HistoricalSource, s: Session) -> list[dict]:
-    """The files a session reads, with checksums and conditions: a change means rebuild."""
+    """The files a session reads, with checksums, conditions, and the part of each day they
+    cover (`DbnFile.window`, from the job's requested range): a change means rebuild."""
     return [
         {"file": f.path.name, "job": f.job_id, "sha256": f.sha256, "condition": f.condition}
+        | {"window": list(f.window)}
         for _, f in source.day_files(s)
         if f is not None and f.present
     ]

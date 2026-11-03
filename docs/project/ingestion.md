@@ -99,7 +99,7 @@ calendar, file, source, ingestion, and storage modules), the trade-assignment ti
 feature settings, the calendar and phase origin, numeric package versions, and the column
 list. Any change makes stored rows `stale`, including comment-only edits to those files:
 rebuild before extending. Every session's `market.ingest_slice` row keeps the builder,
-source files with checksums, the quality report, and the checkpoint. Cached session volumes
+source files with checksums and covered windows, the quality report, and the checkpoint. Cached session volumes
 carry their own digest (`scan_sha256`: `SCAN_FILES`, which include `ingest.py`, the
 timing settings, and the Databento
 and exchange-calendar package versions) and their session hours; they are read again from

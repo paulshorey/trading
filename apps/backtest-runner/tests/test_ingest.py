@@ -1,5 +1,6 @@
 """Ingestion into PostgreSQL: schema, binary COPY, planning, checkpoints, and repairs."""
 
+import dataclasses
 from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -416,6 +417,12 @@ def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, w
         )
         conn.commit()
     assert scans() == ["GC: scanned volumes of 1/1 sessions"]
+    # Regression (PR #63 review): a file whose job range changed covers other seconds
+    day = date(2026, 9, 2)
+    first["GC"].files[day] = dataclasses.replace(
+        first["GC"].files[day], start_ns=day_ns(day) + 3600 * NS
+    )
+    assert scans() == ["GC: scanned volumes of 2/2 sessions"]  # both sessions reading 09-02
     monkeypatch.setattr(ingest, "scan_identity", lambda: "f" * 64)
     assert scans() == ["GC: scanned volumes of 3/3 sessions"]  # other code: scanned again
     with db.connect(database) as conn:

@@ -224,3 +224,26 @@ def test_late_trades_count_only_trades_moved_to_a_later_second():
         ]
     )
     assert m["late_trades"][0] == 0
+
+
+def test_windows_without_missing_data_never_bridge_across_it():
+    """PR #63 review: the bridge into the first trade after missing seconds lies either in a
+    window that contains them (a gap candle, whose features are NULL) or in the window's first
+    observed second, whose bridge is excluded. So no window without missing rows carries a price
+    move or side switch across unknown data."""
+    cal = calendar((0, 1))
+    ends = cal.slot_ends(T0, T0 + 200 * NS, SECOND)
+    rows = [(T0 + k * NS + 1000, 10.0, 1, 1) for k in range(10)]  # buyers at 10.0
+    rows += [(T0 + k * NS + 1000, 12.0, 1, -1) for k in range(20, 200)]  # sellers at 12.0
+    cov = np.array([[T0, T0 + 10 * NS], [T0 + 20 * NS, T0 + 200 * NS]], np.int64)  # 10-20 s
+    t = trades(rows)
+    agg = aggregate(t, ends, SECOND, cov, **KW)
+    w = MetricWindow(60).update(agg.bars, second_metrics(t, agg))
+    missing = (agg.bars.status == 0).astype(int)
+    in_window = np.convolve(missing, np.ones(60, int))[: len(ends)]
+    clean, gapped = in_window == 0, in_window > 0
+    after = np.arange(len(ends)) >= 20
+    assert (clean & after).sum() > 100
+    for name in ("path_abs", "upticks", "side_switches"):
+        assert (w[name][clean & after] == 0).all(), name  # no move or switch across the gap
+    assert (w["path_abs"][gapped & after] > 0).any()  # gap windows join both sides (NULL features)

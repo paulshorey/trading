@@ -190,8 +190,9 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
   book (the handoff's validity subsets: P quotes, D displayed sizes, C order counts, K known
   side). Features are NULL unless the candle is complete (60 covered seconds with a trade);
   the latest-book features (`trade_age_s`, `book_age_s`, `depth_age_s`, `book_spread_bps`,
-  `book_imbalance`) are also
-  defined for windows without trades.
+  `book_imbalance`) are also defined for windows without trades, but never across missing
+  data: after a missing second they are NULL until the next trade, because trades during
+  the gap are unknown.
 - **Session CVD** (`bar_1s.session_cvd`) runs from the calendar session's open and is NULL
   from the first missing second of that session on. Unknown-side volume stays out of it.
 - **Exact base statistics.** Prices, spreads, the effective-spread numerator, depth sums,

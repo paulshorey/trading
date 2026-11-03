@@ -12,7 +12,8 @@ of its trades. Two statistics need more than their per-second values:
 
 It also carries the latest observation as of each row, from any earlier row: the last trade
 time, and the last sampled book (prices, displayed sizes, and imbalance) with the time of
-the trade that showed it. TBBO shows the book only at trades, so its age is part of it.
+the trade that showed it. TBBO shows the book only at trades, so its age is part of it. An
+observation is never carried across missing data, where newer trades may be unknown.
 
 The window keeps the previous `slots - 1` rows and the carried values between calls, so
 processing a session at once or one second at a time gives identical results.
@@ -21,7 +22,7 @@ processing a session at once or one second at a time gives identical results.
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-from .bars import OBSERVED, BaseBars
+from .bars import MISSING, OBSERVED, BaseBars
 from .metrics import FIELDS, FIRST, MAX, MIN, SUM
 
 BIG = np.iinfo(np.int64).max
@@ -163,8 +164,13 @@ class MetricWindow:
         }
 
     def _as_of(self, cur: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        """Latest book and trade time at or before each row, from this or any earlier row."""
+        """Latest book and trade time at or before each row, from this or any earlier row, but
+        never across missing data: trades during a missing row are unknown, so each carried
+        observation is unknown from a missing row until the next valid one."""
         c, m, out = self.carry, len(cur["status"]), {}
+        index = np.arange(m)
+        # index of the latest missing row at or before each row (-1: none in this chunk)
+        gap = np.maximum.accumulate(np.where(cur["status"] == MISSING, index, -1))
         for valid, has, flag, pairs in (
             (
                 cur["quote_trades"] > 0,
@@ -189,13 +195,17 @@ class MetricWindow:
                 {"last_trade_at": ("last_at", "trade_at")},
             ),
         ):
-            i = np.maximum.accumulate(np.where(valid, np.arange(m), -1))
-            known = i >= 0
-            for name, (source, key) in pairs.items():
-                out[name] = np.where(known, cur[source][np.maximum(i, 0)], c[key])
-            out[flag] = (known | bool(c[has])).astype(np.int8)
-            if m and known[-1]:
+            i = np.maximum.accumulate(np.where(valid, index, -1))
+            fresh = (i >= 0) & (i > gap)  # observed in this chunk after its latest missing row
+            carried = (gap < 0) & bool(c[has])  # from earlier chunks, with no missing row since
+            for name, (source, key) in pairs.items():  # 0 where unknown, in any chunking
+                known_value = np.where(fresh, cur[source][np.maximum(i, 0)], c[key])
+                out[name] = np.where(fresh | carried, known_value, 0)
+            out[flag] = (fresh | carried).astype(np.int8)
+            if m and fresh[-1]:
                 for source, key in pairs.values():
                     c[key] = np.asarray(cur[source][i[-1]], CARRY[key])
                 c[has] = np.asarray(1, np.int8)
+            elif m and gap[-1] >= 0:  # the chunk ends after missing data: nothing is known
+                c[has] = np.asarray(0, np.int8)
         return out

@@ -218,3 +218,23 @@ def adx_reference(h, lo, c, n):
         dxs.append(100 * abs(a - b) / (a + b) if a + b else 0.0)
         adx = np.mean(dxs) if len(dxs) <= n else (adx * (n - 1) + dxs[-1]) / n
     return adx
+
+
+def test_quiet_windows_after_missing_data_have_no_latest_observation():
+    """Regression (PR #63 review): an empty window after missing data has no current trade or
+    book, while an empty window after covered quiet seconds keeps the last one with its age."""
+    cal = calendar((0, 0.1))  # six open minutes
+    t = random_trades(T0, T0 + 30 * NS, seed=2, rate=2)  # trades only in the first 30 s
+    end = T0 + 360 * NS
+
+    def build(cov):
+        c = builder(cal).process(MarketChunk("X", T0, end, t, cov)).candle.values
+        return c, c["status"] == 1  # EMPTY windows: covered, no trades
+
+    quiet, empty = build(np.array([[T0, end]], np.int64))
+    assert empty.any() and np.isfinite(quiet["trade_age_s"][empty]).all()
+    assert np.isfinite(quiet["book_spread_bps"][empty]).all()
+    gapped, empty = build(np.array([[T0, T0 + 40 * NS], [T0 + 50 * NS, end]], np.int64))
+    assert empty.any()
+    for name in ("trade_age_s", "book_age_s", "depth_age_s", "book_spread_bps", "book_imbalance"):
+        assert np.isnan(gapped[name][empty]).all(), name

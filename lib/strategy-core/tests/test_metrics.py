@@ -143,9 +143,14 @@ def test_window_metrics_equal_direct_aggregation_in_any_chunking():
         assert whole["delta_low"][i] == min(signed.min(), 0)
         checked += 1
     assert checked > 500
-    # as-of book: the last valid book at or before each row, carried through quiet seconds
-    last_row = np.maximum.accumulate(np.where(m["quote_trades"] > 0, np.arange(len(ends)), -1))
-    ok = last_row >= 0
+    # as-of book: the last valid book at or before each row, carried through quiet seconds but
+    # not across missing ones
+    index = np.arange(len(ends))
+    last_row = np.maximum.accumulate(np.where(m["quote_trades"] > 0, index, -1))
+    last_gap = np.maximum.accumulate(np.where(agg.bars.status == 0, index, -1))
+    ok = (last_row >= 0) & (last_row > last_gap)
+    assert (~ok).any() and ok.any()
+    np.testing.assert_array_equal(whole["has_book"], ok.astype(np.int8))
     np.testing.assert_array_equal(whole["book_bid"][ok], m["last_bid"][last_row[ok]])
     np.testing.assert_array_equal(whole["last_trade_at"][ok], m["last_at"][last_row[ok]])
 
@@ -185,3 +190,27 @@ def test_size_per_order_uses_the_trades_with_order_counts():
     assert (m["bid_depth_sum"][0], m["ask_depth_sum"][0]) == (56, 44)
     assert (m["order_bid_size_sum"][0], m["order_ask_size_sum"][0]) == (6, 4)
     assert (m["bid_orders_sum"][0], m["ask_orders_sum"][0], m["order_trades"][0]) == (2, 1, 1)
+
+
+def test_observations_are_not_carried_across_missing_data():
+    """Regression (PR #63 review): trades during missing seconds are unknown, so the last
+    trade and book from before them stop being current, in any chunking."""
+    cal = calendar((0, 1))
+    ends = cal.slot_ends(T0, T0 + 20 * NS, SECOND)
+    t = trades([(T0 + 100_000_000, 10.0, 1, 1)])  # one trade in the first second
+    cov = np.array([[T0, T0 + 5 * NS], [T0 + 8 * NS, T0 + 20 * NS]], np.int64)  # 5-8 s missing
+    agg = aggregate(t, ends, SECOND, cov, **KW)
+    m = second_metrics(t, agg)
+    whole = MetricWindow(60).update(agg.bars, m)
+    missing = agg.bars.status == 0
+    assert missing.tolist() == [False] * 5 + [True] * 3 + [False] * 12
+    for flag in ("has_trade", "has_book", "has_depth"):
+        assert whole[flag].tolist() == [1] * 5 + [0] * 15, flag  # unknown after the gap
+    w = MetricWindow(60)
+    rows = [
+        w.update(agg.bars.take(slice(i, i + 1)), {k: v[i : i + 1] for k, v in m.items()})
+        for i in range(len(ends))
+    ]
+    for name in ("has_trade", "has_book", "last_trade_at", "book_at"):
+        np.testing.assert_array_equal(np.concatenate([r[name] for r in rows]), whole[name])
+    assert (whole["last_trade_at"][5:] == 0).all()  # unknown values are 0, never a stale time

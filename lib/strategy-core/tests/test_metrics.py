@@ -212,3 +212,15 @@ def test_observations_are_not_carried_across_missing_data():
     for name in ("has_trade", "has_book", "last_trade_at", "book_at"):
         np.testing.assert_array_equal(np.concatenate([r[name] for r in rows]), whole[name])
     assert (whole["last_trade_at"][5:] == 0).all()  # unknown values are 0, never a stale time
+
+
+def test_late_trades_count_only_trades_moved_to_a_later_second():
+    """Regression (PR #63 review): a receive delay beyond the close delay that keeps the trade
+    in its event-time second is not late."""
+    _, m = one_second(
+        [
+            (T0 + 100_000_000, 10.0, 1, 1, 150_000_000),  # assigned at 0.15 s: same second
+            (T0 + 200_000_000, 10.0, 1, 1, 1_000),
+        ]
+    )
+    assert m["late_trades"][0] == 0

@@ -55,6 +55,15 @@ def test_late_trade_joins_the_slot_open_when_it_arrived():
     assert report.late_trades == 1
 
 
+def test_a_delay_that_stays_in_the_event_slot_is_not_late():
+    """Regression (PR #63 review): received 150 ms after its event, with a 100 ms close
+    delay, a trade early in its second is still assigned to that second, so it is not late."""
+    b, report = bars_for([(T0 + NS // 10, 10.0, 1, 1, 150_000_000)])
+    assert b.status.tolist()[0] == OBSERVED and report.late_trades == 0
+    _, report = bars_for([(T0 + NS - 10_000_000, 10.0, 1, 1, 150_000_000)])
+    assert report.late_trades == 1  # near the end of its second, it lands in the next one
+
+
 def test_missing_coverage_is_not_a_closure_and_closed_time_has_no_slots():
     cov = np.array([[T0, T0 + 2 * NS]], np.int64)
     b, report = bars_for([(T0 + 3 * NS + 5, 10.0, 1, 1)], cov=cov)

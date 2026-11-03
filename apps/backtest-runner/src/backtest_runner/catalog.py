@@ -11,7 +11,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from functools import cache
 from pathlib import Path
 
@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[4]
 SEARCH = (ROOT / "data/databento", ROOT / "data/sample")
 FILE_DATE = re.compile(r"(\d{8})\.([a-z0-9-]+)\.dbn(\.zst)?$")
 COVERED = ("available", "degraded")
+DAY_NS = 86_400 * 1_000_000_000
 SCHEMAS = ("tbbo", "definition")  # trades with the pre-trade book; contract metadata
 
 
@@ -46,20 +47,40 @@ class DbnFile:
     def covered(self) -> bool:
         return self.present and self.condition in COVERED
 
+    @property
+    def window(self) -> tuple[int, int]:
+        """The `[start, end)` UTC nanoseconds this file covers: its day inside its job's
+        requested range. A job that starts or ends partway through a day delivers only that
+        part of it."""
+        lo = int(datetime(self.date.year, self.date.month, self.date.day, tzinfo=UTC).timestamp())
+        lo *= 1_000_000_000
+        hi = lo + DAY_NS
+        if self.start_ns is not None:
+            lo = max(lo, self.start_ns)
+        if self.end_ns is not None:
+            hi = min(hi, self.end_ns)
+        return lo, hi
+
 
 def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
     """Files of `schema` (None for all) from every job folder under `roots`, at any depth.
     Earlier roots win when jobs repeat a date."""
     seen: dict[tuple[str, str, str, date], DbnFile] = {}
+    for f in all_files(roots, schema):
+        for parent in f.parents:
+            seen.setdefault((f.schema, f.dataset, parent, f.date), f)
+    return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
+
+
+def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
+    """Every file of `schema` (None for all) in every job, earlier roots first."""
+    out = []
     for root in roots:
         if not root.is_dir():
             continue
         for manifest_path in sorted(root.rglob("manifest.json")):
-            for f in job_files(manifest_path.parent):
-                if schema is None or f.schema == schema:
-                    for parent in f.parents:
-                        seen.setdefault((f.schema, f.dataset, parent, f.date), f)
-    return sorted(set(seen.values()), key=lambda f: (f.date, str(f.path)))
+            out += [f for f in job_files(manifest_path.parent) if schema in (None, f.schema)]
+    return out
 
 
 def job_files(folder: Path) -> list[DbnFile]:
@@ -116,10 +137,23 @@ def job_ranges(
     return sorted(out)
 
 
-def files_for(parent: str, dataset: str, schema: str = "tbbo") -> dict[date, DbnFile]:
-    return {
-        f.date: f for f in discover(schema=schema) if parent in f.parents and f.dataset == dataset
-    }
+def files_for(
+    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+) -> dict[date, DbnFile]:
+    """One file per UTC day for a parent symbol. Jobs that repeat a day must cover the same
+    part of it (the first root's file is used); backtests and ingestion read one file per day,
+    so jobs covering different parts of a day are refused rather than half read."""
+    out: dict[date, DbnFile] = {}
+    for f in all_files(roots, schema):
+        if parent not in f.parents or f.dataset != dataset:
+            continue
+        kept = out.setdefault(f.date, f)
+        if kept.window != f.window:
+            raise ValueError(
+                f"{parent} {f.date}: jobs {kept.job_id} and {f.job_id} cover different parts of "
+                "this day, but one file is read per day; download the day in a single job"
+            )
+    return out
 
 
 @cache

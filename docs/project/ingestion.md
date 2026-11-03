@@ -177,7 +177,8 @@ On November 1, 2026, in a throwaway database with the real files (no rows were w
 - **Every scheduled-open second is a row**, including seconds without trades (`status` 1)
   or without data coverage (`status` 0). Closures have no rows. A file covers its UTC day
   only inside its job's requested range, so a job that starts or ends partway through a day
-  leaves the rest of that day missing, not quiet.
+  leaves the rest of that day missing, not quiet. Two jobs covering different parts of the
+  same day are refused, since one file is read per day ([data/README.md](../../data/README.md)).
 - **Accepted trades only.** A trade record needs a defined price and a positive size (zero
   and negative prices are valid futures prices). Rejected records never reach rows or roll
   volumes; each session counts them (`rejected_trades` in `market.ingest_slice.report`).

@@ -142,7 +142,13 @@ FIELDS = (
     ),
     # Quality
     Field("bad_book_trades", SUM, INT, "", "Trades flagged F_MAYBE_BAD_BOOK by Databento"),
-    Field("late_trades", SUM, INT, "", "Trades received after their event-time slot closed"),
+    Field(
+        "late_trades",
+        SUM,
+        INT,
+        "",
+        "Trades received after their event-time slot closed, so counted in a later slot",
+    ),
 )
 BY_NAME = {f.name: f for f in FIELDS}
 BIG = np.iinfo(np.int64).max
@@ -255,7 +261,8 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     put("order_imbalance_sum", np.where(orders, nb / np.where(orders, nb + na, 1), 0.0))
 
     put("bad_book_trades", ((t.flags & F_MAYBE_BAD_BOOK) > 0).astype(np.int64))
-    put("late_trades", (agg.at > t.ts_event).astype(np.int64))
+    step = bars.step  # late: assigned to a later slot than its event time's
+    put("late_trades", (agg.at // step > t.ts_event // step).astype(np.int64))
     for f in FIELDS:  # sentinels of slots without a valid observation back to zero
         if f.kind in (MAX, MIN) and f.dtype is INT:
             v = out[f.name]

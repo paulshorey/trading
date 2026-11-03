@@ -15,7 +15,9 @@ archive that every stored row is rebuilt from.
 DBN is Databento's binary encoding, compressed with zstd: 7.3 GB for one year of the seven
 products. Code finds jobs by searching `databento/` for `manifest.json` at any depth
 (`apps/backtest-runner/src/backtest_runner/catalog.py`), so add new downloads as new job
-folders beside the existing ones and keep them unchanged. Then:
+folders beside the existing ones and keep them unchanged. One file is read per UTC day:
+if two jobs cover different parts of the same day, `research` refuses to run, so download
+whole days, or that day again in one job. Then:
 
 ```sh
 uv run research catalog --verify   # sizes and SHA-256 against each manifest

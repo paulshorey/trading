@@ -207,6 +207,31 @@ def test_malformed_trade_records_are_rejected_and_reported(monkeypatch):
     assert source.quality[chunk.session]["rejected_trades"] == rejected
 
 
+def write_job(root: Path, job_id: str, start: int, end: int) -> None:
+    folder = root / job_id
+    folder.mkdir(parents=True)
+    name, content = "glbx-mdp3-20260901.tbbo.dbn.zst", job_id.encode()
+    (folder / name).write_bytes(content)
+    digest = "sha256:" + hashlib.sha256(content).hexdigest()
+    files = [{"filename": name, "size": len(content), "hash": digest}]
+    (folder / "manifest.json").write_text(json.dumps({"job_id": job_id, "files": files}))
+    query = {"dataset": "GLBX.MDP3", "schema": "tbbo", "symbols": ["GC.FUT"]}
+    query |= {"stype_in": "parent", "start": start, "end": end}
+    (folder / "metadata.json").write_text(json.dumps({"query": query}))
+
+
+def test_jobs_covering_different_parts_of_a_day_are_refused(tmp_path):
+    """Regression (PR #63 review): one file is read per day, so two jobs that each cover part
+    of the same UTC day are refused instead of half read; identical days are duplicates."""
+    write_job(tmp_path, "A", DAY0 - 86_400 * NS, DAY0 + 86_400 * NS)
+    write_job(tmp_path, "B", DAY0, DAY0 + 86_400 * NS)  # the same day, whole: a duplicate
+    files = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+    assert [(d, f.job_id) for d, f in files.items()] == [(D1, "A")]
+    write_job(tmp_path, "C", DAY0 + 12 * HOUR, DAY0 + 86_400 * NS)  # only the afternoon
+    with pytest.raises(ValueError, match="different parts of this day"):
+        catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
+
+
 def test_file_coverage_stops_at_its_job_range(monkeypatch):
     """Regression (PR #63 review): a job that starts partway through a UTC day delivers only
     that part of it, so earlier seconds are missing, not quiet, and the day's volume is partial."""

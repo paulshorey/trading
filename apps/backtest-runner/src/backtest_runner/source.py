@@ -85,17 +85,6 @@ def day_ns(day: date) -> int:
     return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp()) * NS
 
 
-def file_window(file: DbnFile, day: date) -> tuple[int, int]:
-    """The `[start, end)` a day file covers: its UTC day inside the job's requested range. A
-    job that starts or ends partway through a day delivers only that part of it."""
-    lo, hi = day_ns(day), day_ns(day) + DAY
-    if file.start_ns is not None:
-        lo = max(lo, file.start_ns)
-    if file.end_ns is not None:
-        hi = min(hi, file.end_ns)
-    return lo, hi
-
-
 @dataclass
 class HistoricalSource:
     product: Product
@@ -137,7 +126,7 @@ class HistoricalSource:
     ) -> tuple[Trades, np.ndarray, list[date], dict[str, int]]:
         """A contract's trades for a session in receive order, its covered intervals, the days
         whose files do not list the contract, and the session's rejected trade records. A
-        file covers its UTC day only inside its job's requested range (`file_window`).
+        file covers its UTC day only inside its job's requested range (`DbnFile.window`).
 
         A trade record is accepted only with a defined price and a positive size (a price may
         be zero or negative); rejected records are counted, never aggregated.
@@ -157,7 +146,7 @@ class HistoricalSource:
             if iid is None:
                 unmapped.append(day)
                 continue
-            window = file_window(file, day)  # the day, bounded by the job's requested range
+            window = file.window  # the day, bounded by the job's requested range
             if window[0] >= window[1]:
                 continue
             coverage.append(window)
@@ -228,7 +217,7 @@ class HistoricalSource:
             overlaps = scheduled[0] < scheduled[1]
             usable = file is not None and file.covered
             if usable:
-                window = file_window(file, day)
+                window = file.window
                 usable = window[0] < window[1]
             if not usable or (
                 overlaps and not (window[0] <= scheduled[0] and scheduled[1] <= window[1])

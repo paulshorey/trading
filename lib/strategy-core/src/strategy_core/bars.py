@@ -168,7 +168,8 @@ def aggregate(
         return Aggregation(bars, report, none, none, none)
 
     assign = assignment_times(trades, feed_latency, close_delay)
-    report.late_trades = int(np.sum(assign > trades.ts_event))
+    # late: assigned to a later slot than its event time's (a small delay within the slot is not)
+    report.late_trades = int(np.sum(assign // step > trades.ts_event // step))
     slot = np.searchsorted(ends, assign, side="right")
     inside = slot < len(ends)
     inside[inside] &= ends[slot[inside]] - step <= assign[inside]

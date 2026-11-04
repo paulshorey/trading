@@ -790,8 +790,8 @@ def build_contract(
                     conn.execute(
                         """INSERT INTO market.ingest_slice (contract_id, trade_date, builder_id,
                                run_id, open_ns, close_ns, first_ordinal, last_ordinal, row_count,
-                               observed, missing, report, source_files, state, build_seconds)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, %s)""",
+                               observed, missing, report, source_files, build_seconds)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         (
                             cid,
                             s.trade_date,

@@ -58,10 +58,11 @@ See [historical data](docs/project/data.md) for the layout and verification.
 - [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), the
   [handoff notes](docs/project/handoff.md) with decisions and next steps, and the
   prioritized [to-do list](docs/project/todo.md).
-- [One-second ingestion](docs/project/ingestion.md), the [TBBO metrics handoff](docs/project/tbbo-engineering-handoff.md) it implements, and the [storage contract](lib/db-research/README.md).
+- [Ingestion](docs/project/ingestion.md), the [TBBO metrics handoff](docs/project/tbbo-engineering-handoff.md) it implements, and the [storage contract](lib/db-research/README.md).
 - [Research UI](docs/project/metric-explorer.md).
 
-## Private phone access through Tailscale
+## Local services and private phone access
 
-`~/git/local-dev` manages the local services and the private Tailscale route; see
-[the local Tailscale guide](docs/local-development-tailscale.md).
+`~/git/local-dev` manages this project's services (web on 4400, API on 4401) and the private
+Tailscale route to the web UI, https://pauls-macbook-pro.taila9173b.ts.net:4400/; start,
+stop, and restart them there. Plain `pnpm dev` runs the web UI on 4400 and the API on 8001.

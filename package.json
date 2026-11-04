@@ -17,10 +17,7 @@
     "rehearse": "uv run --no-sync research rehearse",
     "api": "uv run --no-sync research serve",
     "cloud:install": "sh scripts/cloud-install.sh",
-    "cloud:start": "python3 --version",
-    "dev:tailscale": "node scripts/tailscale-dev.mjs start",
-    "dev:tailscale:status": "node scripts/tailscale-dev.mjs status",
-    "dev:tailscale:stop": "node scripts/tailscale-dev.mjs stop"
+    "cloud:start": "python3 --version"
   },
   "devDependencies": {
     "prettier": "3.6.2",

@@ -102,9 +102,21 @@ def status(conn: psycopg.Connection, folder: Path = MIGRATIONS) -> list[dict]:
     return out
 
 
+# Migrations folded into 0001_baseline on November 4, 2026. A database that applied them holds
+# only derived rows; it is rebuilt from the DBN files, never upgraded in place.
+FOLDED = {(1, "foundation"), (2, "second_rows"), (3, "side_bridges"), (4, "stages")}
+
+
 def migrate(conn: psycopg.Connection, folder: Path = MIGRATIONS) -> list[str]:
     """Apply pending migrations in order. Refuses to run if an applied file changed."""
     current = status(conn, folder)
+    recorded = set(conn.execute("SELECT version, name FROM meta.schema_migration").fetchall())
+    if recorded & FOLDED:  # the recorded names, which differ from the current files
+        raise ValueError(
+            "This database predates the baseline schema: migrations 0001-0004 were folded into "
+            "0001_baseline on 2026-11-04. Its rows are all derived from the DBN files: rebuild it "
+            "as described in lib/db-research/README.md (Migrations), with Paul's approval."
+        )
     bad = [
         f"{r['version']:04d}_{r['name']} ({r['state']})"
         for r in current

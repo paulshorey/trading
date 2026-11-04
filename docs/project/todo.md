@@ -10,14 +10,14 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **Download contract definitions.** Free, but submitting the job needs the
       account owner. Settings are in [data](data.md#what-we-have).
 - [x] **Implement one-second rows and metrics.** Per-second TBBO metrics, the stored
-      `1m@1s` candle with 87 features, migration `0002_second_rows`, and
+      `1m@1s` candle with 87 features, the second-row migration (now part of `0001_baseline`), and
       `research ingest plan|run|status` ([ingestion](ingestion.md)).
 - [x] **One continuous series per product.** `market.continuous_bar_1s` and
       `market.continuous_candle_1m_1s` take each session from its front contract;
       rolls only move forward, in backtests too.
 - [x] **Run the GC and SI ingest.** Completed November 3: 11 min 2 s, 8 workers,
       46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
-      degraded reports and the GCZ6 roll checked ([results](handoff.md#first-ingest-gc-and-si)).
+      degraded reports and the GCZ6 roll checked. Superseded by the stage rebuild below.
 - [x] **Stages (PR A).** Tiered stages with per-stage tables, versions, and checkpoints;
       registries; empty windows carry the last trade price; drawdown/drawup and high/low order; lead derived from
       indicator warm-ups (40 to start), with `warm` flags and a two-start warm-up test
@@ -110,9 +110,9 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to
       Ubuntu 26.
-- [ ] **Legacy Tailscale profile.** `tailscale.dev.json`, `scripts/tailscale-dev.mjs`,
+- [x] **Legacy Tailscale profile.** `tailscale.dev.json`, `scripts/tailscale-dev.mjs`,
       and the `dev:tailscale` scripts predate `~/git/local-dev`, which now manages
-      the services (API on 4401). Remove them, or align them with local-dev.
-- [ ] **Old SQL proposal.** Delete `lib/db-research/schema.sql`,
+      the services (API on 4401). Removed November 4 with `scripts/research.py`.
+- [x] **Old SQL proposal.** Delete `lib/db-research/schema.sql`,
       `partitions.example.sql`, and `queries/` once migrations cover what they offer.
-- [ ] **Stale PRs.** Close #56, #58, and #59; they target the archived implementation.
+- [x] **Stale PRs.** #56, #58, and #59 target the archived implementation; closed November 1.

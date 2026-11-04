@@ -239,8 +239,8 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
         # Regression (PR #63 review): stale rows (another builder) are never published
         other = conn.execute(
-            "INSERT INTO market.builder (sha256, product, code_sha256, settings) "
-            "VALUES (repeat('c', 64), 'GC', 'x', '{}') RETURNING id"
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+            "VALUES (repeat('c', 64), 'GC', 'x', '{}', 'source') RETURNING id"
         ).fetchone()[0]
         where = "WHERE trade_date = '2026-09-03'"
         conn.execute(f"UPDATE market.ingest_slice SET builder_id = %s {where}", (other,))
@@ -318,8 +318,8 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         ).fetchone()[0]
         assert dup == 0
         # Rows from other code are stale until rebuilt
-        conn.execute("INSERT INTO market.builder (sha256, product, code_sha256, settings) "
-                     "VALUES (repeat('a', 64), 'GC', 'x', '{}')")  # fmt: skip
+        conn.execute("INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+                     "VALUES (repeat('a', 64), 'GC', 'x', '{}', 'source')")  # fmt: skip
         conn.execute("UPDATE market.ingest_slice SET builder_id = "
                      "(SELECT id FROM market.builder WHERE sha256 = repeat('a', 64))")  # fmt: skip
         conn.commit()
@@ -618,8 +618,8 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
     with db.connect(database) as conn:
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
         conn.execute(  # rows from other code: every contract must be rebuilt
-            "INSERT INTO market.builder (sha256, product, code_sha256, settings) "
-            "VALUES (repeat('b', 64), 'GC', 'x', '{}')"
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+            "VALUES (repeat('b', 64), 'GC', 'x', '{}', 'source')"
         )
         conn.execute(
             "UPDATE market.ingest_slice SET builder_id = "

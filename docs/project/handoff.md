@@ -99,25 +99,59 @@ These are fundamental; changing any of them changes every stored value.
 
 ## Where things stand
 
-| Area     | State                                                                                                                                                            |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62), and one-second ingestion with the continuous series (PR #63), all merged into `main` |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                          |
-| Database | PostgreSQL 18 database `trading`: migrations `0001`–`0003` applied; GC and SI stored, 46,503,000 rows in each second table (57.65 GB including indexes)          |
-| Ingest   | Run #1 completed November 3: 11 min 2 s, 8 workers; both products have 257/257 front sessions, no missing rows ([verification](#first-ingest-gc-and-si))         |
-| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                  |
-| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                 |
+| Area     | State                                                                                                                                                                                                           |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70) |
+| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                         |
+| Database | PostgreSQL 18 database `trading`: migrations `0001`–`0004` applied; GC and SI stored, 71,559,900 rows in each second table (80.84 GB including indexes)                                                         |
+| Ingest   | Run #2 (stages, 40-session lead) completed November 4: 23 min 44 s, 8 workers; 257/257 front sessions per product ([verification](#rebuild-with-stages-gc-and-si))                                              |
+| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                 |
+| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:
 spread, displayed size and orders, imbalance, effective spread); `market.candle_1m_1s`
-holds the rolling `1m@1s` candle and 87 normalized features. The first full GC and SI
-ingest took 11 min 2 s with 8 workers and uses 57.65 GB including indexes
+holds the rolling `1m@1s` candle and 87 normalized features. Each is a stage with its own
+version and checkpoints ([pipeline](feature-pipeline.md)). The GC and SI rebuild with a
+40-session lead took 23 min 44 s with 8 workers and uses 80.84 GB including indexes
 ([measurements](ingestion.md#measured)). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
 by rebuilding from the DBN files ([how](ingestion.md#adding-a-metric-or-feature)).
 
+## Rebuild with stages (GC and SI)
+
+Completed November 4, 2026, from PR #70 (commit `ca6cb53`) after migration `0004` was applied
+to `trading`. Run #2 (`ingest run GC SI --rebuild --workers 8`) exited 0 with `"status":
+"done"` in 1,423.9 s (23 min 44 s; the database records 23 min 42 s). Builders: GC source
+`97980d7123bb`, `bar_1s` `5010f3903b79`, `candle_1m_1s` `383c6f3de161`; SI source
+`117dedfecf0c`, `bar_1s` `6654ce9b0405`, `candle_1m_1s` `e2185053e1a6`.
+
+- **Coverage:** lead 40 sessions (derived; the candle stage alone needs 1); 12 contracts,
+  868 contract-sessions (434 per product), 71,559,900 rows in **each** table; 257/257 front
+  sessions per product published; a fresh plan reports every contract `current`.
+- **Warm:** every front session's candle stage is warm except the first downloaded one,
+  2025-11-03, in each product. GCZ5, GCG6, SIZ5, and SIH6 start at the download start and
+  report `history_limited`.
+- **Carried prices:** September 2026 NULL rates on the continuous series are now 0.00% for
+  `rsi`, `ema50_atr`, `aroon_up`, and `flow_price_corr` in both products (SI before: 5.74%,
+  3.18%, 30.83%, 28.12%; SI windows without trades: 3.18%).
+- **Parity:** recomputing GCZ6 2026-09-15 and SIK6 2026-03-16 (a degraded day) from the
+  stored stage checkpoints reproduces every stored column of both stages.
+- **Roll:** July 30 switches GCQ6 to GCZ6 with `rolled = true`; RSI, ATR, EMA(21), and Aroon
+  are defined in all 82,800 rows of both sessions.
+- **Quality:** the sessions reading the 2025-11-28, 2026-03-16, and 2026-04-10 files keep
+  their `degraded` conditions, with no missing rows.
+- **Size:** after `VACUUM (FULL, ANALYZE)` of each partition (10 min; the rebuild had left
+  46.5 million replaced rows per table), `bar_1s` 20.11 GB and `candle_1m_1s` 60.73 GB,
+  80.84 GB total (decimal). Free disk: 212 GiB.
+
+Local evidence: `~/ingest-gc-si-pra.log` and `~/ingest-gc-si-pra.summary.json`. A rebuild
+replaces rows session by session; compact afterwards with `VACUUM (FULL, ANALYZE)` per
+partition when the replaced rows are not reused soon.
+
 ## First ingest (GC and SI)
+
+Superseded by the [rebuild with stages](#rebuild-with-stages-gc-and-si); kept as history.
 
 Completed November 3, 2026, on `main` commit `738fd6a`, in local PostgreSQL 18 database
 `trading` at `127.0.0.1:5432`. Run #1 exited 0 with `"status": "done"`; wall time was
@@ -217,10 +251,9 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 The order and decisions (November 3, 2026) are in the
 [plan for stages, `1h@1m`, and pivots](plan-1h-and-pivots.md):
 
-1. **Stages (PR A)**: stages ordered in [tiers](feature-pipeline.md), each with its own
-   table, version, and checkpoint; feature and variant registries; one summation order;
-   empty windows carry the last trade price; per-second drawdown, drawup, and high/low order; 40 lead
-   sessions. Then rebuild GC and SI.
+1. **Stages (PR A)**: done (PR #70): per-stage tables, versions, and checkpoints, the derived
+   lead, carried prices, and the path fields; GC and SI rebuilt
+   ([results](#rebuild-with-stages-gc-and-si)).
 2. **`1h@1m` rows (PR B)**: `market.bar_1m` and `market.candle_1h_1m`, with the
    amendments in the plan.
 3. **Volatility tier (PR C)**: ATR horizons, time-of-day and daily ATR, bullish and

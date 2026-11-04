@@ -1,8 +1,8 @@
 # Ingestion
 
-Status (November 3, 2026): GC and SI are stored in local database `trading`; the first
-full run completed and passed coverage, quality-report, and roll checks
-([results](handoff.md#first-ingest-gc-and-si), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
+pipeline with a 40-session lead; run #2 passed coverage, warm, parity, quality-report, and
+roll checks ([results](handoff.md#rebuild-with-stages-gc-and-si), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -185,7 +185,14 @@ letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
 
-On November 3, 2026, run #1 on local PostgreSQL 18 database `trading`, built from
+On November 4, 2026, run #2 (stages, 40-session lead, `--rebuild`, 8 workers) built 12
+contracts and 868 contract-sessions, 71,559,900 rows per table, in 1,423.9 s (23 min 44 s),
+about 1.6 s of wall time per contract-session per worker including deletes of the replaced
+rows. Compute alone is about 0.4 s per GC session for both stages. After compaction,
+`bar_1s` is 20.11 GB and `candle_1m_1s` 60.73 GB including indexes, 80.84 GB total
+([details](handoff.md#rebuild-with-stages-gc-and-si)).
+
+Run #1, on November 3, 2026 on local PostgreSQL 18 database `trading`, built from
 `main` commit `738fd6a` (GC builder `a1e91462c0e0`, SI builder `62d8aa4402a4`):
 
 - **Full year:** 257 front sessions per product; 12 contracts, 564 contract-sessions

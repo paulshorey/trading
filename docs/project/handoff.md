@@ -6,35 +6,14 @@ it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
 
-1. **Rebuild the database on the baseline schema (blocked on Paul).** `main` has one
-   migration, `0001_baseline` (PR #71 folded 0001–0004 into it), but `trading` still holds
-   the old migrations and run #2's rows, so `research db migrate` and every ingest command
-   refuse with "This database predates the baseline schema". The rows are still readable.
-   The first step drops every schema; the auto-mode safety check blocked it for the agent,
-   so Paul runs it or approves it explicitly:
-
-   ```sh
-   psql -h 127.0.0.1 -d trading -c "DROP SCHEMA market, research, ml, meta CASCADE"
-   ```
-
-   Then, from the main checkout on current `main`:
-
-   ```sh
-   uv run research db migrate               # applies 0001_baseline
-   uv run research db register              # Databento file registry
-   caffeinate -i uv run research ingest run GC SI --workers 8 \
-     > ~/ingest-gc-si.summary.json 2> ~/ingest-gc-si.log   # about 25 min; every contract "new"
-   ```
-
-   Verify as for [run #2](#rebuild-with-stages-gc-and-si): 71,559,900 rows per table,
-   868 contract-sessions, 257/257 front sessions per product, a fresh `ingest plan GC SI`
-   all `current`, warm front sessions except 2025-11-03, the July 30 roll, and September NULL
-   rates (`rsi`, `aroon_up` 0.00%). Exact `count(*)` over a table takes minutes. A fresh
-   build leaves no replaced rows, so no `VACUUM FULL` is needed. Record the results in this
-   page and in [ingestion](ingestion.md#measured), then delete run #2's logs
-   (`~/ingest-gc-si-pra.log`, `~/ingest-gc-si-pra.summary.json`).
-
-2. **Then build PR B** ([below](#pr-b-1h1m-rows-next)).
+1. **The baseline database rebuild is complete.** PR #72 is merged; `trading` now records
+   only `0001_baseline`. With Paul's explicit authorization, the four project schemas
+   (`market`, `research`, `ml`, `meta`) were dropped and recreated, all 2,182 source files
+   registered, and GC/SI rebuilt from their unchanged DBN files. See the
+   [baseline rebuild results](#baseline-rebuild-gc-and-si) before rerunning anything.
+2. **Build PR B** ([below](#pr-b-1h1m-rows-next)). Add the new minute tables through
+   migration `0002`; the existing second tables stay current. No further reset is needed
+   for the planned addition.
 
 How to work in this repository:
 
@@ -175,8 +154,8 @@ These are fundamental; changing any of them changes every stored value.
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70); baseline schema and cleanup (PR #71) |
 | Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                                                               |
-| Database | PostgreSQL 18 database `trading`: still on the old migrations 0001–0004 with run #2's GC and SI rows (71,559,900 per table, 80.84 GB); must be rebuilt on `0001_baseline` ([start here](#start-here-next-session))                                    |
-| Ingest   | Run #2 (stages, 40-session lead) completed November 4: 23 min 44 s, 8 workers; 257/257 front sessions per product ([verification](#rebuild-with-stages-gc-and-si))                                                                                    |
+| Database | PostgreSQL 18 database `trading`: `0001_baseline` applied; GC and SI rebuilt from scratch, 71,559,900 rows per second table ([results](#baseline-rebuild-gc-and-si))                                                                                  |
+| Ingest   | Baseline rebuild completed November 4: 8 workers plus a 1-worker retry, 40-session lead, 257/257 front sessions per product ([verification](#baseline-rebuild-gc-and-si))                                                                             |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                                                       |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                                                      |
 
@@ -184,16 +163,54 @@ Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exa
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:
 spread, displayed size and orders, imbalance, effective spread); `market.candle_1m_1s`
 holds the rolling `1m@1s` candle and 87 normalized features. Each is a stage with its own
-version and checkpoints ([pipeline](feature-pipeline.md)). The GC and SI rebuild with a
-40-session lead took 23 min 44 s with 8 workers and uses 80.84 GB including indexes
+version and checkpoints ([pipeline](feature-pipeline.md)). Historical run #2 rebuilt GC and SI
+with a 40-session lead in 23 min 44 s with 8 workers and used 80.84 GB including indexes
 ([measurements](ingestion.md#measured)). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
 by rebuilding from the DBN files ([how](ingestion.md#adding-a-metric-or-feature)).
 
+## Baseline rebuild (GC and SI)
+
+Completed November 4, 2026, after merging PR #72 (`f268369`). Paul explicitly authorized
+resetting the experimental database. The four project schemas were dropped, `0001_baseline`
+applied unchanged, and all 2,182 files registered. Before the reset, every file passed its
+size/checksum verification (7.28 GB, no missing files); the migration and registry tests
+passed on throwaway databases.
+
+The initial 8-worker ingest completed 11 contracts, but SIU6 stalled in its first
+`candle_1m_1s` COPY. Its PostgreSQL connection was waiting for client data while the client
+was polling; the cause is not established. Only that connection was terminated, rolling
+back its unfinished session. The first run ended `partial` after 14 min 47 s. Rerunning
+`ingest run GC SI --workers 1` left the 11 completed contracts current and built only SIU6's
+84 sessions; the retry ended `done` after 3 min 29 s, including ANALYZE. No source or stage
+code was changed to recover.
+
+- **Coverage:** 12 contracts, 868 contract-sessions, 71,559,900 rows in each second table;
+  257/257 front sessions published per product; zero missing scheduled rows. A fresh
+  `ingest plan GC SI` reports every contract `current`.
+- **Warm-up and roll:** only the first downloaded front session, 2025-11-03, is not warm
+  for `candle_1m_1s`, in both products. July 30 switches GCQ6 to GCZ6; RSI, ATR, EMA(21),
+  and Aroon are defined throughout the two surrounding sessions.
+- **Feature completeness:** September front-session NULL rates are 0.00% for `rsi`,
+  `ema50_atr`, `aroon_up`, and `flow_price_corr`, in both products.
+- **Exact replay:** GCZ6 2026-09-15 and SIK6 2026-03-16, restored from their previous
+  stage checkpoints and recomputed from DBN, match binary COPY output exactly for all
+  70 base-stage columns and 105 candle-stage columns (82,800 rows per stage/session).
+- **Quality:** stored source conditions match the file registry, including the degraded
+  files on 2025-11-28, 2026-03-16, and 2026-04-10.
+- **Size:** fresh partitions including indexes: `bar_1s` 21.28 GB,
+  `candle_1m_1s` 61.79 GB, 83.07 GB total (decimal).
+  No `VACUUM FULL` was needed.
+
+Local evidence uses the prefix `~/ingest-gc-si-baseline-20261104`: `.log` and
+`.summary.json` for the initial partial run, `-resume.log` and `-resume.summary.json` for
+the completed retry, `.plan.json`, `.validation.json`, and `.parity-GC.json` / `.parity-SI.json`.
+Run #2's older `ingest-gc-si-pra` logs were removed after verification.
+
 ## Rebuild with stages (GC and SI)
 
-The data in `trading` now; the from-scratch build on the baseline schema
-([start here](#start-here-next-session)) replaces it and should reproduce these figures.
+Historical run #2, replaced by the [baseline rebuild](#baseline-rebuild-gc-and-si),
+which reproduces its coverage and validation results.
 Completed November 4, 2026, from PR #70 (commit `ca6cb53`) after migration `0004` was applied
 to `trading`. Run #2 (`ingest run GC SI --rebuild --workers 8`) exited 0 with `"status":
 "done"` in 1,423.9 s (23 min 44 s; the database records 23 min 42 s). Builders: GC source
@@ -219,15 +236,15 @@ to `trading`. Run #2 (`ingest run GC SI --rebuild --workers 8`) exited 0 with `"
   46.5 million replaced rows per table), `bar_1s` 20.11 GB and `candle_1m_1s` 60.73 GB,
   80.84 GB total (decimal). Free disk: 212 GiB.
 
-Local evidence: `~/ingest-gc-si-pra.log` and `~/ingest-gc-si-pra.summary.json`. A rebuild
+Run #2 logs were removed after the baseline rebuild passed verification. A rebuild
 replaces rows session by session; compact afterwards with `VACUUM (FULL, ANALYZE)` per
 partition when the replaced rows are not reused soon.
 
 ## Running ingestion
 
 History: run #1 (November 3, 2026, 11 min 2 s) stored GC and SI with the one-builder code
-and a 5-session lead; run #2 (November 4) rebuilt them with stages; the from-scratch build on
-the baseline schema ([start here](#start-here-next-session)) is next.
+and a 5-session lead; run #2 (November 4) rebuilt them with stages; the
+[baseline rebuild](#baseline-rebuild-gc-and-si) then recreated them from scratch.
 
 To check current coverage or extend after new downloads:
 
@@ -382,7 +399,7 @@ The order and decisions (November 3, 2026) are in the
 1. **Stages (PR A)**: done (PR #70): per-stage tables, versions, and checkpoints, the derived
    lead, carried prices, and the path fields; GC and SI rebuilt
    ([results](#rebuild-with-stages-gc-and-si)).
-2. **Rebuild `trading` on the baseline schema** ([start here](#start-here-next-session)).
+2. **Baseline rebuild**: done ([results](#baseline-rebuild-gc-and-si)).
 3. **`1h@1m` rows (PR B)**: [B1 and B2 above](#pr-b-1h1m-rows-next).
 4. **Volatility tier (PR C)**: ATR horizons, time-of-day and daily ATR, bullish and
    bearish ATR, and adverse-excursion ATR ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).

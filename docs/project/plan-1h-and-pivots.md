@@ -137,7 +137,8 @@ conclusions into one design doc and leave the rest as history.
 - **Fast scales** are stored per second (`pivot_1s`); each threshold is a multiple of the
   `1m@1s` ATR as of the previous second, with a spread floor.
 - **Slow scales** run on the same trade stream, with thresholds from the `1h@1m` ATR of
-  the latest completed minute, and are stored at each minute's end (`pivot_1m`).
+  the latest completed minute and the same spread floor, and are stored at each minute's
+  end (`pivot_1m`).
 - Prices stay in exact fixed-point integers inside the detector, so ties are exact.
   Outputs are normalized (`Unit`).
 - Second-resolution entries read the slow structure as of the latest completed minute,
@@ -214,7 +215,8 @@ data context, not a feature), θ, leg statistics, and the structure label. Chart
 and SQL research use it.
 
 **Initial grid** (illustrative, to be judged by the benchmark): fast `k ∈ {0.5, 1, 2}` ×
-`1m@1s` ATR, with a floor of 2 spreads; slow `k ∈ {0.5, 1, 2}` × `1h@1m` ATR. For scale:
+`1m@1s` ATR and slow `k ∈ {0.5, 1, 2}` × `1h@1m` ATR, every scale with the same spread
+floor `f = 2` (θ ≥ 2 spreads; it rarely binds at slow scales). For scale:
 the median `1m@1s` ATR in September 2026 was 4.3 bps for GC and 6.4 bps for SI. So
 0.5 × ATR is about 8 GC ticks but only about 3 SI ticks, which is why the spread floor matters.
 

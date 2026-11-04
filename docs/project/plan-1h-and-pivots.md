@@ -132,9 +132,11 @@ conclusions into one design doc and leave the rest as history.
   and θ = 4, the trades `99 → 105 → 100` confirm the new high at 105, but replaying only
   the extremes, `99 → 105`, never sees the decline. Stages recompute from the DBN files
   in memory, and live sessions receive the trades, so the exact path is always available.
-- **Availability stays per second.** State is published once per second row, after that
-  second's trades, at the second's close plus the close delay. A crossing trade's exact
-  time is recorded, but no feature uses it before its second closes.
+- **Availability follows the publication row.** Fast state is published once per second
+  row, after that second's trades, at the second's close plus the close delay; slow state
+  once per minute row, at the minute's close plus the close delay. A crossing trade's
+  exact time is recorded, but no feature uses it before its row is published, so slow
+  confirmations and breaches never appear on the second rows inside their minute.
 - **Fast scales** are stored per second (`pivot_1s`); each threshold is a multiple of the
   `1m@1s` ATR as of the previous second, with a spread floor.
 - **Slow scales** run on the same trade stream, with thresholds from the `1h@1m` ATR of
@@ -165,8 +167,9 @@ ends the segment, exactly like missing data, and the detector stays idle until p
 positive again; a flag records it. GC and SI have never traded at nonpositive prices.
 
 **Threshold inputs.** `ATR_bps` is the window's ATR (`1m@1s` for fast scales, `1h@1m`
-for slow), and `spread_bps` is the last sampled book spread (`book_spread_bps`), both as
-of the previous row. A segment ([3.3](#33-structure-higher-lows-and-lower-highs)) starts
+for slow), and `spread_bps` is the last sampled book spread (`book_spread_bps`), both from
+the previous completed row: the previous second for fast scales, the latest previously
+completed minute for slow scales. A segment ([3.3](#33-structure-higher-lows-and-lower-highs)) starts
 only at the first row where both are defined: at a contract's start, after warm-up, and
 after missing data. Until then the detector is idle; it keeps no candidate, so no later
 scale is applied to an earlier extreme. Within a segment both stay defined, because with
@@ -183,22 +186,27 @@ safeguard, if either is ever undefined, the segment ends exactly as for missing 
 
 ### 3.3 Structure: higher lows and lower highs
 
+The [pivot/structure contract](pivot-structure-design.md) defines the exact classes, trend,
+provisional relations, breaches, and their field names; this section summarizes them.
+
 Within one **segment** (a stretch without missing data), confirmed pivots alternate high,
 low, high, … per scale. Missing data ends the segment, because the swing during the gap is
 unobserved: the next segment's first pivot may be of either kind, and it is never compared
-with pivots before the gap. Structure features (`hl_atr`, `lh_atr`, `trend`,
-`trend_swings`, break of structure) stay NULL until the new segment has confirmed both a
+with pivots before the gap. Structure features (`low_change_atr`, `high_change_atr`, classes,
+`trend`, provisional relations, breaches) stay NULL until the new segment has confirmed both a
 high and a low; the last confirmed levels before the gap remain in `pivot_event`, with
 their segment. Each confirmed low `L_k` is a
 **higher low** if `L_k > L_{k−1}`, a lower low if it is lower, and an equal low if the
 two are equal. Highs are classified the same way. Trend state: **up** after a higher
 high and a higher low, **down** after a lower high and a lower low, otherwise
-**mixed**. A _break of structure_ is a trade beyond the last confirmed opposite pivot.
-In a down structure, that is the first sign of reversal.
+**mixed**. A breach (`break_up`, `break_down`) is a trade strictly beyond the latest confirmed
+high or low.
+In a down structure, `break_up` is the first sign of reversal.
 
-The early signal you are after is a **provisional higher low**: in an up or mixed
-structure, the current down leg's running low is still above the last confirmed low, and
-price has already reversed part of `θ`. The reversal progress (0 to 1, where 1 is
+The early signal you are after is a **provisional higher low**: the current down leg's
+running low is still above the last confirmed low, and price has already reversed part of
+`θ`. It is stored in every trend context; a filter such as "only in an up or mixed
+structure" belongs to the strategy or model, which also receives `trend`. The reversal progress (0 to 1, where 1 is
 confirmation) is the key ML input: the model learns how likely confirmation is from
 progress, flow, and context. Lower highs mirror this.
 
@@ -211,8 +219,9 @@ Per scale, normalized, as dense columns:
   `prev_leg_atr`, `retrace` (current leg ÷ previous leg)
 - `low_dist_atr`, `high_dist_atr` (close vs the last confirmed low and high), with ages
   since each extreme and since its confirmation
-- `hl_atr` = `(L_k − L_{k−1}) / ATR`, `lh_atr` = `(H_k − H_{k−1}) / ATR`,
-  `trend` (−1, 0, +1), `trend_swings` (consecutive swings in trend), `bos_age_s`
+- `low_change_atr` = `(L_k − L_{k−1}) / ATR`, `high_change_atr` = `(H_k − H_{k−1}) / ATR`
+  (ATR snapshot of the new pivot), latest low and high classes, `trend` (−1, 0, +1; NULL
+  until both comparisons exist), provisional HL/LH flags, and breach ages
 - `theta_bps`, and validity/warm-up flags
 
 Every age (`*_age_s`) counts scheduled-open rows, like `slot_ordinal`: seconds of open

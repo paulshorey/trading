@@ -231,9 +231,12 @@ The order and decisions (November 3, 2026) are in the
 7. **Contract definitions**: download the free `definition` job into
    `data/databento/definition/` (needs the account owner) and load expirations.
 
-Pivot research: the [next-agent handoff](pivot-detection-handoff.md) and its saved
-research; [the plan](plan-1h-and-pivots.md#2-assessment-of-the-pivot-research-pr-66)
-records how it is adopted. The methods remain unimplemented and unvalidated on GC/SI.
+Pivot work: the [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design) sets the
+observations (the trade path, published per second and per minute), thresholds, segments,
+storage, and labels; the [pivot/structure contract](pivot-structure-design.md) defines
+higher/lower highs and lows, trend, provisional relations, and breaches. Research history:
+the [next-agent handoff](pivot-detection-handoff.md) and its saved research. The methods
+remain unimplemented and unvalidated on GC/SI.
 
 ## Open questions
 

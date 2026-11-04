@@ -150,14 +150,22 @@ is a step lag, so it must not feed standard indicators.
 - A rolling candle's high is the highest trade in its 60 slots. It changes when a
   new extreme enters or when the old one drops out 60 slots later, so a falling
   rolling high can mean the old high expired, not that price fell.
-- A standard pivot, such as a high above the N candles on each side, runs on the
-  phase series and is confirmed N periods later. With 60 phases, confirmation can
-  happen at any minute instead of only at the top of the hour.
-- A minute-precise swing high is a base-bar high with no higher high in the 60
-  slots before or after it, confirmed 60 slots later. The window's high and its
-  time are enough to detect it. Ties resolve to the earliest occurrence.
-- Every pivot keeps its origin time and its confirmation time. Features use it only
-  after confirmation.
+- Strategy swing structure uses directional change on the **trade path** (the engine's
+  released trades), publishing state per second row for fast scales and per minute row
+  for slow scales. Keep one chronological history
+  per contract/stream/scale, not 60 interleaved phase histories. ATR remains a
+  per-phase candle indicator used as an available, frozen threshold normalizer.
+- The threshold sets reversal magnitude; the publication cadence sets availability. Neither defines a guaranteed swing duration. Compare each confirmed
+  high/low with its previous confirmed same-kind pivot to derive HH/HL/LH/LL.
+  Provisional relations remain distinct from confirmed structure. The
+  [pivot contract](../project/pivot-structure-design.md) defines the fixed scales,
+  comparisons, state, and storage-before-benchmark sequence.
+- Fixed-left/right fractals may run on one explicitly named phase as a benchmark,
+  confirmed N same-phase periods later. A base-bar neighborhood extremum is a
+  separate reference definition with its own right-side delay and tie policy;
+  neither is the default chronological swing history.
+- Every pivot retains extreme, confirmation, and availability times. Features use
+  the event and its structure class only from availability onward.
 - Indicator extremes, such as RSI highs, come from the computed indicator series,
   not from RSI calculated on candle highs.
 

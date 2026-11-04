@@ -720,3 +720,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     assert plan["warm_sessions"] == {"bar_1s": 0, "candle_1m_1s": 1}
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
+    # a longer lead prepends sessions: every later value changes, so the plan says why
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **{**options, "lead": 2}))["products"]
+    g7 = next(c for c in plan["contracts"] if c["contract"] == "GCG7")
+    assert g7["action"] == "needs_rebuild" and "lead of 2 sessions" in g7["reason"]

@@ -25,7 +25,8 @@ lib/strategy-core                  The same code for history and live sessions
   windows.py, window_metrics.py    Rolling candles: rows o − 59 … o
   kernels.py, indicators.py        Per-phase indicators: candles o, o − 60, o − 120, …
   features.py                      Normalized features (Unit), engine.py strategies and fills
-  rows.py, state.py                Rows to store, with exact checkpoints
+  stages.py, stage_*.py            Stages: one stored table each, versioned on its own
+  pipeline.py, state.py, warmup.py Tier-ordered pipeline, exact checkpoints, derived warm-ups
         │                                      │
         ▼                                      ▼
 Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
@@ -67,12 +68,13 @@ These are fundamental; changing any of them changes every stored value.
    different prices, so every candle, indicator, and outcome is computed within one
    contract. The front contract has the most volume in the previous complete session,
    switches at a session open, and only moves to a later month (`source.next_front`, the
-   same in backtests and storage, `market.roll`). Each contract is computed from 5 sessions
-   before it becomes front (40 from PR A), so its indicators are warm at the switch. The
-   warm-up must cover the slowest indicator until it forgets its starting point, not just
-   its first value: hourly EMA(50) gives values after 2.2 sessions but needs about 7.5 to
-   settle, and EMA(200) about 30. From PR A the lead is derived from indicator parameters
-   ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)). The views `market.continuous_bar_1s` and
+   same in backtests and storage, `market.roll`). Each contract is computed from a lead of
+   sessions before it becomes front, so its values have settled at the switch. The lead is
+   derived from the stages' warm-ups, which follow from indicator parameters, and is at
+   least 40 sessions ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)). A
+   warm-up covers an indicator until it forgets its starting point, not just its first
+   value: hourly EMA(50) gives values after 2.2 sessions but needs about 7.6 to settle, and
+   EMA(200) about 30. The views `market.continuous_bar_1s` and
    `market.continuous_candle_1m_1s` read each product as one series by taking every session
    from its front contract; only raw prices jump at a roll, flagged by `rolled`.
 
@@ -181,18 +183,18 @@ manual database repair.
 
 The core rules above, plus:
 
-| Decision                                                                                             | Why                                                                                                                             | Details                                                             |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Prototype with GC and SI                                                                             | Liquid, and far smaller than NQ or ES (GC 32M and SI 13M trades a year against NQ's 103M)                                       | [Data](data.md#what-we-have)                                        |
-| TBBO only, the same rules for every product                                                          | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI | [Data limits](engine.md#data-limits-tbbo-only)                      |
-| DBN files are the permanent archive; PostgreSQL holds everything derived                             | Every stored value can be rebuilt or extended; SQL for research; no Parquet layer                                               | [Data](data.md#storage), [storage](../../lib/db-research/README.md) |
-| Store each second's base row and its `1m@1s` candle with features; NULL when undefined, never zero   | Research and ML read compiled rows; base rows stay mergeable into any window; missing, quiet, and invalid stay distinct         | [Ingestion](ingestion.md)                                           |
-| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk space is not a concern                                            | [Measured](ingestion.md#measured)                                   |
-| Event-time assignment and per-phase indicators confirmed against the TBBO handoff (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)            |
-| A builder hash covers the code, settings, packages, and columns that make stored values              | Rows never mix code versions; changed code shows as `stale` until `--rebuild`                                                   | [Ingestion](ingestion.md#run-it)                                    |
-| Conservative TBBO fills (pre-trade book, trade-through targets, stops never better than the trigger) | Realistic second-scale costs; every setting is recorded with the run                                                            | [Timing model](engine.md#timing-model)                              |
-| Databento `definition` records for contract metadata                                                 | Free for this data; expirations, tick sizes, and multipliers                                                                    | [Data](data.md#what-we-have)                                        |
-| uv with Python 3.13, numba, psycopg 3, numbered SQL migrations; `research-web` is the only UI        | Reproducible environments, fast batch runs, simple schema history; checking backtest logic matters most now                     | [README](../../README.md), [UI](metric-explorer.md)                 |
+| Decision                                                                                             | Why                                                                                                                             | Details                                                                          |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Prototype with GC and SI                                                                             | Liquid, and far smaller than NQ or ES (GC 32M and SI 13M trades a year against NQ's 103M)                                       | [Data](data.md#what-we-have)                                                     |
+| TBBO only, the same rules for every product                                                          | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI | [Data limits](engine.md#data-limits-tbbo-only)                                   |
+| DBN files are the permanent archive; PostgreSQL holds everything derived                             | Every stored value can be rebuilt or extended; SQL for research; no Parquet layer                                               | [Data](data.md#storage), [storage](../../lib/db-research/README.md)              |
+| Store each second's base row and its `1m@1s` candle with features; NULL when undefined, never zero   | Research and ML read compiled rows; base rows stay mergeable into any window; missing, quiet, and invalid stay distinct         | [Ingestion](ingestion.md)                                                        |
+| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk space is not a concern                                            | [Measured](ingestion.md#measured)                                                |
+| Event-time assignment and per-phase indicators confirmed against the TBBO handoff (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)                         |
+| A builder identity per stage covers its code, settings, packages, columns, and inputs (PR A)         | Rows never mix code versions; a changed stage and those reading it are `stale`, the others stay current, new stages are added   | [Ingestion](ingestion.md#what-the-plan-decides), [pipeline](feature-pipeline.md) |
+| Conservative TBBO fills (pre-trade book, trade-through targets, stops never better than the trigger) | Realistic second-scale costs; every setting is recorded with the run                                                            | [Timing model](engine.md#timing-model)                                           |
+| Databento `definition` records for contract metadata                                                 | Free for this data; expirations, tick sizes, and multipliers                                                                    | [Data](data.md#what-we-have)                                                     |
+| uv with Python 3.13, numba, psycopg 3, numbered SQL migrations; `research-web` is the only UI        | Reproducible environments, fast batch runs, simple schema history; checking backtest logic matters most now                     | [README](../../README.md), [UI](metric-explorer.md)                              |
 
 ## Run it
 

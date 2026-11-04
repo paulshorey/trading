@@ -649,9 +649,17 @@ def plan_product(
         product, period, front, volumes, contract=contract, start=start, end=end, lead=lead
     ).items():
         cid = contract_id_for(conn, product, symbol, month)
+        stored = stored_sessions(conn, cid)
         span, i, delete_from, action, reason = diff(
-            span, period, stored_sessions(conn, cid), builders, expected, rebuild
+            span, period, stored, builders, expected, rebuild
         )
+        if action in ("needs_rebuild", "rebuild") and span[0].trade_date < min(
+            stored.dates, default=span[0].trade_date
+        ):
+            reason += (
+                f"; the lead of {lead} sessions starts before the stored sessions "
+                f"(required: {required}, by {required_by})"
+            )
         todo = span[i:] if action in RUNNABLE else []
         limited = contract is None and first_front.get((symbol, month), lead) < lead
         plans.append(

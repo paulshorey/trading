@@ -1,4 +1,4 @@
-# One-second ingestion
+# Ingestion
 
 Status (November 3, 2026): GC and SI are stored in local database `trading`; the first
 full run completed and passed coverage, quality-report, and roll checks
@@ -6,13 +6,14 @@ full run completed and passed coverage, quality-report, and roll checks
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
-and every scheduled-open second, two rows computed by `strategy-core`, the code live
-sessions run:
+and every scheduled-open second, one row per **stage**, computed by `strategy-core`, the
+code live sessions run ([stages and tiers](feature-pipeline.md)). Each stage has its own
+table, version, and per-session checkpoint:
 
-| Table                 | One row per second holds                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `market.bar_1s`       | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, book sampled at trades |
-| `market.candle_1m_1s` | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                       |
+| Table                          | One row per second holds                                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `market.bar_1s` (tier 0)       | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book sampled at trades |
+| `market.candle_1m_1s` (tier 1) | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                                 |
 
 Both are keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters), and `phase` is a
@@ -32,7 +33,7 @@ Once, after pulling this code:
 
 ```sh
 brew services start postgresql@18
-uv run research db migrate              # applies pending migrations (0002, 0003)
+uv run research db migrate              # applies pending migrations
 uv run research ingest plan GC SI       # what would be built; stores no second rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
 uv run research ingest status           # series coverage, contracts, sizes, recent runs
@@ -41,9 +42,10 @@ uv run research ingest status           # series coverage, contracts, sizes, rec
 `plan` reads every session's outright volumes from the DBN files once (about 15 s for a
 year of GC and SI) and caches them, and computes the roll schedule without publishing it, so
 a plan changes nothing that queries read. `run` does the same planning and then builds one
-process per contract (`--workers`, default cores − 2). Each session commits
-its rows and its checkpoint together, so `run` can be interrupted and rerun at any time:
-it continues where it stopped and never adds a session twice.
+process per contract (`--workers`, default cores − 2). Every stage is computed in memory
+from the DBN files; only the stages that are not current are written. Each session commits
+its rows and checkpoints together, so `run` can be interrupted and rerun at any time: it
+continues where it stopped and never adds a session twice.
 
 **After downloading new TBBO files** (a later month, or a re-delivered file), put the job
 folder under `data/databento/tbbo/` as delivered, then:
@@ -65,7 +67,7 @@ changed, from the checkpoint before it.
 | Another product (PL, ES, NQ, YM, RTY)    | `research ingest run PL`                                             |
 | A specific contract, such as a far month | `research ingest run GC --contract GCV6` (every session it traded)   |
 | Only part of the range                   | `--start 2026-06-01 --end 2026-09-30` (trade dates)                  |
-| Longer warmup before each roll           | `--lead-sessions 10` (default 5)                                     |
+| A different lead before each roll        | `--lead-sessions 50` (default: derived, at least 40; see below)      |
 | Rows built by older code or settings     | `research ingest run GC SI --rebuild` replaces those contracts' rows |
 
 The first stored session of a contract is where its indicator states start. Adding earlier
@@ -79,15 +81,16 @@ the contract's whole stored chain, so no stored session is dropped.
 Stored sessions are replaced one at a time, each in one transaction, so a failed or
 interrupted build leaves the remaining sessions on their previous, readable rows.
 
-| Action          | Meaning                                                                                                    |
-| --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `new`           | Nothing stored: build every session of the span                                                            |
-| `extend`        | Stored sessions are current; build the new ones from the last checkpoint                                   |
-| `repair`        | A stored session's files changed: rebuild it and later sessions from the checkpoint before                 |
-| `current`       | Nothing to do                                                                                              |
-| `stale`         | Stored by other code or settings (the builder hash differs): needs `--rebuild`                             |
-| `needs_rebuild` | New sessions before the first stored one, or its files changed: needs `--rebuild`                          |
-| `rebuild`       | With `--rebuild`: rebuild from the first session that is not current; an interrupted rebuild resumes there |
+| Action          | Meaning                                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `new`           | Nothing stored: build every session of the span                                                                            |
+| `extend`        | Stored sessions are current; build the new ones from the last checkpoints                                                  |
+| `add`           | A stage has no rows yet (a new stage): build it from the span start; nothing stored is replaced                            |
+| `repair`        | A stored session's files changed: rebuild it and later sessions from the checkpoint before                                 |
+| `current`       | Nothing to do                                                                                                              |
+| `stale`         | A stage or the source was stored by other code or settings: needs `--rebuild` (rewrites only the stages that depend on it) |
+| `needs_rebuild` | New sessions before the first stored one, or its files changed: needs `--rebuild`                                          |
+| `rebuild`       | With `--rebuild`: rebuild from the first session that is not current; an interrupted rebuild resumes there                 |
 
 **Spans.** Every contract that is ever the front contract (the [roll rule](#continuous-series-per-product),
 `market.roll`) is stored from `--lead-sessions` sessions before it first becomes front
@@ -98,17 +101,34 @@ ones: a session in a gap between downloads is stored as rows without data covera
 (`status` 0), never skipped, and is rebuilt once the gap is downloaded. The first session
 after a gap chooses its front contract afresh.
 
-**Builder version.** `market.builder` records a SHA-256 of the files that determine stored
-values (`BUILDER_FILES` in `ingest.py`: the calculations in `strategy-core`, and the
-calendar, file, source, ingestion, and storage modules), the trade-assignment timing,
-feature settings, the calendar and phase origin, numeric package versions, and the column
-list. Any change makes stored rows `stale`, including comment-only edits to those files:
-rebuild before extending. Every session's `market.ingest_slice` row keeps the builder,
-source files with checksums and covered windows, the quality report, and the checkpoint. Cached session volumes
-carry their own digest (`scan_sha256`: `SCAN_FILES`, which include `ingest.py`, the
-timing settings, and the Databento
-and exchange-calendar package versions) and their session hours; they are read again from
-the DBN files when either changes, so rolls always come from current code and calendars.
+**Builder versions.** Each stage has its own identity in `market.builder` (column `stage`): a
+SHA-256 of its `MODULES` (its calculations in `strategy-core`), the row codec (`codec.py`),
+its settings and columns, numeric package versions, and the identities of its inputs. The
+market source has one too (`stage` = `source`): the calendar, file, and source modules, the
+trade-assignment timing, the calendar and phase origin, and the Databento and calendar
+package versions. Changing a stage's code makes that stage and every stage that reads it
+`stale`; the others stay current, and a new stage is simply added. Ingestion's
+orchestration (`ingest.py`, `store.py`) is in no identity, since it computes and encodes no
+values; the end-to-end tests prove that stored rows equal the pipeline's output.
+
+**Records.** `market.ingest_slice` keeps one row per stored contract session: its source
+builder, its source files with checksums and covered windows, its quality report (including
+`history_limited`), and the row bounds the continuous series reads. `market.stage_slice`
+keeps one row per stage and session: the stage builder, its checkpoint, and `warm`. Cached
+session volumes carry their own digest (`scan_sha256`: `SCAN_FILES`, which include
+`ingest.py`, the timing settings, and the Databento and exchange-calendar package
+versions) and their session hours; they are read again from the DBN files when either
+changes, so rolls always come from current code and calendars.
+
+**Lead and warm-up.** The lead (sessions stored before a contract first becomes front) is
+derived from the stages' warm-ups, which follow from their indicator parameters
+([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)), and is at least 40
+sessions (`LEAD_FLOOR`) to reserve room for the planned stages. `plan` reports
+`lead_sessions`, `required_lead` (the stage that needs most), and `warm_sessions` per stage;
+a `--lead-sessions` shorter than a stage needs is refused. A stage's session is `warm` once
+the contract has run its warm-up; a contract whose downloads start too late for the full
+lead is reported `history_limited`. A longer indicator that raises the required lead makes
+the plan prepend sessions, which shows as `needs_rebuild`.
 
 ## Continuous series per product
 
@@ -207,8 +227,14 @@ live values exactly; the completed run did not retime those query benchmarks.
 - **NULL, never zero, when undefined.** Missing seconds have NULL volume; seconds without
   trades have NULL prices; a book statistic is NULL when no trade in the second had a usable
   book (the handoff's validity subsets: P quotes, D displayed sizes, C order counts, K known
-  side). Features are NULL unless the candle is complete (60 covered seconds with a trade);
-  the latest-book features (`trade_age_s`, `book_age_s`, `depth_age_s`, `book_spread_bps`,
+  side). Features are NULL unless the candle is complete (60 covered seconds with a trade),
+  with two exceptions. **Price indicators** (RSI, ATR, EMA distances, MACD, ADX, midpoint
+  RSI, and the lookbacks such as stochastic, Bollinger, Donchian, Aroon) are also defined
+  on an empty window (covered, no trades) with a known last trade price: the price did not
+  change, so they advance with a flat candle at that price, and its flows are zero (decided
+  November 3, 2026). Nothing is carried across missing data, and activity baselines
+  (`rel_volume`, `rel_trades`, `rel_depth`, `rel_spread`) still use windows with trades
+  only. The latest-book features (`trade_age_s`, `book_age_s`, `depth_age_s`, `book_spread_bps`,
   `book_imbalance`) are also defined for windows without trades, but never across missing
   data: after a missing second they are NULL until the next trade, because trades during
   the gap are unknown.
@@ -216,7 +242,14 @@ live values exactly; the completed run did not retime those query benchmarks.
   from the first missing second of that session on. Unknown-side volume stays out of it.
 - **Exact base statistics.** Prices, spreads, the effective-spread numerator, depth sums,
   and times are integers (Databento fixed point); every field merges into minutes and
-  windows by sums, extremes, or first and last values. Ratios are formed after merging.
+  windows by sums, extremes, first and last values, or the path rules below. Ratios are
+  formed after merging. Floating-point sums are added oldest first everywhere, so a minute
+  equals the rolling window that ends with it to the bit.
+- **Path within the second** (`drawdown`, `drawup`, `extreme_order`): the largest drop and
+  rise from a trade to any later trade, in release order, and whether the first trade at the
+  low or at the high came first (0: the same trade). They show what the high and low cannot,
+  such as 99, 105, 100 falling 5 in a second that closes up, and merge exactly into windows
+  with the high and low.
 
 ## Metrics
 
@@ -224,24 +257,24 @@ Definitions, units, and NULL rules are in the code and the column comments:
 `strategy_core/metrics.py` (per second), `window_metrics.py` (over the window), and
 `indicators.py` and `features.py` (features).
 
-| Handoff entries                                                                               | Stored as                                                                                                                                                                         |
-| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                            |
-| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                              |
-| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                   |
-| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                              |
-| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                       |
-| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*` |
-| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                     |
-| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`                       |
-| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_bid_size_sum`, `order_ask_size_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                  |
-| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                                   |
-| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                                |
-| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                                           |
-| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                 |
-| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                               |
-| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`             |
-| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                              |
+| Handoff entries                                                                               | Stored as                                                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                                      |
+| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                                        |
+| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                             |
+| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`, `drawdown`, `drawup`, `extreme_order`; features `path_*`, `uptick_ratio`, `side_switch_ratio` |
+| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                                 |
+| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*`           |
+| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                               |
+| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`                                 |
+| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_bid_size_sum`, `order_ask_size_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                            |
+| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                                             |
+| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                                          |
+| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                                                     |
+| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                           |
+| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                                         |
+| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`                       |
+| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                                        |
 
 Indicators on the candle follow the [per-phase rule](../sliding-windows/design.md#4-indicators-per-phase):
 recursive ones (EMA, MACD, Wilder RSI, ATR, ADX) keep one state per phase, and lookback
@@ -269,21 +302,25 @@ Not stored yet; each can be added later by rebuilding from the DBN files:
 ### Adding a metric or feature
 
 Every stored value is computed from the DBN files, which are kept permanently
-([data/README.md](../../data/README.md)), so any statistic can be added later:
+([data/README.md](../../data/README.md)), so any statistic can be added later. What a change
+rebuilds is listed in the [feature pipeline](feature-pipeline.md#what-a-change-costs).
 
 1. **Per-second statistic:** add a `Field` to `metrics.FIELDS` (how it merges: sum, max,
-   min, first, or last, and which count makes it valid) and compute it in
+   min, first, last, or a path rule, and which count makes it valid) and compute it in
    `second_metrics`. Its window value follows from the merge kind.
    **Candle feature:** add it to `indicators.FEATURES` with a normalized unit and compute
-   it in `CandleIndicators.update`.
-2. The column registry in `strategy_core/rows.py` picks both up. Add a numbered migration
-   with `ALTER TABLE ... ADD COLUMN`, and recreate the `market.continuous_*` views in it
-   (they select `table.*`).
+   it in `CandleIndicators.update`; a price indicator also joins `PRICE_FEATURES`.
+   **New stage:** a `Stage` subclass in its own module (`stage_<name>.py`) with its
+   columns, inputs, `MODULES`, settings, and `warmup()`, registered in `pipeline.STAGES`.
+2. The stage's column registry picks it up. Add a numbered migration with
+   `ALTER TABLE ... ADD COLUMN` (or `CREATE TABLE` for a stage), and recreate the
+   `market.continuous_*` views of changed tables in it (they select `table.*`).
 3. Existing tests cover the new value automatically: windows against direct aggregation,
-   scale invariance, chunking and checkpoints, and the registry against the migrated
-   tables. Add a hand-checked case for the formula.
-4. `uv run research db migrate`, then `uv run research ingest run GC SI --rebuild`: the
-   builder hash changed, so stored rows are `stale` until rebuilt.
+   scale invariance, chunking and checkpoints, the declared warm-up, and the registry against
+   the migrated tables. Add a hand-checked case for the formula.
+4. `uv run research db migrate`, then `uv run research ingest plan GC SI`: the changed stage
+   and the stages that read it show `stale` (run with `--rebuild`); a new stage shows `add`.
+   If a longer indicator raised the required lead, the plan says so with `needs_rebuild`.
 
 ## Differences from the handoff
 
@@ -311,13 +348,18 @@ Every stored value is computed from the DBN files, which are kept permanently
 
 ## Tests
 
-`lib/strategy-core/tests/test_metrics.py` and `test_rows.py`: the handoff's numeric
+`lib/strategy-core/tests/test_metrics.py`, `test_rows.py`, and `test_stages.py`: the handoff's numeric
 reference second, validity subsets, windows equal to direct aggregation of their trades,
 identical rows and state for whole-session and second-by-second processing, exact
 checkpoint restore, scale invariance of every feature, session CVD resets, and per-phase
 parity with plain references (RSI, EMA, stochastic, Bollinger, Donchian, regression,
-efficiency ratio, ADX). `apps/backtest-runner/tests/test_ingest.py`: the schema equals the
-registry, binary COPY range checks, and an end-to-end run with two contracts and a roll:
+efficiency ratio, ADX), RSI on empty windows with the carried price, path drawdown and
+extreme order (hand-checked and against direct aggregation), the stage graph, derived
+warm-ups, and that each declared warm-up settles every candle feature (built from two
+starting points). `apps/backtest-runner/tests/test_ingest.py`: the schema and
+`market.column_registry` equal the registry, binary COPY range checks, stages versioned on
+their own (a stale stage is rebuilt alone, a missing one is added), warm flags and the
+derived lead, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
 build), repair after a file changes, rebuild, and stale detection; the continuous series
 has one row per second, each session from its front contract, across the roll. Rolls only
@@ -325,8 +367,8 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. **`1h@1m` rows**: `market.bar_1m` rolled up from `bar_1s` (the metric fields merge by
-   their kinds, as `bars.combine` does for OHLCV) and `market.candle_1h_1m` with the same
-   features on the `BIAS` window spec, as a second builder in the same ingest.
+1. **`1h@1m` rows (PR B)**: stages `bar_1m`, rolled up from the second rows (the metric
+   fields merge by their kinds, as `bars.combine` does for OHLCV), and `candle_1h_1m`, with
+   the amendments in the [plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan).
 2. Let backtests read stored rows when the builder matches the run.
 3. Load Databento `definition` records into `market.contract` (expirations).

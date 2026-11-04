@@ -9,7 +9,8 @@ per-product continuous views; and the stage records, variants, and column regist
 It replaced migrations 0001–0004, folded on November 4, 2026; the local `trading` database,
 which applied those, was rebuilt on it from the DBN files on November 4 with Paul's
 authorization ([results](../../docs/project/handoff.md#baseline-rebuild-gc-and-si)). Later changes are new
-numbered files. Runs and ML rows come next.
+numbered files: `0002_minute_rows` adds the minute stages' tables `market.bar_1m` and
+`market.candle_1h_1m` and their continuous views (PR B1). Runs and ML rows come next.
 
 ## Local setup
 
@@ -48,9 +49,9 @@ database when their code needs them ([AGENTS.md](../../AGENTS.md#local-database-
 
 ## One-second and one-minute rows
 
-`market.bar_1s` (and `market.candle_1m_1s`, its rolling `1m@1s` candle and features) are
-implemented; `market.bar_1m` and `market.candle_1h_1m` will follow the same design. There is
-one row for every scheduled-open slot per contract, including slots without trades or
+`market.bar_1s` and `market.bar_1m` (with `market.candle_1m_1s` and `market.candle_1h_1m`,
+their rolling `1m@1s` and `1h@1m` candles and features) are implemented with the same
+design. There is one row for every scheduled-open slot per contract, including slots without trades or
 with missing data, so every sliding window is exactly 60 consecutive rows (decided
 November 1, 2026). Closures have no rows.
 
@@ -106,9 +107,10 @@ from the research (CVD, spread, top-of-book size and imbalance at trades, and so
 - `market.builder` records one builder version per stage and one for the market source
   (code hash, settings, columns, packages, inputs' identities; column `stage`).
   `market.ingest_slice` records each stored contract session (source builder, source files,
-  quality report, row bounds) and `market.stage_slice` each stage's builder, checkpoint, and
-  warm flag for it. A stage's slice is reloaded by deleting its rows and copying them again
-  ([ingestion](../../docs/project/ingestion.md)).
+  quality report, row bounds in seconds) and `market.stage_slice` each stage's builder,
+  checkpoint, and warm flag for it. A stage's slice is reloaded by deleting its rows and
+  copying them again; a minute table's rows of a session follow from its second bounds
+  (`store.row_bounds`) ([ingestion](../../docs/project/ingestion.md)).
 - Stored raw aggregates may use price units; model features derived from them must
   be normalized (see `strategy_core.features.Unit`).
 - Measured (November 4, 2026, compacted): about 281 bytes per `bar_1s` row and 849 per
@@ -123,9 +125,11 @@ per date from the files. `market.roll` holds the published front contract per se
 `market.session_volume` the volumes it was chosen from.
 
 **Continuous series** (implemented): `market.front_session` maps each product session to its
-front contract and that session's stored index counters; `market.continuous_bar_1s` and
-`market.continuous_candle_1m_1s` select those rows, so each product reads as one series with
-one row per scheduled second. They are views (`table.*` plus product columns): recreate them
+front contract and that session's stored index counters (in seconds); the views
+`market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`, and
+`continuous_candle_1h_1m` select those rows, so each product reads as one series with one
+row per scheduled second or minute. Sessions are whole minutes, so a session's minutes are
+`(first_ordinal + 59) / 60 … last_ordinal / 60`. They are views (`table.*` plus product columns): recreate them
 in the migration that adds columns to the tables. Bound `slot_ordinal` in queries so the
 primary key is used.
 

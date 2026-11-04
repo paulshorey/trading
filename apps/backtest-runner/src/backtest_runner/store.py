@@ -17,6 +17,8 @@ from strategy_core.pipeline import STAGES
 from .codec import HEADER, TRAILER, encode
 
 TABLES: dict[str, tuple[Column, ...]] = {s.NAME: s.COLUMNS for s in STAGES}  # one per stage
+# Seconds per row of each table: its `slot_ordinal` counts rows of this many seconds
+SLOT_SECONDS = {s.NAME: {"1s": 1, "1m": 60}[s.RESOLUTION] for s in STAGES}
 
 
 def copy_table(conn: psycopg.Connection, name: str, table: Table, contract_id: int) -> None:
@@ -33,16 +35,26 @@ def copy_table(conn: psycopg.Connection, name: str, table: Table, contract_id: i
         copy.write(TRAILER)
 
 
+def row_bounds(name: str, first: int, last: int) -> tuple[int, int]:
+    """Index counters in table `name` of the rows inside seconds `first ... last` (second
+    ordinals). Sessions are whole minutes, so minute `m` (seconds 60m - 59 ... 60m) lies inside
+    them exactly when `(first + 59) // 60 <= m <= last // 60`."""
+    k = SLOT_SECONDS[name]
+    return -(-first // k), last // k
+
+
 def delete_rows(
     conn: psycopg.Connection, contract_id: int, first: int, last: int, names=tuple(TABLES)
 ) -> None:
-    """Delete a contract's rows with index counters `first ... last` from the named tables."""
+    """Delete a contract's rows inside seconds `first ... last` (second ordinals) from the named
+    tables, each at its own resolution (`row_bounds`)."""
     for name in names:
+        lo, hi = row_bounds(name, first, last)
         conn.execute(
             sql.SQL(
                 "DELETE FROM {} WHERE contract_id = %s AND slot_ordinal BETWEEN %s AND %s"
             ).format(sql.Identifier("market", name)),
-            (contract_id, first, last),
+            (contract_id, lo, hi),
         )
 
 
@@ -60,7 +72,7 @@ def to_ns(d: date) -> int:
 
 
 def ensure_partitions(conn: psycopg.Connection, first_ns: int, last_ns: int) -> list[str]:
-    """Monthly partitions (UTC) of both tables covering `end_ns` in [first_ns, last_ns]."""
+    """Monthly partitions (UTC) of every stage table covering `end_ns` in [first_ns, last_ns]."""
     created, month = [], month_start(first_ns)
     while to_ns(month) <= last_ns:
         nxt = next_month(month)

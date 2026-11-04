@@ -12,7 +12,7 @@ import numpy as np
 
 from .bars import AggregationReport, aggregate, assignment_times
 from .execution import ExecutionConfig, ExecView, Position, Simulator
-from .features import FeatureConfig, FeatureFrame, FeaturePipeline
+from .features import FeatureConfig, FeatureFrame
 from .market import SECOND, Product, SessionCalendar, Trades
 from .strategies import Strategy
 
@@ -54,7 +54,7 @@ class Engine:
         self.feature_config = features or FeatureConfig()
         self.sim = Simulator(product, self.config, strategy.bracket, calendar)
         self.contract = ""
-        self.pipeline = FeaturePipeline(self.calendar, self.feature_config)
+        self.pipeline = self.features()
         self.pending: Position | None = None
         self.position: Position | None = None
         self.now = 0  # latest time the engine knows the position state for
@@ -72,7 +72,7 @@ class Engine:
             self.switch_contract(chunk.contract)
         c = self.config
         ends = self.calendar.slot_ends(chunk.start, chunk.end, SECOND)
-        agg = aggregate(
+        agg = aggregate(  # for execution; the stages assign trades to seconds by the same rules
             chunk.trades,
             ends,
             SECOND,
@@ -81,7 +81,7 @@ class Engine:
             close_delay=c.close_delay,
         )
         self.reports.setdefault(chunk.session, AggregationReport()).add(agg.report)
-        frame = self.pipeline.update(agg.bars)
+        frame = self.pipeline.update(chunk)
         signals = np.zeros(len(frame), np.int8)
         if chunk.tradable and len(frame):
             signals = self.strategy.signals(frame.features).astype(np.int8)
@@ -156,8 +156,20 @@ class Engine:
             self.abandon("contract_roll")
         self.contract = contract
         self.contracts.append(contract)
-        self.pipeline = FeaturePipeline(self.calendar, self.feature_config)
+        self.pipeline = self.features()
         self.ts_floor = 0
+
+    def features(self):
+        """A new contract's feature rows, from the stage graph that also computes stored rows."""
+        from .pipeline import StageFeatures  # its stages import MarketChunk from this module
+
+        c = self.config
+        return StageFeatures(
+            self.calendar,
+            feed_latency=c.feed_latency,
+            close_delay=c.close_delay,
+            config=self.feature_config,
+        )
 
     def abandon(self, reason: str) -> None:
         """Close an open position at the book of the latest trade after its entry (end of data

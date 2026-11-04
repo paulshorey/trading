@@ -1,0 +1,216 @@
+-- PR B1: one-minute rows and the rolling 1h@1m candle, two new stages
+-- (strategy_core.stage_bar_1m, strategy_core.stage_candle_1h_1m). The second tables are
+-- unchanged; ingest adds the minute tables without rewriting them.
+
+-- One row per scheduled-open minute per contract, including minutes without trades or data,
+-- merged exactly from the minute's 60 second rows. slot_ordinal is the minute's index counter:
+-- minute m holds the seconds with ordinals 60m - 59 ... 60m. A minute with any missing second
+-- is missing (status 0) and stores only its keys and status. Monthly partitions on end_ns are
+-- created by the ingest command; columns are ordered by width.
+CREATE TABLE market.bar_1m (
+    contract_id bigint NOT NULL,
+    slot_ordinal bigint NOT NULL,
+    end_ns bigint NOT NULL,
+    open bigint,
+    high bigint,
+    low bigint,
+    close bigint,
+    high_at_ns bigint,
+    low_at_ns bigint,
+    pv double precision,
+    session_cvd bigint,
+    first_close bigint,
+    ret2_sum double precision,
+    size_sq bigint,
+    first_at_ns bigint,
+    last_at_ns bigint,
+    path_abs bigint,
+    drawdown bigint,
+    drawup bigint,
+    spread_sum bigint,
+    spread_max bigint,
+    mid2_open bigint,
+    mid2_high bigint,
+    mid2_low bigint,
+    last_bid bigint,
+    last_ask bigint,
+    quote_at_ns bigint,
+    eff_spread_sum bigint,
+    bid_depth_sum bigint,
+    ask_depth_sum bigint,
+    depth_at_ns bigint,
+    imbalance_sum double precision,
+    imbalance_volume_sum double precision,
+    imbalance_last double precision,
+    tilt_sum double precision,
+    buy_take_sum double precision,
+    sell_take_sum double precision,
+    alignment_sum double precision,
+    order_bid_size_sum bigint,
+    order_ask_size_sum bigint,
+    order_imbalance_sum double precision,
+    volume integer,
+    buy_volume integer,
+    sell_volume integer,
+    trades integer,
+    delta_high integer,
+    delta_low integer,
+    buy_trades integer,
+    sell_trades integer,
+    max_size integer,
+    upticks integer,
+    downticks integer,
+    side_pairs integer,
+    side_switches integer,
+    extreme_order integer,
+    first_side integer,
+    last_side integer,
+    sweep_buy_volume integer,
+    sweep_sell_volume integer,
+    quote_trades integer,
+    quote_volume integer,
+    known_quote_volume integer,
+    depth_trades integer,
+    depth_volume integer,
+    known_depth_volume integer,
+    order_trades integer,
+    last_bid_size integer,
+    last_ask_size integer,
+    bid_orders_sum integer,
+    ask_orders_sum integer,
+    bad_book_trades integer,
+    late_trades integer,
+    status smallint NOT NULL,
+    observed_seconds smallint,
+    ret_count smallint,
+    phase smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
+    PRIMARY KEY (contract_id, slot_ordinal, end_ns)
+) PARTITION BY RANGE (end_ns);
+CREATE INDEX bar_1m_end ON market.bar_1m USING brin (end_ns);
+
+-- The rolling 1h@1m candle of minute rows m - 59 ... m and its normalized features, one per
+-- minute; indicators run per phase (m % 60), so RSI(14) is a 14-hour RSI updated every minute.
+CREATE TABLE market.candle_1h_1m (
+    contract_id bigint NOT NULL,
+    slot_ordinal bigint NOT NULL,
+    end_ns bigint NOT NULL,
+    start_ns bigint,
+    open bigint,
+    high bigint,
+    low bigint,
+    close bigint,
+    high_at_ns bigint,
+    low_at_ns bigint,
+    vwap double precision,
+    rsi double precision,
+    atr_bps double precision,
+    ret_atr double precision,
+    close_loc double precision,
+    vwap_atr double precision,
+    delta_ratio double precision,
+    rel_volume double precision,
+    complete double precision,
+    range_bps double precision,
+    body_bps double precision,
+    body_ratio double precision,
+    upper_wick_ratio double precision,
+    lower_wick_ratio double precision,
+    vwap_bps double precision,
+    active_ratio double precision,
+    path_bps double precision,
+    path_efficiency double precision,
+    uptick_ratio double precision,
+    known_ratio double precision,
+    count_delta_ratio double precision,
+    cvd_high_ratio double precision,
+    cvd_low_ratio double precision,
+    size_hhi double precision,
+    max_size_ratio double precision,
+    side_switch_ratio double precision,
+    size_side_ratio double precision,
+    sweep_ratio double precision,
+    sweep_delta_ratio double precision,
+    spread_bps double precision,
+    spread_max_bps double precision,
+    eff_spread_bps double precision,
+    imbalance_mean double precision,
+    imbalance_vw double precision,
+    depth_imbalance double precision,
+    tilt_bps double precision,
+    alignment double precision,
+    take_ratio double precision,
+    order_imbalance double precision,
+    order_size_log_ratio double precision,
+    quote_ratio double precision,
+    bad_book_ratio double precision,
+    ema9_atr double precision,
+    ema21_atr double precision,
+    ema50_atr double precision,
+    macd_atr double precision,
+    macd_signal_atr double precision,
+    macd_hist_atr double precision,
+    ppo_bps double precision,
+    adx double precision,
+    plus_di double precision,
+    minus_di double precision,
+    mid_rsi double precision,
+    rel_trades double precision,
+    rel_depth double precision,
+    rel_spread double precision,
+    stoch_k double precision,
+    stoch_d double precision,
+    bb_z double precision,
+    bb_width_bps double precision,
+    cci double precision,
+    donchian_pos double precision,
+    donchian_high_atr double precision,
+    donchian_low_atr double precision,
+    aroon_up double precision,
+    aroon_down double precision,
+    linreg_slope_atr double precision,
+    linreg_r2 double precision,
+    chop double precision,
+    vol_bps double precision,
+    cmf double precision,
+    mfi double precision,
+    er double precision,
+    ret_5_atr double precision,
+    ret_15_atr double precision,
+    delta_ratio_5 double precision,
+    delta_ratio_15 double precision,
+    flow_price_corr double precision,
+    volume integer,
+    buy_volume integer,
+    sell_volume integer,
+    trades integer,
+    delta_high integer,
+    delta_low integer,
+    status smallint NOT NULL,
+    observed smallint,
+    phase smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
+    PRIMARY KEY (contract_id, slot_ordinal, end_ns)
+) PARTITION BY RANGE (end_ns);
+CREATE INDEX candle_1h_1m_end ON market.candle_1h_1m USING brin (end_ns);
+
+-- The continuous series of each product, as for the second tables: every session's rows from
+-- its front contract. Sessions are whole minutes, so the minutes inside a session's seconds
+-- first_ordinal ... last_ordinal are (first_ordinal + 59) / 60 ... last_ordinal / 60.
+CREATE VIEW market.continuous_bar_1m AS
+SELECT f.product, f.trade_date, f.contract, f.roll_basis, f.rolled, b.*
+FROM market.front_session f
+JOIN market.bar_1m b
+  ON b.contract_id = f.contract_id
+ AND b.slot_ordinal BETWEEN (f.first_ordinal + 59) / 60 AND f.last_ordinal / 60
+ AND b.end_ns > f.open_ns AND b.end_ns <= f.close_ns;
+COMMENT ON VIEW market.continuous_bar_1m IS
+    'One-minute rows of each product session from its front contract: one series per product';
+
+CREATE VIEW market.continuous_candle_1h_1m AS
+SELECT f.product, f.trade_date, f.contract, f.roll_basis, f.rolled, k.*
+FROM market.front_session f
+JOIN market.candle_1h_1m k
+  ON k.contract_id = f.contract_id
+ AND k.slot_ordinal BETWEEN (f.first_ordinal + 59) / 60 AND f.last_ordinal / 60
+ AND k.end_ns > f.open_ns AND k.end_ns <= f.close_ns;
+COMMENT ON VIEW market.continuous_candle_1h_1m IS
+    '1h@1m candles and features of each product session from its front contract';

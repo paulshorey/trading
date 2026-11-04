@@ -7,26 +7,30 @@ has since been rebuilt on the baseline schema ([results](handoff.md#baseline-reb
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
-and every scheduled-open second, one row per **stage**, computed by `strategy-core`, the
-code live sessions run ([stages and tiers](feature-pipeline.md)). Each stage has its own
-table, version, and per-session checkpoint:
+and every scheduled-open second and minute, one row per **stage**, computed by
+`strategy-core`, the code live sessions run ([stages and tiers](feature-pipeline.md)). Each
+stage has its own table, version, and per-session checkpoint:
 
-| Table                          | One row per second holds                                                                                                          |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `market.bar_1s` (tier 0)       | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book sampled at trades |
-| `market.candle_1m_1s` (tier 1) | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                                 |
+| Table                          | One row per                    | Holds                                                                                                                       |
+| ------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `market.bar_1s` (tier 0)       | second `o`                     | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book at trades    |
+| `market.bar_1m` (tier 0)       | minute `m` (seconds 60m−59…60m) | The same statistics merged exactly from the minute's 60 second rows, plus observed seconds and one-second returns            |
+| `market.candle_1m_1s` (tier 1) | second `o`                     | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                           |
+| `market.candle_1h_1m` (tier 1) | minute `m`                     | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)       |
 
-Both are keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
-[index counter](../sliding-windows/README.md#rows-and-index-counters), and `phase` is a
-virtual column, `slot_ordinal % 60`. Partitions are monthly on `end_ns`. Join the tables on
-`(contract_id, slot_ordinal)`. Column descriptions and units are stored as PostgreSQL
-comments (`\d+ market.candle_1m_1s`).
+Each is keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
+[index counter](../sliding-windows/README.md#rows-and-index-counters) at its own resolution,
+and `phase` is a virtual column, `slot_ordinal % 60`. Minute `m` holds the seconds with
+ordinals `60m − 59 … 60m`, since calendar boundaries are whole minutes, so the second row at
+`60m` ends with minute `m`. Partitions are monthly on `end_ns`. Join tables of one
+resolution on `(contract_id, slot_ordinal)`, and a minute to its last second on
+`second.slot_ordinal = 60 * minute.slot_ordinal`. Column descriptions and units are stored
+as PostgreSQL comments (`\d+ market.candle_1h_1m`).
 
 Rows are stored per contract. Each product also reads as **one permanent series**,
-`product = 'GC'`, through the views `market.continuous_bar_1s` and
-`market.continuous_candle_1m_1s`: every session's rows from that session's front contract
-([continuous series](#continuous-series-per-product)). The rolling `1h@1m` tables are the
-[next step](#next).
+`product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,
+`continuous_candle_1m_1s`, and `continuous_candle_1h_1m`: every session's rows from that
+session's front contract ([continuous series](#continuous-series-per-product)).
 
 ## Run it
 
@@ -35,7 +39,7 @@ Once, after pulling this code:
 ```sh
 brew services start postgresql@18
 uv run research db migrate              # applies pending migrations
-uv run research ingest plan GC SI       # what would be built; stores no second rows
+uv run research ingest plan GC SI       # what would be built; stores no rows
 uv run research ingest run GC SI        # build; progress on stderr, summary as JSON
 uv run research ingest status           # series coverage, contracts, sizes, recent runs
 ```
@@ -133,8 +137,8 @@ the plan prepend sessions, which shows as `needs_rebuild`.
 
 ## Continuous series per product
 
-`market.continuous_bar_1s` and `market.continuous_candle_1m_1s` give each product one
-series across contract rolls, with the columns of the stored tables plus `product`,
+`market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`, and
+`continuous_candle_1h_1m` give each product one series across contract rolls, with the columns of the stored tables plus `product`,
 `trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
 over the per-contract tables (`market.front_session` maps sessions to contracts), so they
 take no storage. `run` publishes each session's front contract to `market.roll` only once
@@ -153,11 +157,13 @@ missing rows.
   they use their own volume, even if partial, or with none the range's first front
   (`roll_basis` = `same_session`, not causal). Sessions without any volume in their range
   get no front; `plan` and `run` list them as `unresolved_sessions`.
-- **One row per scheduled second.** Contracts of a product share the calendar, so
-  `slot_ordinal` continues across rolls and the series has every index exactly once.
+- **One row per scheduled second (or minute).** Contracts of a product share the calendar,
+  so `slot_ordinal` continues across rolls and the series has every index exactly once. A
+  session's minutes are the whole minutes inside its seconds `first_ordinal … last_ordinal`:
+  `(first_ordinal + 59) / 60 … last_ordinal / 60`.
 - **No artificial roll moves in features.** Each row's candle and features come from its
-  own contract's history; the new front contract was stored from 5 sessions before its roll,
-  so its indicators are warm and no feature sees the price difference between months. Raw
+  own contract's history; the new front contract was stored from the lead (40 sessions)
+  before its roll, so its indicators are warm and no feature sees the price difference between months. Raw
   prices (OHLC, VWAP) do jump at a roll: `contract` names the source, and `rolled` is true
   on each new contract's first session. Compute anything from raw prices within one
   contract; a window over `continuous_bar_1s` rows would mix contracts across a roll, while
@@ -264,6 +270,19 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   low or at the high came first (0: the same trade). They show what the high and low cannot,
   such as 99, 105, 100 falling 5 in a second that closes up, and merge exactly into windows
   with the high and low.
+- **Minutes** (`bar_1m`) merge their 60 second rows by these rules (`stage_bar_1m.combine_metrics`
+  applies the window rules within each minute), so a minute equals the `1m@1s` window that
+  ends at ordinal `60m`, field by field. A minute with any missing second is missing
+  (`status` 0) and stores only its keys and status. `session_cvd` is the value at the
+  minute's last second. `observed_seconds` counts seconds with trades. For realized
+  volatility, `ret2_sum` and `ret_count` hold the squared log returns between consecutive
+  observed second closes inside the minute, and `first_close` (the first observed second's
+  close) with the previous minute's `close` gives the return between minutes.
+- **The hourly candle** (`candle_1h_1m`) is computed by the `1m@1s` code on minute rows,
+  with indicators per phase `m % 60`; `active_ratio` is observed seconds ÷ 3,600. It leaves
+  out the session features and the latest observation with its age (`trade_age_s`,
+  `book_age_s`, `depth_age_s`, `book_spread_bps`, `book_imbalance`): at a minute's end they
+  repeat the second row at `60m`.
 
 ## Metrics
 
@@ -362,7 +381,7 @@ rebuilds is listed in the [feature pipeline](feature-pipeline.md#what-a-change-c
 
 ## Tests
 
-`lib/strategy-core/tests/test_metrics.py`, `test_rows.py`, and `test_stages.py`: the handoff's numeric
+`lib/strategy-core/tests/test_metrics.py`, `test_rows.py`, `test_minutes.py`, and `test_stages.py`: the handoff's numeric
 reference second, validity subsets, windows equal to direct aggregation of their trades,
 identical rows and state for whole-session and second-by-second processing, exact
 checkpoint restore, scale invariance of every feature, session CVD resets, and per-phase
@@ -370,9 +389,13 @@ parity with plain references (RSI, EMA, stochastic, Bollinger, Donchian, regress
 efficiency ratio, ADX), RSI on empty windows with the carried price, path drawdown and
 extreme order (hand-checked and against direct aggregation), the stage graph, derived
 warm-ups, and that each declared warm-up settles every candle feature (built from two
-starting points). `apps/backtest-runner/tests/test_ingest.py`: the schema and
+starting points). Minutes: a hand-checked minute; every minute field equal to
+`MetricWindow(60)` and to the `1m@1s` candle at ordinal `60m` in any chunking; closures,
+early closes, empty and missing minutes; checkpoints inside a minute; hourly scale
+invariance. `apps/backtest-runner/tests/test_ingest.py`: the schema and
 `market.column_registry` equal the registry, binary COPY range checks, stages versioned on
-their own (a stale stage is rebuilt alone, a missing one is added), warm flags and the
+their own (a stale stage is rebuilt alone, including a minute stage at its own resolution, a
+missing one is added), warm flags and the
 derived lead, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
 build), repair after a file changes, rebuild, and stale detection; the continuous series
@@ -381,8 +404,8 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. **`1h@1m` rows (PR B)**: stages `bar_1m`, rolled up from the second rows (the metric
-   fields merge by their kinds, as `bars.combine` does for OHLCV), and `candle_1h_1m`, with
-   the amendments in the [plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan).
+1. **Hourly-only metrics (PR B2)**: realized volatility from the minutes' one-second returns,
+   minute-return statistics, and the other [plan 5.4](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)
+   metrics, on `candle_1h_1m` or a new tier-1 stage.
 2. Let backtests read stored rows when the builder matches the run.
 3. Load Databento `definition` records into `market.contract` (expirations).

@@ -25,7 +25,7 @@ def main() -> None:
     p.add_argument("action", choices=("status", "migrate", "register"))
     p = sub.add_parser(
         "ingest",
-        help="Store one-second rows and 1m@1s candle features in PostgreSQL",
+        help="Store second and minute rows with their 1m@1s and 1h@1m candle features",
         description="plan: show what would be built (reads DBN files to find rolls, writes no "
         "rows). run: build it; safe to rerun or interrupt. status: what is stored.",
     )

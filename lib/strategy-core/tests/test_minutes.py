@@ -294,3 +294,29 @@ def test_the_declared_warmup_settles_every_hourly_feature():
         np.testing.assert_array_equal(np.isfinite(a[name][sa]), np.isfinite(b[name][sb]), name)
     assert worst(settled) <= warmup.TOLERANCE
     assert worst(later + stage.warmup() * NS // 2) > warmup.TOLERANCE
+
+
+def test_complete_hourly_windows_never_bridge_across_a_missing_minute():
+    """PR #74 review: the only bridge across missing data is the one into the first observed
+    minute after it. Every window holding that minute but not the missing one starts with it
+    (or with quiet minutes before it), so the bridge is the window's first and is excluded; a
+    window holding the missing minute is a gap, whose features are NULL. Buyers at 10.0 before
+    a missing minute and sellers at 12.0 after it (past a quiet minute) would show any leak as
+    a price move or a side switch."""
+    cal = calendar((0, 3))
+    rows = [(T0 + k * S + 1000, 10.0, 1, 1) for k in range(1800)]  # minutes 1-30
+    rows += [(T0 + k * S + 1000, 12.0, 1, -1) for k in range(1920, 10800)]  # minutes 33-180
+    cov = np.array([[T0, T0 + 1810 * S], [T0 + 1820 * S, T0 + 3 * HOUR]], np.int64)  # minute 31
+    chunk = MarketChunk("X", T0, T0 + 3 * HOUR, trades(rows), cov)
+    out = builder(cal, MINUTE_BRANCH).process(chunk)
+    m, h = out.tables["bar_1m"].values, out.tables["candle_1h_1m"].values
+    win = out.products["hour_window"]
+    assert m["status"][30] == MISSING and m["status"][31] == NO_TRADES
+    complete = h["status"] == COMPLETE
+    assert complete.sum() == 90 and h["slot_ordinal"][complete].min() == 91  # past the gap
+    for name in ("path_abs", "upticks", "downticks", "side_switches"):
+        assert (win[name][complete] == 0).all(), name  # no move or switch across the gap
+    assert (h["path_bps"][complete] == 0).all() and (h["side_switch_ratio"][complete] == 0).all()
+    gap = h["status"] == GAP
+    assert (win["path_abs"][gap] > 0).any()  # gap windows join both sides; their features are NULL
+    assert np.isnan(h["path_bps"][gap]).all()

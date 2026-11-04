@@ -103,7 +103,7 @@ These are fundamental; changing any of them changes every stored value.
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70) |
 | Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                         |
-| Database | PostgreSQL 18 database `trading`: migrations `0001`–`0004` applied; GC and SI stored, 71,559,900 rows in each second table (80.84 GB including indexes)                                                         |
+| Database | PostgreSQL 18 database `trading`: migration `0001_baseline` applied; GC and SI stored, 71,559,900 rows in each second table (80.84 GB including indexes)                                                         |
 | Ingest   | Run #2 (stages, 40-session lead) completed November 4: 23 min 44 s, 8 workers; 257/257 front sessions per product ([verification](#rebuild-with-stages-gc-and-si))                                              |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                 |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                |
@@ -149,34 +149,12 @@ Local evidence: `~/ingest-gc-si-pra.log` and `~/ingest-gc-si-pra.summary.json`. 
 replaces rows session by session; compact afterwards with `VACUUM (FULL, ANALYZE)` per
 partition when the replaced rows are not reused soon.
 
-## First ingest (GC and SI)
+## Running ingestion
 
-Superseded by the [rebuild with stages](#rebuild-with-stages-gc-and-si); kept as history.
+History: run #1 (November 3, 2026, 11 min 2 s) stored GC and SI with the one-builder code
+and a 5-session lead; run #2 (November 4) rebuilt them with stages, both superseded by the
+from-scratch build on the baseline schema above.
 
-Completed November 3, 2026, on `main` commit `738fd6a`, in local PostgreSQL 18 database
-`trading` at `127.0.0.1:5432`. Run #1 exited 0 with `"status": "done"`; wall time was
-661.594 s (11 min 2 s), using 8 workers. No code fixes or new migrations were needed.
-
-- **Coverage:** 6 contracts and 282 contract-sessions per product, including warm-up;
-  46,503,000 rows in **each** table (93,006,000 total). GC and SI each publish all 257
-  front sessions, November 3, 2025 through October 30, 2026, with no missing rows.
-- **Sizes including indexes:** `bar_1s` 14.91 GB; `candle_1m_1s` 42.74 GB; total 57.65 GB
-  (decimal GB). Free disk after the run: 254 GiB.
-- **Resume check:** `research ingest plan GC SI` reports every contract `current`,
-  `todo_sessions = 0`, `todo_rows = 0`, and no unresolved sessions.
-- **Quality:** inspected all 15 contract-session reports referencing degraded files,
-  including 2025-11-28, 2026-03-16, and 2026-04-10. They retain degraded source conditions;
-  none reports rejected trades, bad receive-time/book flags, or missing rows. Missing
-  rows measure file coverage; zero does not clear the outage or certify a session for ML.
-  The [session quality policy](todo.md#now-make-the-core-work-and-test-it) remains open.
-- **Roll:** July 30 switches GCQ6 to GCZ6 with `rolled = true`, consecutive ordinals, and
-  populated RSI, ATR, and EMA(21) at the open. Last observed GCQ6 close was 4065.5;
-  first GCZ6 close was 4123.9. Candles use GCZ6's own history. Three later complete
-  candles have NULL RSI because their prior same-phase candles were empty; this follows
-  the documented indicator re-seeding policy.
-
-Local run evidence: `~/ingest-gc-si.log` (one line per session),
-`~/ingest-gc-si.summary.json`, and `~/ingest-gc-si.process.json` (runtime and exit status).
 To check current coverage or extend after new downloads:
 
 ```sh

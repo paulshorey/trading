@@ -1,14 +1,13 @@
 # Research storage
 
-Status: a local PostgreSQL 18 database, `trading`, managed by the numbered migrations
-in [`migrations/`](migrations/): `0001_foundation` (schemas `market`, `research`, `ml`,
-and the Databento file registry `market.source_file`) and `0002_second_rows` (contracts,
-rolls, ingestion bookkeeping, the one-second tables written by `research ingest`, and the
-per-product continuous views), and `0003_side_bridges` (each second's first and last trade
-side, so windows count side transitions across seconds); see
-[ingestion](../../docs/project/ingestion.md). Runs and ML rows come next. The earlier
-full-schema proposal ([`schema.sql`](schema.sql) and its queries) is reference only;
-its clock-based `phase_index` is superseded by trading-time ordinals (below).
+Status: a local PostgreSQL 18 database, `trading`, managed by the numbered migrations in
+[`migrations/`](migrations/). `0001_baseline` creates the current structure from scratch:
+schemas `market`, `research`, and `ml`; the Databento file registry; contracts, rolls, and
+ingestion records; the stage tables `market.bar_1s` and `market.candle_1m_1s` with their
+per-product continuous views; and the stage records, variants, and column registry
+([ingestion](../../docs/project/ingestion.md), [feature pipeline](../../docs/project/feature-pipeline.md)).
+It replaced migrations 0001–0004 on November 4, 2026, when the database was rebuilt from the
+DBN files; later changes are new numbered files. Runs and ML rows come next.
 
 ## Local setup
 
@@ -36,7 +35,13 @@ throwaway `trading_test_*` databases; CI runs them against a `postgres:18` servi
 Add `NNNN_short_name.sql` with the next number. `research db migrate` applies each
 pending file once, in order, in a transaction, and records its SHA-256 in
 `meta.schema_migration`. Never edit an applied file; the runner refuses to continue
-when one changes. Add a new migration instead. Agents apply migrations to the local
+when one changes. Add a new migration instead.
+
+Every stored row is derived from the DBN files, so the migrations can be folded into a new
+baseline when their history stops being useful, as on November 4, 2026. That replaces the
+database: with Paul's approval, drop the schemas (`DROP SCHEMA market, research, ml, meta
+CASCADE`), run `research db migrate` and `research db register`, then rebuild every product
+with `research ingest run`. Agents apply migrations to the local
 database when their code needs them ([AGENTS.md](../../AGENTS.md#local-database-agents-may-write-to-it)).
 
 ## One-second and one-minute rows
@@ -68,7 +73,7 @@ CREATE TABLE market.bar_1s (
     slot_ordinal  bigint   NOT NULL,     -- index counter: +1 per scheduled-open second
     end_ns        bigint   NOT NULL,     -- clock time: charts and joins, never windows
     -- OHLC, high/low times, volume by aggressor side, trade count, price x size sum,
-    -- running-delta extremes, session CVD, and the TBBO metrics (strategy_core.rows)
+    -- running-delta extremes, session CVD, and the TBBO metrics (strategy_core.stage_bar_1s)
     status        smallint NOT NULL,     -- 0 missing, 1 no trades, 2 observed
     phase         smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
     PRIMARY KEY (contract_id, slot_ordinal, end_ns)
@@ -104,9 +109,9 @@ from the research (CVD, spread, top-of-book size and imbalance at trades, and so
   ([ingestion](../../docs/project/ingestion.md)).
 - Stored raw aggregates may use price units; model features derived from them must
   be normalized (see `strategy_core.features.Unit`).
-- Measured: about 325 bytes per `bar_1s` row and 951 per `candle_1m_1s` row with indexes,
-  or about 27 GB per contract-year; 1.4 s per 23-hour session per worker, including
-  binary `COPY`.
+- Measured (November 4, 2026, compacted): about 281 bytes per `bar_1s` row and 849 per
+  `candle_1m_1s` row with indexes; GC and SI with a 40-session lead use 80.84 GB, about
+  40 GB per product-year ([measured](../../docs/project/ingestion.md#measured)).
 
 **Contracts and rolls** (implemented): `market.contract` has one row per contract keyed
 by product, raw symbol, and delivery month (raw symbols repeat each decade); expirations

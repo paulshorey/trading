@@ -1,7 +1,36 @@
--- Contracts, rolls, ingestion bookkeeping, the stored one-second rows, and one continuous
--- series per product. docs/project/ingestion.md describes the tables; strategy_core.rows
--- defines every column of market.bar_1s and market.candle_1m_1s (tests compare them with
--- this file's result).
+-- Baseline schema of the research database, from scratch (replaces migrations 0001-0004 of
+-- PR #62-#70; the database was rebuilt on it November 4, 2026). Every stored row is derived
+-- from the Databento DBN files and can be rebuilt (docs/project/ingestion.md).
+--
+-- Stages (docs/project/feature-pipeline.md): every stored table is a stage with its own builder
+-- identity and per-session checkpoint. Each stage's Python registry (strategy_core stage
+-- modules) defines its columns; tests compare it with this schema and market.column_registry.
+
+CREATE SCHEMA market;
+CREATE SCHEMA research;
+CREATE SCHEMA ml;
+
+COMMENT ON SCHEMA market IS 'Market data derived from Databento DBN files: catalog, contracts, bars, metrics';
+COMMENT ON SCHEMA research IS 'Backtest runs, trades, and feature-set versions';
+COMMENT ON SCHEMA ml IS 'ML rows (one would-be trade per signal), models, and predictions';
+
+-- One row per downloaded Databento file. DBN files stay the permanent tick archive;
+-- derived rows reference the files they came from.
+CREATE TABLE market.source_file (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    dataset text NOT NULL,
+    schema_name text NOT NULL,
+    job_id text NOT NULL,
+    file_name text NOT NULL,
+    utc_date date NOT NULL,
+    parents text[] NOT NULL CHECK (cardinality(parents) > 0),
+    byte_count bigint NOT NULL CHECK (byte_count >= 0),
+    sha256 text NOT NULL CHECK (sha256 ~ '^[0-9a-f]{64}$'),
+    condition text NOT NULL CHECK (condition IN ('available', 'degraded', 'pending', 'missing')),
+    registered_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (job_id, file_name)
+);
+CREATE INDEX source_file_date ON market.source_file (dataset, schema_name, utc_date);
 
 -- One row per futures contract. Raw symbols repeat each decade, so the delivery month is part
 -- of the key. Expiration comes from Databento definition records once they are loaded.
@@ -51,15 +80,19 @@ COMMENT ON COLUMN market.roll.basis IS
     'volume was an earlier delivery month, front unchanged; kept: previous session incomplete, '
     'front unchanged; same_session: first session of a downloaded range (not causal)';
 
--- Builder versions: code digest and settings that determine stored values.
+-- Builder identities, one per stage and one for the market source: the code digest and
+-- settings that determine stored values, including the identities of the stage's inputs.
 CREATE TABLE market.builder (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sha256 text NOT NULL UNIQUE CHECK (sha256 ~ '^[0-9a-f]{64}$'),
     product text NOT NULL,
     code_sha256 text NOT NULL,
     settings jsonb NOT NULL,
+    stage text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
+COMMENT ON COLUMN market.builder.stage IS
+    'Stage this identity versions; "source" for the market source (files, calendar, timing)';
 
 CREATE TABLE market.ingest_run (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -71,8 +104,9 @@ CREATE TABLE market.ingest_run (
     error text
 );
 
--- One row per stored (contract, session): what built it, from which files, its quality
--- report, and the builder checkpoint after the session, from which the next session resumes.
+-- One row per stored contract session: the market source builder, the source files and their
+-- quality report, and the row bounds the continuous series reads. Stage checkpoints are in
+-- market.stage_slice.
 CREATE TABLE market.ingest_slice (
     contract_id bigint NOT NULL REFERENCES market.contract (id),
     trade_date date NOT NULL,
@@ -87,7 +121,6 @@ CREATE TABLE market.ingest_slice (
     missing integer NOT NULL,
     report jsonb NOT NULL,
     source_files jsonb NOT NULL,
-    state bytea NOT NULL,
     build_seconds real NOT NULL,
     ingested_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (contract_id, trade_date)
@@ -129,6 +162,8 @@ CREATE TABLE market.bar_1s (
     order_bid_size_sum bigint,
     order_ask_size_sum bigint,
     depth_at_ns bigint,
+    drawdown bigint,
+    drawup bigint,
     imbalance_sum double precision,
     imbalance_volume_sum double precision,
     imbalance_last double precision,
@@ -165,6 +200,9 @@ CREATE TABLE market.bar_1s (
     ask_orders_sum integer,
     bad_book_trades integer,
     late_trades integer,
+    first_side integer,
+    last_side integer,
+    extreme_order integer,
     status smallint NOT NULL,
     phase smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
     PRIMARY KEY (contract_id, slot_ordinal, end_ns)
@@ -333,3 +371,57 @@ JOIN market.candle_1m_1s k
  AND k.end_ns > f.open_ns AND k.end_ns <= f.close_ns;
 COMMENT ON VIEW market.continuous_candle_1m_1s IS
     '1m@1s candles and features of each product session from its front contract';
+
+-- Stages: per-session records, variants, and the column registry.
+
+-- One row per stage, variant, and stored contract session: the stage builder that wrote the
+-- session's rows, the stage checkpoint after it, and whether its values had settled.
+CREATE TABLE market.stage_slice (
+    stage text NOT NULL,
+    variant_id bigint NOT NULL DEFAULT 0,  -- 0: a stage without variants
+    contract_id bigint NOT NULL,
+    trade_date date NOT NULL,
+    builder_id bigint NOT NULL REFERENCES market.builder (id),
+    run_id bigint NOT NULL REFERENCES market.ingest_run (id),
+    state bytea NOT NULL,
+    warm boolean NOT NULL,
+    build_seconds real NOT NULL,
+    ingested_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (stage, variant_id, contract_id, trade_date),
+    FOREIGN KEY (contract_id, trade_date) REFERENCES market.ingest_slice ON DELETE CASCADE
+);
+CREATE INDEX stage_slice_session ON market.stage_slice (contract_id, trade_date);
+CREATE INDEX stage_slice_builder ON market.stage_slice (builder_id);
+COMMENT ON TABLE market.stage_slice IS
+    'Per stage, variant, and contract session: builder, checkpoint, and warm flag';
+COMMENT ON COLUMN market.stage_slice.warm IS
+    'The contract had run at least the stage''s derived warm-up before this session';
+
+-- Parameter grids of a stage (for example pivot scales) are variants: rows, not columns.
+CREATE TABLE market.variant (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    stage text NOT NULL,
+    name text NOT NULL,
+    params jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (stage, name)
+);
+COMMENT ON TABLE market.variant IS
+    'Variants of a stage over a parameter grid; their rows are keyed by variant_id';
+
+-- Every stored column with its role, from the stages' Python registries (store.apply_registry).
+CREATE TABLE market.column_registry (
+    stage text NOT NULL,
+    name text NOT NULL,
+    role text NOT NULL CHECK (role IN ('feature', 'context', 'key')),
+    unit text,
+    sql_type text NOT NULL,
+    description text NOT NULL,
+    status text NOT NULL CHECK (status IN ('active', 'deprecated')),
+    introduced_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (stage, name),
+    CHECK ((role = 'feature') = (unit IS NOT NULL))
+);
+COMMENT ON TABLE market.column_registry IS
+    'Stored columns: feature (normalized model input with a unit), context (source units, never '
+    'a model input), or key';

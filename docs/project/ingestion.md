@@ -208,7 +208,7 @@ Run #1, on November 3, 2026 on local PostgreSQL 18 database `trading`, built fro
 - **Checks:** inspected all stored reports referencing degraded files and checked the
   July 30 GCQ6-to-GCZ6 roll, including warm features at the open. Degraded metadata
   remains a research-quality warning; complete file coverage does not certify a session
-  for training. Details and local evidence paths are in the [handoff](handoff.md#first-ingest-gc-and-si).
+  for training. Details and local evidence paths are in the [handoff](handoff.md#rebuild-with-stages-gc-and-si).
 
 Earlier throwaway-database measurements (November 1) found about 0.35 s to compute,
 0.5 s to encode, and 1.4 s including writes for one 23-hour session per worker.

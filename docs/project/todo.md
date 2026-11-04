@@ -22,6 +22,9 @@ task live in [handoff: next steps](handoff.md#next-steps).
       registries; empty windows carry the last trade price; drawdown/drawup and high/low order; lead derived from
       indicator warm-ups (40 to start), with `warm` flags and a two-start warm-up test
       ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)); GC and SI rebuilt November 4 ([results](handoff.md#rebuild-with-stages-gc-and-si), [pipeline](feature-pipeline.md), [plan](plan-1h-and-pivots.md)).
+- [ ] **Rebuild `trading` on the baseline schema.** Paul drops the old schemas (the
+      command is in the [handoff](handoff.md#start-here-next-session)); then migrate,
+      register, `ingest run GC SI`, verify, and record.
 - [ ] **Store `1h@1m` rows (PR B).** `market.bar_1m` and `market.candle_1h_1m`
       ([plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
 - [ ] **Volatility tier (PR C).** Including bullish, bearish, and adverse-excursion ATR

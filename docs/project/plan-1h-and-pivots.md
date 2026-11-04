@@ -1,7 +1,8 @@
 # Plan: extensible stages, `1h@1m` rows, and swing structure (higher lows, lower highs)
 
 Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decisions)).
-Nothing here is implemented yet. It answers four questions: are the stored `1m@1s` rows
+Status November 4: PR A is done (#70) and the schema folded into a baseline (#71); next are
+the database rebuild and PR B ([handoff](handoff.md#start-here-next-session)). It answers four questions: are the stored `1m@1s` rows
 right, how to make the system extensible, when to build `1h@1m`, and how to add high/low
 pivot detection at both resolutions. The [feature pipeline](feature-pipeline.md) sets the
 calculation tiers and database rules, and [section 7](#7-volatility-tier-atr-family) the

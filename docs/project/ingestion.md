@@ -2,7 +2,8 @@
 
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead; run #2 passed coverage, warm, parity, quality-report, and
-roll checks ([results](handoff.md#rebuild-with-stages-gc-and-si), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+roll checks ([results](handoff.md#rebuild-with-stages-gc-and-si), [measurements](#measured)). The database
+must next be rebuilt on the baseline schema ([how](handoff.md#start-here-next-session)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract

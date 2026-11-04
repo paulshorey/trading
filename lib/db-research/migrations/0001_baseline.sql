@@ -1,6 +1,7 @@
--- Baseline schema of the research database, from scratch (replaces migrations 0001-0004 of
--- PR #62-#70; the database was rebuilt on it November 4, 2026). Every stored row is derived
--- from the Databento DBN files and can be rebuilt (docs/project/ingestion.md).
+-- Baseline schema of the research database, from scratch. It replaces migrations 0001-0004 of
+-- PR #62-#70, folded on November 4, 2026; a database that applied those is rebuilt from the
+-- DBN files, never upgraded (lib/db-research/README.md). Every stored row is derived from the
+-- Databento DBN files and can be rebuilt (docs/project/ingestion.md).
 --
 -- Stages (docs/project/feature-pipeline.md): every stored table is a stage with its own builder
 -- identity and per-session checkpoint. Each stage's Python registry (strategy_core stage

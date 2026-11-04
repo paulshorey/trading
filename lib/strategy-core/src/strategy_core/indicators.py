@@ -190,11 +190,9 @@ def phase_adx(high, low, close, valid, phase, n, prev, tr, pdm, mdm, count, dx, 
 
 
 def row_sum(x: np.ndarray) -> np.ndarray:
-    """Sum across columns in one fixed order, so results never depend on the chunk size."""
-    acc = x[:, 0].copy()
-    for j in range(1, x.shape[1]):
-        acc += x[:, j]
-    return acc
+    """Sum across history columns (column j is j periods back) oldest first, the one order for
+    floating-point sums (`kernels.ordered_sum`), so results never depend on the chunk size."""
+    return kernels.ordered_sum(x[:, ::-1])
 
 
 def div(a, b, zero=np.nan):

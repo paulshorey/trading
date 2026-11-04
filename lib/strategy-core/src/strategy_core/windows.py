@@ -15,6 +15,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from .bars import MISSING, OBSERVED, BaseBars
+from .kernels import ordered_sum
 from .market import MINUTE, PX, SECOND, SessionCalendar
 
 COMPLETE, EMPTY, GAP, WARMUP = 0, 1, 2, 3
@@ -119,9 +120,9 @@ class RollingWindow:
         ends = padded(b.end, 0)
 
         volume = window_sum(padded(b.volume, 0)).astype(float)
-        # Float sums over each window's own slots (not cumulative-sum differences), so the
-        # result never depends on where a chunk started.
-        pv = sliding_window_view(padded(b.pv, 0.0), w)[-m:].sum(axis=1) if m else np.zeros(0)
+        # Float sums over each window's own slots, oldest first (not cumulative-sum
+        # differences), so the result never depends on where a chunk started.
+        pv = ordered_sum(sliding_window_view(padded(b.pv, 0.0), w)[-m:]) if m else np.zeros(0)
         nan = np.full(m, np.nan)
 
         def px(values: np.ndarray) -> np.ndarray:

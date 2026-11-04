@@ -92,9 +92,9 @@ class MetricWindow:
             if v.dtype.kind == "i":
                 c = np.r_[0, np.cumsum(v)]
                 return c[r + 1] - c[lo]
-            acc = v[r].copy()  # floats: one fixed order (newest first) for any chunking
+            acc = v[lo].copy()  # floats: oldest first, the one order for any chunking
             for j in range(1, w):
-                acc += v[r - j]
+                acc += v[lo + j]
             return acc
 
         def first_last(valid: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

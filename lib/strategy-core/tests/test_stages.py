@@ -85,3 +85,27 @@ def test_the_declared_warmup_settles_every_candle_feature():
         )
     assert worst(settled) <= warmup.TOLERANCE  # settled within the declared warm-up
     assert worst(later + stage.warmup() * NS // 2) > warmup.TOLERANCE  # and not before it
+
+
+def test_a_minute_equals_the_window_that_ends_with_it_to_the_bit():
+    """One summation order (oldest first) for floating-point sums: combining a minute's seconds
+    and summing the rolling window that ends at that minute give identical bits."""
+    from strategy_core.bars import Rollup, aggregate
+    from strategy_core.market import MINUTE, SECOND
+    from strategy_core.windows import FAST, RollingWindow
+
+    cal = calendar((0, 2))
+    end = T0 + 2 * HOUR
+    t = random_trades(T0, end, seed=8, rate=3)
+    cov = np.array([[T0, end]], np.int64)
+    ends = cal.slot_ends(T0, end, SECOND)
+    seconds = aggregate(t, ends, SECOND, cov, feed_latency=0, close_delay=100_000_000).bars
+    minutes = Rollup(SECOND, MINUTE).update(seconds)
+    windows = RollingWindow(FAST, cal).update(seconds)
+    at = np.searchsorted(windows.end, minutes.end)
+    np.testing.assert_array_equal(windows.end[at], minutes.end)
+    traded = minutes.volume > 0
+    assert traded.sum() > 100
+    np.testing.assert_array_equal(
+        windows.vwap[at][traded], minutes.pv[traded] / minutes.volume[traded]
+    )

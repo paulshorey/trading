@@ -196,11 +196,14 @@ its row count, inclusive: `end ordinal − start ordinal + 1`, where start and e
 rows of its starting and ending extreme trades. A leg inside one row has duration 1, so
 no ratio below divides by zero:
 
-- `pullback_depth`: pullback size ÷ impulse size (a retracement ratio; above 1 means the
-  low is no longer higher).
-- `pullback_time_ratio`: pullback rows ÷ impulse rows.
-- `pullback_volume_log`: `log` of volume per row in the pullback ÷ in the impulse (light
-  volume on pullbacks is the classic healthy-trend pattern).
+- `pullback_depth`: pullback size ÷ impulse size, clipped to 0–2 (a retracement ratio;
+  above 1 means the low is no longer higher).
+- `pullback_time_log`: `log(pullback rows ÷ impulse rows)`, clipped to ±3.
+- `pullback_volume_log`: `log` of volume per row in the pullback ÷ in the impulse, clipped
+  to ±3 (light volume on pullbacks is the classic healthy-trend pattern).
+
+The unclipped ratios are stored on the events as context, not features.
+
 - `pullback_delta_ratio` and `impulse_delta_ratio`: buy − sell over sided volume in each
   leg.
 - `impulse_speed_atr`, `pullback_speed_atr`: leg size in ATR per minute, from that

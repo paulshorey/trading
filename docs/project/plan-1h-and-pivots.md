@@ -200,9 +200,10 @@ Within one **segment** (a stretch with data coverage and defined threshold input
 confirmed pivots alternate high,
 low, high, … per scale. Missing data ends the segment, because the swing during the gap is
 unobserved: the next segment's first pivot may be of either kind, and it is never compared
-with pivots before the gap. Structure features (`low_change_atr`, `high_change_atr`, classes,
-`trend`, provisional relations, breaches) stay NULL until the new segment has confirmed both a
-high and a low; the last confirmed levels before the gap remain in `pivot_event`, with
+with pivots before the gap. Each structure value needs only its own references: a
+confirmed level can be breached as soon as it is confirmed (with `trend_before` NULL if the
+trend is not yet known), a same-kind class needs two confirmed pivots of that kind, and
+`trend` needs a classified high and low. Until then each is NULL; the last confirmed levels before the gap remain in `pivot_event`, with
 their segment. Each confirmed low `L_k` is a
 **higher low** if `L_k > L_{k−1}`, a lower low if it is lower, and an equal low if the
 two are equal. Highs are classified the same way. Trend state: **up** after a higher
@@ -246,9 +247,12 @@ time for the fast stream, and minutes × 60 for the slow stream. Closures add no
 an extreme set just before an 18:15 close is 60 s old one minute after the 23:00 reopen.
 If wall-clock age is ever needed, it gets a separately named column.
 
-Also stored is a sparse **`market.pivot_event`** table, one row per confirmed pivot. It
-holds the scale, kind, extreme and confirmation ordinals and times, the raw level (as
-data context, not a feature), θ, leg statistics, and the structure label. Charts, labels,
+Also stored is a sparse **`market.pivot_event`** table, one row per event of a scale:
+confirmed highs and lows, breaches (`breach_up`, `breach_down`), and reclaims. Every event
+has its ID, kind, observation ordinal and the exact time of the trade that produced it,
+`available_at`, and the epoch. Pivots add their extreme ordinal and time, the raw level (as
+data context, not a feature), θ and its ATR snapshot, leg statistics, and the structure
+class. Breaches and reclaims add the ID of the pivot they refer to and the breach depth. Charts, labels,
 and SQL research use it.
 
 **Initial grid** (illustrative, to be judged by the benchmark): fast `k ∈ {0.5, 1, 2}` ×

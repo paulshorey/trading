@@ -98,14 +98,16 @@ both comparisons exist in the valid history. Do not encode insufficient history 
 mixed/neutral. This state describes swing structure; it is not a forecast or trade.
 
 Sequence counters, updated at each confirmation and NULL until the first classified pivot
-of their kind in the epoch:
+of their kind in the epoch. The raw run lengths are event data: each confirmed low records
+`low_run` (`+n` after `n` consecutive higher lows, `−n` after `n` consecutive lower lows;
+an equal low sets 0, and the next class starts a new run from ±1), and each high records
+`high_run` the same way. Model inputs are bounded:
 
-- `low_run`: `+n` after `n` consecutive higher lows, `−n` after `n` consecutive lower
-  lows; an equal low sets 0, and the next class starts a new run from ±1.
-- `high_run`: the same for highs (`+n` higher highs, `−n` lower highs).
+- `low_run_ratio`, `high_run_ratio`: the run clipped to ±5 and divided by 5 (`Unit.RATIO`,
+  −1 to 1). Five or more consecutive higher lows read as 1.
 - `trend_age_s`: scheduled-open age since `trend` took its current value.
 
-An epoch reset clears all three.
+An epoch reset clears the counters and their ratios.
 
 Store normalized deltas as `low_change_atr = (L_new - L_prev) / A_new` and
 `high_change_atr = (H_new - H_prev) / A_new`, where `A_new` is the positive price-unit
@@ -177,6 +179,16 @@ are variant rows like the scales; cross-scale summaries are one row per slot. Al
 normalized, NULL when an input is undefined, and available with the row that publishes
 them.
 
+Persistence: values about the open candidate (pullback quality) update every row. Values
+fixed by an event (divergences at a confirmed pivot, the latest sweep) **hold** on every
+later row until the next event of the same kind replaces them or an epoch reset clears
+them, and each has an age column (`*_event_age_s`, in scheduled-open rows) so a model sees
+how fresh it is. The event tables hold the one-time pulses.
+
+ATR snapshots: every value "in ATR" about a leg uses the ATR frozen with that leg's ending
+extreme (for the open leg, its running extreme's snapshot), as stored on the event. No
+leg value uses the publication row's current ATR.
+
 **Pullback quality**, for the open candidate and for each confirmed low (mirrored for
 highs). The _impulse_ is the last completed leg toward the comparator's opposite pivot,
 and the _pullback_ is the leg from that pivot to the candidate low. A leg's duration is
@@ -209,7 +221,9 @@ Within one trade, breaches and reclaims are evaluated against the references kno
 before that trade, and only then confirmations: a trade that both reclaims the old low
 and confirms a new, lower low emits the reclaim first. It is
 the classic stop-run below a low that reverses. The fields are `reclaim_age_s` and
-`sweep_depth_atr` (how far below the low the breach went). Highs mirror this. `W` is a
+`sweep_depth_atr`: the distance from the breached low to the lowest trade from the
+breaching trade through the reclaiming trade, in the ATR snapshot of the breached low's
+event. Highs mirror this. `W` is a
 variant parameter (initially 60 rows for fast scales and 15 for slow).
 
 **Location:** `range_pos`, the close within the latest confirmed low–high range (0 at the
@@ -261,24 +275,26 @@ for reproducibility if later versions add or retire scales.
 
 ## Required implementation examples and checks
 
-| Case                                                         | Expected result                                                                                |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| First confirmed low/high                                     | Same-kind comparison unknown; trend stays NULL                                                 |
-| Two confirmed lows 100 then 102                              | HL appears at the second confirmation, not its extreme time                                    |
-| Two confirmed highs 110 then 108                             | LH; signed high delta is negative                                                              |
-| Equal same-kind pivots                                       | EL/EH, never HL/HH or a strict breach                                                          |
-| Candidate 102 above prior low 100, then extends to 99        | Provisional HL can be true after partial rebound, then clears without rewriting its past rows  |
-| HH+HL; LH+LL; one equal/mixed pair                           | Up; down; mixed, once both comparisons are known                                               |
-| Volatility falls without a new price                         | Frozen threshold does not create confirmation                                                  |
-| Adjacent second rows with different ATR phases               | Same swing history/comparators; only an actual qualifying observation changes events           |
-| One slow confirmation joined to 60 second rows               | One event ID/availability, held context with age; no 60 confirmation pulses                    |
-| Missing interval, quiet interval, roll, closure              | Distinct behavior from the state table above                                                   |
-| Lows HL, HL, EL, LL, LL                                      | `low_run` = 1, 2, 0, −1, −2                                                                    |
-| Break below a confirmed low, back above it within `W`        | One `reclaim` with its age and sweep depth; none if a new low confirms first or after `W` rows |
-| Price LL while cumulative delta rises between lows           | `low_change_atr` < 0 and `low_cvd_change_ratio` > 0 (bullish divergence)                       |
-| One trade reclaims the breached low and confirms the new low | Reclaim emitted, then the new low (an LL) confirms; both in that trade's row                   |
-| Confirmation trade's volume                                  | Counted in the new leg only; each trade belongs to exactly one leg                             |
-| Impulse and pullback both inside one second                  | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
+| Case                                                              | Expected result                                                                                |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| First confirmed low/high                                          | Same-kind comparison unknown; trend stays NULL                                                 |
+| Two confirmed lows 100 then 102                                   | HL appears at the second confirmation, not its extreme time                                    |
+| Two confirmed highs 110 then 108                                  | LH; signed high delta is negative                                                              |
+| Equal same-kind pivots                                            | EL/EH, never HL/HH or a strict breach                                                          |
+| Candidate 102 above prior low 100, then extends to 99             | Provisional HL can be true after partial rebound, then clears without rewriting its past rows  |
+| HH+HL; LH+LL; one equal/mixed pair                                | Up; down; mixed, once both comparisons are known                                               |
+| Volatility falls without a new price                              | Frozen threshold does not create confirmation                                                  |
+| Adjacent second rows with different ATR phases                    | Same swing history/comparators; only an actual qualifying observation changes events           |
+| One slow confirmation joined to 60 second rows                    | One event ID/availability, held context with age; no 60 confirmation pulses                    |
+| Missing interval, quiet interval, roll, closure                   | Distinct behavior from the state table above                                                   |
+| Lows HL, HL, EL, LL, LL                                           | `low_run` = 1, 2, 0, −1, −2                                                                    |
+| Break below a confirmed low, back above it within `W`             | One `reclaim` with its age and sweep depth; none if a new low confirms first or after `W` rows |
+| Price LL while cumulative delta rises between lows                | `low_change_atr` < 0 and `low_cvd_change_ratio` > 0 (bullish divergence)                       |
+| One trade reclaims the breached low and confirms the new low      | Reclaim emitted, then the new low (an LL) confirms; both in that trade's row                   |
+| Confirmation trade's volume                                       | Counted in the new leg only; each trade belongs to exactly one leg                             |
+| Impulse and pullback both inside one second                       | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
+| Breach to 99.8, extend to 99.5, reclaim above 100 at a low of 100 | `sweep_depth_atr` uses 0.5 (the deepest trade before the reclaim)                              |
+| Six consecutive higher lows                                       | `low_run` = 6 on the event; `low_run_ratio` = 1                                                |
 
 Prove price/size scale invariance, prefix invariance, checkpoint continuation, and
 whole-session versus incremental parity. Test threshold equality/overshoot, repeated

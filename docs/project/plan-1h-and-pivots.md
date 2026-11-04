@@ -233,7 +233,7 @@ rows, not columns, and leaves the existing scales current. Per scale, normalized
   since each extreme and since its confirmation
 - `low_change_atr` = `(L_k − L_{k−1}) / ATR`, `high_change_atr` = `(H_k − H_{k−1}) / ATR`
   (ATR snapshot of the new pivot), latest low and high classes, `trend` (−1, 0, +1; NULL
-  until both comparisons exist), `low_run`, `high_run`, `trend_age_s`, provisional HL/LH
+  until both comparisons exist), `low_run_ratio`, `high_run_ratio`, `trend_age_s`, provisional HL/LH
   flags, and breach ages
 - `theta_bps`, and validity/warm-up flags
 

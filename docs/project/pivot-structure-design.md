@@ -1,4 +1,4 @@
-**Pivot and market-structure contract: review follow-up**
+# Pivot and market-structure contract
 
 Proposed November 3, 2026, following the review of PR #66. This defines the next
 implementation; it is not implemented or benchmarked. Read the
@@ -9,7 +9,7 @@ domain, ages, storage, and labels. This contract governs structure semantics: cl
 trend, provisional relations, breaches, and their field names. Where both cover a point,
 they must agree; an _epoch_ here is a plan _segment_.
 
-**One chronological swing history per contract, stream, and scale.**
+## One chronological swing history per contract, stream, and scale
 
 | Family | Detector observations                           | Threshold normalizer                | Initial multipliers |
 | ------ | ----------------------------------------------- | ----------------------------------- | ------------------- |
@@ -17,8 +17,12 @@ they must agree; an _epoch_ here is a plan _segment_.
 | Slow   | Released trades; state published per minute row | Available same-contract `1h@1m` ATR | 0.5, 1, 2           |
 
 These six scales follow the [recorded decisions](plan-1h-and-pivots.md#6-decisions).
-Name them by stream and multiplier, such as `fast_atr_0p5` and `slow_atr_2`;
-include the registry/configuration version in provenance. Each has its own state,
+Name them by stream and multiplier, such as `fast_atr_0p5` and `slow_atr_2`. Each scale
+is a variant row (`variant_id`) whose registry entry holds its stream, multiplier,
+reclaim window `W` (it changes which reclaim events the detector emits), threshold
+normalizer (initially ATR(14) from the tier-1 candle; later variants may use the
+[volatility tier](plan-1h-and-pivots.md#7-volatility-tier-atr-family)), and spread floor;
+include the registry version in provenance. Each has its own state,
 but **no phase key**. Never compare pivots across contracts, streams, or scales.
 
 The threshold determines the minimum reversal magnitude. Sampling determines which
@@ -40,14 +44,16 @@ The stored detector replays the engine's released trades in order
 cannot show every crossing. A close-stream detector (one observation per bar close) is a
 benchmark baseline only; it is not stored and must not be called exact.
 
-**Directional change and availability.**
+## Directional change and availability
 
 For an up leg with running high `H`, freeze
-`theta_bps = max(k * ATR_bps, 2 * spread_bps)` when its candidate is set. Use a usable
-trade-sampled spread under a declared observation-age policy. Mirror this for a down
-leg's running low `L`. Undefined ATR or unusable spread means an unready candidate,
-not a zero threshold; restart it from the next eligible observation and mark the
-interruption. A ready candidate keeps its frozen threshold until a strict new extreme
+`theta_bps = max(k * ATR_bps, 2 * spread_bps)` when its candidate is set. The spread is the last
+usable trade-sampled spread (`book_spread_bps`) with no age cutoff; its age is a separate
+feature. It is undefined only before the first usable quote of an epoch or after missing
+data. Mirror this for a down
+leg's running low `L`. An undefined ATR or spread is never a zero threshold: it ends the epoch
+exactly as missing coverage does (state table below), and a new epoch starts at the first
+row where both inputs are defined. A ready candidate keeps its frozen threshold until a strict new extreme
 replaces it. Equal prices keep the first extreme occurrence and do not refresh scale.
 
 A high confirms when `10_000 * ln(H / p) >= theta_bps`; a low confirms when
@@ -69,7 +75,7 @@ confirmed candidate's reference, threshold, progress, extreme ordinal/time,
 confirmation ordinal/time, and `available_at`. Never write the new classification
 back onto the earlier extreme's feature row.
 
-**Confirmed structure is a deterministic second layer.**
+## Confirmed structure is a deterministic second layer
 
 For confirmed lows `L_prev`, `L_new` in the same history, classify the new low by the
 sign of `L_new - L_prev`. Compare highs the same way. Equality is exact in the initial
@@ -92,13 +98,25 @@ LH and LL, and `0` for other known combinations, including equality. It is NULL 
 both comparisons exist in the valid history. Do not encode insufficient history as
 mixed/neutral. This state describes swing structure; it is not a forecast or trade.
 
+Sequence counters, updated at each confirmation and NULL until the first classified pivot
+of their kind in the epoch. The raw run lengths are event data: each confirmed low records
+`low_run` (`+n` after `n` consecutive higher lows, `−n` after `n` consecutive lower lows;
+an equal low sets 0, and the next class starts a new run from ±1), and each high records
+`high_run` the same way. Model inputs are bounded:
+
+- `low_run_ratio`, `high_run_ratio`: the run clipped to ±5 and divided by 5 (`Unit.RATIO`,
+  −1 to 1). Five or more consecutive higher lows read as 1.
+- `trend_age_s`: scheduled-open age since `trend` took its current value.
+
+An epoch reset clears the counters and their ratios.
+
 Store normalized deltas as `low_change_atr = (L_new - L_prev) / A_new` and
 `high_change_atr = (H_new - H_prev) / A_new`, where `A_new` is the positive price-unit
 ATR snapshot belonging to the new candidate. Positive/negative signs have the same
 meaning for both fields. Keep that snapshot fixed for these event-relative deltas;
 current-price distances to confirmed levels may use a separately named current ATR.
 
-**Provisional higher lows and lower highs are causal candidate features.**
+## Provisional higher lows and lower highs are causal candidate features
 
 A provisional HL is true when the current down leg has an eligible candidate low
 above the last confirmed low, the comparator belongs to the same valid history, and
@@ -129,7 +147,17 @@ not a breach, and an unknown reference produces no claimed breach. The breaching
 trade's time is recorded; availability and the feature row follow the same publication
 rule as confirmations (second row for fast scales, minute row for slow scales).
 
-**Coverage, closures, and resets are part of the state contract.**
+**Leg accumulators.** A leg runs from one extreme trade to the next: it holds the trades
+after its starting extreme, through and including its ending extreme. Every trade
+belongs to exactly one leg. The confirmation trade comes after the confirmed extreme, so
+it belongs to the new leg that starts there, not to the completed one. The detector keeps
+two sets of sums for the open leg: through its running extreme, and since that extreme.
+When a strict new extreme replaces the running one, the since-extreme sums fold into the
+through-extreme sums; on confirmation the since-extreme sums seed the new leg. Each leg
+records its start and extreme ordinals and its sums of volume, sided volume, and buy −
+sell volume. Tier 3 forms ratios from them; raw sums are data context, not features.
+
+## Coverage, closures, and resets are part of the state contract
 
 | Situation             | Behavior                                                                                                                                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -144,7 +172,135 @@ through an unknown interval. Historical events remain queryable with their old e
 The empty-window/analysis-close policy of the related stage plan does not turn an
 unchanged carried price into a new observed trade for this detector.
 
-**Build and store the fixed grid before comparing predictive quality.**
+## Swing sources: price and RSI
+
+The detector and the structure layer are generic over a **source series**, so swings,
+higher lows and lower highs, trend, runs, provisional relations, breaches, and reclaims are
+computed the same way for every source. A source declares its observations, how distance
+is measured, and its threshold:
+
+| Source  | Observations                                                                    | Distance                         | Threshold `θ`                                        |
+| ------- | ------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
+| `price` | Released trades, in order; published per second or minute row                   | `10⁴ × ln(H / p)` (log-bps)      | `max(k × ATR_bps, 2 × spread_bps)`, frozen           |
+| `rsi`   | The window's RSI, one value per row: `1m@1s` RSI per second, `1h@1m` per minute | `H − p` in RSI points (additive) | Fixed points: initially 5, 10, and 20 per resolution |
+
+What differs for RSI:
+
+- **No intra-row path.** RSI changes only when a row closes, so each row is one
+  observation, and events happen at row closes.
+- **No price-only rules.** RSI is already normalized, so there is no spread floor and no
+  positive-price rule. An undefined RSI (an incomplete window) ends the epoch like an
+  undefined threshold input.
+- **Levels are features.** RSI is an index, so an RSI pivot's level is a model input
+  (`Unit.INDEX`): a low at 28 differs from one at 45. Raw price levels stay context. RSI
+  distances and changes are stored in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1).
+- **One chronological series.** The stored `1m@1s` RSI is per phase, so consecutive
+  second rows come from different phase states, each a 14-minute RSI. Read row by row,
+  they form one rolling RSI sampled every second. That is one swing history, not 60.
+  Phase-to-phase jitter is filtered by the threshold; PR D measures the row-to-row RSI
+  noise and keeps the smallest threshold above it.
+- **Own stages.** Columns carry units, so RSI structure lives in `pivot_rsi_1s` and
+  `pivot_rsi_1m` (tier 2, inputs `candle_1m_1s` and `candle_1h_1m`). These stages use the
+  same detector code, with threshold points as their variants. Their events share
+  `market.pivot_event` and are marked by stage.
+
+More sources (cumulative delta, MACD histogram, other oscillators) can be added later as
+stages that declare the same three things.
+
+## Tier 3: structure signals
+
+These combine structure (tier 2) with indicators and volatility (tier 1) in the
+[pipeline's](feature-pipeline.md) third tier (`signal_1s`, `signal_1m`). Per-scale signals
+are variant rows like the scales; cross-scale summaries are one row per slot. All are
+normalized, NULL when an input is undefined, and available with the row that publishes
+them.
+
+Persistence: values about the open candidate (pullback quality) update every row. Values
+fixed by an event (divergences at a confirmed pivot, the latest sweep) **hold** on every
+later row until the next event of the same kind replaces them or an epoch reset clears
+them, and each has an age column (`*_event_age_s`, in scheduled-open rows) so a model sees
+how fresh it is. The event tables hold the one-time pulses.
+
+ATR snapshots: every value "in ATR" about a leg uses the ATR frozen with that leg's ending
+extreme (for the open leg, its running extreme's snapshot), as stored on the event. No
+leg value uses the publication row's current ATR.
+
+**Pullback quality**, for the open candidate and for each confirmed low (mirrored for
+highs). The _impulse_ is the last completed leg toward the comparator's opposite pivot,
+and the _pullback_ is the leg from that pivot to the candidate low. A leg's duration is
+its row count, inclusive: `end ordinal − start ordinal + 1`, where start and end are the
+rows of its starting and ending extreme trades. A leg inside one row has duration 1, so
+no ratio below divides by zero:
+
+- `pullback_depth`: pullback size ÷ impulse size, clipped to 0–2 (a retracement ratio;
+  above 1 means the low is no longer higher).
+- `pullback_time_log`: `log(pullback rows ÷ impulse rows)`, clipped to ±3.
+- `pullback_volume_log`: `log` of volume per row in the pullback ÷ in the impulse, clipped
+  to ±3 (light volume on pullbacks is the classic healthy-trend pattern).
+
+The unclipped ratios are stored on the events as context, not features.
+
+- `pullback_delta_ratio` and `impulse_delta_ratio`: buy − sell over sided volume in each
+  leg.
+- `speed_ratio_log`: `log` of the pullback's speed ÷ the impulse's speed (size per row of
+  duration), clipped to ±3. Sizes (`leg_atr`, `prev_leg_atr`, in ATR) and durations
+  (`leg_age_s`, in seconds) stay separate features with their own units.
+
+**Divergence at confirmed pivots**, compared with the previous same-kind pivot:
+
+- `low_cvd_change_ratio`: the change in cumulative buy − sell volume between the two lows,
+  ÷ sided volume between them (−1 to 1). Price making a lower low while this rises is
+  absorption, a classic bullish divergence; mirror for highs (`high_cvd_change_ratio`).
+- `low_rsi_change`, `high_rsi_change`: the change in the tier-1 RSI between the two
+  pivots' extreme rows, in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1). Each value was
+  available at its row, so the comparison is causal once the newer pivot confirms.
+- **Structural divergence** (with RSI structure, below): `rsi_low_class`, the class of
+  the RSI low matched to each confirmed price low (+1 higher low, −1 lower low, 0 equal,
+  NULL when none matches), and `rsi_high_class` for highs. The match is the latest
+  confirmed RSI low, of the declared RSI variant, whose extreme row lies between the price
+  low's preceding confirmed high and the price low's confirmation. A price lower low
+  with an RSI higher low is the classic bullish divergence; a price higher high with an
+  RSI lower high, the bearish one. Each pairing of price and RSI variants is declared in
+  the summary's variant set.
+
+**Failed breaks (sweeps).** After `break_down` of a confirmed low, a trade back above
+that low within `W` scheduled-open rows, before a new low is confirmed, is a `reclaim`.
+Within one trade, breaches and reclaims are evaluated against the references known
+before that trade, and only then confirmations: a trade that both reclaims the old low
+and confirms a new, lower low emits the reclaim first. It is
+the classic stop-run below a low that reverses. The fields are `reclaim_age_s` and
+`sweep_depth_atr`: the distance from the breached low to the lowest trade from the
+breaching trade through the reclaiming trade, in the ATR snapshot of the breached low's
+event. Highs mirror this. `W` is a
+pivot-variant parameter, part of that variant's identity (initially 60 rows for fast
+scales and 15 for slow). Breaches and
+reclaims need the trade order inside a row, so the pivot detector (tier 2), which replays
+the trades, detects them and emits `breach` and `reclaim` events with their depth and
+ordinals. Tier 3 reads those events; it never reconstructs paths from aggregated rows.
+
+**Location:** `range_pos`, the current price within the latest confirmed low–high range,
+clipped to 0 (at or below the low) through 1 (at or above the high). A breach is measured
+separately: `beyond_high_atr` and `beyond_low_atr`, the distance beyond the latest
+confirmed high or low in the high's or low's ATR snapshot, 0 inside the range.
+
+**Across scales** (one row per slot): each summary declares the variant set it covers, as
+part of its identity, so adding a scale never silently changes it; a new version that
+includes the scale rebuilds the summary rows. Initially the set is the six scales of the
+fixed grid. The summaries are the number of fast scales with `trend = +1` and with
+`trend = −1`, the same for slow scales (as of the latest completed minute on second
+rows), and the number of scales with a provisional HL or LH. A model learns the
+interactions, such as a fast higher low inside a slow uptrend, from these and the
+per-scale fields; no combination is hard-coded.
+
+**Later variants**, judged by the benchmark and added as variant rows:
+
+- A time-or-magnitude confirmation that also confirms after `N` rows without a new extreme
+  once the reversal reaches a smaller fraction of θ. It catches quiet, sideways turns
+  that pure directional change confirms late.
+- Equal-high and equal-low zones with a tolerance in ATR (double tops and bottoms).
+- Thresholds normalized by time-of-day or directional ATR.
+
+## Build and store the fixed grid before comparing predictive quality
 
 After the planned stage/version work and minute/hourly inputs, implement the
 deterministic detector and structure together, validate synthetic/recorded fixtures,
@@ -171,20 +327,31 @@ using test outcomes would still leak evaluation information. Store future-lookin
 labels separately from contemporaneous features. Keep the fixed initial grid version
 for reproducibility if later versions add or retire scales.
 
-**Required implementation examples and checks.**
+## Required implementation examples and checks
 
-| Case                                                  | Expected result                                                                               |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| First confirmed low/high                              | Same-kind comparison unknown; trend stays NULL                                                |
-| Two confirmed lows 100 then 102                       | HL appears at the second confirmation, not its extreme time                                   |
-| Two confirmed highs 110 then 108                      | LH; signed high delta is negative                                                             |
-| Equal same-kind pivots                                | EL/EH, never HL/HH or a strict breach                                                         |
-| Candidate 102 above prior low 100, then extends to 99 | Provisional HL can be true after partial rebound, then clears without rewriting its past rows |
-| HH+HL; LH+LL; one equal/mixed pair                    | Up; down; mixed, once both comparisons are known                                              |
-| Volatility falls without a new price                  | Frozen threshold does not create confirmation                                                 |
-| Adjacent second rows with different ATR phases        | Same swing history/comparators; only an actual qualifying observation changes events          |
-| One slow confirmation joined to 60 second rows        | One event ID/availability, held context with age; no 60 confirmation pulses                   |
-| Missing interval, quiet interval, roll, closure       | Distinct behavior from the state table above                                                  |
+| Case                                                              | Expected result                                                                                |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| First confirmed low/high                                          | Same-kind comparison unknown; trend stays NULL                                                 |
+| Two confirmed lows 100 then 102                                   | HL appears at the second confirmation, not its extreme time                                    |
+| Two confirmed highs 110 then 108                                  | LH; signed high delta is negative                                                              |
+| Equal same-kind pivots                                            | EL/EH, never HL/HH or a strict breach                                                          |
+| Candidate 102 above prior low 100, then extends to 99             | Provisional HL can be true after partial rebound, then clears without rewriting its past rows  |
+| HH+HL; LH+LL; one equal/mixed pair                                | Up; down; mixed, once both comparisons are known                                               |
+| Volatility falls without a new price                              | Frozen threshold does not create confirmation                                                  |
+| Adjacent second rows with different ATR phases                    | Same swing history/comparators; only an actual qualifying observation changes events           |
+| One slow confirmation joined to 60 second rows                    | One event ID/availability, held context with age; no 60 confirmation pulses                    |
+| Missing interval, quiet interval, roll, closure                   | Distinct behavior from the state table above                                                   |
+| Lows HL, HL, EL, LL, LL                                           | `low_run` = 1, 2, 0, −1, −2                                                                    |
+| Break below a confirmed low, back above it within `W`             | One `reclaim` with its age and sweep depth; none if a new low confirms first or after `W` rows |
+| Price LL while cumulative delta rises between lows                | `low_change_atr` < 0 and `low_cvd_change_ratio` > 0 (bullish divergence)                       |
+| One trade reclaims the breached low and confirms the new low      | Reclaim emitted, then the new low (an LL) confirms; both in that trade's row                   |
+| Confirmation trade's volume                                       | Counted in the new leg only; each trade belongs to exactly one leg                             |
+| Impulse and pullback both inside one second                       | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
+| Breach to 99.8, extend to 99.5, reclaim above 100 at a low of 100 | `sweep_depth_atr` uses 0.5 (the deepest trade before the reclaim)                              |
+| Six consecutive higher lows                                       | `low_run` = 6 on the event; `low_run_ratio` = 1                                                |
+| RSI 40 → 55 → 49 with θ = 5 points                                | RSI high at 55 confirmed on the 49 row; its level 55 is a feature, its change ÷ 100 a ratio    |
+| Price lower low; matched RSI low higher                           | `rsi_low_class` = +1 on the price low's confirmation row (bullish divergence)                  |
+| RSI NULL (incomplete window)                                      | RSI epoch ends; RSI structure restarts when RSI is defined again                               |
 
 Prove price/size scale invariance, prefix invariance, checkpoint continuation, and
 whole-session versus incremental parity. Test threshold equality/overshoot, repeated

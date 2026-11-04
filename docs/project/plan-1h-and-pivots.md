@@ -149,9 +149,12 @@ ties) and the lowest price since it. The threshold `θ` (bps) is
 `max(k × ATR_bps, f × spread_bps)`, taken as of the time `H` was set. It refreshes only
 when a strictly higher high replaces `H`, so falling volatility alone can never confirm a
 reversal. The high is **confirmed** when `10⁴ × ln(H / p) ≥ θ`. The leg then turns down,
-with the running low being the lowest price since `H`. Mirror everything for lows. Before
-the first leg is established, the direction is unknown, and the first `θ` move from the
-start sets it.
+with the running low being the lowest price since `H`. Mirror everything for lows. Until
+the first leg is established (at the start, and after missing data), the direction is
+unknown: the detector tracks both the running high and the running low, each with the
+lowest or highest price since it, and the first reversal of `θ` from either extreme sets
+the direction. For example, with θ = 4, `100 → 103 → 97` confirms the high at 103 even
+though price never moved 4 from where it started.
 
 | Situation         | Rule                                                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -269,8 +272,10 @@ it.
 This is not a rewrite. `SecondRowBuilder` becomes two stage classes around unchanged
 numerical code, and the tables stay as they are. PR A must prove that rows are unchanged
 with the empty-window policy off. Then it turns the policy on and rebuilds once. Adding a
-column to an existing stage stays as documented in [ingestion](ingestion.md#adding-a-metric-or-feature),
-but rebuilds only that stage.
+column to an existing stage stays as documented in [ingestion](ingestion.md#adding-a-metric-or-feature).
+It changes that stage's identity, so the stage and every stage downstream of it rebuild;
+stages upstream and on other branches stay current. For example, a new `bar_1s` column rebuilds every stored stage, while a new pivot column rebuilds only the pivot
+stages.
 
 ## 5. `1h@1m`: amendments to the proposed plan
 
@@ -354,13 +359,13 @@ window is too little. Proposed for PR E as its own stage per resolution (`vol_1s
   multiplier) for stop distances and position sizing in execution. Raw units stay out of
   model inputs.
 
-Two choices to settle in PR E:
+Two points for PR E:
 
-- **History for daily and time-of-day ATR.** These need 14–20 prior sessions, more than
-  a contract's lead sessions. Either lengthen the lead for this stage, or compute these
-  normalized (bps) profiles from the product's front-contract sessions. The latter never
-  mixes prices across delivery months, but it is a departure from strictly per-contract
-  computation.
+- **History for daily and time-of-day ATR.** These need 14–20 prior sessions of the same
+  contract, more than the current lead. Compute them within each contract and give the
+  volatility stages a longer lead (and the same for any stage that reads them). Never
+  build them from the front-contract sequence: a roll-day true range would compare the new
+  contract's high and low with the old contract's close, a false volatility spike.
 - **Pivot thresholds.** PR C uses ATR(14). Once PR E exists, the benchmark can compare
   thresholds scaled by the time-of-day ATR, which may stop the open from producing a
-  burst of small swings. Only the pivot stages would be rebuilt.
+  burst of small swings. Only the pivot stages and their descendants would be rebuilt.

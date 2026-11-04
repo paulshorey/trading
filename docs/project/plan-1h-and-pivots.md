@@ -240,8 +240,14 @@ it.
   - `STATE` for checkpoints, plus a `VERSION`;
   - its module files;
   - `process(inputs) -> Table`.
-- The graph: `bar_1s` → `candle_1m_1s`; `bar_1s` → `bar_1m` → `candle_1h_1m`;
-  (`bar_1s`, `candle_1m_1s`) → `pivot_1s`; (`bar_1m`, `candle_1h_1m`) → `pivot_1m`.
+- The graph starts at an explicit **`trades` source**: one contract's accepted trades
+  with their assigned second, in release order (`bars.aggregate`). Its identity covers
+  the DBN files' checksums and covered windows, the trade-assignment timing, and the
+  acceptance and assignment code. It is not stored; ingest reads it from DBN, and live
+  sessions from the feed. Then `trades` → `bar_1s` → `candle_1m_1s`;
+  `bar_1s` → `bar_1m` → `candle_1h_1m`; (`trades`, `candle_1m_1s`) → `pivot_1s`;
+  (`trades`, `candle_1h_1m`) → `pivot_1m`. Pivot stages read the trade path from
+  `trades`, never from aggregated bars ([3.1](#31-input-stream)).
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
   versions, plus its inputs' identities. A new stage never touches existing ones. Editing
   a shared kernel correctly invalidates every stage that uses it.

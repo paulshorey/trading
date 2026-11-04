@@ -3,40 +3,40 @@
 Proposed November 3, 2026, following the review of PR #66. This defines the next
 implementation; it is not implemented or benchmarked. Read the
 [agent handoff](pivot-detection-handoff.md) and [research](../research/pivots/2026-11-03-reviewed-findings.md).
-The related [stage/minute/pivot plan](https://github.com/paulshorey/trading/pull/67)
-records the implementation order and the fixed-scale/storage decisions. This contract
-adds precise structure semantics without adopting that plan's unrelated changes.
+The [stage/minute/pivot plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)
+governs the observations (the trade path), thresholds and their inputs, segments, price
+domain, ages, storage, and labels. This contract governs structure semantics: classes,
+trend, provisional relations, breaches, and their field names. Where both cover a point,
+they must agree; an _epoch_ here is a plan _segment_.
 
 **One chronological swing history per contract, stream, and scale.**
 
-| Family | Detector observations    | Threshold normalizer                | Initial multipliers |
-| ------ | ------------------------ | ----------------------------------- | ------------------- |
-| Fast   | Disjoint `bar_1s` closes | Available same-contract `1m@1s` ATR | 0.5, 1, 2           |
-| Slow   | Disjoint `bar_1m` closes | Available same-contract `1h@1m` ATR | 0.5, 1, 2           |
+| Family | Detector observations                           | Threshold normalizer                | Initial multipliers |
+| ------ | ----------------------------------------------- | ----------------------------------- | ------------------- |
+| Fast   | Released trades; state published per second row | Available same-contract `1m@1s` ATR | 0.5, 1, 2           |
+| Slow   | Released trades; state published per minute row | Available same-contract `1h@1m` ATR | 0.5, 1, 2           |
 
-These six scales follow the [decisions recorded in the related plan](https://github.com/paulshorey/trading/blob/4f5dc94c7d4bb4cd0b3f0eb5a427a162d9b3b2fa/docs/project/plan-1h-and-pivots.md#6-decisions).
+These six scales follow the [recorded decisions](plan-1h-and-pivots.md#6-decisions).
 Name them by stream and multiplier, such as `fast_atr_0p5` and `slow_atr_2`;
 include the registry/configuration version in provenance. Each has its own state,
 but **no phase key**. Never compare pivots across contracts, streams, or scales.
 
 The threshold determines the minimum reversal magnitude. Sampling determines which
 observations can trigger it and when. A large threshold often produces longer swings,
-but does not guarantee an hour/day duration; a minute-close stream can miss excursions
-that a second-close stream sees. `1m@1s` and `1h@1m` identify the ATR context, not a
-promise about the duration of the detected swing.
+but does not guarantee an hour/day duration. `1m@1s` and `1h@1m` identify the ATR
+context and the publication cadence, not a promise about the duration of the swing.
 
 ATR still follows the existing per-phase indicator rules. At each candidate update,
 read only the ATR already available for that stream's newest row. That does not create
-60 swing histories: the detector consumes every disjoint row in one sequence. On
+60 swing histories: the detector consumes every released trade in one sequence. On
 second decision rows, join slow state by `available_at <= decision_at`, holding the
 latest completed-minute state and reporting its age/source ordinal. Do not reprocess
 that held state or emit its confirmation again on every second.
 
-Closes give an explicit, reproducible baseline: these are close-stream extremes.
-Do not call them exact intrabar trade extremes. Processing just a bar's high and low
-in `high_at`/`low_at` order cannot reconstruct repeated crossings between them. A
-trade-path detector is a separately versioned variant using the engine's ordered
-released trades; assess ambiguity from DBN replay rather than assuming it is rare.
+The stored detector replays the engine's released trades in order
+([plan 3.1](plan-1h-and-pivots.md#31-input-stream)), because a bar's high, low, or close
+cannot show every crossing. A close-stream detector (one observation per bar close) is a
+benchmark baseline only; it is not stored and must not be called exact.
 
 **Directional change and availability.**
 
@@ -113,14 +113,14 @@ Alternatively, confirmation at low 102 emits HL only on the later confirmation r
 These illustrative prices are context, not model inputs.
 
 Use explicit breach fields rather than an ambiguous "break of structure":
-`break_up` is an observed close strictly above the latest confirmed high;
-`break_down` is an observed close strictly below the latest confirmed low. Evaluate
+`break_up` is an observed trade strictly above the latest confirmed high;
+`break_down` is an observed trade strictly below the latest confirmed low. Evaluate
 against the references known before processing the observation's confirmations.
 Record the first observed breach once per reference event ID and direction, with its
 availability and `trend_before`. In an up structure, an upward breach is continuation
 and a downward breach is a reversal warning; mirror for down structure. Equality is
-not a breach, and an unknown reference produces no claimed breach. Close-stream
-breaches do not claim the first intrabar trade crossing.
+not a breach, and an unknown reference produces no claimed breach. The breaching
+trade's time is recorded; its feature row is the second row that contains it.
 
 **Coverage, closures, and resets are part of the state contract.**
 

@@ -128,7 +128,8 @@ Code must say which "previous value" it means:
 
 **Previous swing** is a separate event reference: the previous confirmed same-kind
 pivot in one contract/stream/scale history. Strategy higher lows/lower highs come
-from directional change on disjoint second/minute bars, with rolling ATR as context;
+from directional change on the trade path, published per second and per minute row,
+with rolling ATR as context;
 see the [pivot contract](../project/pivot-structure-design.md). They do not cycle
 through 60 phase-specific histories.
 

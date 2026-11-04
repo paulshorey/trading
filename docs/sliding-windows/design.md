@@ -150,12 +150,12 @@ is a step lag, so it must not feed standard indicators.
 - A rolling candle's high is the highest trade in its 60 slots. It changes when a
   new extreme enters or when the old one drops out 60 slots later, so a falling
   rolling high can mean the old high expired, not that price fell.
-- Strategy swing structure uses directional change on **disjoint base bars**:
-  seconds for fast scales, minutes for slow scales. Keep one chronological history
+- Strategy swing structure uses directional change on the **trade path** (the engine's
+  released trades), publishing state per second row for fast scales and per minute row
+  for slow scales. Keep one chronological history
   per contract/stream/scale, not 60 interleaved phase histories. ATR remains a
   per-phase candle indicator used as an available, frozen threshold normalizer.
-- The threshold sets reversal magnitude; sampling affects observed extrema and
-  availability. Neither defines a guaranteed swing duration. Compare each confirmed
+- The threshold sets reversal magnitude; the publication cadence sets availability. Neither defines a guaranteed swing duration. Compare each confirmed
   high/low with its previous confirmed same-kind pivot to derive HH/HL/LH/LL.
   Provisional relations remain distinct from confirmed structure. The
   [pivot contract](../project/pivot-structure-design.md) defines the fixed scales,

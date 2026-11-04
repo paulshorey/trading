@@ -18,7 +18,7 @@ research was not restricted by language.
 | Read                                                                    | Purpose                                                                                                           |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md) | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark |
-| [Pivot and structure contract](pivot-structure-design.md)               | Follow-up definitions, six fixed scales, disjoint streams, provisional HL/LH, and storage-first sequence          |
+| [Pivot and structure contract](pivot-structure-design.md)               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                  |
 | [Parallel report](../research/pivots/2026-11-03-parallel-report.md)     | Supporting deep-research output, with references; distinguish provider recommendations from established results   |
 | [Research brief](../research/pivots/2026-11-03-research-question.md)    | Exact question and constraints sent to the research provider                                                      |
 | [Provenance](../research/pivots/2026-11-03-provenance.json)             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                        |
@@ -66,7 +66,7 @@ establish an advantage for this dataset and task.
 **The next task follows the concrete pivot/structure contract.**
 
 Use the [contract](pivot-structure-design.md) and the related
-[stage/minute/pivot plan](https://github.com/paulshorey/trading/pull/67): stage/version
+[stage/minute/pivot plan](plan-1h-and-pivots.md): stage/version
 work, minute/hourly inputs, then the deterministic pivot/structure stage and its fixed
 grid, followed by benchmarking and outcome labels. Finalize implementation details
 within that workstream. This documentation follow-up performs no schema/data changes
@@ -89,9 +89,9 @@ Resolve these distinctions explicitly:
   to missing data. A barrier already crossed before scoring is an observation, not
   an unresolved prediction target.
 
-The detector consumes **disjoint one-second observations** for fast scales and
-**disjoint one-minute observations** for slow scales, with rolling ATR providing
-context. Thresholds determine reversal magnitude; neither a threshold nor a bar size
+The detector replays the engine's released trades in order and publishes state per
+second row (fast scales) and per minute row (slow scales), with rolling ATR providing
+context ([plan 3.1](plan-1h-and-pivots.md#31-input-stream)). Thresholds determine reversal magnitude; neither a threshold nor a bar size
 guarantees swing duration. Conventional indicators over rolling candles use separate phase state
 and same-phase history at ordinal differences of 60; adjacent `1m@1s` candles share
 59/60 observations. Do not treat their outputs as independent confirmation votes.

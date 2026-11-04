@@ -1,0 +1,350 @@
+# Plan: extensible stages, `1h@1m` rows, and swing structure (higher lows, lower highs)
+
+Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decisions)).
+Nothing here is implemented yet. It answers four questions: are the stored `1m@1s` rows
+right, how to make the system extensible, when to build `1h@1m`, and how to add high/low
+pivot detection at both resolutions. [Section 7](#7-after-pivots-more-atr-metrics) outlines
+the ATR metrics that follow.
+
+## Summary
+
+1. **The stored `1m@1s` rows are correct as specified** ([checks](#1-review-of-the-stored-1m1s-rows)).
+   One policy produces many NULL features in SI and should be decided before
+   anything is built on top of it: a window with no trades is treated like missing data.
+2. **Refactor the plumbing, not the calculations.** Split the row builder into
+   independent _stages_ (one table, one version, one checkpoint each), so adding
+   `1h@1m` or pivots never invalidates the 57 GB of second rows again. This is a small
+   PR. It needs one 11-minute GC+SI rebuild, which can also apply the empty-window decision.
+3. **Then `1h@1m`** as the update proposed, with the amendments in [section 5](#5-1h1m-amendments-to-the-proposed-plan).
+4. **Then swing structure**: a multi-scale directional-change detector plus a deterministic
+   _market-structure_ layer that labels each confirmed swing as a higher/lower high/low.
+   Store a small fixed grid of scales at both resolutions, then benchmark and train on
+   the stored values ([section 3](#3-pivot-and-structure-design)).
+
+| PR  | Contents                                                                        | Rebuild              |
+| --- | ------------------------------------------------------------------------------- | -------------------- |
+| A   | Stage interface, per-stage versions and checkpoints, empty-window policy        | `1s` stages, ~11 min |
+| B   | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics           | new tables only      |
+| C   | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`             | new tables only      |
+| D   | Pivot benchmark and outcome labels (future-looking, stored apart from inputs)   | new tables only      |
+| E   | More ATR and volatility metrics ([section 7](#7-after-pivots-more-atr-metrics)) | new tables only      |
+
+C's fast scales need only A, so C can start in parallel with B. Its slow scales need B.
+
+## 1. Review of the stored `1m@1s` rows
+
+Read-only checks on November 3, against local database `trading`:
+
+| Check                                                                                                                                                                    | Result                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Raw DBN trades, using only the `databento` library, bucketed into seconds and compared with `bar_1s` (OHLC, volume, buy/sell volume, trades), 2026-09-15 13:00–15:00 UTC | GCZ6 4,727 seconds, SIZ6 2,268 seconds: **0 differences** |
+| `candle_1m_1s` vs direct SQL aggregation of its 60 `bar_1s` rows (OHLC, volume, delta, observed seconds), GCZ6, one hour                                                 | 3,541 rows: **0 differences**                             |
+| Ordinals: rows per contract equal `max − min + 1`                                                                                                                        | GCQ6 4,102,200, GCZ6 5,952,600: **no gaps or duplicates** |
+| Textbook same-phase Wilder RSI(14), ATR(14), and EMA(21) recomputed from stored candle closes, GCZ6, phases 0, 17, and 59 (99,210 candles each)                          | **Bit-identical**, with identical NULLs                   |
+
+Together with the ingest's roll and degraded-session checks, this covers prices, volumes,
+aggressor sides, windows, ordinals, and recursive indicators. These checks did not compare
+the sampled-book metrics (spread, depth, imbalance) with raw DBN records. Unit tests
+cover them against the handoff's reference cases. The planned `catalog --audit` command
+should add a raw-record check for them.
+
+### Finding 1: quiet windows blank out SI features (policy decision)
+
+A 60-second window without a trade (`status` empty) is treated like missing data. It is
+not an indicator input, and it restarts each indicator's previous close. Lookback
+indicators need every same-phase candle in their range, so one quiet minute erases the
+next 14–26 values of that phase. Measured on September 2026 front sessions:
+
+| Product | Empty windows | `rsi` NULL | `ema50_atr` NULL | `aroon_up` NULL | `flow_price_corr` NULL |
+| ------- | ------------- | ---------- | ---------------- | --------------- | ---------------------- |
+| GC      | 0.06%         | 0.12%      | 0.06%            | 1.16%           | 1.17%                  |
+| SI      | 3.18%         | 5.74%      | 3.18%            | 30.83%          | 28.12%                 |
+
+In plain terms, a quiet minute is a known fact: the price did not change. A missing
+minute is an unknown. The current code treats both as "unknown". The NULLs also
+cluster in quiet hours, so an ML model trained on complete rows would see mostly busy
+markets.
+
+The TBBO handoff ([§4.2](tbbo-engineering-handoff.md)) recommended a carried
+_analysis close_. A healthy empty window keeps the last trade price as its indicator
+input, so it contributes zero change. It stays flagged, and its age is recorded. Its
+observed OHLC stays NULL, and nothing is ever carried across missing data. The
+implementation chose otherwise ([difference 4](ingestion.md#differences-from-the-handoff)).
+**Recommendation:** adopt the carried analysis close for empty windows in PR A, keep the
+gap policy for missing data, and record `price_age_s` as a feature. This changes stored
+features, so it shares PR A's rebuild. It matters most for SI and for the pivot detector,
+which would otherwise stall in the same quiet periods.
+
+### Finding 2: three float summation orders
+
+Rolling `pv` sums use `sliding_window_view(...).sum()` (`windows.py`), metric windows
+add newest-first (`window_metrics.py`), and `bars.combine` uses `reduceat`. Each is
+deterministic, and tests prove that chunking does not change results. Minute aggregation
+adds a fourth path, so PR A should provide one ordered-sum helper and use it everywhere.
+Then `bar_1m` floats equal the `1m@1s` candle at the same minute end exactly, not just
+to the last bit.
+
+## 2. Assessment of the pivot research (PR #66)
+
+**Sound and worth keeping:**
+
+- Directional change (DC) as the primary detector.
+- Separate times for the extreme, the confirmation, and availability; no backdating.
+- Completion versus survival labels, and timeouts kept apart from unknown outcomes.
+- Labels defined independently of any detector.
+- No profitability gate for an indicator.
+
+**What it leaves out, for this goal:**
+
+1. **It stops one layer short.** It asks "has a temporary extreme happened?" Your
+   strategy asks "is this low _higher_ than the last confirmed low?" That second layer,
+   _market structure_, is deterministic once pivots are confirmed. It needs definitions,
+   not more research. [Section 3.3](#33-structure-higher-lows-and-lower-highs) supplies them.
+2. **Scale comes from the threshold, not the bar size.** Think of a coastline measured
+   with a 1 m ruler and a 1 km ruler: same coast, different wiggles. DC with a 2-tick
+   threshold finds second-scale swings, and with a 2-hourly-ATR threshold finds day-scale
+   swings, on the _same_ price stream. "Pivots for `1m@1s` and `1h@1m`" therefore means
+   small and large threshold families. Each is normalized by its own window's ATR.
+3. **It gates storage on the benchmark.** The DC detector and structure rules are cheap,
+   deterministic, and testable for causality. I would build them, store a small
+   predeclared grid, and let the benchmark and ML choose among stored variants. Keep the
+   grid small, because storage per second is not free ([sizes](#34-stored-values)).
+4. **Interleaved phases are wrong for swings.** The [design doc §5](../sliding-windows/design.md#5-highs-lows-and-pivots)
+   proposes pivots on each phase series. That creates 60 interleaved structures, so
+   adjacent rows would describe different swing histories, and features would jitter
+   second to second. Run swing detection on the **disjoint** stream: seconds for
+   fast scales, minutes for slow scales. The research also recommends this. Keep
+   per-phase fractal pivots only as a benchmark, and amend design §5 accordingly.
+
+There are five research files plus the older proposal. After the benchmark, fold the
+conclusions into one design doc and leave the rest as history.
+
+## 3. Pivot and structure design
+
+### 3.1 Input stream
+
+- **Fast scales** run on disjoint `bar_1s` rows. Each scale's threshold is a multiple
+  of the `1m@1s` ATR, with a spread floor.
+- **Slow scales** run on disjoint `bar_1m` rows. Each scale's threshold is a multiple
+  of the `1h@1m` ATR.
+- Each bar contributes its high and its low, in the order of `high_at`/`low_at` (exact
+  trade times), so a bar that sets both extremes is replayed correctly. Several reversals
+  inside one bar are not reconstructed. At the proposed thresholds they are rare, so count
+  them as a quality statistic.
+- Prices stay in exact fixed-point integers inside the detector, so ties are exact.
+  Outputs are normalized (`Unit`).
+- Second-resolution entries read the slow structure as of the latest completed minute,
+  with its age, exactly as `1h@1m` bias features are joined today.
+
+### 3.2 Detector: directional change with a frozen scale
+
+For each contract and scale: an _up_ leg keeps its running high `H` (first occurrence on
+ties) and the lowest price since it. The threshold `θ` (bps) is
+`max(k × ATR_bps, f × spread_bps)`, taken as of the time `H` was set. It refreshes only
+when a strictly higher high replaces `H`, so falling volatility alone can never confirm a
+reversal. The high is **confirmed** when `10⁴ × ln(H / p) ≥ θ`. The leg then turns down,
+with the running low being the lowest price since `H`. Mirror everything for lows. Before
+the first leg is established, the direction is unknown, and the first `θ` move from the
+start sets it.
+
+| Situation         | Rule                                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Closure (no rows) | State continues; a reopening jump can confirm a pivot, because it is a real move                                    |
+| Missing data      | Confirmed history is kept. The open candidate is dropped and restarts at the next observed price; a flag records it |
+| Empty bar         | No new price, no change; ages advance (Finding 1)                                                                   |
+| Roll              | Per contract; a new contract warms up during its lead sessions                                                      |
+| Emitted events    | Immutable; a later break of the level is a new event, never an edit                                                 |
+
+### 3.3 Structure: higher lows and lower highs
+
+Confirmed pivots alternate high, low, high, … per scale. Each confirmed low `L_k` is a
+**higher low** if `L_k > L_{k−1}`, a lower low if it is lower, and an equal low if the
+two are equal. Highs are classified the same way. Trend state: **up** after a higher
+high and a higher low, **down** after a lower high and a lower low, otherwise
+**mixed**. A _break of structure_ is a trade beyond the last confirmed opposite pivot.
+In a down structure, that is the first sign of reversal.
+
+The early signal you are after is a **provisional higher low**: in an up or mixed
+structure, the current down leg's running low is still above the last confirmed low, and
+price has already reversed part of `θ`. The reversal progress (0 to 1, where 1 is
+confirmation) is the key ML input: the model learns how likely confirmation is from
+progress, flow, and context. Lower highs mirror this.
+
+### 3.4 Stored values
+
+Per scale, normalized, as dense columns:
+
+- `dir`, `progress` (reversal since the running extreme ÷ θ), `ext_dist_atr`, `ext_age_s`
+- `leg_atr`, `leg_age_s`, `leg_delta_ratio` (aggressor flow over the leg: divergence input),
+  `prev_leg_atr`, `retrace` (current leg ÷ previous leg)
+- `low_dist_atr`, `high_dist_atr` (close vs the last confirmed low and high), with ages
+  since each extreme and since its confirmation
+- `hl_atr` = (L*k − L*{k−1}) / ATR, `lh_atr` = (H*k − H*{k−1}) / ATR,
+  `trend` (−1, 0, +1), `trend_swings` (consecutive swings in trend), `bos_age_s`
+- `theta_bps`, and validity/warm-up flags
+
+Also stored is a sparse **`market.pivot_event`** table, one row per confirmed pivot. It
+holds the scale, kind, extreme and confirmation ordinals and times, the raw level (as
+data context, not a feature), θ, leg statistics, and the structure label. Charts, labels,
+and SQL research use it.
+
+**Initial grid** (illustrative, to be judged by the benchmark): fast `k ∈ {0.5, 1, 2}` ×
+`1m@1s` ATR, with a floor of 2 spreads; slow `k ∈ {0.5, 1, 2}` × `1h@1m` ATR. For scale:
+the median `1m@1s` ATR in September 2026 was 4.3 bps for GC and 6.4 bps for SI. So
+0.5 × ATR is about 8 GC ticks but only about 3 SI ticks, which is why the spread floor matters.
+
+**Size:** about 16 columns × 3 scales of `double precision` per second comes to roughly
+15–20 GB for a GC+SI year. Minute rows and events are under 1 GB. See decision 3.
+
+### 3.5 Labels and benchmark (PR D)
+
+Outcome labels are stored apart from inputs, in their own table, with their availability
+times. For each candidate they record the first passage of reversal `R`, invalidation
+`C`, or horizon `K` (reversal, invalidation, timeout, or unknown), plus survival to a
+deadline. Hindsight reference swings are flagged as such. The benchmark follows the
+reviewed research:
+
+- Compare DC scales, fixed left/right extrema, a slope-sign rule, and one CUSUM/FOCuS
+  variant.
+- Compare logistic regression with one GBDT on the provisional-HL/LH candidates.
+- Measure delay, location error, coverage, and false alarms per open hour.
+- Use chronological purged splits and an untouched newest holdout.
+
+Its result decides which scales to keep or add. Changing the grid rebuilds only the pivot
+stages.
+
+## 4. Extensibility: stages
+
+**Today:**
+
+- One builder hash covers 15 files: all of `strategy-core` plus ingest and storage. Any
+  edit, including one that only adds minute storage, marks every second row stale.
+- New values go into two wide tables, so each addition means a migration and a
+  rebuild of everything.
+- The engine (`FeaturePipeline`) and storage (`SecondRowBuilder`) assemble the same
+  pieces separately. The engine's `1h@1m` has only 8 features.
+
+**Proposal:** treat the pipeline like assembly-line stations. Each station has its own
+inspection stamp, and changing one station re-runs only that station and the ones after
+it.
+
+- A `Stage` in `strategy-core` declares:
+  - its name and its input stages;
+  - its columns, with units;
+  - `STATE` for checkpoints, plus a `VERSION`;
+  - its module files;
+  - `process(inputs) -> Table`.
+- The graph: `bar_1s` → `candle_1m_1s`; `bar_1s` → `bar_1m` → `candle_1h_1m`;
+  (`bar_1s`, `candle_1m_1s`) → `pivot_1s`; (`bar_1m`, `candle_1h_1m`) → `pivot_1m`.
+- **Identity per stage** is a hash of the stage's modules, settings, columns, and package
+  versions, plus its inputs' identities. A new stage never touches existing ones. Editing
+  a shared kernel correctly invalidates every stage that uses it.
+- **One table per stage**, keyed `(contract_id, slot_ordinal, end_ns)`, with monthly
+  partitions. Continuous views are generated from the column registry, so migrations stay
+  consistent.
+- **Bookkeeping:** a new `market.stage_slice` table, keyed by stage, contract, and
+  session. It holds the builder, ordinal bounds, checkpoint, report, and source files.
+  `ingest_slice` stays as is.
+- **Ingest** recomputes upstream stages in memory from DBN (0.35 s per session) instead
+  of reading 57 GB back, and writes only stale stages. Each session commits all of its
+  stage rows and checkpoints in one transaction.
+- **The engine runs the same graph**, so live sessions compute exactly what is stored.
+
+This is not a rewrite. `SecondRowBuilder` becomes two stage classes around unchanged
+numerical code, and the tables stay as they are. PR A must prove that rows are unchanged
+with the empty-window policy off. Then it turns the policy on and rebuilds once. Adding a
+column to an existing stage stays as documented in [ingestion](ingestion.md#adding-a-metric-or-feature),
+but rebuilds only that stage.
+
+## 5. `1h@1m`: amendments to the proposed plan
+
+Keep the update's five parts (aggregation, shared hourly calculations, schema and views,
+resumable versioned stage, pilot then backfill). Amend them as follows:
+
+1. **Aggregation reuses existing rules.** Base fields go through `bars.combine`. Metric
+   fields go through a new disjoint `combine_metrics` that reuses `MetricWindow`'s bridge,
+   CVD-extreme, and first/last-by-validity rules. Group by ordinal (`m = ⌈o / 60⌉`) and
+   assert that this equals clock grouping (calendar boundaries are whole minutes).
+   As in the engine's `Rollup`, a minute with any missing second is missing.
+2. **Free full-year validation.** The `1m@1s` candle at every ordinal `60m` _is_ minute
+   `m`. After backfill, SQL compares every integer field of `bar_1m` with those candle rows
+   for all 775,050 minutes. With one summation order, floats are compared too.
+3. **Feature set:**
+   - Reuse `CandleIndicators`, with `active_ratio` redefined as observed seconds ÷ 3600
+     (`bar_1m` gets `observed_seconds`).
+   - Drop the session features and the latest-book ages: at a minute end they duplicate
+     the second row.
+4. **New hourly-only metrics.** These are not window sums of second statistics:
+   - Realized volatility from consecutive observed one-second closes within the hour, and
+     its ratio to ATR. Volatility measured second by second against volatility measured in
+     ranges shows noise versus trend.
+   - From the 60 disjoint minute returns: standard deviation, skew, lag-1 autocorrelation,
+     variance ratio VR(5) (above 1 trending, below 1 mean-reverting: directly relevant to
+     pullback entries), and the share of up minutes.
+   - Maximum drawdown and drawup inside the window, in ATR: how deep the pullbacks were.
+   - Where the high and low fell within the window (0 to 1).
+   - Session-anchored VWAP distance, and the prior session's high, low, and close
+     distances, all in hourly ATR.
+   - Correlation of minute closes with minute cumulative delta inside the window.
+5. **Engine parity.** The engine's `1h@1m` features equal the stored columns, and the
+   engine reads the full stage.
+6. **Warm-up.** Measure NULL rates at each roll's first front session. Slow pivot scales
+   need several confirmed swings, so the lead may need to grow from 5 sessions to about 10.
+   That widens every stage's spans, so decide it in PR B, before the backfill.
+
+## 6. Decisions
+
+Decided by Paul on November 3, 2026:
+
+1. **Empty windows:** carry the last trade price as an indicator input
+   ([Finding 1](#finding-1-quiet-windows-blank-out-si-features-policy-decision)), flagged,
+   with its age, never across missing data. Applied in PR A.
+2. **Order:** stages first (PR A), then `1h@1m` (PR B), then pivots (PR C).
+3. **Pivot storage:** dense per-second features plus the sparse event table.
+4. **Initial scales:** 0.5, 1, and 2 times the window's ATR, at both resolutions. The
+   2-spread floor in [3.4](#34-stored-values) stays as a noise guard unless it is changed.
+5. **Disk:** not a constraint; space will be added for all products as needed.
+
+Still open: **lead sessions** (5 or more). Measure warm-up at each roll in PR B and
+choose before the `1h@1m` backfill; slow pivot scales and daily ATR
+([section 7](#7-after-pivots-more-atr-metrics)) may need more.
+
+## 7. After pivots: more ATR metrics
+
+ATR sets stop distances, position sizes, and the pivot thresholds, so one ATR(14) per
+window is too little. Proposed for PR E as its own stage per resolution (`vol_1s`,
+`vol_1m`), each value normalized and scale-invariance tested:
+
+- **Several horizons.** Same-phase Wilder ATR(5), ATR(14) (stored now), and ATR(50), in
+  bps, with `log(ATR5 / ATR14)` and `log(ATR14 / ATR50)` showing volatility expanding
+  or contracting.
+- **Time-of-day normal.** Volatility at the US open is several times that of the Asian
+  session, so ATR(14) right after 08:30 CT still reflects the quiet minutes before. Add
+  ATR relative to the typical ATR at the same minute of the session over the previous
+  20 sessions (log ratio).
+- **Daily scale.** ATR(14) of prior complete sessions' true ranges (bps); the current
+  session's range so far as a share of it (how much of a typical day's move is used);
+  distances to the session high and low in daily ATRs.
+- **The current candle against its ATR.** True range ÷ ATR (an expansion candle), and
+  the ATR's percentile within its own trailing sessions (a causal rank, 0–1).
+- **Other estimators.** Parkinson and Garman–Klass volatility from OHLC, and the ratio of
+  realized volatility from one-second returns to ATR (noise versus trend; the `1h@1m`
+  version is in PR B).
+- **Up versus down.** Average upward against downward true range: whether volatility
+  comes from rallies or selloffs.
+- **Cost relative to movement.** Spread ÷ ATR: the share of a typical move paid to cross
+  the spread, which decides which swing scales are tradable.
+- **Risk context, not features.** ATR in price units and in dollars per contract (ATR ×
+  multiplier) for stop distances and position sizing in execution. Raw units stay out of
+  model inputs.
+
+Two choices to settle in PR E:
+
+- **History for daily and time-of-day ATR.** These need 14–20 prior sessions, more than
+  a contract's lead sessions. Either lengthen the lead for this stage, or compute these
+  normalized (bps) profiles from the product's front-contract sessions. The latter never
+  mixes prices across delivery months, but it is a departure from strictly per-contract
+  computation.
+- **Pivot thresholds.** PR C uses ATR(14). Once PR E exists, the benchmark can compare
+  thresholds scaled by the time-of-day ATR, which may stop the open from producing a
+  burst of small swings. Only the pivot stages would be rebuilt.

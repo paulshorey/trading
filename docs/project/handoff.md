@@ -210,27 +210,29 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 
 ## Next steps
 
-1. **`1h@1m` rows**: `market.bar_1m` rolled up from `bar_1s` and `market.candle_1h_1m`
-   with the same features on the bias window; give minute tables a longer warm-up if
-   slow hourly indicators are added. Before implementation, review this plan: add a
-   numbered migration and minute-row builder; merge each minute's 60 second rows by
-   `slot_ordinal` and metric merge kind, within one contract; feed the existing `BIAS`
-   window and per-phase features; checkpoint and resume with whole-session/streaming
-   parity. Scope builder hashes so adding minute storage does not invalidate unchanged
-   second-row values. Validate early closes, empty/missing rows, rolls, normalized
-   features, and interruption/resume before applying the migration to `trading`.
-2. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
+The order and decisions (November 3, 2026) are in the
+[plan for stages, `1h@1m`, and pivots](plan-1h-and-pivots.md):
+
+1. **Stages (PR A)**: one table, version, and checkpoint per stage, so new tables never
+   invalidate stored second rows; empty windows carry the last trade price as an
+   indicator input. Then rebuild GC and SI second rows (about 11 min).
+2. **`1h@1m` rows (PR B)**: `market.bar_1m` and `market.candle_1h_1m`, with the
+   amendments in the plan.
+3. **Swing structure (PRs C, D)**: directional-change pivots at 0.5, 1, and 2 ATRs on
+   both resolutions, higher/lower highs and lows, stored per second and per minute; then
+   the benchmark and outcome labels.
+4. **More ATR metrics (PR E)**.
+5. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).
-3. **Backtests read stored rows** when the builder matches, so their roll warm-up equals
+6. **Backtests read stored rows** when the builder matches, so their roll warm-up equals
    storage (backtests now replay one warm-up session).
-4. **Contract definitions**: download the free `definition` job into
+7. **Contract definitions**: download the free `definition` job into
    `data/databento/definition/` (needs the account owner) and load expirations.
 
-For the separate pivot-indicator research task, read the
-[next-agent handoff](pivot-detection-handoff.md) and its saved research. The next step
-is a concrete event contract and bounded indicator benchmark proposal; the methods
-remain unimplemented and unvalidated on GC/SI.
+Pivot research: the [next-agent handoff](pivot-detection-handoff.md) and its saved
+research; [the plan](plan-1h-and-pivots.md#2-assessment-of-the-pivot-research-pr-66)
+records how it is adopted. The methods remain unimplemented and unvalidated on GC/SI.
 
 ## Open questions
 

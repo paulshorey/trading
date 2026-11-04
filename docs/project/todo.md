@@ -18,8 +18,13 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Run the GC and SI ingest.** Completed November 3: 11 min 2 s, 8 workers,
       46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
       degraded reports and the GCZ6 roll checked ([results](handoff.md#first-ingest-gc-and-si)).
-- [ ] **Store `1h@1m` rows.** `market.bar_1m` rolled up from `bar_1s` and
-      `market.candle_1h_1m` with the same features on the bias window, in the same ingest.
+- [ ] **Stages (PR A).** Per-stage tables, versions, and checkpoints; empty windows carry
+      the last trade price; rebuild GC and SI ([plan](plan-1h-and-pivots.md)).
+- [ ] **Store `1h@1m` rows (PR B).** `market.bar_1m` and `market.candle_1h_1m`
+      ([plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
+- [ ] **Swing structure (PRs C, D).** Pivots, higher lows and lower highs, benchmark, and
+      labels ([plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
+- [ ] **More ATR metrics (PR E)** ([plan](plan-1h-and-pivots.md#7-after-pivots-more-atr-metrics)).
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
       Check run time and memory, rolls and warmup at every contract change, and the
       per-session quality reports. Run `research verify` on a week of GC and SI:

@@ -12,18 +12,23 @@ Planning, per product:
    and cached (`market.session_scan`, `market.session_volume`); the front contract of each
    session follows the backtest rule (most volume in the previous session). Planning only
    computes it; `run` publishes it to `market.roll` where the matching rows are stored.
-3. **Spans**: every contract that is ever front is stored from `lead_sessions` before its
-   first front session through its last, so its indicators are warm when it becomes front.
+3. **Spans**: every contract that is ever front is stored from the lead before its first
+   front session through its last, so its values have settled when it becomes front. The lead
+   is derived from the stages' warm-ups (`required_lead`), at least `LEAD_FLOOR` sessions.
    An explicit `--contract` is stored for every session in which it traded.
-4. **Diff**: a contract's stored sessions (`market.ingest_slice`) must be a prefix of its
-   span, built by the current builder from the current files. New sessions extend it from the
-   last checkpoint; a session whose files changed is rebuilt from the previous checkpoint.
-   Rows from other code or settings, and new sessions before the first stored one, change
-   every later value, so they need `--rebuild`, which replaces the contract's rows.
+4. **Diff**: a contract's stored sessions (`market.ingest_slice`, one per session, and
+   `market.stage_slice`, one per stage and session) must be a prefix of its span, built by the
+   current builders from the current files. Each stage has its own builder identity
+   (`identities`), so a stage whose code changed is rebuilt while the others stay current.
+   New sessions extend it from the last checkpoints; a session whose files changed is rebuilt
+   from the previous checkpoints; a stage with no rows yet is added. Rows from other code or
+   settings, and new sessions before the first stored one, change every later value, so they
+   need `--rebuild`, which replaces the contract's rows.
 
 Running: a contract is one task (its sessions in order, state carried); tasks run in parallel
-processes; each session commits its rows, slice record, and checkpoint in one transaction, so
-an interrupted run resumes where it stopped.
+processes; each session commits its rows, slice records, and checkpoints in one transaction, so
+an interrupted run resumes where it stopped. Every stage is computed in memory from the DBN
+files; only the stages that are not current for a session are written.
 """
 
 import hashlib
@@ -41,11 +46,12 @@ from importlib.metadata import version
 
 import psycopg
 from psycopg.types.json import Jsonb
-from strategy_core.engine import MarketChunk
+from strategy_core import warmup
 from strategy_core.execution import ExecutionConfig
 from strategy_core.features import FeatureConfig
 from strategy_core.market import NS, PRODUCTS, Product
-from strategy_core.rows import ROWS_VERSION, SecondRowBuilder
+from strategy_core.pipeline import STAGES, Pipeline
+from strategy_core.stages import StageContext
 from strategy_core.state import from_bytes, to_bytes
 
 from . import catalog, db, store
@@ -55,28 +61,21 @@ from .source import DayCache, HistoricalSource, front_of, next_front, raw_qualit
 
 EXECUTION = ExecutionConfig()  # stored rows use the backtest defaults for trade assignment
 FEATURES = FeatureConfig()
-LEAD_SESSIONS = 5
+LEAD_FLOOR = 40  # sessions; reserves the lead the planned stages need (feature-pipeline.md)
 LOCK_SPACE = 7_311  # pg advisory lock namespace for contracts being built
 CORE = "lib/strategy-core/src/strategy_core"
 RUNNER = "apps/backtest-runner/src/backtest_runner"
-# Code that determines stored values: the calculations, and how ingestion selects files and
-# sessions, feeds them to the builder, restores checkpoints, and writes rows (this module).
-# Editing any of these files makes stored rows `stale` until they are rebuilt.
-BUILDER_FILES = tuple(
-    f"{CORE}/{name}.py"
-    for name in (
-        "bars",
-        "features",
-        "indicators",
-        "kernels",
-        "market",
-        "metrics",
-        "rows",
-        "state",
-        "window_metrics",
-        "windows",
-    )
-) + tuple(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "ingest", "source", "store"))
+# Code that determines the market source of every stage: which files and sessions are read,
+# their hours, how trades are decoded and filtered, and the chunk each session feeds the
+# stages (`HistoricalSource.stored_chunk`). Each stage's own code is listed in its `MODULES`,
+# and how its values are written in CODEC_FILES. Ingestion's orchestration (this module and
+# store.py: which sessions, in which order, from which checkpoint) computes and encodes no
+# values; tests prove that stored rows equal the pipeline's output in any chunking, so editing
+# it leaves stored rows current, and adding a stage never makes the others stale.
+SOURCE_FILES = (
+    f"{CORE}/market.py",
+    *(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "source")),
+)
 # Code that determines the cached session volumes, and so the roll schedule: how volumes are
 # summed (source.py), over which hours and files, and how scans are judged complete and stored
 # (scan_sessions in this module). Editing any of them rescans every session, about 15 s.
@@ -85,8 +84,10 @@ SCAN_FILES = (
     f"{CORE}/market.py",
     *(f"{RUNNER}/{n}.py" for n in ("calendars", "catalog", "ingest", "source")),
 )
-PACKAGES = ("numpy", "numba", "databento", "pandas_market_calendars")
-RUNNABLE = ("new", "extend", "repair", "rebuild")
+SOURCE_PACKAGES = ("databento", "pandas_market_calendars")
+STAGE_PACKAGES = ("numpy", "numba")
+CODEC_FILES = (f"{RUNNER}/codec.py",)
+RUNNABLE = ("new", "extend", "add", "repair", "rebuild")
 Log = Callable[[str], None]
 
 
@@ -94,29 +95,73 @@ def stderr(line: str) -> None:
     print(line, file=sys.stderr, flush=True)
 
 
-def builder_identity(product: Product, calendar_name: str) -> dict:
-    """Everything that determines stored values: the code that computes them, assignment
-    timing, feature settings, the calendar and phase origin, and numeric package versions."""
+def _identity(stage: str, files: list[str], settings: dict) -> dict:
     code = hashlib.sha256()
-    for rel in BUILDER_FILES:
+    for rel in files:
         code.update(rel.encode())
         code.update((ROOT / rel).read_bytes())
-    settings = {
-        "rows_version": ROWS_VERSION,
-        "product": product.root,
-        "calendar": calendar_name,
-        "phase_origin": PHASE_ORIGIN.isoformat(),
-        "feed_latency_ns": EXECUTION.feed_latency,
-        "close_delay_ns": EXECUTION.close_delay,
-        "features": asdict(FEATURES),
-        "packages": {p: version(p) for p in PACKAGES},
-        "columns": {n: [f"{c.name} {c.sql}" for c in cols] for n, cols in store.TABLES.items()},
-    }
     body = json.dumps({"code": code.hexdigest(), "settings": settings}, sort_keys=True)
     return {
+        "stage": stage,
         "sha256": hashlib.sha256(body.encode()).hexdigest(),
         "code_sha256": code.hexdigest(),
         "settings": settings,
+    }
+
+
+def stage_context(calendar=None) -> StageContext:
+    """Settings and warm-ups never read the calendar, so planning builds stages without one."""
+    return StageContext(calendar, EXECUTION.feed_latency, EXECUTION.close_delay, FEATURES)
+
+
+def identities(product: Product, calendar_name: str) -> dict[str, dict]:
+    """Builder identity of the market source and of every stage: the code that computes its
+    values, its settings, its columns, numeric package versions, and its inputs' identities.
+    A stage's identity changes only when something it depends on changes."""
+    source = _identity(
+        "source",
+        list(SOURCE_FILES),
+        {
+            "product": product.root,
+            "calendar": calendar_name,
+            "phase_origin": PHASE_ORIGIN.isoformat(),
+            "feed_latency_ns": EXECUTION.feed_latency,
+            "close_delay_ns": EXECUTION.close_delay,
+            "packages": {p: version(p) for p in SOURCE_PACKAGES},
+        },
+    )
+    out = {"source": source}
+    for cls in STAGES:
+        stage = cls(stage_context())
+        out[cls.NAME] = _identity(
+            cls.NAME,
+            [f"{CORE}/{m}.py" for m in cls.MODULES] + list(CODEC_FILES),
+            {
+                "product": product.root,
+                "stage": cls.NAME,
+                "tier": cls.TIER,
+                "settings": stage.settings(),
+                "columns": [f"{c.name} {c.sql}" for c in cls.COLUMNS],
+                "packages": {p: version(p) for p in STAGE_PACKAGES},
+                "inputs": {n: out["source" if n == "market" else n]["sha256"] for n in cls.INPUTS},
+            },
+        )
+    return out
+
+
+def required_lead(session_seconds: int) -> tuple[int, str]:
+    """Sessions of lead that every stage's derived warm-up needs, and the stage that needs the
+    most. `session_seconds` is a typical session's open time. `LEAD_FLOOR` adds the margin."""
+    need = warm_sessions(session_seconds)
+    name = max(need, key=need.get)
+    return need[name], name
+
+
+def warm_sessions(session_seconds: int) -> dict[str, int]:
+    """Per stage: stored sessions a contract must have run before a session is warm."""
+    return {
+        cls.NAME: warmup.sessions(cls(stage_context()).warmup(), 1, session_seconds)
+        for cls in STAGES
     }
 
 
@@ -205,14 +250,15 @@ def contract_id_for(conn: psycopg.Connection, product: Product, symbol: str, mon
 
 def builder_id(conn: psycopg.Connection, identity: dict) -> int:
     row = conn.execute(
-        """INSERT INTO market.builder (sha256, product, code_sha256, settings)
-           VALUES (%s, %s, %s, %s)
+        """INSERT INTO market.builder (sha256, product, code_sha256, settings, stage)
+           VALUES (%s, %s, %s, %s, %s)
            ON CONFLICT (sha256) DO UPDATE SET sha256 = EXCLUDED.sha256 RETURNING id""",
         (
             identity["sha256"],
             identity["settings"]["product"],
             identity["code_sha256"],
             Jsonb(identity["settings"]),
+            identity["stage"],
         ),
     ).fetchone()
     return int(row[0])
@@ -338,15 +384,16 @@ def publish_rolls(
     conn: psycopg.Connection,
     product: Product,
     schedule: dict[date, tuple[str, str]],
-    builder: int,
+    builders: dict[str, int],
     expected: dict[date, list[dict]],
 ) -> int:
     """Publish the front contract of each session to `market.roll`, which the continuous views
-    read, only where that contract's rows for the session are current: stored by `builder` from
-    the session's current files (`expected`), never stale rows. Until then a session
-    keeps its previous entry, so planning, a failed build, or a rebuild in progress never
-    takes a readable session out of the series or points it at rows that do not exist yet.
-    Returns the number of sessions published."""
+    read, only where that contract's session is current: its source record stored by the
+    current source builder from the session's current files (`expected`), and every stage's
+    rows by that stage's current builder, never stale rows. Until then a session keeps its
+    previous entry, so planning, a failed build, or a rebuild in progress never takes a
+    readable session out of the series or points it at rows that do not exist yet. Returns the
+    number of sessions published."""
     published = 0
     with conn.transaction():
         for day, (symbol, basis) in schedule.items():
@@ -356,7 +403,16 @@ def publish_rolls(
                    WHERE contract_id = %s AND trade_date = %s""",
                 (cid, day),
             ).fetchone()
-            if stored is None or tuple(stored) != (builder, expected.get(day)):
+            if stored is None or tuple(stored) != (builders["source"], expected.get(day)):
+                continue
+            stages = dict(
+                conn.execute(
+                    """SELECT stage, builder_id FROM market.stage_slice
+                       WHERE contract_id = %s AND trade_date = %s AND variant_id = 0""",
+                    (cid, day),
+                ).fetchall()
+            )
+            if any(stages.get(cls.NAME) != builders[cls.NAME] for cls in STAGES):
                 continue
             conn.execute(
                 """INSERT INTO market.roll (product, trade_date, contract_id, basis)
@@ -378,10 +434,11 @@ class ContractPlan:
     stored: int  # sessions stored by the current builder from the current files
     start: int  # index of the first session to build
     delete_from: str | None  # stored sessions from this trade date on are replaced, one by one
-    action: str  # new, extend, repair, rebuild, current, stale, needs_rebuild
+    action: str  # new, extend, add, repair, rebuild, current, stale, needs_rebuild
     reason: str = ""
     rows: int = 0  # scheduled seconds to build
     delivery: str = ""  # delivery month, YYYY-MM: one-digit-year symbols repeat each decade
+    history_limited: bool = False  # the downloads start too late for the full lead
 
     @property
     def todo(self) -> int:
@@ -429,47 +486,115 @@ def spans(
     return out
 
 
+@dataclass(frozen=True)
+class Stored:
+    """A contract's stored sessions: the source record of each (`market.ingest_slice`: builder
+    and files) and the builder of each stage's rows (`market.stage_slice`)."""
+
+    source: dict[date, tuple[int, list[dict]]]
+    stages: dict[str, dict[date, int]]
+
+    @property
+    def dates(self) -> list[date]:
+        return sorted(self.source)
+
+
+def session_state(
+    day: date, stored: Stored, builders: dict[str, int], expected: dict[date, list[dict]]
+) -> tuple[bool, list[str], bool]:
+    """(current, stages to write, stale) for one session. The session is current when its
+    source record and every stage were stored by the current builders from its current files.
+    A changed source rewrites every stage; otherwise only stages missing or built by other code.
+    Stale means something stored for it came from other code or settings."""
+    names = [cls.NAME for cls in STAGES]
+    src = stored.source.get(day)
+    if src is None or src[1] != expected[day]:
+        stale = src is not None and src[0] != builders["source"]
+        return False, names, stale
+    stale = src[0] != builders["source"]
+    if stale:
+        return False, names, True
+    write = [n for n in names if stored.stages.get(n, {}).get(day) != builders[n]]
+    stale = any(stored.stages.get(n, {}).get(day) not in (None, builders[n]) for n in names)
+    return not write, write, stale
+
+
 def diff(
     span: list[Session],
     period: list[Session],
-    stored: list[tuple],
-    builder: int,
+    stored: Stored,
+    builders: dict[str, int],
     expected: dict[date, list[dict]],
     rebuild: bool,
 ) -> tuple[list[Session], int, date | None, str, str]:
     """(span, start index, first replaced date, action, reason) for one contract. The span grows
     to cover every stored session first, so a rebuild or repair never drops stored sessions
-    outside `--start` or `--end`. A session is current when stored by this builder from its
-    current files; building starts at the first one that is not, from the checkpoint before
-    it, and replaces stored sessions one at a time, so an interrupted rebuild resumes there."""
-    if not stored:
+    outside `--start` or `--end`. A session is current when its source record and all stages
+    are current (`session_state`); building starts at the first one that is not, from the
+    checkpoints before it, and replaces stored sessions one at a time, so an interrupted
+    rebuild resumes there. A stage without stored rows (a new stage) is added from the span
+    start without `--rebuild`: nothing stored is replaced."""
+    dates = stored.dates
+    if not dates:
         return span, 0, None, "new", ""
-    first_stored, last_stored = stored[0][0], stored[-1][0]
-    lo, hi = min(first_stored, span[0].trade_date), max(last_stored, span[-1].trade_date)
+    lo, hi = min(dates[0], span[0].trade_date), max(dates[-1], span[-1].trade_date)
     span = [s for s in period if lo <= s.trade_date <= hi]
-    slices = {d: (b, f) for d, b, f in stored}
+    states = [session_state(s.trade_date, stored, builders, expected) for s in span]
     i = 0
-    while i < len(span) and slices.get(span[i].trade_date) == (
-        builder,
-        expected[span[i].trade_date],
-    ):
+    while i < len(span) and states[i][0]:
         i += 1
     if i == len(span):
         return span, i, None, "current", ""
-    rest = [d for d in slices if d >= span[i].trade_date]
+    rest = [k for k in range(i, len(span)) if span[k].trade_date in stored.source]
     if not rest:
         return span, i, None, "extend", ""
-    stale = any(slices[d][0] != builder for d in rest)
-    if stale or i == 0:
-        why = (
-            "stored by other code or settings"
-            if stale
-            else "a session before the stored ones, or the first session's files changed"
-        )
+    stale = any(states[k][2] for k in rest)
+    if stale:
+        why = "stored by other code or settings"
         if rebuild:
             return span, i, span[i].trade_date, "rebuild", why
-        return span, len(span), None, "stale" if stale else "needs_rebuild", why + "; use --rebuild"
+        return span, len(span), None, "stale", why + "; use --rebuild"
+
+    def only_missing(k: int) -> bool:  # source current; its other stages were never stored
+        day = span[k].trade_date
+        source_ok = stored.source[day] == (builders["source"], expected[day])
+        return source_ok and all(day not in stored.stages.get(n, {}) for n in states[k][1])
+
+    contiguous = all(span[k].trade_date in stored.source for k in range(i, rest[-1] + 1))
+    if contiguous and all(only_missing(k) for k in rest):
+        missing = sorted({n for k in rest for n in states[k][1]})
+        return span, i, None, "add", f"stages without stored rows: {', '.join(missing)}"
+    if i == 0:
+        why = "a session before the stored ones, or the first session's files changed"
+        if rebuild:
+            return span, i, span[i].trade_date, "rebuild", why
+        return span, len(span), None, "needs_rebuild", why + "; use --rebuild"
     return span, i, span[i].trade_date, "repair", "files changed or sessions missing"
+
+
+def stored_sessions(conn: psycopg.Connection, cid: int) -> Stored:
+    source = {
+        day: (int(b), files)
+        for day, b, files in conn.execute(
+            """SELECT trade_date, builder_id, source_files FROM market.ingest_slice
+               WHERE contract_id = %s""",
+            (cid,),
+        )
+    }
+    stages: dict[str, dict[date, int]] = {}
+    for stage, day, b in conn.execute(
+        """SELECT stage, trade_date, builder_id FROM market.stage_slice
+           WHERE contract_id = %s AND variant_id = 0""",
+        (cid,),
+    ):
+        stages.setdefault(stage, {})[day] = int(b)
+    return Stored(source, stages)
+
+
+def session_seconds(sessions: list[Session]) -> int:
+    """A typical session's scheduled-open seconds (the median), for warm-ups in sessions."""
+    lengths = sorted((s.close - s.open) // NS for s in sessions)
+    return int(lengths[len(lengths) // 2]) if lengths else 86_400
 
 
 def plan_product(
@@ -479,7 +604,7 @@ def plan_product(
     contract: str | None = None,
     start: date | None = None,
     end: date | None = None,
-    lead: int = LEAD_SESSIONS,
+    lead: int | None = None,
     rebuild: bool = False,
     cache: DayCache | None = None,
     log: Log = stderr,
@@ -488,8 +613,8 @@ def plan_product(
     if contract is not None and not product.is_outright(contract):
         raise ValueError(f"{contract!r} is not a {product.root} outright contract")
     calendar_name, calendar, downloaded = data.sessions()
-    identity = builder_identity(product, calendar_name)
-    builder = builder_id(conn, identity)
+    ids = identities(product, calendar_name)
+    builders = {name: builder_id(conn, identity) for name, identity in ids.items()}
     source = HistoricalSource(
         product, data.files, [], downloaded, EXECUTION, None, cache or DayCache()
     )
@@ -505,21 +630,30 @@ def plan_product(
     period = [
         s for s in calendar if downloaded and downloaded[0].open <= s.open <= downloaded[-1].open
     ]
+    seconds = session_seconds(period)
+    required, required_by = required_lead(seconds)
+    if lead is None:
+        lead = max(LEAD_FLOOR, required)
+    elif lead < required:
+        raise ValueError(
+            f"lead {lead} is shorter than the {required} sessions {required_by} needs to settle"
+        )
     expected = {s.trade_date: session_files(source, s) for s in period}
+    index = {s.trade_date: i for i, s in enumerate(period)}
+    first_front: dict[tuple[str, date], int] = {}
+    for day, symbol in front.items():
+        key = (symbol, product.contract_month(symbol, day))
+        first_front[key] = min(first_front.get(key, index[day]), index[day])
     plans = []
     for (symbol, month), span in spans(
         product, period, front, volumes, contract=contract, start=start, end=end, lead=lead
     ).items():
         cid = contract_id_for(conn, product, symbol, month)
-        stored = conn.execute(
-            """SELECT trade_date, builder_id, source_files FROM market.ingest_slice
-               WHERE contract_id = %s ORDER BY trade_date""",
-            (cid,),
-        ).fetchall()
         span, i, delete_from, action, reason = diff(
-            span, period, stored, builder, expected, rebuild
+            span, period, stored_sessions(conn, cid), builders, expected, rebuild
         )
         todo = span[i:] if action in RUNNABLE else []
+        limited = contract is None and first_front.get((symbol, month), lead) < lead
         plans.append(
             ContractPlan(
                 product.root,
@@ -533,13 +667,17 @@ def plan_product(
                 reason,
                 sum((s.close - s.open) // NS for s in todo),
                 delivery=f"{month:%Y-%m}",
+                history_limited=limited,
             )
         )
     plans.sort(key=lambda p: (p.sessions[0], p.contract))
     return {
         "product": product.root,
-        "builder_id": builder,
-        "builder": identity["sha256"][:12],
+        "builders": builders,
+        "builder": {name: identity["sha256"][:12] for name, identity in ids.items()},
+        "lead_sessions": lead,
+        "required_lead": {"sessions": required, "stage": required_by},
+        "warm_sessions": warm_sessions(seconds),
         "downloaded_sessions": len(downloaded),
         "first_session": downloaded[0].trade_date.isoformat() if downloaded else None,
         "last_session": downloaded[-1].trade_date.isoformat() if downloaded else None,
@@ -559,98 +697,142 @@ def require_migrated(conn: psycopg.Connection) -> None:
         raise ValueError(f"Database migrations not applied: {pending}; run `research db migrate`")
 
 
+def downstream(names: set[str]) -> set[str]:
+    """The named stages and every stage that reads them, directly or through others."""
+    out = set(names)
+    for cls in STAGES:  # registered in dependency order
+        if any(n in out for n in cls.INPUTS):
+            out.add(cls.NAME)
+    return out
+
+
 def build_contract(
     plan: dict,
-    builder: int,
+    product_plan: dict,
     run_id: int,
     url: str,
     data: ProductData,
     cache: DayCache | None = None,
     log: Log = stderr,
 ) -> dict:
-    """Build one contract's sessions from `plan["start"]` on, in order, resuming from the
-    checkpoint of the session before. Each session commits on its own."""
+    """Build one contract's sessions from `plan["start"]` on, in order, resuming every stage
+    from its checkpoint of the session before. Every stage is computed in memory; a stage's rows
+    are written from the first session where it, or a stage it reads, is not current, because
+    its state carries from there on. Each session commits on its own."""
     product, symbol, cid = data.product, plan["contract"], plan["contract_id"]
+    builders, warm = product_plan["builders"], product_plan["warm_sessions"]
     dates = [date.fromisoformat(d) for d in plan["sessions"]]
     calendar, _, sessions = load_sessions(product, dates[0], dates[-1], 0)
     by_date = {s.trade_date: s for s in sessions}
     span = [by_date[d] for d in dates]
     source = HistoricalSource(product, data.files, [], span, EXECUTION, symbol, cache or DayCache())
-    rows_builder = SecondRowBuilder(
+    pipeline = Pipeline(
         calendar,
         feed_latency=EXECUTION.feed_latency,
         close_delay=EXECUTION.close_delay,
         config=FEATURES,
     )
+    names = [cls.NAME for cls in STAGES]
     done, total_rows, started = 0, 0, time.time()
     with db.connect(url) as conn:
         conn.autocommit = True  # each session's transaction commits on its own
         locked = conn.execute("SELECT pg_try_advisory_lock(%s, %s)", (LOCK_SPACE, cid)).fetchone()
         if not locked[0]:
             raise RuntimeError(f"{symbol} is being built by another ingest run")
+        stored = stored_sessions(conn, cid)
         if plan["start"] > 0:
-            state = conn.execute(
-                "SELECT state FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s",
-                (cid, dates[plan["start"] - 1]),
-            ).fetchone()
-            if state is None:
-                raise RuntimeError(f"{symbol}: no checkpoint for {dates[plan['start'] - 1]}")
-            rows_builder.restore(from_bytes(state[0]))
-        for s in span[plan["start"] :]:
+            before = dates[plan["start"] - 1]
+            for name in names:
+                state = conn.execute(
+                    """SELECT state FROM market.stage_slice WHERE stage = %s AND variant_id = 0
+                           AND contract_id = %s AND trade_date = %s AND builder_id = %s""",
+                    (name, cid, before, builders[name]),
+                ).fetchone()
+                if state is None:
+                    raise RuntimeError(f"{symbol}: no current {name} checkpoint for {before}")
+                pipeline.restore(name, from_bytes(state[0]))
+        dirty: set[str] = set()
+        for k in range(plan["start"], len(span)):
+            s = span[k]
             t0 = time.time()
-            trades, coverage, unmapped, rejected = source.session_trades(symbol, s)
-            label = f"{s.trade_date} {symbol}"
-            rows = rows_builder.process(
-                MarketChunk(symbol, s.open, s.close, trades, coverage, label)
-            )
-            base = rows.base.values
+            chunk, trades, unmapped, rejected = source.stored_chunk(symbol, s)
+            rows = pipeline.process(chunk)
+            files = session_files(source, s)
+            _, write, _ = session_state(s.trade_date, stored, builders, {s.trade_date: files})
+            source_current = stored.source.get(s.trade_date) == (builders["source"], files)
+            dirty = set(names) if not source_current else downstream(dirty | set(write))
+            base = rows.tables["bar_1s"].values
             report = {
                 "aggregation": asdict(rows.report),
                 "raw": raw_quality(trades),
                 "rejected_trades": rejected,
                 "contract_unmapped_days": [d.isoformat() for d in unmapped],
+                "history_limited": bool(plan.get("history_limited")),
             }
-            with conn.transaction():  # replace this session's stored rows and slice atomically
-                lo, hi = int(base["slot_ordinal"][0]), int(base["slot_ordinal"][-1])
-                old = conn.execute(
-                    """DELETE FROM market.ingest_slice WHERE contract_id = %s AND trade_date = %s
-                       RETURNING first_ordinal, last_ordinal""",
-                    (cid, s.trade_date),
-                ).fetchone()
-                if old is not None:
-                    lo, hi = min(lo, int(old[0])), max(hi, int(old[1]))
-                store.delete_rows(conn, cid, lo, hi)
-                store.write_rows(conn, cid, rows)
-                conn.execute(
-                    """INSERT INTO market.ingest_slice (contract_id, trade_date, builder_id, run_id,
-                           open_ns, close_ns, first_ordinal, last_ordinal, row_count, observed,
-                           missing, report, source_files, state, build_seconds)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-                    (
-                        cid,
-                        s.trade_date,
-                        builder,
-                        run_id,
-                        s.open,
-                        s.close,
-                        int(base["slot_ordinal"][0]),
-                        int(base["slot_ordinal"][-1]),
-                        len(rows),
-                        int((base["status"] == 2).sum()),
-                        int((base["status"] == 0).sum()),
-                        Jsonb(report),
-                        Jsonb(session_files(source, s)),
-                        to_bytes(rows_builder.export()),
-                        time.time() - t0,
-                    ),
-                )
+            lo, hi = int(base["slot_ordinal"][0]), int(base["slot_ordinal"][-1])
+            with conn.transaction():  # replace this session's records and rows atomically
+                if not source_current:  # a new source record; its stage records cascade
+                    old = conn.execute(
+                        """DELETE FROM market.ingest_slice WHERE contract_id = %s
+                               AND trade_date = %s RETURNING first_ordinal, last_ordinal""",
+                        (cid, s.trade_date),
+                    ).fetchone()
+                    if old is not None:
+                        lo, hi = min(lo, int(old[0])), max(hi, int(old[1]))
+                    conn.execute(
+                        """INSERT INTO market.ingest_slice (contract_id, trade_date, builder_id,
+                               run_id, open_ns, close_ns, first_ordinal, last_ordinal, row_count,
+                               observed, missing, report, source_files, state, build_seconds)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, %s)""",
+                        (
+                            cid,
+                            s.trade_date,
+                            builders["source"],
+                            run_id,
+                            s.open,
+                            s.close,
+                            lo,
+                            hi,
+                            len(rows),
+                            int((base["status"] == 2).sum()),
+                            int((base["status"] == 0).sum()),
+                            Jsonb(report),
+                            Jsonb(files),
+                            time.time() - t0,
+                        ),
+                    )
+                written = [n for n in names if n in dirty]
+                store.delete_rows(conn, cid, lo, hi, written)
+                for name in written:
+                    store.copy_table(conn, name, rows.tables[name], cid)
+                    conn.execute(
+                        """DELETE FROM market.stage_slice WHERE stage = %s AND variant_id = 0
+                               AND contract_id = %s AND trade_date = %s""",
+                        (name, cid, s.trade_date),
+                    )
+                    conn.execute(
+                        """INSERT INTO market.stage_slice (stage, variant_id, contract_id,
+                               trade_date, builder_id, run_id, state, warm, build_seconds)
+                           VALUES (%s, 0, %s, %s, %s, %s, %s, %s, %s)""",
+                        (
+                            name,
+                            cid,
+                            s.trade_date,
+                            builders[name],
+                            run_id,
+                            to_bytes(pipeline.export(name)),
+                            k >= warm[name],
+                            time.time() - t0,
+                        ),
+                    )
             done += 1
             total_rows += len(rows)
             observed = (base["status"] == 2).mean()
             log(
-                f"{product.root} {symbol} {s.trade_date}: {len(rows):,} rows, "
-                f"{observed:.0%} with trades, {int((base['status'] == 0).sum()):,} missing, "
-                f"{time.time() - t0:.1f}s ({done}/{len(span) - plan['start']})"
+                f"{product.root} {symbol} {s.trade_date}: {len(rows):,} rows "
+                f"({', '.join(written) or 'nothing written'}), {observed:.0%} with trades, "
+                f"{int((base['status'] == 0).sum()):,} missing, {time.time() - t0:.1f}s "
+                f"({done}/{len(span) - plan['start']})"
             )
     return {
         "contract": symbol,
@@ -661,9 +843,9 @@ def build_contract(
 
 
 def _task(args: tuple) -> dict:
-    plan, builder, run_id, url, data = args
+    plan, product_plan, run_id, url, data = args
     try:
-        return build_contract(plan, builder, run_id, url, data)
+        return build_contract(plan, product_plan, run_id, url, data)
     except Exception as error:  # report per contract; the other contracts continue
         return {"contract": plan["contract"], "error": f"{error}", "trace": traceback.format_exc()}
 
@@ -674,7 +856,7 @@ def plan(
     contract: str | None = None,
     start: date | None = None,
     end: date | None = None,
-    lead: int = LEAD_SESSIONS,
+    lead: int | None = None,
     rebuild: bool = False,
     url: str | None = None,
     data: dict[str, ProductData] | None = None,
@@ -684,12 +866,12 @@ def plan(
     products = list(dict.fromkeys(products))  # `GC GC` must not plan every contract twice
     if contract is not None and len(products) != 1:
         raise ValueError("--contract needs exactly one product")
-    if type(lead) is not int or not 0 <= lead <= 60:
-        raise ValueError("lead sessions must be an integer from 0 to 60")
+    if lead is not None and (type(lead) is not int or not 0 <= lead <= 400):
+        raise ValueError("lead sessions must be an integer from 0 to 400")
     with db.connect(url) as conn:
         conn.autocommit = True  # each `transaction()` block commits on its own
         require_migrated(conn)
-        store.apply_comments(conn)
+        store.apply_registry(conn)
         if data is None:
             db.register_files(conn, [f for f in catalog.discover(schema=None) if f.present])
         sources = data or {p: ProductData.load(p) for p in products}
@@ -749,7 +931,16 @@ def run(
     workers = workers or max(1, min(len(tasks), (os.cpu_count() or 2) - 2))
     log(f"Ingest run {run_id}: {len(tasks)} contracts, {sum(c.todo for _, c in tasks)} sessions, "
         f"{sum(c.rows for _, c in tasks):,} rows, {workers} workers")  # fmt: skip
-    args = [(asdict(c), p["builder_id"], run_id, url, sources[c.product]) for p, c in tasks]
+    args = [
+        (
+            asdict(c),
+            {"builders": p["builders"], "warm_sessions": p["warm_sessions"]},
+            run_id,
+            url,
+            sources[c.product],
+        )
+        for p, c in tasks
+    ]
     results, status = [], "failed"
     try:
         if workers == 1:
@@ -770,8 +961,9 @@ def run(
         if len(failed) < len(results):  # fresh planner statistics for the new rows
             with db.connect(url) as conn:
                 conn.autocommit = True
-                conn.execute("ANALYZE market.bar_1s, market.candle_1m_1s")
-            log("Analyzed market.bar_1s and market.candle_1m_1s")
+                tables = ", ".join(f"market.{name}" for name in store.TABLES)
+                conn.execute(f"ANALYZE {tables}")
+            log(f"Analyzed {tables}")
     finally:
         with db.connect(url) as conn:
             conn.execute(
@@ -802,7 +994,7 @@ def publish(plans: list[dict], url: str, log: Log) -> None:
         conn.autocommit = True
         for p in plans:
             n = publish_rolls(
-                conn, PRODUCTS[p["product"]], p["schedule"], p["builder_id"], p["expected"]
+                conn, PRODUCTS[p["product"]], p["schedule"], p["builders"], p["expected"]
             )
             log(
                 f"{p['product']}: published the front contract of {n}/{len(p['schedule'])} sessions"
@@ -862,10 +1054,12 @@ def status(url: str | None = None) -> dict:
         stored = conn.execute(
             """SELECT c.product, c.raw_symbol, c.contract_month, count(*), min(s.trade_date),
                           max(s.trade_date), sum(s.row_count), sum(s.observed), sum(s.missing),
-                          array_agg(DISTINCT left(b.sha256, 12)), max(s.ingested_at)
+                          (SELECT array_agg(DISTINCT t.stage || ' ' || left(b.sha256, 12))
+                           FROM market.stage_slice t JOIN market.builder b ON b.id = t.builder_id
+                           WHERE t.contract_id = c.id),
+                          max(s.ingested_at)
                    FROM market.ingest_slice s
                    JOIN market.contract c ON c.id = s.contract_id
-                   JOIN market.builder b ON b.id = s.builder_id
                    GROUP BY c.id, 1, 2, 3 ORDER BY 1, 5"""
         ).fetchall()
         contracts = [stored_contract(row) for row in stored]

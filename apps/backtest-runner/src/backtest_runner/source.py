@@ -166,6 +166,17 @@ class HistoricalSource:
         keep = inside & ~undefined & ~empty & ~unset
         return trades.take(keep), np.array(coverage, np.int64).reshape(-1, 2), unmapped, rejected
 
+    def stored_chunk(
+        self, contract: str, session: Session
+    ) -> tuple[MarketChunk, Trades, list[date], dict[str, int]]:
+        """The chunk ingestion stores for a contract's session, with its trades, the days whose
+        files do not list the contract, and its rejected records. Part of the source identity:
+        what each stage reads comes from here."""
+        trades, coverage, unmapped, rejected = self.session_trades(contract, session)
+        label = f"{session.trade_date} {contract}"
+        chunk = MarketChunk(contract, session.open, session.close, trades, coverage, label)
+        return chunk, trades, unmapped, rejected
+
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
         trades, coverage, unmapped, rejected = self.session_trades(contract, session)
         label = f"{session.trade_date} {contract}" + ("" if tradable else " (warmup)")

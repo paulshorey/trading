@@ -21,7 +21,7 @@ would include it. History carries between calls, so any chunking gives identical
 import numpy as np
 from numba import njit
 
-from . import kernels
+from . import kernels, warmup
 from .market import NS, PX
 from .windows import COMPLETE, EMPTY, Candles
 
@@ -123,6 +123,8 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
 )
 AS_OF_FEATURES = ("trade_age_s", "book_age_s", "depth_age_s", "book_spread_bps", "book_imbalance")
 DEPTH = 26  # same-phase candles kept: Aroon(25) needs 26
+EMA_PERIODS = (9, 21, 50)
+MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9
 
 
 @njit(cache=True)
@@ -265,6 +267,21 @@ class CandleIndicators:
         self.history = History(names, DEPTH, slots)
         self.k_history = History(("k",), 3, slots)
 
+    def warmup(self, atr: int) -> int:
+        """Same-phase periods until every output has settled (`warmup.py`): the longest chain
+        among the recursive averages, and the lookback windows behind ATR-scaled values. `atr`
+        is the warm-up of the ATR these features are scaled by."""
+        n = self.n
+        chains = [
+            *(warmup.ema(p) for p in EMA_PERIODS),
+            warmup.ema(MACD_SLOW) + warmup.ema(MACD_SIGNAL),  # signal line of MACD
+            warmup.wilder(n, extra=1) + warmup.wilder(n),  # ADX: smoothed DX of smoothed DMs
+            warmup.wilder(n, extra=1),  # mid RSI
+            warmup.ema(self.activity) + 1,  # activity baselines read earlier periods
+            atr + warmup.window(DEPTH),  # ATR-scaled lookbacks over the deepest history
+        ]
+        return max(chains)
+
     def update(
         self,
         c: Candles,
@@ -364,15 +381,12 @@ class CandleIndicators:
             phase_ema(x, ok, ph, period, state.ema, state.count, out)
             return out
 
-        for name, state, period in (
-            ("ema9_atr", self.ema9, 9),
-            ("ema21_atr", self.ema21, 21),
-            ("ema50_atr", self.ema50, 50),
-        ):
-            f[name] = (cl - ema(state, cl, valid, period)) / atr_ok
-        fast, slow = ema(self.ema12, cl, valid, 12), ema(self.ema26, cl, valid, 26)
+        for state, period in zip((self.ema9, self.ema21, self.ema50), EMA_PERIODS, strict=True):
+            f[f"ema{period}_atr"] = (cl - ema(state, cl, valid, period)) / atr_ok
+        fast = ema(self.ema12, cl, valid, MACD_FAST)
+        slow = ema(self.ema26, cl, valid, MACD_SLOW)
         macd = fast - slow
-        signal = ema(self.signal, macd, valid & np.isfinite(macd), 9)
+        signal = ema(self.signal, macd, valid & np.isfinite(macd), MACD_SIGNAL)
         f["macd_atr"] = macd / atr_ok
         f["macd_signal_atr"] = signal / atr_ok
         f["macd_hist_atr"] = (macd - signal) / atr_ok

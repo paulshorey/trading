@@ -10,9 +10,12 @@ import pytest
 from backtest_runner import db, ingest, store
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import HistoricalSource, next_front
+from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
-from strategy_core.rows import BASE_COLUMNS, FEATURE_COLUMNS, SecondRowBuilder, Table
+from strategy_core.pipeline import Pipeline
+from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
+from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
 from strategy_core.synthetic import random_trades
 from test_runner import RECORD, FakeCache
 
@@ -97,12 +100,33 @@ def test_registry_matches_the_migrated_tables(database):
                 "roll_basis": "text",
                 "rolled": "boolean",
             }, name
-        store.apply_comments(conn)
+        conn.execute(
+            "INSERT INTO market.column_registry (stage, name, role, sql_type, description, "
+            "status) VALUES ('bar_1s', 'retired', 'context', 'bigint', 'gone', 'active')"
+        )
+        store.apply_registry(conn)
         comment = conn.execute(
             "SELECT col_description('market.candle_1m_1s'::regclass, attnum) FROM pg_attribute "
             "WHERE attrelid = 'market.candle_1m_1s'::regclass AND attname = 'rsi'"
         ).fetchone()[0]
         assert "index_0_100" in comment
+        # The column registry holds every stored column with its role; features carry units
+        registry = {
+            (stage, name): (role, unit, sql_type, status)
+            for stage, name, role, unit, sql_type, status in conn.execute(
+                "SELECT stage, name, role, unit, sql_type, status FROM market.column_registry"
+            )
+        }
+        want = {
+            (stage, c.name): (c.role, c.unit or None, c.sql, "active")
+            for stage, columns in store.TABLES.items()
+            for c in columns
+        }
+        assert {k: v for k, v in registry.items() if v[3] == "active"} == want
+        assert registry[("bar_1s", "retired")][3] == "deprecated"  # never deleted
+        assert registry[("candle_1m_1s", "rsi")][:2] == ("feature", "index_0_100")
+        assert registry[("bar_1s", "close")][0] == "context"  # raw prices are never features
+        assert registry[("bar_1s", "slot_ordinal")][0] == "key"
 
 
 def test_encoding_rejects_values_that_do_not_fit():
@@ -149,7 +173,7 @@ def in_memory(cache, data, symbol: str, dates: list[date]):
     calendar, _, sessions = load_sessions(GC, dates[0], dates[-1], 0)
     by_date = {s.trade_date: s for s in sessions}
     source = HistoricalSource(GC, data["GC"].files, [], [], ingest.EXECUTION, symbol, cache)
-    b = SecondRowBuilder(
+    b = Pipeline(
         calendar,
         feed_latency=ingest.EXECUTION.feed_latency,
         close_delay=ingest.EXECUTION.close_delay,
@@ -209,7 +233,7 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         # Regression (PR #63 review): a front without stored rows is not published; the
         # session keeps its readable entry
         [now] = ingest.plan(["GC"], data=first, **options)
-        current = (now["builder_id"], now["expected"])
+        current = (now["builders"], now["expected"])
         schedule = {date(2026, 9, 1): ("GCG7", "previous_session")}
         assert ingest.publish_rolls(conn, GC, schedule, *current) == 0
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
@@ -221,7 +245,9 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         where = "WHERE trade_date = '2026-09-03'"
         conn.execute(f"UPDATE market.ingest_slice SET builder_id = %s {where}", (other,))
         assert ingest.publish_rolls(conn, GC, {date(2026, 9, 3): ("GCG7", "kept")}, *current) == 0
-        conn.execute(f"UPDATE market.ingest_slice SET builder_id = %s {where}", (current[0],))
+        conn.execute(
+            f"UPDATE market.ingest_slice SET builder_id = %s {where}", (current[0]["source"],)
+        )
         conn.commit()
 
     # Unchanged inputs: nothing to do
@@ -242,9 +268,13 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         cols = ["slot_ordinal", *FEATURE_COLUMNS, "close", "volume", "status"]
         got = read(conn, "candle_1m_1s", ids["GCG7"], cols, every=97)
         base = read(conn, "bar_1s", ids["GCG7"], [c.name for c in BASE_COLUMNS], every=89)
-    candle = {k: np.concatenate([p.candle.values[k] for p in expected]) for k in cols}
+    candle = {
+        k: np.concatenate([p.tables["candle_1m_1s"].values[k] for p in expected]) for k in cols
+    }
     nulls = {
-        k: np.concatenate([p.candle.nulls.get(k, np.zeros(len(p), bool)) for p in expected])
+        k: np.concatenate(
+            [p.tables["candle_1m_1s"].nulls.get(k, np.zeros(len(p), bool)) for p in expected]
+        )
         for k in cols
     }
     at = np.searchsorted(candle["slot_ordinal"], got["slot_ordinal"].astype(np.int64))
@@ -255,9 +285,11 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         np.testing.assert_array_equal(is_null, nulls[k][at], err_msg=k)
         want = candle[k][at][~is_null]
         np.testing.assert_array_equal(stored[~is_null].astype(want.dtype), want, err_msg=k)
-    flat = {k: np.concatenate([p.base.values[k] for p in expected]) for k in base}
+    flat = {k: np.concatenate([p.tables["bar_1s"].values[k] for p in expected]) for k in base}
     flat_null = {
-        k: np.concatenate([p.base.nulls.get(k, np.zeros(len(p), bool)) for p in expected])
+        k: np.concatenate(
+            [p.tables["bar_1s"].nulls.get(k, np.zeros(len(p), bool)) for p in expected]
+        )
         for k in base
     }
     at = np.searchsorted(flat["slot_ordinal"], base["slot_ordinal"].astype(np.int64))
@@ -356,39 +388,76 @@ def test_spans_keep_each_delivery_of_a_repeated_symbol_apart():
     }
 
 
+def stored_of(rows, stages=None) -> ingest.Stored:
+    """Stored sessions [(date, builder, files)]: the source and, unless `stages` says otherwise
+    ({stage: {date: builder}}), every stage built by the same builder."""
+    source = {d: (b, f) for d, b, f in rows}
+    if stages is None:
+        stages = {n: {d: b for d, b, _ in rows} for n in NAMES}
+    return ingest.Stored(source, stages)
+
+
+NAMES = [cls.NAME for cls in ingest.STAGES]
+
+
+def builders(b: int, **stage) -> dict[str, int]:
+    return {"source": b, **{n: stage.get(n, b) for n in NAMES}}
+
+
 def test_diff_rules():
     from backtest_runner.calendars import Session
 
     s = [Session(date(2026, 9, d), d, d + 1, d) for d in range(1, 6)]
     files = {x.trade_date: [{"f": x.trade_date.isoformat()}] for x in s}
-    stored = [(x.trade_date, 1, files[x.trade_date]) for x in s[:3]]
-    _, i, delete_from, action, _ = ingest.diff(s, s, stored, 1, files, False)
+    rows = [(x.trade_date, 1, files[x.trade_date]) for x in s[:3]]
+    stored = stored_of(rows)
+    _, i, delete_from, action, _ = ingest.diff(s, s, stored, builders(1), files, False)
     assert (i, delete_from, action) == (3, None, "extend")
-    _, i, _, action, _ = ingest.diff(s[:3], s, stored, 1, files, False)
+    _, i, _, action, _ = ingest.diff(s[:3], s, stored, builders(1), files, False)
     assert (i, action) == (3, "current")
-    _, i, _, action, _ = ingest.diff(s, s, stored, 2, files, False)
+    _, i, _, action, _ = ingest.diff(s, s, stored, builders(2), files, False)
     assert action == "stale"
-    _, i, _, action, _ = ingest.diff(s, s, stored, 2, files, True)
+    _, i, _, action, _ = ingest.diff(s, s, stored, builders(2), files, True)
     assert (i, action) == (0, "rebuild")
     changed = {**files, s[1].trade_date: [{"f": "new"}]}
-    _, i, delete_from, action, _ = ingest.diff(s, s, stored, 1, changed, False)
+    _, i, delete_from, action, _ = ingest.diff(s, s, stored, builders(1), changed, False)
     assert (i, delete_from, action) == (1, s[1].trade_date, "repair")
-    _, _, _, action, _ = ingest.diff(s, s, stored[1:], 1, files, False)
+    _, _, _, action, _ = ingest.diff(s, s, stored_of(rows[1:]), builders(1), files, False)
     assert action == "needs_rebuild"  # an earlier session than the stored ones
-    span, i, _, action, _ = ingest.diff(s[1:3], s, stored, 1, files, False)
+    span, i, _, action, _ = ingest.diff(s[1:3], s, stored, builders(1), files, False)
     assert (len(span), i, action) == (3, 3, "current")  # keeps the earlier stored chain
     # Regression (PR #63 review): a rebuild or repair covers the whole stored chain, so a later
     # --start or an earlier --end never deletes stored sessions without rebuilding them
-    span, i, delete_from, action, _ = ingest.diff(s[2:], s, stored, 2, files, True)
+    span, i, delete_from, action, _ = ingest.diff(s[2:], s, stored, builders(2), files, True)
     assert (len(span), i, delete_from, action) == (5, 0, s[0].trade_date, "rebuild")
-    span, i, delete_from, action, _ = ingest.diff(s[:2], s, stored, 1, changed, False)
+    span, i, delete_from, action, _ = ingest.diff(s[:2], s, stored, builders(1), changed, False)
     assert (len(span), i, delete_from, action) == (3, 1, s[1].trade_date, "repair")
     # Regression (PR #63 review): an interrupted rebuild resumes after its current prefix
-    mixed = [(x.trade_date, 2 if k < 2 else 1, files[x.trade_date]) for k, x in enumerate(s[:4])]
-    _, i, delete_from, action, _ = ingest.diff(s, s, mixed, 2, files, True)
+    mixed = stored_of([(x.trade_date, 2 if k < 2 else 1, files[x.trade_date])
+                       for k, x in enumerate(s[:4])])  # fmt: skip
+    _, i, delete_from, action, _ = ingest.diff(s, s, mixed, builders(2), files, True)
     assert (i, delete_from, action) == (2, s[2].trade_date, "rebuild")
-    _, _, _, action, _ = ingest.diff(s, s, mixed, 2, files, False)
+    _, _, _, action, _ = ingest.diff(s, s, mixed, builders(2), files, False)
     assert action == "stale"
+    # Stages are versioned on their own: changed candle code leaves the source and bar_1s
+    # current, but the candle rows are stale until rebuilt
+    new_candles = builders(1, candle_1m_1s=9)
+    _, i, _, action, _ = ingest.diff(s[:3], s, stored, new_candles, files, False)
+    assert (i, action) == (3, "stale")  # nothing runs without --rebuild
+    _, i, delete_from, action, _ = ingest.diff(s[:3], s, stored, new_candles, files, True)
+    assert (i, delete_from, action) == (0, s[0].trade_date, "rebuild")
+    # A stage without stored rows (a new stage) is added without --rebuild, from the start
+    only_bar = stored_of(rows, {"bar_1s": {d: 1 for d, _, _ in rows}})
+    _, i, delete_from, action, why = ingest.diff(s[:3], s, only_bar, builders(1), files, False)
+    assert (i, delete_from, action) == (0, None, "add") and "candle_1m_1s" in why
+    # ... and an interrupted add resumes after the sessions it already stored
+    part = stored_of(rows, {"bar_1s": {d: 1 for d, _, _ in rows},
+                            "candle_1m_1s": {s[0].trade_date: 1}})  # fmt: skip
+    _, i, _, action, _ = ingest.diff(s, s, part, builders(1), files, False)
+    assert (i, action) == (1, "add")
+    # A missing stage next to changed files is a repair of the changed session
+    _, i, _, action, _ = ingest.diff(s, s, only_bar, builders(1), changed, False)
+    assert action == "needs_rebuild"  # the first session lacks candles and is not a repair
 
 
 def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(database, world):
@@ -478,11 +547,24 @@ def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, w
         assert conn.execute("SELECT DISTINCT scan_sha256 FROM market.session_scan").fetchall() == [
             ("f" * 64,)
         ]
-    for name in ("ingest", "store", "catalog", "source", "calendars"):
-        assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.BUILDER_FILES
+    # The source identity covers the code that selects files and sessions and feeds the stages;
+    # every stage covers its own modules and the encoding of its rows. Orchestration (ingest,
+    # store) is in neither, so adding a stage never makes the others stale; the end-to-end test
+    # proves that stored rows equal the pipeline's output.
+    runner = "apps/backtest-runner/src/backtest_runner"
+    for name in ("catalog", "source", "calendars"):
+        assert f"{runner}/{name}.py" in ingest.SOURCE_FILES
+    assert f"{runner}/ingest.py" not in ingest.SOURCE_FILES
+    ids = ingest.identities(GC, "COMEX")
+    for cls in ingest.STAGES:
+        assert ids[cls.NAME]["settings"]["inputs"]  # inputs' identities are part of it
+        assert f"{runner}/codec.py" in ingest.CODEC_FILES
+    assert ids["candle_1m_1s"]["settings"]["inputs"]["bar_1s"] == ids["bar_1s"]["sha256"]
     for name in ("ingest", "catalog", "source", "calendars"):  # scans are versioned the same way
-        assert f"apps/backtest-runner/src/backtest_runner/{name}.py" in ingest.SCAN_FILES
-    assert all((ingest.ROOT / rel).is_file() for rel in ingest.BUILDER_FILES + ingest.SCAN_FILES)
+        assert f"{runner}/{name}.py" in ingest.SCAN_FILES
+    files = ingest.SOURCE_FILES + ingest.CODEC_FILES + ingest.SCAN_FILES
+    modules = [f"{ingest.CORE}/{m}.py" for cls in ingest.STAGES for m in cls.MODULES]
+    assert all((ingest.ROOT / rel).is_file() for rel in (*files, *modules))
 
 
 def test_incomplete_range_openings_keep_a_front_and_explicit_contracts_keep_partial_edges(
@@ -544,15 +626,15 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
             "(SELECT id FROM market.builder WHERE sha256 = repeat('b', 64))"
         )
         conn.commit()
-    real, calls = store.write_rows, []
+    real, calls = store.copy_table, []
 
-    def failing(conn, cid, rows):
+    def failing(conn, name, table, cid):  # one call per stage table and session
         calls.append(cid)
-        if len(calls) == 2:
+        if len(calls) == 3:  # the second session's first table
             raise RuntimeError("disk full")
-        return real(conn, cid, rows)
+        return real(conn, name, table, cid)
 
-    monkeypatch.setattr(store, "write_rows", failing)
+    monkeypatch.setattr(store, "copy_table", failing)
     result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
     assert result["status"] in ("partial", "failed")
     with db.connect(database) as conn:
@@ -562,3 +644,79 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
             "SELECT count(DISTINCT builder_id) FROM market.ingest_slice"
         ).fetchone()[0]
         assert builders == 2  # replaced sessions next to old ones, each whole
+
+
+def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
+    """A stage built by other code is rebuilt alone, leaving the rows of the stages it does not
+    depend on untouched; a stage without rows is added without --rebuild; every stage records
+    whether its values had settled; the lead follows the stages' derived warm-ups."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    assert ingest.run(["GC"], workers=1, data=first, **options)["status"] == "done"
+
+    def slices(conn):
+        return {
+            (stage, cid, day): (builder, warm, at)
+            for stage, cid, day, builder, warm, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, builder_id, warm, ingested_at "
+                "FROM market.stage_slice"
+            )
+        }
+
+    with db.connect(database) as conn:
+        before = slices(conn)
+        ids = dict(conn.execute("SELECT raw_symbol, id FROM market.contract").fetchall())
+        # warm: the candle stage needs part of a session to settle, so a contract's first stored
+        # session is not warm and its later ones are; bar_1s has nothing to settle
+        g7 = sorted(
+            (k[2], v[1]) for k, v in before.items() if k[:2] == ("candle_1m_1s", ids["GCG7"])
+        )
+        assert [w for _, w in g7] == [False, True]
+        assert all(v[1] for k, v in before.items() if k[0] == "bar_1s")
+        # candle rows from other code: stale, and --rebuild rewrites only the candle stage
+        other = conn.execute(
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+            "VALUES (repeat('d', 64), 'GC', 'x', '{}', 'candle_1m_1s') RETURNING id"
+        ).fetchone()[0]
+        conn.execute("UPDATE market.stage_slice SET builder_id = %s WHERE stage = 'candle_1m_1s'",
+                     (other,))  # fmt: skip
+        conn.commit()
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in plan["contracts"]} == {"stale"}
+    assert ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)["status"] == "done"
+    with db.connect(database) as conn:
+        after = slices(conn)
+        for key, (builder, _, at) in after.items():
+            if key[0] == "bar_1s":
+                assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
+            else:
+                assert at > before[key][2] and builder == before[key][0], key  # rewritten
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+        # a stage without rows is added from the span start, without --rebuild
+        conn.execute("DELETE FROM market.stage_slice WHERE stage = 'candle_1m_1s'")
+        conn.execute("DELETE FROM market.candle_1m_1s")
+        conn.commit()
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {(c["action"], c["todo"]) for c in plan["contracts"]} == {("add", 2)}
+    assert ingest.run(["GC"], workers=1, data=first, **options)["status"] == "done"
+    expected = in_memory(cache, first, "GCG7", [date(2026, 9, 2), date(2026, 9, 3)])
+    with db.connect(database) as conn:
+        restored = slices(conn)
+        assert all(restored[k][2] == after[k][2] for k in after if k[0] == "bar_1s")
+        cols = ["slot_ordinal", "rsi", "ema50_atr", "adx"]
+        got = read(conn, "candle_1m_1s", ids["GCG7"], cols, every=101)
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+    want = {k: np.concatenate([p.tables["candle_1m_1s"].values[k] for p in expected]) for k in cols}
+    at = np.searchsorted(want["slot_ordinal"], got["slot_ordinal"].astype(np.int64))
+    for k in cols[1:]:
+        stored = np.array([np.nan if v is None else v for v in got[k]], float)
+        np.testing.assert_array_equal(stored, want[k][at], err_msg=k)
+    # the derived lead: at least the floor, and a lead below a stage's warm-up is refused
+    [plan] = ingest.plan(["GC"], data=first, url=database, cache=cache, log=lambda line: None)
+    assert plan["lead_sessions"] == max(ingest.LEAD_FLOOR, plan["required_lead"]["sessions"])
+    assert plan["warm_sessions"] == {"bar_1s": 0, "candle_1m_1s": 1}
+    with pytest.raises(ValueError, match="candle_1m_1s"):
+        ingest.plan(["GC"], data=first, **{**options, "lead": 0})

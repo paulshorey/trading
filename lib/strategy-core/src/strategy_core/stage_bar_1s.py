@@ -1,45 +1,22 @@
-"""Stored one-second rows for one contract, computed by the code live sessions run.
+"""Stage `bar_1s` (tier 0): each scheduled-open second's own exact statistics.
 
-`SecondRowBuilder` turns `MarketChunk`s (a session at once, or one second at a time) into two
-row sets, one row per scheduled-open second, each keyed by its index counter `slot_ordinal`:
-
-- **base** (`market.bar_1s`): the second's own exact statistics: OHLC, volumes by aggressor
-  side, the running-delta extremes, session CVD, and the TBBO metrics of `metrics.py`.
-  Every field merges exactly into minutes and windows.
-- **candle** (`market.candle_1m_1s`): the rolling `1m@1s` candle of rows `o - 59 ... o` and its
-  normalized features: the engine's (`features.WINDOW_FEATURES`) and `indicators.FEATURES`.
-
-Values are NULL where undefined, never zero: a missing second has unknown volume, a second
-without trades has no price, and a statistic without a valid observation has no value.
-The builder's state can be exported after any chunk (`state.export_state`) and restored, and
-results never depend on how the data was chunked.
+One row per scheduled-open second, keyed by its index counter `slot_ordinal`: OHLC, volumes by
+aggressor side, the running-delta extremes, session CVD, and the TBBO metrics of `metrics.py`.
+Every field merges exactly into minutes and windows. Values are NULL where undefined, never
+zero: a missing second has unknown volume, a second without trades has no price, and a
+statistic without a valid observation has no value.
 """
 
-from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-from .bars import MISSING, OBSERVED, AggregationReport, BaseBars, aggregate
+from .bars import MISSING, OBSERVED, BaseBars, aggregate
+from .columns import BIGINT, DOUBLE, INTEGER, SMALLINT, Column, Table
 from .engine import MarketChunk
-from .features import WINDOW_FEATURES, FeatureConfig, WindowFeatures
-from .indicators import FEATURES, CandleIndicators
-from .market import PX, SECOND, SessionCalendar
+from .market import SECOND, SessionCalendar
 from .metrics import FIELDS, second_metrics
-from .state import export_state, import_state
-from .window_metrics import MetricWindow
-from .windows import FAST, WARMUP
-
-ROWS_VERSION = 1  # bump with any change to stored values; the builder hash also covers the code
-BIGINT, INTEGER, SMALLINT, DOUBLE = "bigint", "integer", "smallint", "double precision"
-
-
-@dataclass(frozen=True)
-class Column:
-    name: str
-    sql: str
-    description: str
-    unit: str = ""  # normalized unit of a feature column (features.Unit value)
-
+from .stages import Stage
 
 WIDE = {
     "size_sq",
@@ -80,7 +57,7 @@ def _metric_columns() -> list[Column]:
     return out
 
 
-BASE_COLUMNS: tuple[Column, ...] = (
+COLUMNS: tuple[Column, ...] = (
     Column("slot_ordinal", BIGINT, "Index counter: +1 per scheduled-open second"),
     Column("end_ns", BIGINT, "Slot end, UTC ns; the slot is [end - 1 s, end)"),
     Column("status", SMALLINT, "0 missing (no data coverage), 1 no trades, 2 trades observed"),
@@ -110,52 +87,6 @@ OBSERVED_ONLY = {"open", "high", "low", "close", "high_at_ns", "low_at_ns", "pv"
     "last_at_ns",
 }
 
-ENGINE_FEATURES = tuple((name, unit.value, desc) for name, unit, desc in WINDOW_FEATURES)
-CANDLE_COLUMNS: tuple[Column, ...] = (
-    Column("slot_ordinal", BIGINT, "Index counter of the newest second in the window"),
-    Column("end_ns", BIGINT, "Window end, UTC ns"),
-    Column("start_ns", BIGINT, "Start of the oldest second; end - start > 60 s spans a closure"),
-    Column("status", SMALLINT, "0 complete, 1 empty (no trades), 2 gap (missing data), 3 warmup"),
-    Column("open", BIGINT, f"First trade price in the window, {PRICE}; NULL without trades"),
-    Column("high", BIGINT, f"Highest trade price in the window, {PRICE}"),
-    Column("low", BIGINT, f"Lowest trade price in the window, {PRICE}"),
-    Column("close", BIGINT, f"Last trade price in the window, {PRICE}"),
-    Column("high_at_ns", BIGINT, "Assignment time of the first trade at the high"),
-    Column("low_at_ns", BIGINT, "Assignment time of the first trade at the low"),
-    Column("vwap", DOUBLE, "Volume-weighted average trade price (quoted units)"),
-    Column("volume", INTEGER, "Contracts traded in the window's covered seconds"),
-    Column("buy_volume", INTEGER, "Buyer-aggressor volume"),
-    Column("sell_volume", INTEGER, "Seller-aggressor volume"),
-    Column("trades", INTEGER, "Trade records"),
-    Column("observed", SMALLINT, "Seconds with trades in the window"),
-    Column("delta_high", INTEGER, "Highest running buy - sell volume from the window start"),
-    Column("delta_low", INTEGER, "Lowest running buy - sell volume from the window start"),
-    *(Column(n, DOUBLE, d, u) for n, u, d in ENGINE_FEATURES),
-    *(Column(n, DOUBLE, d, u) for n, u, d in FEATURES),
-)
-FEATURE_COLUMNS = tuple(c.name for c in CANDLE_COLUMNS if c.unit)
-
-
-@dataclass(frozen=True)
-class Table:
-    """Column arrays for one table and, for nullable columns, a mask that is True for NULL."""
-
-    values: dict[str, np.ndarray]
-    nulls: dict[str, np.ndarray]
-
-    def __len__(self) -> int:
-        return len(self.values["end_ns"])
-
-
-@dataclass(frozen=True)
-class SecondRows:
-    base: Table
-    candle: Table
-    report: AggregationReport
-
-    def __len__(self) -> int:
-        return len(self.base)
-
 
 class SessionState:
     """Accumulators from each calendar session's open (the scheduled-open interval holding the
@@ -183,7 +114,9 @@ class SessionState:
             "has_px": np.zeros(m, np.int8),
             "interval_open": cal.opens[np.maximum(iv, 0)],
         }
-        cuts = np.flatnonzero(np.r_[True, iv[1:] != iv[:-1]]) if m else np.zeros(0, np.int64)
+        if m == 0:  # a chunk inside a closure has no rows
+            return out
+        cuts = np.flatnonzero(np.r_[True, iv[1:] != iv[:-1]])
         big = np.iinfo(np.int64).max
         for a, b in zip(cuts, np.r_[cuts[1:], m], strict=True):
             if iv[a] != self.interval:
@@ -216,56 +149,45 @@ class SessionState:
         return out
 
 
-class SecondRowBuilder:
-    STATE = ("fast", "window", "session", "indicators")
+class BarStage(Stage):
+    NAME = "bar_1s"
+    TIER = 0
+    RESOLUTION = "1s"
+    INPUTS = ("market",)
+    MODULES = ("stages", "columns", "stage_bar_1s", "bars", "market", "metrics", "state")
+    COLUMNS = COLUMNS
+    STATE = ("session",)
 
-    def __init__(
-        self,
-        calendar: SessionCalendar,
-        *,
-        feed_latency: int,
-        close_delay: int,
-        config: FeatureConfig | None = None,
-    ):
-        self.calendar = calendar
-        self.feed_latency, self.close_delay = feed_latency, close_delay
-        self.config = config or FeatureConfig()
-        self.fast = WindowFeatures(FAST, calendar, self.config)
-        self.window = MetricWindow(FAST.slots)
-        self.session = SessionState(calendar)
-        self.indicators = CandleIndicators(FAST.slots, self.config.rsi_period)
+    def __init__(self, context):
+        super().__init__(context)
+        self.session = SessionState(context.calendar)
 
-    def export(self) -> dict[str, np.ndarray]:
-        return export_state(self)
+    def settings(self) -> dict[str, Any]:
+        c = self.context
+        return {"feed_latency_ns": c.feed_latency, "close_delay_ns": c.close_delay}
 
-    def restore(self, state: dict[str, np.ndarray]) -> None:
-        import_state(self, state)
-
-    def process(self, chunk: MarketChunk) -> SecondRows:
-        ends = self.calendar.slot_ends(chunk.start, chunk.end, SECOND)
+    def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
+        c = self.context
+        ends = c.calendar.slot_ends(chunk.start, chunk.end, SECOND)
         agg = aggregate(
             chunk.trades,
             ends,
             SECOND,
             chunk.coverage,
-            feed_latency=self.feed_latency,
-            close_delay=self.close_delay,
+            feed_latency=c.feed_latency,
+            close_delay=c.close_delay,
         )
         bars = agg.bars
         metrics = second_metrics(chunk.trades, agg)
         session = self.session.update(bars)
-        candles, engine, atr = self.fast.update(bars)
-        win = self.window.update(bars, metrics)
-        features = self.indicators.update(candles, win, atr, session)
-        ordinal = candles.ordinal
-        return SecondRows(
-            self._base(bars, metrics, session, ordinal),
-            self._candle(candles, engine, features, win),
-            agg.report,
+        ordinal = c.calendar.slot_ordinals(bars.end, SECOND)
+        products.update(
+            report=agg.report, bars=bars, metrics=metrics, session=session, ordinal=ordinal
         )
+        return self.table(bars, metrics, session, ordinal)
 
     @staticmethod
-    def _base(bars, metrics, session, ordinal) -> Table:
+    def table(bars, metrics, session, ordinal) -> Table:
         missing = bars.status == MISSING
         observed = bars.status == OBSERVED
         v = {
@@ -289,7 +211,7 @@ class SecondRowBuilder:
         }
         v |= {RENAME.get(k, k): a for k, a in metrics.items()}
         nulls = {"session_cvd": missing | ~session["complete"]}
-        for c in BASE_COLUMNS[3:]:
+        for c in COLUMNS[3:]:
             if c.name in nulls:
                 continue
             if c.name in OBSERVED_ONLY:
@@ -301,39 +223,4 @@ class SecondRowBuilder:
                 nulls[c.name] = missing | (count == 0)
             else:
                 nulls[c.name] = missing
-        return Table(v, nulls)
-
-    @staticmethod
-    def _candle(c, engine, features, win) -> Table:
-        has_price = np.isfinite(c.close)
-
-        def fixed(x):
-            return np.where(has_price, np.rint(np.where(has_price, x, 0) * PX), 0).astype(np.int64)
-
-        v = {
-            "slot_ordinal": c.ordinal,
-            "end_ns": c.end,
-            "start_ns": c.start,
-            "status": c.status.astype(np.int16),
-            "open": fixed(c.open),
-            "high": fixed(c.high),
-            "low": fixed(c.low),
-            "close": fixed(c.close),
-            "high_at_ns": c.high_at,
-            "low_at_ns": c.low_at,
-            "vwap": c.vwap,
-            "volume": c.volume.astype(np.int64),
-            "buy_volume": c.buy.astype(np.int64),
-            "sell_volume": c.sell.astype(np.int64),
-            "trades": c.trades.astype(np.int64),
-            "observed": win["observed"].astype(np.int64),
-            "delta_high": win["delta_high"].astype(np.int64),
-            "delta_low": win["delta_low"].astype(np.int64),
-        }
-        v |= {k.split(".", 1)[1]: a for k, a in engine.items()}
-        v |= features
-        nulls = {k: ~has_price for k in ("open", "high", "low", "close", "high_at_ns")}
-        nulls |= {"low_at_ns": ~has_price, "vwap": ~np.isfinite(c.vwap)}
-        nulls["start_ns"] = c.status == WARMUP
-        nulls |= {k: ~np.isfinite(v[k]) for k in FEATURE_COLUMNS}
         return Table(v, nulls)

@@ -29,7 +29,7 @@ volatility (ATR) tier, including bullish and bearish ATR.
 
 | PR  | Tier | Contents                                                                                                                                                             | Rebuild         |
 | --- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, feature and variant registries, summation order, empty-window policy, drawdown/drawup fields, 20 lead sessions | every stage     |
+| A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, feature and variant registries, summation order, empty-window policy, drawdown/drawup fields, 40 lead sessions | every stage     |
 | B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                | new tables only |
 | C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                              | new tables only |
 | D   | 2    | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                                                                                                  | new tables only |
@@ -355,8 +355,9 @@ it.
   rebuilding a session deletes and replaces that stage's dense rows _and_ events for the
   session in one transaction, so events always match the features. Continuous views are generated from the column registry, so migrations stay
   consistent.
-- **Bookkeeping:** a new `market.stage_slice` table, keyed by stage, contract, and
-  session. It holds the builder, ordinal bounds, checkpoint, report, and source files.
+- **Bookkeeping:** a new `market.stage_slice` table, keyed by stage, variant (none for
+  stages without variants), contract, and session, so each variant keeps its own builder
+  identity and checkpoint. It holds the builder, ordinal bounds, checkpoint, report, and source files.
   `ingest_slice` stays as is.
 - **Ingest** recomputes upstream stages in memory from DBN (0.35 s per session) instead
   of reading 57 GB back, and writes only stale stages. Each session commits all of its
@@ -430,13 +431,19 @@ recommended lead, which Paul accepted):
 4. **Initial scales:** 0.5, 1, and 2 times the window's ATR, at both resolutions. The
    2-spread floor in [3.4](#34-stored-values) stays as a noise guard unless it is changed.
 5. **Disk:** not a constraint; space will be added for all products as needed.
-6. **Lead sessions: 20**, applied in PR A's rebuild. Every stage shares a
-   contract's span, and prepending sessions later changes the history behind every stored
-   row, which means rebuilding all stored stages (`spans()`/`diff()` treat an earlier start
-   as a rebuild from the beginning). Twenty covers hourly EMA(50) (about 2.2 sessions),
-   several slow-scale swings, and the 14–20 prior sessions that daily and time-of-day ATR
-   need ([section 7](#7-volatility-tier-atr-family)), so PRs B–F add only new tables. The
-   cost is about a third more contract-sessions in the PR A rebuild.
+6. **Lead sessions: 40**, applied in PR A's rebuild (raised from the 20 Paul accepted:
+   review showed 20 is too short, see below). Every stage shares a contract's span, and
+   prepending sessions later changes the history behind every stored row, which means
+   rebuilding all stored stages (`spans()`/`diff()` treat an earlier start as a rebuild
+   from the beginning). The lead must cover each value's own warm-up _plus_ the warm-up of
+   what it summarizes. The longest planned chain is the daily ATR percentile: a daily
+   ATR(14) needs 15 prior sessions before its first value, and a percentile over its
+   trailing 20 values needs 20 more, 35 in all. The time-of-day ATR normal needs about 21
+   (one session to warm the hourly ATR, then 20). Forty covers both with margin, so PRs
+   B–F add only new tables. Each stage declares its need
+   ([feature pipeline](feature-pipeline.md#database-properties)), and a test fails if any
+   exceeds the lead. The cost is about 75% more contract-sessions in the PR A rebuild;
+   lead sessions of a far delivery month trade thinly, which the session reports record.
 
 ## 7. Volatility tier: ATR family
 
@@ -498,8 +505,8 @@ exactly from the trades:
   multiplier) for stop distances and position sizing in execution. Raw units stay out of
   model inputs.
 
-**History.** Daily and time-of-day ATR need 14–20 prior sessions of the same contract,
-which the 20 lead sessions provide. They are computed within each contract, never from
+**History.** Daily and time-of-day ATR need up to 35 prior sessions of the same contract,
+including their inputs' warm-up, which the 40 lead sessions provide ([decision 6](#6-decisions)). They are computed within each contract, never from
 the front-contract sequence: a roll-day true range would compare the new contract's high
 and low with the old contract's close, a false volatility spike.
 

@@ -200,7 +200,10 @@ variant parameter (initially 60 rows for fast scales and 15 for slow).
 **Location:** `range_pos`, the close within the latest confirmed low–high range (0 at the
 low, 1 at the high; outside 0–1 once breached).
 
-**Across scales** (one row per slot): the number of fast scales with `trend = +1` and with
+**Across scales** (one row per slot): each summary declares the variant set it covers, as
+part of its identity, so adding a scale never silently changes it; a new version that
+includes the scale rebuilds the summary rows. Initially the set is the six scales of the
+fixed grid. The summaries are the number of fast scales with `trend = +1` and with
 `trend = −1`, the same for slow scales (as of the latest completed minute on second
 rows), and the number of scales with a provisional HL or LH. A model learns the
 interactions, such as a fast higher low inside a slow uptrend, from these and the

@@ -19,7 +19,7 @@ task live in [handoff: next steps](handoff.md#next-steps).
       46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
       degraded reports and the GCZ6 roll checked ([results](handoff.md#first-ingest-gc-and-si)).
 - [ ] **Stages (PR A).** Tiered stages with per-stage tables, versions, and checkpoints;
-      registries; empty windows carry the last trade price; drawdown/drawup; 20 lead
+      registries; empty windows carry the last trade price; drawdown/drawup; 40 lead
       sessions; rebuild GC and SI ([pipeline](feature-pipeline.md), [plan](plan-1h-and-pivots.md)).
 - [ ] **Store `1h@1m` rows (PR B).** `market.bar_1m` and `market.candle_1h_1m`
       ([plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).

@@ -36,13 +36,13 @@ swings, and trend signals need both indicators and structure. The pipeline there
 computes in **tiers**, like floors of a building: each floor rests only on the ones
 below it, and every floor is finished before anything reads from it.
 
-| Tier | Contents                                                                                                          | Stages (per resolution)                            |
-| ---- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                 |
-| 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), and the volatility family (ATR variants)        | `candle_1m_1s`, `candle_1h_1m`, `vol_1s`, `vol_1m` |
-| 2    | Market structure: swing detection sized by tier-1 volatility, confirmed pivots, HH/HL/LH/LL, trend, breaches      | `pivot_1s`, `pivot_1m` (+ `pivot_event`)           |
-| 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                           |
-| —    | Labels: future outcomes for training and evaluation, never inputs                                                 | `pivot_label` (later: trade outcomes)              |
+| Tier | Contents                                                                                                          | Stages (per resolution)                                                  |
+| ---- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                                       |
+| 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), and the volatility family (ATR variants)        | `candle_1m_1s`, `candle_1h_1m`, `vol_1s`, `vol_1m`                       |
+| 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m` (+ `pivot_event`) |
+| 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                                                 |
+| —    | Labels: future outcomes for training and evaluation, never inputs                                                 | `pivot_label` (later: trade outcomes)                                    |
 
 Tiers are dependency levels; stages are the unit of code, versioning, and storage. A
 tier can hold several stages, and new tiers can be added on top without touching the
@@ -69,19 +69,21 @@ module files, and variants, and implements `process(inputs) -> tables`. The back
 live engine run the same graph in tier order, one chunk at a time; ingest runs it from
 the DBN files and writes the stale stages. Details are in [plan section 4](plan-1h-and-pivots.md#4-extensibility-stages).
 
-| Stage          | Tier | Inputs                                                                              |
-| -------------- | ---- | ----------------------------------------------------------------------------------- |
-| `bar_1s`       | 0    | `market` (trades, coverage), calendar                                               |
-| `bar_1m`       | 0    | `bar_1s`                                                                            |
-| `candle_1m_1s` | 1    | `bar_1s`                                                                            |
-| `candle_1h_1m` | 1    | `bar_1m`                                                                            |
-| `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s`                                                            |
-| `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m`                                                            |
-| `pivot_1s`     | 2    | `market` (trade path), `candle_1m_1s`, `vol_1s`                                     |
-| `pivot_1m`     | 2    | `market` (trade path), `candle_1h_1m`, `vol_1m`                                     |
-| `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`                                                |
-| `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`; `pivot_1m` and `signal_1m` as of availability |
-| `pivot_label`  | —    | `market`, `pivot_1s`, `pivot_1m`                                                    |
+| Stage          | Tier | Inputs                                                                                                               |
+| -------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
+| `bar_1s`       | 0    | `market` (trades, coverage), calendar                                                                                |
+| `bar_1m`       | 0    | `bar_1s`                                                                                                             |
+| `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
+| `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
+| `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s`                                                                                             |
+| `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m`                                                                                             |
+| `pivot_1s`     | 2    | `market` (trade path), `candle_1m_1s`, `vol_1s`                                                                      |
+| `pivot_1m`     | 2    | `market` (trade path), `candle_1h_1m`, `vol_1m`                                                                      |
+| `pivot_rsi_1s` | 2    | `candle_1m_1s` (its RSI series)                                                                                      |
+| `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series)                                                                                      |
+| `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
+| `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
+| `pivot_label`  | —    | `market`, `pivot_1s`, `pivot_1m`                                                                                     |
 
 The two resolutions are independent branches below tier 3: nothing at second resolution
 feeds a minute stage except through `bar_1m`, so changing a second-resolution

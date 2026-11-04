@@ -32,7 +32,7 @@ volatility (ATR) tier, including bullish and bearish ATR.
 | A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, column and variant registries, summation order, empty-window policy, drawdown/drawup and high/low-order fields, derived lead (40 to start) | every stage     |
 | B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                                            | new tables only |
 | C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                                                          | new tables only |
-| D   | 2    | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                                                                                                                              | new tables only |
+| D   | 2    | Swing detector and structure of price and RSI: `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m`, `pivot_event`                                                                             | new tables only |
 | E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                                                     | new tables only |
 | F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                                                | new tables only |
 
@@ -192,6 +192,11 @@ safeguard, if either is ever undefined, the segment ends exactly as for missing 
 | Emitted events    | Immutable; a later break of the level is a new event, never an edit                                                                                                            |
 
 ### 3.3 Structure: higher lows and lower highs
+
+The same detector and structure layer also run on the RSI series
+([swing sources](pivot-structure-design.md#swing-sources-price-and-rsi)): RSI pivots with
+thresholds in RSI points (5, 10, 20), their higher lows and lower highs, and in tier 3
+the structural divergences between price and RSI.
 
 The [pivot/structure contract](pivot-structure-design.md) defines the exact classes, trend,
 provisional relations, breaches, and their field names; this section summarizes them.

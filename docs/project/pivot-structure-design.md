@@ -172,6 +172,41 @@ through an unknown interval. Historical events remain queryable with their old e
 The empty-window/analysis-close policy of the related stage plan does not turn an
 unchanged carried price into a new observed trade for this detector.
 
+## Swing sources: price and RSI
+
+The detector and the structure layer are generic over a **source series**, so swings,
+higher lows and lower highs, trend, runs, provisional relations, breaches, and reclaims are
+computed the same way for every source. A source declares its observations, how distance
+is measured, and its threshold:
+
+| Source  | Observations                                                                    | Distance                         | Threshold `θ`                                        |
+| ------- | ------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
+| `price` | Released trades, in order; published per second or minute row                   | `10⁴ × ln(H / p)` (log-bps)      | `max(k × ATR_bps, 2 × spread_bps)`, frozen           |
+| `rsi`   | The window's RSI, one value per row: `1m@1s` RSI per second, `1h@1m` per minute | `H − p` in RSI points (additive) | Fixed points: initially 5, 10, and 20 per resolution |
+
+What differs for RSI:
+
+- **No intra-row path.** RSI changes only when a row closes, so each row is one
+  observation, and events happen at row closes.
+- **No price-only rules.** RSI is already normalized, so there is no spread floor and no
+  positive-price rule. An undefined RSI (an incomplete window) ends the epoch like an
+  undefined threshold input.
+- **Levels are features.** RSI is an index, so an RSI pivot's level is a model input
+  (`Unit.INDEX`): a low at 28 differs from one at 45. Raw price levels stay context. RSI
+  distances and changes are stored in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1).
+- **One chronological series.** The stored `1m@1s` RSI is per phase, so consecutive
+  second rows come from different phase states, each a 14-minute RSI. Read row by row,
+  they form one rolling RSI sampled every second. That is one swing history, not 60.
+  Phase-to-phase jitter is filtered by the threshold; PR D measures the row-to-row RSI
+  noise and keeps the smallest threshold above it.
+- **Own stages.** Columns carry units, so RSI structure lives in `pivot_rsi_1s` and
+  `pivot_rsi_1m` (tier 2, inputs `candle_1m_1s` and `candle_1h_1m`). These stages use the
+  same detector code, with threshold points as their variants. Their events share
+  `market.pivot_event` and are marked by stage.
+
+More sources (cumulative delta, MACD histogram, other oscillators) can be added later as
+stages that declare the same three things.
+
 ## Tier 3: structure signals
 
 These combine structure (tier 2) with indicators and volatility (tier 1) in the
@@ -216,9 +251,17 @@ The unclipped ratios are stored on the events as context, not features.
 - `low_cvd_change_ratio`: the change in cumulative buy − sell volume between the two lows,
   ÷ sided volume between them (−1 to 1). Price making a lower low while this rises is
   absorption, a classic bullish divergence; mirror for highs (`high_cvd_change_ratio`).
-- `low_rsi_change`, `high_rsi_change`: the tier-1 RSI at each pivot's extreme row (index
-  points). That value was available at that row, so the comparison is causal once the
-  newer pivot confirms.
+- `low_rsi_change`, `high_rsi_change`: the change in the tier-1 RSI between the two
+  pivots' extreme rows, in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1). Each value was
+  available at its row, so the comparison is causal once the newer pivot confirms.
+- **Structural divergence** (with RSI structure, below): `rsi_low_class`, the class of
+  the RSI low matched to each confirmed price low (+1 higher low, −1 lower low, 0 equal,
+  NULL when none matches), and `rsi_high_class` for highs. The match is the latest
+  confirmed RSI low, of the declared RSI variant, whose extreme row lies between the price
+  low's preceding confirmed high and the price low's confirmation. A price lower low
+  with an RSI higher low is the classic bullish divergence; a price higher high with an
+  RSI lower high, the bearish one. Each pairing of price and RSI variants is declared in
+  the summary's variant set.
 
 **Failed breaks (sweeps).** After `break_down` of a confirmed low, a trade back above
 that low within `W` scheduled-open rows, before a new low is confirmed, is a `reclaim`.
@@ -306,6 +349,9 @@ for reproducibility if later versions add or retire scales.
 | Impulse and pullback both inside one second                       | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
 | Breach to 99.8, extend to 99.5, reclaim above 100 at a low of 100 | `sweep_depth_atr` uses 0.5 (the deepest trade before the reclaim)                              |
 | Six consecutive higher lows                                       | `low_run` = 6 on the event; `low_run_ratio` = 1                                                |
+| RSI 40 → 55 → 49 with θ = 5 points                                | RSI high at 55 confirmed on the 49 row; its level 55 is a feature, its change ÷ 100 a ratio    |
+| Price lower low; matched RSI low higher                           | `rsi_low_class` = +1 on the price low's confirmation row (bullish divergence)                  |
+| RSI NULL (incomplete window)                                      | RSI epoch ends; RSI structure restarts when RSI is defined again                               |
 
 Prove price/size scale invariance, prefix invariance, checkpoint continuation, and
 whole-session versus incremental parity. Test threshold equality/overshoot, repeated

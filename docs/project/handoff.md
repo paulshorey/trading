@@ -340,11 +340,18 @@ stays reviewable:
    bounds are in seconds; minute bounds follow exactly, as sessions are whole minutes:
    `(first_ordinal + 59) / 60` through `last_ordinal / 60`. The registry test (schema and
    `market.column_registry` equal the stage registries) covers the new tables.
-4. **Engine on the stage graph.** Replace `FeaturePipeline`'s own composition with the
+4. **Resolution-aware row replacement in ingest.** `build_contract` now takes a session's
+   `lo`/`hi` from the `bar_1s` second ordinals and passes them to `store.delete_rows` for
+   every stage it writes; minute tables count minutes, so a rebuild of a minute stage would
+   leave its old rows and fail on duplicate keys. Compute each stage's bounds from its own
+   rows (the new table's `slot_ordinal` range, widened by the stored session bounds converted
+   to that resolution: `(first + 59) // 60` through `last // 60` for minutes), or delete by
+   the session's `end_ns` range. Test it: make a minute stage stale and rebuild it alone.
+5. **Engine on the stage graph.** Replace `FeaturePipeline`'s own composition with the
    stages, so backtests, rehearsals, and stored rows share one code path; second rows read
    `1h@1m` values as of the latest completed minute, with their age (`1h@1m.age_s`).
    `research verify` (whole-session against second-by-second) must still hold.
-5. **Validation before applying `0002` to `trading`:**
+6. **Validation before applying `0002` to `trading`:**
    - Unit tests: hand-checked minute merges; `combine_metrics` equal to `MetricWindow(60)` at
      each minute end for every field (any chunking); the declared warm-up settles every
      hourly feature (the two-start test in `test_stages.py`); scale invariance; closures,

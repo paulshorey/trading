@@ -110,9 +110,9 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to
       Ubuntu 26.
-- [ ] **Legacy Tailscale profile.** `tailscale.dev.json`, `scripts/tailscale-dev.mjs`,
+- [x] **Legacy Tailscale profile.** `tailscale.dev.json`, `scripts/tailscale-dev.mjs`,
       and the `dev:tailscale` scripts predate `~/git/local-dev`, which now manages
-      the services (API on 4401). Remove them, or align them with local-dev.
+      the services (API on 4401). Removed November 4 with `scripts/research.py`.
 - [x] **Old SQL proposal.** Delete `lib/db-research/schema.sql`,
       `partitions.example.sql`, and `queries/` once migrations cover what they offer.
-- [ ] **Stale PRs.** Close #56, #58, and #59; they target the archived implementation.
+- [x] **Stale PRs.** #56, #58, and #59 target the archived implementation; closed November 1.

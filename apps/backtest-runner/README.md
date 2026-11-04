@@ -17,5 +17,4 @@ A spec selects the product, sessions, optional contract, warmup sessions, strate
 parameters, execution settings, and indicator periods; see [examples](examples/).
 `mgc-sample.json` uses shorter indicator periods because one day cannot warm up
 14-hour indicators. Runs are saved as JSON under `data/runs/` with full provenance
-until PostgreSQL storage lands. `scripts/research.py` starts the same CLI from the uv
-environment for tools that call `python3` directly.
+until PostgreSQL storage lands.

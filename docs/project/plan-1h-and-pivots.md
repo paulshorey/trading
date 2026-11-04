@@ -230,12 +230,15 @@ times. Hindsight reference swings are flagged as such. Each label follows one co
 first-passage contract, recorded with its parameters (a label ID) so any implementation
 assigns the same outcome:
 
-- **Candidate:** a scale's running extreme `E` (with ordinal, time, and frozen `θ`) at
-  the row where its reversal progress first reaches a stage `q` (default `q ∈ {0.25, 0.5}`).
-  The decision moment is that row's close: its features include every trade of the row.
-  First passage is scored on the trades after that row, from the next row's first trade.
-  If a barrier was reached within the candidate row, at or after the trade that reached
-  `q`, the candidate is stored as **resolved before decision**, with that outcome. It is
+- **Candidate:** a snapshot of the detector at a row's close, never at a trade inside a
+  row. For each scale and stage `q` (default `q ∈ {0.25, 0.5}`), the candidate is the
+  open leg's running extreme `E` as of the close (with its ordinal, time, and frozen `θ`),
+  taken at the first row close where `E`'s progress (the largest reversal since `E`,
+  ÷ `θ`) is at least `q`. If the extreme is replaced later, the new extreme is a new
+  candidate when its own progress reaches `q`. At the close, no trade lies beyond `E`, and
+  any pivot confirmed earlier in the row is already in the snapshot. First passage is
+  scored on the trades after that row, from the next row's first trade. If progress at
+  the close already reaches `R`, the candidate is stored as **resolved before decision**:
   an observation, not a prediction target.
 - **Barriers, in multiples of the frozen `θ`, in log-bps from `E`:** reversal at `R`
   (default 1.0, the confirmation itself) and invalidation at `C` beyond `E` (default
@@ -249,10 +252,9 @@ assigns the same outcome:
 - **Survival** is a separate label with its own frozen deadline `S`, in scheduled-open
   rows after the decision row (default `S = K`). `E` is broken by any trade strictly beyond
   it; a trade equal to `E` does not break it. Outcomes: survived (`S` rows fully observed
-  without a break), broken (with the breaking trade's ordinal), session end, unknown
-  (missing data first), and **broken before decision**: a break within the candidate
-  row, at or after the trade that reached `q`. That last outcome is an observation, like a
-  first passage resolved before decision, not a survival target.
+  without a break), broken (with the breaking trade's ordinal), session end, and unknown
+  (missing data first). `E` is the running extreme at the decision close, so it cannot be
+  broken before the decision.
 - **Parameters are frozen in the PR D spec before any labels are computed**, and they
   stay identical in training and testing.
 
@@ -306,8 +308,11 @@ it.
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
   versions, plus its inputs' identities. A new stage never touches existing ones. Editing
   a shared kernel correctly invalidates every stage that uses it.
-- **One table per stage**, keyed `(contract_id, slot_ordinal, end_ns)`, with monthly
-  partitions. Continuous views are generated from the column registry, so migrations stay
+- **Each stage owns its tables**: a dense table keyed `(contract_id, slot_ordinal, end_ns)`,
+  with monthly partitions, plus any event tables it emits. `pivot_1s` and `pivot_1m` each
+  own their rows of `market.pivot_event` (marked by stage and builder). Building or
+  rebuilding a session deletes and replaces that stage's dense rows _and_ events for the
+  session in one transaction, so events always match the features. Continuous views are generated from the column registry, so migrations stay
   consistent.
 - **Bookkeeping:** a new `market.stage_slice` table, keyed by stage, contract, and
   session. It holds the builder, ordinal bounds, checkpoint, report, and source files.

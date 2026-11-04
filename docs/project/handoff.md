@@ -215,7 +215,8 @@ The order and decisions (November 3, 2026) are in the
 
 1. **Stages (PR A)**: one table, version, and checkpoint per stage, so new tables never
    invalidate stored second rows; empty windows carry the last trade price as an
-   indicator input. Then rebuild GC and SI second rows (about 11 min).
+   indicator input; choose the lead sessions (20 recommended). Then rebuild GC and SI second
+   rows (11 min at today's lead of 5).
 2. **`1h@1m` rows (PR B)**: `market.bar_1m` and `market.candle_1h_1m`, with the
    amendments in the plan.
 3. **Swing structure (PRs C, D)**: directional-change pivots at 0.5, 1, and 2 ATRs on

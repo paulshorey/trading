@@ -14,20 +14,21 @@ the ATR metrics that follow.
 2. **Refactor the plumbing, not the calculations.** Split the row builder into
    independent _stages_ (one table, one version, one checkpoint each), so adding
    `1h@1m` or pivots never invalidates the 57 GB of second rows again. This is a small
-   PR. It needs one 11-minute GC+SI rebuild, which can also apply the empty-window decision.
+   PR. It needs one GC+SI rebuild (11 minutes at today's lead), which also applies the
+   empty-window decision and the [lead](#6-decisions) chosen for every later stage.
 3. **Then `1h@1m`** as the update proposed, with the amendments in [section 5](#5-1h1m-amendments-to-the-proposed-plan).
 4. **Then swing structure**: a multi-scale directional-change detector plus a deterministic
    _market-structure_ layer that labels each confirmed swing as a higher/lower high/low.
    Store a small fixed grid of scales at both resolutions, then benchmark and train on
    the stored values ([section 3](#3-pivot-and-structure-design)).
 
-| PR  | Contents                                                                        | Rebuild              |
-| --- | ------------------------------------------------------------------------------- | -------------------- |
-| A   | Stage interface, per-stage versions and checkpoints, empty-window policy        | `1s` stages, ~11 min |
-| B   | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics           | new tables only      |
-| C   | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`             | new tables only      |
-| D   | Pivot benchmark and outcome labels (future-looking, stored apart from inputs)   | new tables only      |
-| E   | More ATR and volatility metrics ([section 7](#7-after-pivots-more-atr-metrics)) | new tables only      |
+| PR  | Contents                                                                                | Rebuild         |
+| --- | --------------------------------------------------------------------------------------- | --------------- |
+| A   | Stage interface, per-stage versions and checkpoints, empty-window policy, lead sessions | `1s` stages     |
+| B   | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                   | new tables only |
+| C   | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                     | new tables only |
+| D   | Pivot benchmark and outcome labels (future-looking, stored apart from inputs)           | new tables only |
+| E   | More ATR and volatility metrics ([section 7](#7-after-pivots-more-atr-metrics))         | new tables only |
 
 C's fast scales need only A, so C can start in parallel with B. Its slow scales need B.
 
@@ -229,8 +230,11 @@ assigns the same outcome:
 
 - **Candidate:** a scale's running extreme `E` (with ordinal, time, and frozen `θ`) at
   the row where its reversal progress first reaches a stage `q` (default `q ∈ {0.25, 0.5}`).
-  The label is scored from that row's close onward; a barrier already crossed is an
-  observation, not a prediction.
+  The decision moment is that row's close: its features include every trade of the row.
+  First passage is scored on the trades after that row, from the next row's first trade.
+  If a barrier was reached within the candidate row, at or after the trade that reached
+  `q`, the candidate is stored as **resolved before decision**, with that outcome. It is
+  an observation, not a prediction target.
 - **Barriers, in multiples of the frozen `θ`, in log-bps from `E`:** reversal at `R`
   (default 1.0, the confirmation itself) and invalidation at `C` beyond `E` (default
   0.25). A price exactly on a barrier counts as reaching it.
@@ -239,8 +243,12 @@ assigns the same outcome:
 - **Path and ties:** the trade path in release order ([3.1](#31-input-stream)), so the
   first barrier reached is unambiguous.
 - **Outcomes:** reversal, invalidation, timeout (the horizon was fully observed), session
-  end (the session closed first), and unknown (missing data before resolution). Survival
-  is separate: whether `E` remains unbroken through a deadline.
+  end (the session closed first), and unknown (missing data before resolution).
+- **Survival** is a separate label with its own frozen deadline `S`, in scheduled-open
+  rows after the decision row (default `S = K`). `E` is broken by any trade strictly beyond
+  it; a trade equal to `E` does not break it. Outcomes: survived (`S` rows fully observed
+  without a break), broken (with the breaking trade's ordinal), session end, and unknown
+  (missing data first).
 - **Parameters are frozen in the PR D spec before any labels are computed**, and they
   stay identical in training and testing. The benchmark follows the
   reviewed research:
@@ -341,9 +349,10 @@ resumable versioned stage, pilot then backfill). Amend them as follows:
    - Correlation of minute closes with minute cumulative delta inside the window.
 5. **Engine parity.** The engine's `1h@1m` features equal the stored columns, and the
    engine reads the full stage.
-6. **Warm-up.** Measure NULL rates at each roll's first front session. Slow pivot scales
-   need several confirmed swings, so the lead may need to grow from 5 sessions to about 10.
-   That widens every stage's spans, so decide it in PR B, before the backfill.
+6. **Warm-up.** Measure NULL rates at each roll's first front session. The lead is set in
+   PR A ([section 6](#6-decisions)). If PR B shows it is too short, raising it prepends
+   sessions to every contract, which rebuilds every stored stage, not only the new ones;
+   budget that rebuild explicitly.
 
 ## 6. Decisions
 
@@ -358,9 +367,13 @@ Decided by Paul on November 3, 2026:
    2-spread floor in [3.4](#34-stored-values) stays as a noise guard unless it is changed.
 5. **Disk:** not a constraint; space will be added for all products as needed.
 
-Still open: **lead sessions** (5 or more). Measure warm-up at each roll in PR B and
-choose before the `1h@1m` backfill; slow pivot scales and daily ATR
-([section 7](#7-after-pivots-more-atr-metrics)) may need more.
+Still open: **lead sessions**, to be chosen before PR A's rebuild. Every stage shares a
+contract's span, and prepending sessions later changes the history behind every stored
+row, which means rebuilding all stored stages (`spans()`/`diff()` treat an earlier start as a
+rebuild from the beginning). Recommendation: **20 sessions**. That covers hourly EMA(50)
+(about 2.2 sessions), several slow-scale swings, and the 14–20 prior sessions that daily
+and time-of-day ATR need ([section 7](#7-after-pivots-more-atr-metrics)), so PRs B–E add
+only new tables. The cost is about a third more contract-sessions in the PR A rebuild.
 
 ## 7. After pivots: more ATR metrics
 

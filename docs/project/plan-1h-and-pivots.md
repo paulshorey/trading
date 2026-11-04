@@ -2,8 +2,10 @@
 
 Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decisions)).
 Status November 4: PR A is done (#70), the schema folded into a baseline (#71), and
-GC/SI rebuilt on it ([results](handoff.md#baseline-rebuild-gc-and-si)); PR B is next
-([handoff](handoff.md#start-here-next-session)). It answers four questions: are the stored `1m@1s` rows
+GC/SI rebuilt on it ([results](handoff.md#baseline-rebuild-gc-and-si)). PR B1 (#74) added
+the minute stages and moved the engine onto the stages
+([results](handoff.md#pr-b1-results-minute-stages)); B2, the hourly-only metrics of
+section 5.4, is next ([handoff](handoff.md#pr-b-1h1m-rows)). It answers four questions: are the stored `1m@1s` rows
 right, how to make the system extensible, when to build `1h@1m`, and how to add high/low
 pivot detection at both resolutions. The [feature pipeline](feature-pipeline.md) sets the
 calculation tiers and database rules, and [section 7](#7-volatility-tier-atr-family) the

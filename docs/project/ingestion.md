@@ -1,9 +1,9 @@
 # Ingestion
 
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
-pipeline with a 40-session lead; run #2 passed coverage, warm, parity, quality-report, and
-roll checks ([results](handoff.md#rebuild-with-stages-gc-and-si), [measurements](#measured)). The database
-has since been rebuilt on the baseline schema ([results](handoff.md#baseline-rebuild-gc-and-si)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+pipeline with a 40-session lead, rebuilt on the baseline schema
+([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
+([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -11,12 +11,12 @@ and every scheduled-open second and minute, one row per **stage**, computed by
 `strategy-core`, the code live sessions run ([stages and tiers](feature-pipeline.md)). Each
 stage has its own table, version, and per-session checkpoint:
 
-| Table                          | One row per                    | Holds                                                                                                                       |
-| ------------------------------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `market.bar_1s` (tier 0)       | second `o`                     | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book at trades    |
-| `market.bar_1m` (tier 0)       | minute `m` (seconds 60m−59…60m) | The same statistics merged exactly from the minute's 60 second rows, plus observed seconds and one-second returns            |
-| `market.candle_1m_1s` (tier 1) | second `o`                     | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                           |
-| `market.candle_1h_1m` (tier 1) | minute `m`                     | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)       |
+| Table                          | One row per                     | Holds                                                                                                                     |
+| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `market.bar_1s` (tier 0)       | second `o`                      | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book at trades |
+| `market.bar_1m` (tier 0)       | minute `m` (seconds 60m−59…60m) | The same statistics merged exactly from the minute's 60 second rows, plus observed seconds and one-second returns         |
+| `market.candle_1m_1s` (tier 1) | second `o`                      | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                         |
+| `market.candle_1h_1m` (tier 1) | minute `m`                      | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)    |
 
 Each is keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters) at its own resolution,
@@ -191,6 +191,13 @@ Backtests use the same roll rule but warm a new contract by replaying `warmup_se
 letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
+
+Run 3 (November 4, 2026, PR B1) added the minute stages to the stored GC and SI contracts
+(`add`, 8 workers): 868 contract-sessions in 2 min 29 s, about 1.4 s of wall time per
+session per worker, computing every stage and writing only `bar_1m` and `candle_1h_1m`.
+They hold 1,192,665 rows each (596,235 GC and 596,430 SI minutes) and use 0.62 GB and
+1.05 GB including indexes. Every minute equals the second rows at ordinal `60m`
+([checks](handoff.md#pr-b1-results-minute-stages)).
 
 The baseline rebuild completed November 4, 2026: 12 contracts, 868 contract-sessions,
 71,559,900 rows per table, and 257/257 front sessions per product. The initial 8-worker

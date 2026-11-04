@@ -109,8 +109,10 @@ uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 6
 
 `verify` runs the same sessions whole and second by second and requires identical
 features and trades. A vectorized step that reads a later row inside its chunk fails
-this check, so it also guards against look-ahead. On the sample day all 17 features
-and 13 trades matched. Tests also cover hand-checked fills, brute-force rolling
+this check, so it also guards against look-ahead. On the sample day all 165 features
+and 13 trades matched (November 4, 2026, with the engine on the stage graph). Whole, the
+session took 0.93 s; second by second 350 s, about 4 ms per second (54 s before the engine
+computed every stored feature), far inside the 100 ms close delay. Tests also cover hand-checked fills, brute-force rolling
 candles, phase parity with standard hourly candles, scale invariance, and prefix
 invariance.
 

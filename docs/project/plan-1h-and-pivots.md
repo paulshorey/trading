@@ -112,8 +112,9 @@ to the last bit.
 4. **Interleaved phases are wrong for swings.** The [design doc §5](../sliding-windows/design.md#5-highs-lows-and-pivots)
    proposes pivots on each phase series. That creates 60 interleaved structures, so
    adjacent rows would describe different swing histories, and features would jitter
-   second to second. Run swing detection on the **disjoint** stream: seconds for
-   fast scales, minutes for slow scales. The research also recommends this. Keep
+   second to second. Run swing detection once on the trade stream, publishing state per
+   second and per minute ([3.1](#31-input-stream)); the research recommends disjoint
+   observations. Keep
    per-phase fractal pivots only as a benchmark, and amend design §5 accordingly.
 
 There are five research files plus the older proposal. After the benchmark, fold the
@@ -123,14 +124,19 @@ conclusions into one design doc and leave the rest as history.
 
 ### 3.1 Input stream
 
-- **Fast scales** run on disjoint `bar_1s` rows. Each scale's threshold is a multiple
-  of the `1m@1s` ATR, with a spread floor.
-- **Slow scales** run on disjoint `bar_1m` rows. Each scale's threshold is a multiple
-  of the `1h@1m` ATR.
-- Each bar contributes its high and its low, in the order of `high_at`/`low_at` (exact
-  trade times), so a bar that sets both extremes is replayed correctly. Several reversals
-  inside one bar are not reconstructed. At the proposed thresholds they are rare, so count
-  them as a quality statistic.
+- **The detector replays the accepted trades themselves**, in the engine's release order
+  (by assigned second, then receive order; `bars.aggregate`). A bar's high and low, or
+  even its open, extremes, and close, cannot show every crossing. With a high of 100
+  and θ = 4, the trades `99 → 105 → 100` confirm the new high at 105, but replaying only
+  the extremes, `99 → 105`, never sees the decline. Stages recompute from the DBN files
+  in memory, and live sessions receive the trades, so the exact path is always available.
+- **Availability stays per second.** State is published once per second row, after that
+  second's trades, at the second's close plus the close delay. A crossing trade's exact
+  time is recorded, but no feature uses it before its second closes.
+- **Fast scales** are stored per second (`pivot_1s`); each threshold is a multiple of the
+  `1m@1s` ATR as of the previous second, with a spread floor.
+- **Slow scales** run on the same trade stream, with thresholds from the `1h@1m` ATR of
+  the latest completed minute, and are stored at each minute's end (`pivot_1m`).
 - Prices stay in exact fixed-point integers inside the detector, so ties are exact.
   Outputs are normalized (`Unit`).
 - Second-resolution entries read the slow structure as of the latest completed minute,

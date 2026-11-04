@@ -82,8 +82,9 @@ Rolling `pv` sums use `sliding_window_view(...).sum()` (`windows.py`), metric wi
 add newest-first (`window_metrics.py`), and `bars.combine` uses `reduceat`. Each is
 deterministic, and tests prove that chunking does not change results. Minute aggregation
 adds a fourth path, so PR A should provide one ordered-sum helper and use it everywhere.
-Then `bar_1m` floats equal the `1m@1s` candle at the same minute end exactly, not just
-to the last bit.
+Then `bar_1m` floats equal the `1m@1s` candle at the same minute end exactly. This is an
+intentional, versioned numerical change: it can alter the last bits of float sums, so PR A
+makes it in a separate step after the unchanged-rows proof ([section 4](#4-extensibility-stages)).
 
 ## 2. Assessment of the pivot research (PR #66)
 
@@ -158,6 +159,11 @@ lowest or highest price since it, and the first reversal of `θ` from either ext
 the direction. For example, with θ = 4, `100 → 103 → 97` confirms the high at 103 even
 though price never moved 4 from where it started.
 
+**Positive prices only.** Reversals are measured in log-bps, which needs positive prices,
+as every bps feature does. A trade at a price of zero or below (valid for some futures)
+ends the segment, exactly like missing data, and the detector stays idle until prices are
+positive again; a flag records it. GC and SI have never traded at nonpositive prices.
+
 **Threshold inputs.** `ATR_bps` is the window's ATR (`1m@1s` for fast scales, `1h@1m`
 for slow), and `spread_bps` is the last sampled book spread (`book_spread_bps`), both as
 of the previous row. A segment ([3.3](#33-structure-higher-lows-and-lower-highs)) starts
@@ -205,9 +211,14 @@ Per scale, normalized, as dense columns:
   `prev_leg_atr`, `retrace` (current leg ÷ previous leg)
 - `low_dist_atr`, `high_dist_atr` (close vs the last confirmed low and high), with ages
   since each extreme and since its confirmation
-- `hl_atr` = (L*k − L*{k−1}) / ATR, `lh_atr` = (H*k − H*{k−1}) / ATR,
+- `hl_atr` = `(L_k − L_{k−1}) / ATR`, `lh_atr` = `(H_k − H_{k−1}) / ATR`,
   `trend` (−1, 0, +1), `trend_swings` (consecutive swings in trend), `bos_age_s`
 - `theta_bps`, and validity/warm-up flags
+
+Every age (`*_age_s`) counts scheduled-open rows, like `slot_ordinal`: seconds of open
+time for the fast stream, and minutes × 60 for the slow stream. Closures add nothing, so
+an extreme set just before an 18:15 close is 60 s old one minute after the 23:00 reopen.
+If wall-clock age is ever needed, it gets a separately named column.
 
 Also stored is a sparse **`market.pivot_event`** table, one row per confirmed pivot. It
 holds the scale, kind, extreme and confirmation ordinals and times, the raw level (as
@@ -323,8 +334,11 @@ it.
 - **The engine runs the same graph**, so live sessions compute exactly what is stored.
 
 This is not a rewrite. `SecondRowBuilder` becomes two stage classes around unchanged
-numerical code, and the tables stay as they are. PR A must prove that rows are unchanged
-with the empty-window policy off. Then it turns the policy on and rebuilds once. Adding a
+numerical code, and the tables stay as they are. PR A works in three steps: (1) the stage
+refactor, proven to leave every stored value bit-identical; (2) the canonical summation
+order, a versioned change whose float differences are reported (expected within a few
+ulps) while every integer column stays identical; (3) the empty-window policy, whose
+differences are expected and reported. Then it rebuilds once. Adding a
 column to an existing stage stays as documented in [ingestion](ingestion.md#adding-a-metric-or-feature).
 It changes that stage's identity, so the stage and every stage downstream of it rebuild;
 stages upstream and on other branches stay current. For example, a new `bar_1s` column rebuilds every stored stage, while a new pivot column rebuilds the pivot
@@ -340,9 +354,13 @@ resumable versioned stage, pilot then backfill). Amend them as follows:
    CVD-extreme, and first/last-by-validity rules. Group by ordinal (`m = ⌈o / 60⌉`) and
    assert that this equals clock grouping (calendar boundaries are whole minutes).
    As in the engine's `Rollup`, a minute with any missing second is missing.
-2. **Free full-year validation.** The `1m@1s` candle at every ordinal `60m` _is_ minute
-   `m`. After backfill, SQL compares every integer field of `bar_1m` with those candle rows
-   for all 775,050 minutes. With one summation order, floats are compared too.
+2. **Full-year validation.** The `1m@1s` candle at every ordinal `60m` _is_ minute `m`,
+   so after backfill SQL compares the fields both tables store (OHLC, high/low times,
+   volume, buy/sell volume, trades, observed seconds, delta extremes, and VWAP) for all
+   775,050 minutes. The candle table does not store `pv`, `session_cvd`, or the raw metric
+   fields, so a reference check covers those: for every stored session, `combine_metrics`
+   must equal `MetricWindow(60)`'s window values at each minute end (the same 60 seconds),
+   field by field, and `session_cvd` must equal the second row's value at the minute end.
 3. **Feature set:**
    - Reuse `CandleIndicators`, with `active_ratio` redefined as observed seconds ÷ 3600
      (`bar_1m` gets `observed_seconds`).

@@ -156,6 +156,15 @@ lowest or highest price since it, and the first reversal of `θ` from either ext
 the direction. For example, with θ = 4, `100 → 103 → 97` confirms the high at 103 even
 though price never moved 4 from where it started.
 
+**Threshold inputs.** `ATR_bps` is the window's ATR (`1m@1s` for fast scales, `1h@1m`
+for slow), and `spread_bps` is the last sampled book spread (`book_spread_bps`), both as
+of the previous row. A segment ([3.3](#33-structure-higher-lows-and-lower-highs)) starts
+only at the first row where both are defined: at a contract's start, after warm-up, and
+after missing data. Until then the detector is idle; it keeps no candidate, so no later
+scale is applied to an earlier extreme. Within a segment both stay defined, because with
+carried prices for quiet windows (Finding 1) only missing data makes them undefined. As a
+safeguard, if either is ever undefined, the segment ends exactly as for missing data.
+
 | Situation         | Rule                                                                                                                                                                           |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Closure (no rows) | State continues; a reopening jump can confirm a pivot, because it is a real move                                                                                               |
@@ -214,10 +223,27 @@ the median `1m@1s` ATR in September 2026 was 4.3 bps for GC and 6.4 bps for SI. 
 ### 3.5 Labels and benchmark (PR D)
 
 Outcome labels are stored apart from inputs, in their own table, with their availability
-times. For each candidate they record the first passage of reversal `R`, invalidation
-`C`, or horizon `K` (reversal, invalidation, timeout, or unknown), plus survival to a
-deadline. Hindsight reference swings are flagged as such. The benchmark follows the
-reviewed research:
+times. Hindsight reference swings are flagged as such. Each label follows one complete
+first-passage contract, recorded with its parameters (a label ID) so any implementation
+assigns the same outcome:
+
+- **Candidate:** a scale's running extreme `E` (with ordinal, time, and frozen `θ`) at
+  the row where its reversal progress first reaches a stage `q` (default `q ∈ {0.25, 0.5}`).
+  The label is scored from that row's close onward; a barrier already crossed is an
+  observation, not a prediction.
+- **Barriers, in multiples of the frozen `θ`, in log-bps from `E`:** reversal at `R`
+  (default 1.0, the confirmation itself) and invalidation at `C` beyond `E` (default
+  0.25). A price exactly on a barrier counts as reaching it.
+- **Horizon `K`** in scheduled-open rows of the scale's stream (defaults: fast 300
+  seconds, slow 240 minutes). Closures add no rows.
+- **Path and ties:** the trade path in release order ([3.1](#31-input-stream)), so the
+  first barrier reached is unambiguous.
+- **Outcomes:** reversal, invalidation, timeout (the horizon was fully observed), session
+  end (the session closed first), and unknown (missing data before resolution). Survival
+  is separate: whether `E` remains unbroken through a deadline.
+- **Parameters are frozen in the PR D spec before any labels are computed**, and they
+  stay identical in training and testing. The benchmark follows the
+  reviewed research:
 
 - Compare DC scales, fixed left/right extrema, a slope-sign rule, and one CUSUM/FOCuS
   variant.

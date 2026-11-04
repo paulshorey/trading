@@ -240,14 +240,18 @@ it.
   - `STATE` for checkpoints, plus a `VERSION`;
   - its module files;
   - `process(inputs) -> Table`.
-- The graph starts at an explicit **`trades` source**: one contract's accepted trades
-  with their assigned second, in release order (`bars.aggregate`). Its identity covers
-  the DBN files' checksums and covered windows, the trade-assignment timing, and the
-  acceptance and assignment code. It is not stored; ingest reads it from DBN, and live
-  sessions from the feed. Then `trades` → `bar_1s` → `candle_1m_1s`;
-  `bar_1s` → `bar_1m` → `candle_1h_1m`; (`trades`, `candle_1m_1s`) → `pivot_1s`;
-  (`trades`, `candle_1h_1m`) → `pivot_1m`. Pivot stages read the trade path from
-  `trades`, never from aggregated bars ([3.1](#31-input-stream)).
+- The graph starts at an explicit **`market` source**: one contract's `MarketChunk`,
+  that is, its trades, the data-coverage windows, and the chunk's start and end. Every
+  stage also receives the `SessionCalendar` as a declared input. Coverage and the calendar
+  are what let `bar_1s` tell a quiet second (covered, no trades) from missing data
+  (uncovered) and a closure (no row). The source's identity covers the DBN files'
+  checksums and covered windows, the calendar and its ordinal origin, and the
+  trade-assignment timing. It is not stored: ingest reads it from DBN, and live sessions
+  from the feed. Accepted, assigned trades in release order (`bars.aggregate`) come from
+  it. Then `market` → `bar_1s` → `candle_1m_1s`; `bar_1s` → `bar_1m` → `candle_1h_1m`;
+  (`market`, `candle_1m_1s`) → `pivot_1s`; (`market`, `candle_1h_1m`) → `pivot_1m`.
+  Pivot stages read the trade path from `market`, never from aggregated bars
+  ([3.1](#31-input-stream)), and missing coverage from it too ([3.2](#32-detector-directional-change-with-a-frozen-scale)).
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
   versions, plus its inputs' identities. A new stage never touches existing ones. Editing
   a shared kernel correctly invalidates every stage that uses it.

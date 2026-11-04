@@ -215,9 +215,11 @@ live values exactly; the completed run did not retime those query benchmarks.
 ## Confirm completion after an interrupted run
 
 Check the JSON `status`, not just the process exit code: ingestion currently exits 0 even
-when the result is `partial`. Rerun the same command to resume committed session checkpoints,
-then require `status: done` and a fresh plan with every contract `current`. An uncommitted
-session rolls back if its connection is closed; completed sessions remain readable. A stalled
+when the result is `partial`. Rerun the same command to resume committed session checkpoints.
+If the rerun builds sessions, require `status: done`; a successful no-op instead returns
+`run_id: null`, empty `results`, and no `status` field. In either case, finish with a fresh
+plan reporting every contract `current`. An uncommitted session rolls back if its connection
+is closed; completed sessions remain readable. A stalled
 COPY was recovered this way during the [baseline rebuild](handoff.md#baseline-rebuild-gc-and-si);
 bounded transfer timeouts and a nonzero exit for incomplete runs remain reliability work.
 

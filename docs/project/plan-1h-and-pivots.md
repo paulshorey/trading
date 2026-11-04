@@ -223,7 +223,8 @@ progress, flow, and context. Lower highs mirror this.
 
 Each scale is a **variant row**: `pivot_1s` and `pivot_1m` are keyed
 `(contract_id, variant_id, slot_ordinal, end_ns)`, with each scale's parameters (stream,
-multiplier, threshold normalizer, spread floor) in a registry table
+multiplier, threshold normalizer, spread floor, and the reclaim window `W`) in a registry
+table
 ([feature pipeline](feature-pipeline.md#database-properties)). Adding a scale later adds
 rows, not columns, and leaves the existing scales current. Per scale, normalized:
 
@@ -524,8 +525,15 @@ price leaves them:
   contracting.
 - **Time-of-day normal.** Volatility at the US open is several times that of the Asian
   session, so ATR(14) right after 08:30 CT still reflects the quiet minutes before. Store
-  ATR relative to the typical ATR at the same minute of the session over the previous
-  20 sessions (log ratio).
+  ATR relative to its typical level at the same minute of the session over the previous
+  20 sessions (log ratio). The key is the minute's offset in scheduled-open minutes from
+  the session's first open, at both resolutions. Each session contributes one sample per
+  minute: the window ATR at that minute's last row (`vol_1m`: the `1h@1m` ATR at the
+  minute row; `vol_1s`: the `1m@1s` ATR at ordinal `60m`, the window that is exactly that
+  minute). Every row compares its current ATR with the mean of its minute's samples from
+  earlier sessions only. Keying second rows by each scheduled second would need about
+  82,800 × 20 values in every checkpoint for no gain in a 20-session typical level.
+  Minutes missing from a session (early closes) simply add no sample.
 - **Daily scale.** The simple mean of the prior 14 complete sessions' true ranges (bps;
   a fixed window, exact after 15 sessions, since a Wilder average at daily scale would
   need about 107 sessions to forget its start); the current

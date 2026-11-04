@@ -19,7 +19,8 @@ they must agree; an _epoch_ here is a plan _segment_.
 These six scales follow the [recorded decisions](plan-1h-and-pivots.md#6-decisions).
 Name them by stream and multiplier, such as `fast_atr_0p5` and `slow_atr_2`. Each scale
 is a variant row (`variant_id`) whose registry entry holds its stream, multiplier,
-threshold normalizer (initially ATR(14) from the tier-1 candle; later variants may use the
+reclaim window `W` (it changes which reclaim events the detector emits), threshold
+normalizer (initially ATR(14) from the tier-1 candle; later variants may use the
 [volatility tier](plan-1h-and-pivots.md#7-volatility-tier-atr-family)), and spread floor;
 include the registry version in provenance. Each has its own state,
 but **no phase key**. Never compare pivots across contracts, streams, or scales.
@@ -206,8 +207,9 @@ The unclipped ratios are stored on the events as context, not features.
 
 - `pullback_delta_ratio` and `impulse_delta_ratio`: buy − sell over sided volume in each
   leg.
-- `impulse_speed_atr`, `pullback_speed_atr`: leg size in ATR per minute, from that
-  duration (rows × 60 s for slow scales, rows × 1 s for fast, converted to minutes).
+- `speed_ratio_log`: `log` of the pullback's speed ÷ the impulse's speed (size per row of
+  duration), clipped to ±3. Sizes (`leg_atr`, `prev_leg_atr`, in ATR) and durations
+  (`leg_age_s`, in seconds) stay separate features with their own units.
 
 **Divergence at confirmed pivots**, compared with the previous same-kind pivot:
 
@@ -227,7 +229,8 @@ the classic stop-run below a low that reverses. The fields are `reclaim_age_s` a
 `sweep_depth_atr`: the distance from the breached low to the lowest trade from the
 breaching trade through the reclaiming trade, in the ATR snapshot of the breached low's
 event. Highs mirror this. `W` is a
-variant parameter (initially 60 rows for fast scales and 15 for slow). Breaches and
+pivot-variant parameter, part of that variant's identity (initially 60 rows for fast
+scales and 15 for slow). Breaches and
 reclaims need the trade order inside a row, so the pivot detector (tier 2), which replays
 the trades, detects them and emits `breach` and `reclaim` events with their depth and
 ordinals. Tier 3 reads those events; it never reconstructs paths from aggregated rows.

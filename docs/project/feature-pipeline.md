@@ -153,8 +153,12 @@ Wilder ATR(14), so daily-scale averages use fixed windows.
    contract's span, exactly as after missing data, and `warm` means that epoch has confirmed
    at least one high and one low at that scale. Their values are therefore defined
    relative to the span start, which is part of the builder identity. A front session must be
-   warm whenever its contract's span has the full lead inside the downloaded data, and a
-   test fails otherwise. The first contracts of a downloaded range cannot have it (the
+   warm, for every stage whose warm-up is a number of updates, whenever its contract's
+   span has the full lead inside the downloaded data; a test fails otherwise. Pivot
+   warmth depends on the market producing swings, which no amount of history guarantees
+   (a thin far month, a one-way market, a large scale), so a pivot `warm = false` at a
+   front session is a reported state (`pivot_not_warm` in the session report), never a
+   build failure. The first contracts of a downloaded range cannot have it (the
    data starts November 2025): their rows are stored with `warm = false`, their session
    reports say `history_limited`, and ML extraction and backtests exclude rows that are not
    warm unless asked otherwise.

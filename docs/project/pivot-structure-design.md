@@ -26,11 +26,13 @@ observations can trigger it and when. A large threshold often produces longer sw
 but does not guarantee an hour/day duration. `1m@1s` and `1h@1m` identify the ATR
 context and the publication cadence, not a promise about the duration of the swing.
 
-ATR still follows the existing per-phase indicator rules. At each candidate update,
-read only the ATR already available for that stream's newest row. That does not create
-60 swing histories: the detector consumes every released trade in one sequence. On
-second decision rows, join slow state by `available_at <= decision_at`, holding the
-latest completed-minute state and reporting its age/source ordinal. Do not reprocess
+ATR still follows the existing per-phase indicator rules. A candidate's threshold inputs
+come from the previous completed row, never the row its extreme falls in: for fast
+scales the previous second's `1m@1s` ATR and last sampled spread; for slow scales the
+latest previously completed minute's `1h@1m` ATR and that minute's last sampled spread. That does not create
+60 swing histories: the detector consumes every released trade in one sequence. Slow state is stored only in `pivot_1m`; second decision rows read it
+through an as-of join on `available_at <= decision_at`, holding the latest
+completed-minute state and reporting its age/source ordinal. Do not reprocess
 that held state or emit its confirmation again on every second.
 
 The stored detector replays the engine's released trades in order
@@ -49,7 +51,11 @@ interruption. A ready candidate keeps its frozen threshold until a strict new ex
 replaces it. Equal prices keep the first extreme occurrence and do not refresh scale.
 
 A high confirms when `10_000 * ln(H / p) >= theta_bps`; a low confirms when
-`10_000 * ln(p / L) >= theta_bps`. Emit at the current observation's availability,
+`10_000 * ln(p / L) >= theta_bps`. The crossing trade's exact time is the
+confirmation time. Availability and the feature row follow the scale's publication:
+for fast scales the second row containing that trade, at its close plus the close delay;
+for slow scales the minute row containing it, at the minute's close plus the close delay,
+never the earlier second. Emit at that availability,
 then switch direction and seed the next leg from that observation. Initialization
 establishes a direction before claiming a completed incoming/outgoing swing; the
 initial seed is not a confirmed pivot. Retain exact fixed-point reference prices in
@@ -120,7 +126,8 @@ Record the first observed breach once per reference event ID and direction, with
 availability and `trend_before`. In an up structure, an upward breach is continuation
 and a downward breach is a reversal warning; mirror for down structure. Equality is
 not a breach, and an unknown reference produces no claimed breach. The breaching
-trade's time is recorded; its feature row is the second row that contains it.
+trade's time is recorded; availability and the feature row follow the same publication
+rule as confirmations (second row for fast scales, minute row for slow scales).
 
 **Coverage, closures, and resets are part of the state contract.**
 
@@ -130,7 +137,7 @@ trade's time is recorded; its feature row is the second row that contains it.
 | Scheduled closure     | No synthetic rows; carry valid state, report wall age/closure crossing; a reopening observation can confirm                                                        |
 | Missing coverage      | Preserve historical events, end the active state epoch, drop the candidate and reset current structure/comparators; rebuild known structure after coverage resumes |
 | Contract switch       | Use the warmed state of that contract; never import the prior contract's prices or pivots                                                                          |
-| Unknown/invalid scale | Mark candidate-dependent values unavailable; do not manufacture confirmation from a fallback zero threshold                                                        |
+| Unknown/invalid scale | Same as missing coverage: end the epoch, drop the candidate and direction, clear current comparators, keep historical events; never use a fallback zero threshold  |
 
 An epoch reset prevents "latest confirmed" from implying complete swing history
 through an unknown interval. Historical events remain queryable with their old epoch.
@@ -141,8 +148,9 @@ unchanged carried price into a new observed trade for this detector.
 
 After the planned stage/version work and minute/hourly inputs, implement the
 deterministic detector and structure together, validate synthetic/recorded fixtures,
-then pilot and materialize all six scales. Dense per-second features expose fast
-state and the latest available slow state; the sparse pivot-event table retains native
+then pilot and materialize all six scales. `pivot_1s` stores fast state per second and
+`pivot_1m` stores slow state per minute; second rows join slow state as of its
+availability instead of storing copies; the sparse pivot-event table retains native
 source ordinals and the immutable confirmed history. Do not emit duplicate slow events
 when dense second rows repeat the minute state. Follow the related plan's stage
 boundaries; no need to rebuild unrelated second-row calculations to add pivot storage.

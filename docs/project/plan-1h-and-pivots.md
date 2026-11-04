@@ -156,17 +156,23 @@ lowest or highest price since it, and the first reversal of `θ` from either ext
 the direction. For example, with θ = 4, `100 → 103 → 97` confirms the high at 103 even
 though price never moved 4 from where it started.
 
-| Situation         | Rule                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Closure (no rows) | State continues; a reopening jump can confirm a pivot, because it is a real move                                    |
-| Missing data      | Confirmed history is kept. The open candidate is dropped and restarts at the next observed price; a flag records it |
-| Empty bar         | No new price, no change; ages advance (Finding 1)                                                                   |
-| Roll              | Per contract; a new contract warms up during its lead sessions                                                      |
-| Emitted events    | Immutable; a later break of the level is a new event, never an edit                                                 |
+| Situation         | Rule                                                                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Closure (no rows) | State continues; a reopening jump can confirm a pivot, because it is a real move                                                                                               |
+| Missing data      | Starts a new structure segment: earlier events stay recorded, the open candidate is dropped, and direction is unknown again ([3.3](#33-structure-higher-lows-and-lower-highs)) |
+| Empty bar         | No new price, no change; ages advance (Finding 1)                                                                                                                              |
+| Roll              | Per contract; a new contract warms up during its lead sessions                                                                                                                 |
+| Emitted events    | Immutable; a later break of the level is a new event, never an edit                                                                                                            |
 
 ### 3.3 Structure: higher lows and lower highs
 
-Confirmed pivots alternate high, low, high, … per scale. Each confirmed low `L_k` is a
+Within one **segment** (a stretch without missing data), confirmed pivots alternate high,
+low, high, … per scale. Missing data ends the segment, because the swing during the gap is
+unobserved: the next segment's first pivot may be of either kind, and it is never compared
+with pivots before the gap. Structure features (`hl_atr`, `lh_atr`, `trend`,
+`trend_swings`, break of structure) stay NULL until the new segment has confirmed both a
+high and a low; the last confirmed levels before the gap remain in `pivot_event`, with
+their segment. Each confirmed low `L_k` is a
 **higher low** if `L_k > L_{k−1}`, a lower low if it is lower, and an equal low if the
 two are equal. Highs are classified the same way. Trend state: **up** after a higher
 high and a higher low, **down** after a lower high and a lower low, otherwise

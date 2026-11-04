@@ -122,15 +122,21 @@ form a **rolling stream**: hourly RSI, ATR, and so on, updated every minute.
 Code must say which "previous value" it means:
 
 - **Previous period:** the same phase one period earlier, 60 rows back. Standard
-  crossovers, higher highs, divergences, and pivots use this.
+  candle-indicator crossovers and divergences use this.
 - **Previous step:** the previous row's output, from a different phase. This measures
   how the hourly picture changed in the last minute.
+
+**Previous swing** is a separate event reference: the previous confirmed same-kind
+pivot in one contract/stream/scale history. Strategy higher lows/lower highs come
+from directional change on disjoint second/minute bars, with rolling ATR as context;
+see the [pivot contract](../project/pivot-structure-design.md). They do not cycle
+through 60 phase-specific histories.
 
 ## What this gains
 
 - **Like-for-like comparisons.** Every decision uses a complete candle compared with
   complete candles of the same length. Features mean the same thing at every minute.
-- **Earlier hourly signals.** An hourly crossover, breakout, or pivot confirmation is
+- **Earlier hourly signals.** An hourly candle-indicator crossover or breakout is
   seen in the minute it happens. Logic that waits for clock candles can see it up to
   59 minutes later.
 - **No arbitrary alignment.** All 60 alignments are computed. Running a strategy on

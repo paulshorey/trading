@@ -2,7 +2,9 @@
 
 Prepared November 3, 2026. Read [AGENTS.md](../../AGENTS.md), the current
 [project handoff](handoff.md), and the [reviewed research](../research/pivots/2026-11-03-reviewed-findings.md)
-before starting. This task saved research and a proposed next step; it implemented no
+before starting. The PR #66 follow-up adds a [pivot and structure contract](pivot-structure-design.md)
+for confirmed higher/lower highs/lows, provisional relations, and fixed-scale storage.
+Read that contract for the current implementation sequence. This task implemented no
 detector, model, labeling pipeline, or database change. No GC/SI detection accuracy or
 latency has been measured.
 
@@ -16,6 +18,7 @@ research was not restricted by language.
 | Read                                                                    | Purpose                                                                                                           |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md) | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark |
+| [Pivot and structure contract](pivot-structure-design.md)               | Follow-up definitions, six fixed scales, disjoint streams, provisional HL/LH, and storage-first sequence          |
 | [Parallel report](../research/pivots/2026-11-03-parallel-report.md)     | Supporting deep-research output, with references; distinguish provider recommendations from established results   |
 | [Research brief](../research/pivots/2026-11-03-research-question.md)    | Exact question and constraints sent to the research provider                                                      |
 | [Provenance](../research/pivots/2026-11-03-provenance.json)             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                        |
@@ -23,17 +26,22 @@ research was not restricted by language.
 
 **Research conclusion and proposed architecture.**
 
-Start with multiscale directional change and one detector of local directional
-reversal. Add a calibrated classifier only if it improves early recognition at a
-comparable false-alarm burden. The recommendation concerns fit to the task; no method
-has demonstrated superior GC/SI performance here.
+Start with multiscale directional change **plus deterministic market structure**:
+classify each confirmed low/high against the preceding confirmed same-kind pivot.
+Expose provisional higher lows/lower highs with reversal progress. Materialize the
+fixed grid after implementation correctness checks, then benchmark local-direction
+challengers and calibrated classifiers. No method has demonstrated superior GC/SI
+performance here.
 
 1. **Directional change / drawup-drawdown / hysteresis:** retain a running high or low;
    confirm after a specified opposite excursion. Compare fixed-bps thresholds with
-   volatility-normalized thresholds at a small number of scales. Freeze the trailing
+   volatility-normalized thresholds at a small number of scales. The initial stored
+   grid is 0.5/1/2 ATR for each of the fast and slow streams, with the 2-spread floor
+   recorded in the related plan. Freeze the trailing
    scale for the candidate; refresh only under a declared strict-new-extreme rule so
    falling volatility alone cannot confirm a motionless price. Thresholds such as
-   0.25/0.5/1.0 ATR are illustrative experiments, not validated settings. Include a
+   0.25/0.5/1.0 ATR in the original research are alternative experiments, not the
+   initial stored grid. Include a
    normalized spread/noise floor. Keep candidate endpoints provisional and emitted
    events immutable.
 2. **Local-direction evidence:** compare a causal local-linear trend or rolling-slope
@@ -55,14 +63,14 @@ fixed-lag smoothing can be causal when the output's actual availability is retai
 TEASER and larger sequence models are later challengers; inspected research does not
 establish an advantage for this dataset and task.
 
-**The next task is to make the event contract and benchmark concrete.**
+**The next task follows the concrete pivot/structure contract.**
 
-Begin with a bounded proposal for review before substantial implementation. Define
-the observation stream, incoming move, reversal magnitude, invalidation allowance,
-horizon, tie/plateau policy, and gap/session behavior. Choose a small predeclared
-parameter grid and chronological evaluation plan. Do not treat this research handoff
-as an approved architecture or as permission to install models, rebuild stored rows,
-or change database schemas.
+Use the [contract](pivot-structure-design.md) and the related
+[stage/minute/pivot plan](https://github.com/paulshorey/trading/pull/67): stage/version
+work, minute/hourly inputs, then the deterministic pivot/structure stage and its fixed
+grid, followed by benchmarking and outcome labels. Finalize implementation details
+within that workstream. This documentation follow-up performs no schema/data changes
+or stage refactor and does not implement the separate plan.
 
 Resolve these distinctions explicitly:
 
@@ -81,9 +89,10 @@ Resolve these distinctions explicitly:
   to missing data. A barrier already crossed before scoring is an observation, not
   an unresolved prediction target.
 
-The recommended earliest detector consumes explicitly named **disjoint one-second
-observations**, with rolling features providing context. This is a proposed new
-stream. Conventional indicators over rolling candles still use separate phase state
+The detector consumes **disjoint one-second observations** for fast scales and
+**disjoint one-minute observations** for slow scales, with rolling ATR providing
+context. Thresholds determine reversal magnitude; neither a threshold nor a bar size
+guarantees swing duration. Conventional indicators over rolling candles use separate phase state
 and same-phase history at ordinal differences of 60; adjacent `1m@1s` candles share
 59/60 observations. Do not treat their outputs as independent confirmation votes.
 
@@ -128,7 +137,14 @@ or repeat ingestion. Before any experiment, read the current [ingestion handoff]
 check catalog/coverage/builder compatibility and `uv run research ingest status`, and
 inspect degraded sessions. Do not assume current database state from this snapshot.
 
-**Proposed benchmark and completion evidence for the next task.**
+**Store correct deterministic values, then benchmark their usefulness.**
+
+Implement and fixture-test the six-scale detector and structure, prove causal and
+streaming/checkpoint parity, then pilot and store the fixed grid with dense second
+features and sparse confirmed events. Join slow state as of its minute availability;
+held values are context, not repeated confirmation events. Store future labels apart.
+The benchmark selects later variants and validates quality; it does not gate initial
+storage. Changing the grid must preserve builder/configuration provenance.
 
 Define reference events independently of each detector's emitted candidates, using
 predeclared finite-neighborhood and/or first-passage tasks. A DC detector matching its

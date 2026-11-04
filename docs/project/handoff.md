@@ -229,8 +229,10 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 
 For the separate pivot-indicator research task, read the
 [next-agent handoff](pivot-detection-handoff.md) and its saved research. The next step
-is a concrete event contract and bounded indicator benchmark proposal; the methods
-remain unimplemented and unvalidated on GC/SI.
+is the [pivot/structure contract](pivot-structure-design.md): one disjoint swing stream
+per resolution and scale, confirmed/provisional higher lows and lower highs, and a
+fixed six-scale grid stored before the quality benchmark. Follow the related stage
+plan's order; the methods remain unimplemented and unvalidated on GC/SI.
 
 ## Open questions
 

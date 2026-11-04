@@ -97,7 +97,7 @@ table. Everything else is designed to change.
 | Row grid                   | One row per scheduled-open slot and contract, keyed `(contract_id, slot_ordinal, end_ns)`; monthly partitions on `end_ns`                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | One table per stage        | Each stage owns its tables and replaces a session's rows (and events) in one transaction; for a stage with variants, the replacement covers only the variant being built, `(stage, variant, session)`, so other variants' rows and events are untouched                                                                                                                                                                                                                                                                                           |
 | Variants are rows          | A family computed over a parameter grid whose members are never combined inside the stage (pivot scales, including their threshold normalizers) adds `variant_id` to the key, with parameters in a registry table. A new variant adds rows, not columns: no migration, and existing variants stay current. Values that are combined with each other, such as ATR(5), ATR(14), ATR(50) and their ratios, are columns of one stage; a new one is a column (a migration). Combinations across variants live in a summary with a declared variant set |
-| Feature registry           | `market.feature` lists every column: stage, tier, resolution, unit, description, parameters, the builder that introduced it, and status (active, deprecated). It is generated from the code registry, and a test keeps it equal to the schema                                                                                                                                                                                                                                                                                                     |
+| Column registry            | `market.column` lists every stored column with its **role**: `feature` (a normalized `Unit`; a model input), `context` (raw prices, volumes, and other data in source units; never a model input), or `key` (ordinals, times, IDs). Each also has stage, tier, resolution, description, parameters, the builder that introduced it, and status (active, deprecated). Units are required only for features. It is generated from the code registry, a test keeps it equal to the schema, and ML extraction selects only `feature` columns          |
 | Names never change meaning | A different definition gets a new name (or a new variant); the old one is deprecated, then dropped by a migration once nothing reads it. Models record the names and stage identities they were trained on                                                                                                                                                                                                                                                                                                                                        |
 | NULL means undefined       | Never zero for "unknown"; validity flags and ages say why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Times                      | Rows carry `end_ns`; events carry the extreme time, the confirmation time, and `available_at`; ages count scheduled-open rows (wall time only in separately named columns)                                                                                                                                                                                                                                                                                                                                                                        |
@@ -147,12 +147,18 @@ Wilder ATR(14), so daily-scale averages use fixed windows.
 4. When a change raises the required lead (EMA(200) needs 30 sessions), the planner reports
    `needs_rebuild` with the reason, for example "lead 40 → 52 required by
    `candle_1h_1m.ema200_atr`", and a rebuild prepends the sessions.
-5. Rows carry a `warm` flag: the contract has run at least the stage's warm-up. Front
+5. Rows carry a `warm` flag: the contract has run at least the stage's warm-up. Pivot
+   stages are different: their state can depend on arbitrarily old swings, so no finite
+   lead makes it history-complete. Their structure starts a fresh epoch at the start of the
+   contract's span, exactly as after missing data, and `warm` means that epoch has confirmed
+   at least one high and one low at that scale. Their values are therefore defined
+   relative to the span start, which is part of the builder identity. Front
    sessions must be warm, and a test fails otherwise. The first contract of a downloaded
    range cannot have a full lead, so its early rows are marked not warm instead of being
    used silently.
 6. A pilot check computes a session with the lead and again with the lead plus 10 sessions;
-   values that differ by more than the tolerance expose an undeclared warm-up.
+   values that differ by more than the tolerance expose an undeclared warm-up. Pivot
+   stages are excluded, since their dependence on the span start is declared above.
 
 ## What a change costs
 
@@ -178,4 +184,4 @@ make each change rebuild only what depends on it.
   signal tiers may roughly double that. Disk is not a constraint (decision 5), but measure
   query and ML-extraction speed as tables grow.
 - **Tier-0 additions.** These rebuild everything. PR A therefore adds the per-second fields
-  already known to be needed (price-path drawdown and drawup; [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
+  already known to be needed (price-path drawdown and drawup, and the order of each second's high and low; [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).

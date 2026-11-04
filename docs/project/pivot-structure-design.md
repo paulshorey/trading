@@ -224,7 +224,10 @@ the classic stop-run below a low that reverses. The fields are `reclaim_age_s` a
 `sweep_depth_atr`: the distance from the breached low to the lowest trade from the
 breaching trade through the reclaiming trade, in the ATR snapshot of the breached low's
 event. Highs mirror this. `W` is a
-variant parameter (initially 60 rows for fast scales and 15 for slow).
+variant parameter (initially 60 rows for fast scales and 15 for slow). Breaches and
+reclaims need the trade order inside a row, so the pivot detector (tier 2), which replays
+the trades, detects them and emits `breach` and `reclaim` events with their depth and
+ordinals. Tier 3 reads those events; it never reconstructs paths from aggregated rows.
 
 **Location:** `range_pos`, the current price within the latest confirmed low–high range,
 clipped to 0 (at or below the low) through 1 (at or above the high). A breach is measured

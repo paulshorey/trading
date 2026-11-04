@@ -27,14 +27,14 @@ volatility (ATR) tier, including bullish and bearish ATR.
    Store a small fixed grid of scales at both resolutions, then benchmark and train on
    the stored values ([section 3](#3-pivot-and-structure-design)).
 
-| PR  | Tier | Contents                                                                                                                                                             | Rebuild         |
-| --- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, feature and variant registries, summation order, empty-window policy, drawdown/drawup fields, 40 lead sessions | every stage     |
-| B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                | new tables only |
-| C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                              | new tables only |
-| D   | 2    | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                                                                                                  | new tables only |
-| E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                         | new tables only |
-| F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                    | new tables only |
+| PR  | Tier | Contents                                                                                                                                                                                         | Rebuild         |
+| --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
+| A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, column and variant registries, summation order, empty-window policy, drawdown/drawup and high/low-order fields, derived lead (40 to start) | every stage     |
+| B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                                            | new tables only |
+| C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                                                          | new tables only |
+| D   | 2    | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                                                                                                                              | new tables only |
+| E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                                                     | new tables only |
+| F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                                                | new tables only |
 
 Volatility comes before structure because swing thresholds are sized by it. `vol_1s` can
 start right after A; `vol_1m` and the slow pivot scales need B.
@@ -508,7 +508,10 @@ price leaves them:
   low, in ATR.
 - `high_age_s`, `low_age_s`: how long ago, in scheduled-open time, each was set
   (`high_at_ns` and `low_at_ns` are already stored).
-- `low_first`: 1 when the low came before the high, 0 otherwise.
+- `extreme_order`: +1 when the low came before the high, −1 when the high came first, 0
+  when both are the same observation (a flat or single-trade window). Across seconds the
+  order follows the seconds; within one second it comes from a tier-0 field added in
+  PR A, set from the trades' release order (timestamps can tie).
 
 **Also in the family:**
 

@@ -213,16 +213,17 @@ changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 The order and decisions (November 3, 2026) are in the
 [plan for stages, `1h@1m`, and pivots](plan-1h-and-pivots.md):
 
-1. **Stages (PR A)**: one table, version, and checkpoint per stage, so new tables never
-   invalidate stored second rows; empty windows carry the last trade price as an
-   indicator input; choose the lead sessions (20 recommended). Then rebuild GC and SI second
-   rows (11 min at today's lead of 5).
+1. **Stages (PR A)**: stages ordered in [tiers](feature-pipeline.md), each with its own
+   table, version, and checkpoint; feature and variant registries; one summation order;
+   empty windows carry the last trade price; per-second drawdown and drawup; 20 lead
+   sessions. Then rebuild GC and SI.
 2. **`1h@1m` rows (PR B)**: `market.bar_1m` and `market.candle_1h_1m`, with the
    amendments in the plan.
-3. **Swing structure (PRs C, D)**: directional-change pivots at 0.5, 1, and 2 ATRs on
-   both resolutions, higher/lower highs and lows, stored per second and per minute; then
-   the benchmark and outcome labels.
-4. **More ATR metrics (PR E)**.
+3. **Volatility tier (PR C)**: ATR horizons, time-of-day and daily ATR, bullish and
+   bearish ATR, and adverse-excursion ATR ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
+4. **Swing structure (PRs D–F)**: directional-change pivots at 0.5, 1, and 2 ATRs on both
+   resolutions with higher/lower highs and lows (D), structure signals (E), then outcome
+   labels and the benchmark (F).
 5. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).

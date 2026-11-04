@@ -3,8 +3,9 @@
 Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decisions)).
 Nothing here is implemented yet. It answers four questions: are the stored `1m@1s` rows
 right, how to make the system extensible, when to build `1h@1m`, and how to add high/low
-pivot detection at both resolutions. [Section 7](#7-after-pivots-more-atr-metrics) outlines
-the ATR metrics that follow.
+pivot detection at both resolutions. The [feature pipeline](feature-pipeline.md) sets the
+calculation tiers and database rules, and [section 7](#7-volatility-tier-atr-family) the
+volatility (ATR) tier, including bullish and bearish ATR.
 
 ## Summary
 
@@ -17,20 +18,26 @@ the ATR metrics that follow.
    PR. It needs one GC+SI rebuild (11 minutes at today's lead), which also applies the
    empty-window decision and the [lead](#6-decisions) chosen for every later stage.
 3. **Then `1h@1m`** as the update proposed, with the amendments in [section 5](#5-1h1m-amendments-to-the-proposed-plan).
-4. **Then swing structure**: a multi-scale directional-change detector plus a deterministic
+4. **Calculations run in tiers** ([feature pipeline](feature-pipeline.md)): base rows (0),
+   candles, indicators, and the volatility family (1), market structure sized by that
+   volatility (2), then signals that combine indicators and structure, such as higher-low
+   sequences (3). Labels are kept apart. Each tier reads only the tiers below it.
+5. **Then swing structure**: a multi-scale directional-change detector plus a deterministic
    _market-structure_ layer that labels each confirmed swing as a higher/lower high/low.
    Store a small fixed grid of scales at both resolutions, then benchmark and train on
    the stored values ([section 3](#3-pivot-and-structure-design)).
 
-| PR  | Contents                                                                                | Rebuild         |
-| --- | --------------------------------------------------------------------------------------- | --------------- |
-| A   | Stage interface, per-stage versions and checkpoints, empty-window policy, lead sessions | `1s` stages     |
-| B   | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                   | new tables only |
-| C   | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                     | new tables only |
-| D   | Pivot benchmark and outcome labels (future-looking, stored apart from inputs)           | new tables only |
-| E   | More ATR and volatility metrics ([section 7](#7-after-pivots-more-atr-metrics))         | new tables only |
+| PR  | Tier | Contents                                                                                                                                                             | Rebuild         |
+| --- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, feature and variant registries, summation order, empty-window policy, drawdown/drawup fields, 20 lead sessions | every stage     |
+| B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                | new tables only |
+| C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                              | new tables only |
+| D   | 2    | Swing detector and structure: `pivot_1s`, `pivot_1m`, `pivot_event`                                                                                                  | new tables only |
+| E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                         | new tables only |
+| F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                    | new tables only |
 
-C's fast scales need only A, so C can start in parallel with B. Its slow scales need B.
+Volatility comes before structure because swing thresholds are sized by it. `vol_1s` can
+start right after A; `vol_1m` and the slow pivot scales need B.
 
 ## 1. Review of the stored `1m@1s` rows
 
@@ -212,7 +219,11 @@ progress, flow, and context. Lower highs mirror this.
 
 ### 3.4 Stored values
 
-Per scale, normalized, as dense columns:
+Each scale is a **variant row**: `pivot_1s` and `pivot_1m` are keyed
+`(contract_id, variant_id, slot_ordinal, end_ns)`, with each scale's parameters (stream,
+multiplier, threshold normalizer, spread floor) in a registry table
+([feature pipeline](feature-pipeline.md#database-properties)). Adding a scale later adds
+rows, not columns, and leaves the existing scales current. Per scale, normalized:
 
 - `dir`, `progress` (reversal since the running extreme ÷ θ), `ext_dist_atr`, `ext_age_s`
 - `leg_atr`, `leg_age_s`, `leg_delta_ratio` (aggressor flow over the leg: divergence input),
@@ -221,8 +232,13 @@ Per scale, normalized, as dense columns:
   since each extreme and since its confirmation
 - `low_change_atr` = `(L_k − L_{k−1}) / ATR`, `high_change_atr` = `(H_k − H_{k−1}) / ATR`
   (ATR snapshot of the new pivot), latest low and high classes, `trend` (−1, 0, +1; NULL
-  until both comparisons exist), provisional HL/LH flags, and breach ages
+  until both comparisons exist), `low_run`, `high_run`, `trend_age_s`, provisional HL/LH
+  flags, and breach ages
 - `theta_bps`, and validity/warm-up flags
+
+Signals that combine structure with indicators (pullback quality, divergences, failed
+breaks, cross-scale counts) are tier 3, in their own stages (PR E); the
+[contract](pivot-structure-design.md#tier-3-structure-signals) defines them.
 
 Every age (`*_age_s`) counts scheduled-open rows, like `slot_ordinal`: seconds of open
 time for the fast stream, and minutes × 60 for the slow stream. Closures add nothing, so
@@ -240,10 +256,10 @@ floor `f = 2` (θ ≥ 2 spreads; it rarely binds at slow scales). For scale:
 the median `1m@1s` ATR in September 2026 was 4.3 bps for GC and 6.4 bps for SI. So
 0.5 × ATR is about 8 GC ticks but only about 3 SI ticks, which is why the spread floor matters.
 
-**Size:** about 16 columns × 3 scales of `double precision` per second comes to roughly
-15–20 GB for a GC+SI year. Minute rows and events are under 1 GB. See decision 3.
+**Size:** three fast-scale rows per second of about 16 `double precision` columns come to
+roughly 20–25 GB for a GC+SI year. Minute rows and events are under 1 GB. See decision 3.
 
-### 3.5 Labels and benchmark (PR D)
+### 3.5 Labels and benchmark (PR F)
 
 Outcome labels are stored apart from inputs, in their own table, with their availability
 times. Hindsight reference swings are flagged as such. Each label follows one complete
@@ -275,7 +291,7 @@ assigns the same outcome:
   without a break), broken (with the breaking trade's ordinal), session end, and unknown
   (missing data first). `E` is the running extreme at the decision close, so it cannot be
   broken before the decision.
-- **Parameters are frozen in the PR D spec before any labels are computed**, and they
+- **Parameters are frozen in the PR F spec before any labels are computed**, and they
   stay identical in training and testing.
 
 Labels are a stage (`pivot_label`) whose inputs are `market` and the pivot stages. The
@@ -302,7 +318,9 @@ removed from the grid leave no stored rows or labels behind.
 - The engine (`FeaturePipeline`) and storage (`SecondRowBuilder`) assemble the same
   pieces separately. The engine's `1h@1m` has only 8 features.
 
-**Proposal:** treat the pipeline like assembly-line stations. Each station has its own
+**Proposal:** treat the pipeline like assembly-line stations, ordered in tiers; the
+[feature pipeline](feature-pipeline.md) defines the tiers, read rules, full stage graph,
+and database properties. Each station has its own
 inspection stamp, and changing one station re-runs only that station and the ones after
 it.
 
@@ -320,9 +338,12 @@ it.
   checksums and covered windows, the calendar and its ordinal origin, and the
   trade-assignment timing. It is not stored: ingest reads it from DBN, and live sessions
   from the feed. Accepted, assigned trades in release order (`bars.aggregate`) come from
-  it. Then `market` → `bar_1s` → `candle_1m_1s`; `bar_1s` → `bar_1m` → `candle_1h_1m`;
-  (`market`, `candle_1m_1s`) → `pivot_1s`; (`market`, `candle_1h_1m`) → `pivot_1m`; (`market`, `pivot_1s`, `pivot_1m`) →
-  `pivot_label`.
+  it. Then `market` → `bar_1s` → `candle_1m_1s` → `vol_1s`; `bar_1s` → `bar_1m` →
+  `candle_1h_1m` → `vol_1m`; (`market`, `candle_1m_1s`, `vol_1s`) → `pivot_1s`;
+  (`market`, `candle_1h_1m`, `vol_1m`) → `pivot_1m`; each resolution's lower tiers and
+  pivots → `signal_1s`, `signal_1m` (second rows read minute values as of their
+  availability); (`market`, `pivot_1s`, `pivot_1m`) → `pivot_label`. The
+  [feature pipeline](feature-pipeline.md#stages) draws the graph.
   Pivot stages read the trade path from `market`, never from aggregated bars
   ([3.1](#31-input-stream)), and missing coverage from it too ([3.2](#32-detector-directional-change-with-a-frozen-scale)).
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
@@ -396,36 +417,71 @@ resumable versioned stage, pilot then backfill). Amend them as follows:
 
 ## 6. Decisions
 
-Decided by Paul on November 3, 2026:
+Decided by Paul on November 3, 2026 (items 2 and 6 updated with the tier order and the
+recommended lead, which Paul accepted):
 
 1. **Empty windows:** carry the last trade price as an indicator input
    ([Finding 1](#finding-1-quiet-windows-blank-out-si-features-policy-decision)), flagged,
    with its age, never across missing data. Applied in PR A.
-2. **Order:** stages first (PR A), then `1h@1m` (PR B), then pivots (PR C).
-3. **Pivot storage:** dense per-second features plus the sparse event table.
+2. **Order:** stages first (PR A), then `1h@1m` (PR B), the volatility tier (PR C),
+   structure (PR D), structure signals (PR E), and labels with the benchmark (PR F).
+3. **Pivot storage:** dense per-second features plus the sparse event table, one row per
+   scale ([3.4](#34-stored-values)).
 4. **Initial scales:** 0.5, 1, and 2 times the window's ATR, at both resolutions. The
    2-spread floor in [3.4](#34-stored-values) stays as a noise guard unless it is changed.
 5. **Disk:** not a constraint; space will be added for all products as needed.
+6. **Lead sessions: 20**, applied in PR A's rebuild. Every stage shares a
+   contract's span, and prepending sessions later changes the history behind every stored
+   row, which means rebuilding all stored stages (`spans()`/`diff()` treat an earlier start
+   as a rebuild from the beginning). Twenty covers hourly EMA(50) (about 2.2 sessions),
+   several slow-scale swings, and the 14–20 prior sessions that daily and time-of-day ATR
+   need ([section 7](#7-volatility-tier-atr-family)), so PRs B–F add only new tables. The
+   cost is about a third more contract-sessions in the PR A rebuild.
 
-Still open: **lead sessions**, to be chosen before PR A's rebuild. Every stage shares a
-contract's span, and prepending sessions later changes the history behind every stored
-row, which means rebuilding all stored stages (`spans()`/`diff()` treat an earlier start as a
-rebuild from the beginning). Recommendation: **20 sessions**. That covers hourly EMA(50)
-(about 2.2 sessions), several slow-scale swings, and the 14–20 prior sessions that daily
-and time-of-day ATR need ([section 7](#7-after-pivots-more-atr-metrics)), so PRs B–E add
-only new tables. The cost is about a third more contract-sessions in the PR A rebuild.
+## 7. Volatility tier: ATR family
 
-## 7. After pivots: more ATR metrics
+ATR sets stop distances, position sizes, and the swing thresholds, so one ATR(14) per
+window is too little. The volatility family is tier 1 (PR C), with its own stage per
+resolution (`vol_1s`, `vol_1m`), computed before structure so swing thresholds can use
+it. Each value is per phase on same-phase candles, like ATR, normalized, and
+scale-invariance tested.
 
-ATR sets stop distances, position sizes, and the pivot thresholds, so one ATR(14) per
-window is too little. Proposed for PR E as its own stage per resolution (`vol_1s`,
-`vol_1m`), each value normalized and scale-invariance tested:
+**Bullish and bearish ATR.** True range splits exactly into an upward and a downward
+part. With `C` the previous same-phase close (the candle's open when there is none),
+`up = max(H, C) − C`, `down = C − min(L, C)`, and `TR = up + down`.
 
-- **Several horizons.** Same-phase Wilder ATR(5), ATR(14) (stored now), and ATR(50), in
-  bps, with `log(ATR5 / ATR14)` and `log(ATR14 / ATR50)` showing volatility expanding
-  or contracting.
+- **Bullish ATR** (`bull_atr_bps`) is the Wilder(14) average of `2 × down`: volatility as
+  a long position feels it. Rallies count as zero and declines count double, so in a
+  market that moves equally both ways it equals ATR. It rises when selling spikes
+  dominate, which is when a long's stop needs more room.
+- **Bearish ATR** (`bear_atr_bps`) is the Wilder(14) average of `2 × up`: the short side's
+  view.
+- With the same seeding, `(bull + bear) / 2 = ATR`. Their skew,
+  `(bull − bear) / (bull + bear)` from −1 to 1, says which side drives the volatility.
+
+**A step further: adverse excursion inside the candle.** True range sees only a candle's
+extremes against the previous close. It misses a candle that rallies, drops 8 ticks, and
+still closes up, stopping out a long inside a "bullish" candle. The path order is known
+exactly from the trades:
+
+- **Tier-0 fields, added in PR A:** each second's `drawdown` (the largest drop from a
+  trade to any later, lower trade in that second) and `drawup`. They merge exactly into
+  minutes and windows together with the high and low:
+  `drawdown(a then b) = max(drawdown_a, drawdown_b, high_a − low_b)`.
+- **Long adverse excursion** of a candle: the larger of its drawdown and `C − low`, which
+  is the deepest drop a long would have sat through, from the previous close or any later
+  high. **Short adverse excursion** mirrors it with drawup.
+- `long_adverse_atr_bps` and `short_adverse_atr_bps` are their Wilder(14) averages, and
+  the current candle's excursions ÷ ATR are also stored. These are the stop distances
+  that recent candles would actually have hit, side by side.
+
+**Also in the family:**
+
+- **Several horizons.** ATR(5), ATR(14) (stored now), and ATR(50), in bps, with
+  `log(ATR5 / ATR14)` and `log(ATR14 / ATR50)` showing volatility expanding or
+  contracting.
 - **Time-of-day normal.** Volatility at the US open is several times that of the Asian
-  session, so ATR(14) right after 08:30 CT still reflects the quiet minutes before. Add
+  session, so ATR(14) right after 08:30 CT still reflects the quiet minutes before. Store
   ATR relative to the typical ATR at the same minute of the session over the previous
   20 sessions (log ratio).
 - **Daily scale.** ATR(14) of prior complete sessions' true ranges (bps); the current
@@ -436,21 +492,20 @@ window is too little. Proposed for PR E as its own stage per resolution (`vol_1s
 - **Other estimators.** Parkinson and Garman–Klass volatility from OHLC, and the ratio of
   realized volatility from one-second returns to ATR (noise versus trend; the `1h@1m`
   version is in PR B).
-- **Up versus down.** Average upward against downward true range: whether volatility
-  comes from rallies or selloffs.
 - **Cost relative to movement.** Spread ÷ ATR: the share of a typical move paid to cross
   the spread, which decides which swing scales are tradable.
 - **Risk context, not features.** ATR in price units and in dollars per contract (ATR ×
   multiplier) for stop distances and position sizing in execution. Raw units stay out of
   model inputs.
 
-Two points for PR E:
+**History.** Daily and time-of-day ATR need 14–20 prior sessions of the same contract,
+which the 20 lead sessions provide. They are computed within each contract, never from
+the front-contract sequence: a roll-day true range would compare the new contract's high
+and low with the old contract's close, a false volatility spike.
 
-- **History for daily and time-of-day ATR.** These need 14–20 prior sessions of the same
-  contract, more than the current lead. Compute them within each contract and give the
-  volatility stages a longer lead (and the same for any stage that reads them). Never
-  build them from the front-contract sequence: a roll-day true range would compare the new
-  contract's high and low with the old contract's close, a false volatility spike.
-- **Pivot thresholds.** PR C uses ATR(14). Once PR E exists, the benchmark can compare
-  thresholds scaled by the time-of-day ATR, which may stop the open from producing a
-  burst of small swings. Only the pivot stages and their descendants would be rebuilt.
+**Swing thresholds.** The initial pivot grid uses ATR(14) (decision 4). Because the
+threshold normalizer is a variant parameter, the benchmark can add variants without a
+migration. Candidates: time-of-day ATR, which may stop the open from producing a burst of
+small swings; and directional thresholds, where a high confirms on a decline sized by
+bullish ATR (the noise of declines) and a low on a rise sized by bearish ATR. Each new
+variant builds only its own rows and their signals.

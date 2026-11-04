@@ -37,8 +37,8 @@ def main() -> None:
     p.add_argument(
         "--lead-sessions",
         type=int,
-        default=5,
-        help="Sessions stored before a contract becomes front, to warm its indicators",
+        help="Sessions stored before a contract becomes front, so its values have settled "
+        "(default: derived from the stages' warm-ups, at least 40)",
     )
     p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2)")
     p.add_argument(

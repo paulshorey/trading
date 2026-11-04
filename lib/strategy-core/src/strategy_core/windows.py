@@ -15,6 +15,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from .bars import MISSING, OBSERVED, BaseBars
+from .kernels import ordered_sum
 from .market import MINUTE, PX, SECOND, SessionCalendar
 
 COMPLETE, EMPTY, GAP, WARMUP = 0, 1, 2, 3
@@ -56,18 +57,38 @@ class Candles:
     sell: np.ndarray
     trades: np.ndarray
     vwap: np.ndarray
+    # The last trade price at or before the window's end, never across missing data (NaN when
+    # unknown). An empty window (covered, no trades) feeds price indicators this carried price
+    # as a flat candle: the price did not change (docs/project/plan-1h-and-pivots.md, finding 1).
+    carry_close: np.ndarray
 
     def __len__(self) -> int:
         return len(self.end)
 
+    @property
+    def carried(self) -> np.ndarray:
+        """Empty windows with a known carried price."""
+        return (self.status == EMPTY) & np.isfinite(self.carry_close)
+
+    def analysis(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Open, high, low, close for price indicators: the candle's own when complete, the
+        carried price for a carried empty window, NaN otherwise."""
+        complete = self.status == COMPLETE
+        carried = self.carried
+        out = []
+        for values in (self.open, self.high, self.low, self.close):
+            out.append(np.where(complete, values, np.where(carried, self.carry_close, np.nan)))
+        return tuple(out)
+
 
 class RollingWindow:
-    STATE = ("tail", "seen")  # see `state.export_state`
+    STATE = ("tail", "seen", "last_close", "has_last")  # see `state.export_state`
 
     def __init__(self, spec: WindowSpec, calendar: SessionCalendar):
         self.spec, self.calendar = spec, calendar
         self.tail = BaseBars.empty(spec.step)
         self.seen = 0  # scheduled-open slots received so far
+        self.last_close, self.has_last = 0, 0  # latest trade price, unless missing data since
 
     def update(self, bars: BaseBars) -> Candles:
         spec, w = self.spec, self.spec.slots
@@ -119,9 +140,9 @@ class RollingWindow:
         ends = padded(b.end, 0)
 
         volume = window_sum(padded(b.volume, 0)).astype(float)
-        # Float sums over each window's own slots (not cumulative-sum differences), so the
-        # result never depends on where a chunk started.
-        pv = sliding_window_view(padded(b.pv, 0.0), w)[-m:].sum(axis=1) if m else np.zeros(0)
+        # Float sums over each window's own slots, oldest first (not cumulative-sum
+        # differences), so the result never depends on where a chunk started.
+        pv = ordered_sum(sliding_window_view(padded(b.pv, 0.0), w)[-m:]) if m else np.zeros(0)
         nan = np.full(m, np.nan)
 
         def px(values: np.ndarray) -> np.ndarray:
@@ -146,7 +167,25 @@ class RollingWindow:
             sell=window_sum(padded(b.sell, 0)).astype(float),
             trades=window_sum(padded(b.trades, 0)).astype(float),
             vwap=np.where(volume > 0, pv / np.where(volume > 0, volume, 1), nan),
+            carry_close=self._carry(bars),
         )
         self.tail = b.take(slice(max(n - (w - 1), 0), None))
         self.seen += m
         return candles
+
+    def _carry(self, bars: BaseBars) -> np.ndarray:
+        """The last trade price at or before each row, from this or any earlier row, never
+        across missing data: trades during a missing row are unknown."""
+        m = len(bars)
+        index = np.arange(m)
+        gap = np.maximum.accumulate(np.where(bars.status == MISSING, index, -1))
+        last = np.maximum.accumulate(np.where(bars.status == OBSERVED, index, -1))
+        fresh = (last >= 0) & (last > gap)  # traded in this chunk after its latest missing row
+        carried = (gap < 0) & bool(self.has_last)  # from earlier chunks, nothing missing since
+        price = np.where(fresh, bars.close[np.maximum(last, 0)], self.last_close)
+        out = np.where(fresh | carried, price / PX, np.nan)
+        if m and fresh[-1]:
+            self.last_close, self.has_last = int(bars.close[last[-1]]), 1
+        elif m and gap[-1] >= 0:
+            self.has_last = 0
+        return out

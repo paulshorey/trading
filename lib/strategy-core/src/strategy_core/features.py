@@ -94,6 +94,9 @@ class FeatureFrame:
         return cls(np.concatenate([f.end for f in frames]), join("features"), join("context"))
 
 
+PRICE_FEATURES = frozenset({"rsi", "atr_bps", "ret_atr"})  # defined on carried empty windows
+
+
 class WindowFeatures:
     """Rolling candles of one window spec and their per-phase indicators."""
 
@@ -115,16 +118,22 @@ class WindowFeatures:
         c = self.window.update(bars)
         m, cfg = len(c), self.config
         valid = c.status == COMPLETE
+        # Price indicators also advance on empty windows, with the carried price: no change
+        # and no range. Activity (the volume baseline) uses windows with trades only.
+        _, high, low, close = c.analysis()
+        priced = valid | c.carried
         rsi, atr, chg, vol_base = (np.empty(m) for _ in range(4))
         s = self.rsi
         kernels.wilder_rsi(
-            c.close, valid, c.phase, cfg.rsi_period, s.prev, s.gain, s.loss, s.count, rsi
-        )
+            np.where(priced, close, 0.0), priced, c.phase, cfg.rsi_period, s.prev, s.gain,
+            s.loss, s.count, rsi,
+        )  # fmt: skip
         s = self.atr
         kernels.wilder_atr(
-            c.high, c.low, c.close, valid, c.phase, cfg.atr_period, s.prev, s.atr, s.count, atr
-        )
-        kernels.phase_change(c.close, valid, c.phase, self.chg.prev, chg)
+            np.where(priced, high, 0.0), np.where(priced, low, 0.0), np.where(priced, close, 0.0),
+            priced, c.phase, cfg.atr_period, s.prev, s.atr, s.count, atr,
+        )  # fmt: skip
+        kernels.phase_change(np.where(priced, close, 0.0), priced, c.phase, self.chg.prev, chg)
         s = self.vol
         kernels.ema_prior(c.volume, valid, c.phase, cfg.volume_period, s.ema, s.count, vol_base)
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -133,7 +142,7 @@ class WindowFeatures:
             sided = c.buy + c.sell
             values = {
                 "rsi": rsi,
-                "atr_bps": atr / c.close * 1e4,
+                "atr_bps": atr / close * 1e4,
                 "ret_atr": chg / atr_ok,
                 "close_loc": np.where(span > 0, (c.close - c.low) / span, 0.5),
                 "vwap_atr": (c.close - c.vwap) / atr_ok,
@@ -142,9 +151,15 @@ class WindowFeatures:
                 "complete": valid.astype(float),
             }
         for name, v in values.items():
-            if name != "complete":
+            if name in PRICE_FEATURES:
+                v[~priced] = np.nan
+            elif name != "complete":
                 v[~valid] = np.nan
-        return c, {f"{self.spec.name}.{k}": v for k, v in values.items()}, atr
+        return (
+            c,
+            {f"{self.spec.name}.{k}": v for k, v in values.items()},
+            np.where(priced, atr, np.nan),
+        )
 
 
 class FeaturePipeline:

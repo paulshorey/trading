@@ -88,17 +88,20 @@ ordinals because they share the calendar. Each row also has a status (`observed`
 trade count, the price × size sum, running-delta extremes, and the per-slot metrics
 from the research (CVD, spread, top-of-book size and imbalance at trades, and so on).
 
-- Compute rows with `strategy-core` (`strategy_core.rows.SecondRowBuilder`), the code a
-  live session runs. A new column means a registry entry in `strategy_core.rows`, a new
-  migration, and a rebuild; tests compare the registry with the migrated tables. Never
-  compute a metric in SQL.
+- Compute rows with `strategy-core` stages (`strategy_core.pipeline.Pipeline`), the code a
+  live session runs. A new column means a registry entry in its stage module, a new
+  migration, and a rebuild of that stage and the stages that read it; tests compare the
+  registries with the migrated tables and `market.column_registry`. Never compute a metric
+  in SQL.
 - Store prices and fixed-point sums as `bigint` (Databento fixed point, 10⁻⁹), counts as
   `integer`, and ratios and features as `double precision`. Avoid `numeric` here. NULL
   means undefined; zero means none observed.
-- `market.builder` records the builder version (code hash, `close_delay`, `feed_latency`,
-  calendar version and phase origin, packages, columns); `market.ingest_slice` records it
-  per contract and session with the source files and a checkpoint. A slice is reloaded by
-  deleting its rows and copying them again.
+- `market.builder` records one builder version per stage and one for the market source
+  (code hash, settings, columns, packages, inputs' identities; column `stage`).
+  `market.ingest_slice` records each stored contract session (source builder, source files,
+  quality report, row bounds) and `market.stage_slice` each stage's builder, checkpoint, and
+  warm flag for it. A stage's slice is reloaded by deleting its rows and copying them again
+  ([ingestion](../../docs/project/ingestion.md)).
 - Stored raw aggregates may use price units; model features derived from them must
   be normalized (see `strategy_core.features.Unit`).
 - Measured: about 325 bytes per `bar_1s` row and 951 per `candle_1m_1s` row with indexes,

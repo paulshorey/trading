@@ -18,10 +18,10 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Run the GC and SI ingest.** Completed November 3: 11 min 2 s, 8 workers,
       46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
       degraded reports and the GCZ6 roll checked ([results](handoff.md#first-ingest-gc-and-si)).
-- [ ] **Stages (PR A).** Tiered stages with per-stage tables, versions, and checkpoints;
+- [x] **Stages (PR A).** Tiered stages with per-stage tables, versions, and checkpoints;
       registries; empty windows carry the last trade price; drawdown/drawup and high/low order; lead derived from
-      indicator warm-ups (40 to start), with `warm` flags and a lead+10 check
-      ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)); rebuild GC and SI ([pipeline](feature-pipeline.md), [plan](plan-1h-and-pivots.md)).
+      indicator warm-ups (40 to start), with `warm` flags and a two-start warm-up test
+      ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)); GC and SI rebuilt November 4 ([results](handoff.md#rebuild-with-stages-gc-and-si), [pipeline](feature-pipeline.md), [plan](plan-1h-and-pivots.md)).
 - [ ] **Store `1h@1m` rows (PR B).** `market.bar_1m` and `market.candle_1h_1m`
       ([plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
 - [ ] **Volatility tier (PR C).** Including bullish, bearish, and adverse-excursion ATR
@@ -88,7 +88,7 @@ task live in [handoff: next steps](handoff.md#next-steps).
   - **Done when** every rule has unit tests and whole-session versus second-by-second
     parity still holds.
 - [ ] **Roll warmup.** Backtests replay `warmup_sessions` on a new contract, while stored
-      rows warm it for 5 sessions before the roll. Let backtests read the continuous series
+      rows warm it for the derived lead (40 sessions) before the roll. Let backtests read the continuous series
       so both see the same features.
 - [ ] **More products.** Add PL, YM, RTY, ES, and NQ once GC and SI ingestion is proven;
       all are on disk with specs.

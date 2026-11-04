@@ -21,7 +21,7 @@ would include it. History carries between calls, so any chunking gives identical
 import numpy as np
 from numba import njit
 
-from . import kernels
+from . import kernels, warmup
 from .market import NS, PX
 from .windows import COMPLETE, EMPTY, Candles
 
@@ -123,6 +123,46 @@ FEATURES: tuple[tuple[str, str, str], ...] = (
 )
 AS_OF_FEATURES = ("trade_age_s", "book_age_s", "depth_age_s", "book_spread_bps", "book_imbalance")
 DEPTH = 26  # same-phase candles kept: Aroon(25) needs 26
+EMA_PERIODS = (9, 21, 50)
+MACD_FAST, MACD_SLOW, MACD_SIGNAL = 12, 26, 9
+# Price indicators, also defined on empty windows with a carried price (`Candles.carried`): the
+# price did not change, so they advance with a flat candle. Every other feature describes the
+# window's own trades and is NULL without them.
+PRICE_FEATURES = frozenset(
+    {
+        *(f"ema{p}_atr" for p in EMA_PERIODS),
+        "macd_atr",
+        "macd_signal_atr",
+        "macd_hist_atr",
+        "ppo_bps",
+        "adx",
+        "plus_di",
+        "minus_di",
+        "mid_rsi",
+        "stoch_k",
+        "stoch_d",
+        "bb_z",
+        "bb_width_bps",
+        "cci",
+        "donchian_pos",
+        "donchian_high_atr",
+        "donchian_low_atr",
+        "aroon_up",
+        "aroon_down",
+        "linreg_slope_atr",
+        "linreg_r2",
+        "chop",
+        "vol_bps",
+        "cmf",
+        "mfi",
+        "er",
+        "ret_5_atr",
+        "ret_15_atr",
+        "delta_ratio_5",
+        "delta_ratio_15",
+        "flow_price_corr",
+    }
+)
 
 
 @njit(cache=True)
@@ -188,11 +228,9 @@ def phase_adx(high, low, close, valid, phase, n, prev, tr, pdm, mdm, count, dx, 
 
 
 def row_sum(x: np.ndarray) -> np.ndarray:
-    """Sum across columns in one fixed order, so results never depend on the chunk size."""
-    acc = x[:, 0].copy()
-    for j in range(1, x.shape[1]):
-        acc += x[:, j]
-    return acc
+    """Sum across history columns (column j is j periods back) oldest first, the one order for
+    floating-point sums (`kernels.ordered_sum`), so results never depend on the chunk size."""
+    return kernels.ordered_sum(x[:, ::-1])
 
 
 def div(a, b, zero=np.nan):
@@ -265,6 +303,21 @@ class CandleIndicators:
         self.history = History(names, DEPTH, slots)
         self.k_history = History(("k",), 3, slots)
 
+    def warmup(self, atr: int) -> int:
+        """Same-phase periods until every output has settled (`warmup.py`): the longest chain
+        among the recursive averages, and the lookback windows behind ATR-scaled values. `atr`
+        is the warm-up of the ATR these features are scaled by."""
+        n = self.n
+        chains = [
+            *(warmup.ema(p) for p in EMA_PERIODS),
+            warmup.ema(MACD_SLOW) + warmup.ema(MACD_SIGNAL),  # signal line of MACD
+            warmup.wilder(n, extra=1) + warmup.wilder(n),  # ADX: smoothed DX of smoothed DMs
+            warmup.wilder(n, extra=1),  # mid RSI
+            warmup.ema(self.activity) + 1,  # activity baselines read earlier periods
+            atr + warmup.window(DEPTH),  # ATR-scaled lookbacks over the deepest history
+        ]
+        return max(chains)
+
     def update(
         self,
         c: Candles,
@@ -274,6 +327,9 @@ class CandleIndicators:
     ) -> dict[str, np.ndarray]:
         m = len(c)
         valid = c.status == COMPLETE
+        carried = c.carried
+        priced = valid | carried  # price indicators: complete windows and carried empty ones
+        _, ah, al, ac = c.analysis()  # their prices: the candle's, or the carried flat candle
         o, h, lo, cl = c.open, c.high, c.low, c.close
         atr_ok = np.where(atr > 0, atr, np.nan)
         span = h - lo
@@ -364,15 +420,12 @@ class CandleIndicators:
             phase_ema(x, ok, ph, period, state.ema, state.count, out)
             return out
 
-        for name, state, period in (
-            ("ema9_atr", self.ema9, 9),
-            ("ema21_atr", self.ema21, 21),
-            ("ema50_atr", self.ema50, 50),
-        ):
-            f[name] = (cl - ema(state, cl, valid, period)) / atr_ok
-        fast, slow = ema(self.ema12, cl, valid, 12), ema(self.ema26, cl, valid, 26)
+        for state, period in zip((self.ema9, self.ema21, self.ema50), EMA_PERIODS, strict=True):
+            f[f"ema{period}_atr"] = (ac - ema(state, ac, priced, period)) / atr_ok
+        fast = ema(self.ema12, ac, priced, MACD_FAST)
+        slow = ema(self.ema26, ac, priced, MACD_SLOW)
         macd = fast - slow
-        signal = ema(self.signal, macd, valid & np.isfinite(macd), 9)
+        signal = ema(self.signal, macd, priced & np.isfinite(macd), MACD_SIGNAL)
         f["macd_atr"] = macd / atr_ok
         f["macd_signal_atr"] = signal / atr_ok
         f["macd_hist_atr"] = (macd - signal) / atr_ok
@@ -380,14 +433,18 @@ class CandleIndicators:
         s = self.adx
         pdi, mdi, adx = np.empty(m), np.empty(m), np.empty(m)
         # Fixed-point prices (exact integers in float64), so equal up and down moves tie exactly
-        hf, lf, cf = (np.rint(x * PX) for x in (h, lo, cl))
+        hf, lf, cf = (np.rint(np.where(priced, x, 0.0) * PX) for x in (ah, al, ac))
         phase_adx(
-            hf, lf, cf, valid, ph, self.n, s.prev, s.tr, s.pdm, s.mdm, s.count, s.dx, s.dxn,
+            hf, lf, cf, priced, ph, self.n, s.prev, s.tr, s.pdm, s.mdm, s.count, s.dx, s.dxn,
             pdi, mdi, adx,
         )  # fmt: skip
         f["adx"], f["plus_di"], f["minus_di"] = adx, pdi, mdi
-        mid = np.where(qt > 0, (win["last_bid"] + win["last_ask"]) / (2 * PX), np.nan)
-        mid_ok = valid & np.isfinite(mid)
+        # the window's last sampled midpoint; an empty window keeps the latest book's midpoint
+        book_mid = np.where(
+            carried & (win["has_book"] > 0), (win["book_bid"] + win["book_ask"]) / (2 * PX), np.nan
+        )
+        mid = np.where(qt > 0, (win["last_bid"] + win["last_ask"]) / (2 * PX), book_mid)
+        mid_ok = priced & np.isfinite(mid)
         out = np.empty(m)
         s = self.mid_rsi
         kernels.wilder_rsi(
@@ -411,16 +468,15 @@ class CandleIndicators:
         # Lookback indicators over the same-phase history
         nan = np.nan
         mfm = div((cl - lo) - (h - cl), span, 0.0)
-        new = {
-            "close": cl,
-            "high": h,
-            "low": lo,
+        flows = {  # an empty window traded nothing: zero volume and flow, not unknown
             "volume": c.volume,
             "sided": sided,
             "delta": c.buy - c.sell,
             "mfv": mfm * c.volume,
         }
-        new = {k: np.where(valid, v, nan) for k, v in new.items()}
+        new = {"close": ac, "high": ah, "low": al}
+        new |= {k: np.where(valid, v, 0.0) for k, v in flows.items()}
+        new = {k: np.where(priced, v, nan) for k, v in new.items()}
         hist = self.history
         buffers = hist.extend(new)
 
@@ -511,7 +567,7 @@ class CandleIndicators:
                 full(D[:, :n], S[:, :n]), div(row_sum(D[:, :n]), row_sum(S[:, :n])), nan
             )
         dc = C[:, :20] - C[:, 1:21]
-        dr = div(D, S)
+        dr = div(D, S, 0.0)  # a period without sided trades has no net flow (unknown stays NaN)
         okf = full(C[:, :21], D, S) & np.all(np.isfinite(dr), axis=1)
         dc_c = dc - (row_sum(dc) / 20)[:, None]
         dr_c = dr - (row_sum(np.where(np.isfinite(dr), dr, 0.0)) / 20)[:, None]
@@ -522,6 +578,8 @@ class CandleIndicators:
 
         as_of_ok = (c.status == COMPLETE) | (c.status == EMPTY)
         for name, values in f.items():
-            gate = as_of_ok if name in AS_OF_FEATURES else valid
+            gate = (
+                as_of_ok if name in AS_OF_FEATURES else priced if name in PRICE_FEATURES else valid
+            )
             values[~gate] = np.nan
         return f

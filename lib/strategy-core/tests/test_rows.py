@@ -9,13 +9,10 @@ from strategy_core.execution import ExecutionConfig
 from strategy_core.features import Unit
 from strategy_core.indicators import FEATURES
 from strategy_core.market import HOUR, NS, PX, Trades
-from strategy_core.rows import (
-    BASE_COLUMNS,
-    CANDLE_COLUMNS,
-    FEATURE_COLUMNS,
-    SecondRowBuilder,
-    SecondRows,
-)
+from strategy_core.pipeline import Pipeline, PipelineRows
+from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
+from strategy_core.stage_candle_1m_1s import COLUMNS as CANDLE_COLUMNS
+from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
 from strategy_core.state import from_bytes, same_state, to_bytes
 from strategy_core.synthetic import random_trades
 from strategy_core.windows import COMPLETE
@@ -24,19 +21,27 @@ CONFIG = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
 
 
 def builder(cal):
-    return SecondRowBuilder(cal, feed_latency=0, close_delay=CONFIG.close_delay)
+    return Pipeline(cal, feed_latency=0, close_delay=CONFIG.close_delay)
 
 
-def join(parts: list[SecondRows]) -> dict[str, dict[str, np.ndarray]]:
+def states(p: Pipeline) -> dict[str, dict]:
+    return {name: p.export(name) for name in p.stages}
+
+
+def same_states(a: dict[str, dict], b: dict[str, dict]) -> bool:
+    return a.keys() == b.keys() and all(same_state(a[n], b[n]) for n in a)
+
+
+def join(parts: list[PipelineRows]) -> dict[str, dict[str, np.ndarray]]:
     out = {}
-    for table in ("base", "candle"):
+    for table in parts[0].tables:
         out[table] = {
-            k: np.concatenate([getattr(p, table).values[k] for p in parts])
-            for k in getattr(parts[0], table).values
+            k: np.concatenate([p.tables[table].values[k] for p in parts])
+            for k in parts[0].tables[table].values
         }
         out[table + "_null"] = {
-            k: np.concatenate([getattr(p, table).nulls[k] for p in parts])
-            for k in getattr(parts[0], table).nulls
+            k: np.concatenate([p.tables[table].nulls[k] for p in parts])
+            for k in parts[0].tables[table].nulls
         }
     return out
 
@@ -85,8 +90,9 @@ def test_any_chunking_gives_identical_rows_and_state(session):
     s = builder(cal)
     stepwise = join([s.process(c) for c in regroup(seconds, [1, 7, 59, 300, 1, 1000])])
     assert_same(whole, stepwise)
-    assert same_state(b.export(), s.export())
-    finite = {k: np.isfinite(v).any() for k, v in whole["candle"].items() if k in FEATURE_COLUMNS}
+    assert same_states(states(b), states(s))
+    candle = whole["candle_1m_1s"]
+    finite = {k: np.isfinite(v).any() for k, v in candle.items() if k in FEATURE_COLUMNS}
     assert all(finite.values()), [k for k, ok in finite.items() if not ok]
 
 
@@ -98,10 +104,11 @@ def test_checkpoint_restores_exactly(session):
     uninterrupted = join([full.process(c) for c in parts])
     first = builder(cal)
     head = [first.process(c) for c in parts[:2]]
-    saved = from_bytes(to_bytes(first.export()))
+    saved = {name: from_bytes(to_bytes(state)) for name, state in states(first).items()}
     resumed = builder(cal)
-    resumed.restore(saved)
-    assert same_state(resumed.export(), first.export())
+    for name, state in saved.items():  # each stage resumes from its own checkpoint
+        resumed.restore(name, state)
+    assert same_states(states(resumed), states(first))
     tail = [resumed.process(c) for c in parts[2:]]
     assert_same(join(head + tail), uninterrupted)
 
@@ -115,7 +122,7 @@ def test_features_are_scale_invariant_and_declare_units(session):
         for c in chunks:
             t = c.trades.scaled(**scale)
             parts.append(b.process(MarketChunk(c.contract, c.start, c.end, t, c.coverage)))
-        return join(parts)["candle"]
+        return join(parts)["candle_1m_1s"]
 
     base = run({})
     for scale in ({"price_factor": 3}, {"size_factor": 7}):
@@ -134,7 +141,7 @@ def test_features_are_scale_invariant_and_declare_units(session):
 def test_nulls_follow_status_and_validity(session):
     cal, chunks = session
     rows = join([builder(cal).process(c) for c in chunks])
-    base, nulls = rows["base"], rows["base_null"]
+    base, nulls = rows["bar_1s"], rows["bar_1s_null"]
     missing = base["status"] == MISSING
     assert missing.any() and (base["status"] == 1).any()
     assert nulls["volume"][missing].all() and not nulls["volume"][~missing].any()
@@ -162,7 +169,7 @@ def test_per_phase_indicators_equal_references_on_the_phase_series():
     t = random_trades(T0, T0 + 2 * HOUR, seed=21, rate=3)
     cov = np.array([[T0, T0 + 2 * HOUR]], np.int64)
     rows = builder(cal).process(MarketChunk("X", T0, T0 + 2 * HOUR, t, cov))
-    c = rows.candle.values
+    c = rows.tables["candle_1m_1s"].values
     phase = 17
     sel = np.flatnonzero((c["slot_ordinal"] % 60) == phase)
     assert (c["status"][sel][1:] == COMPLETE).all()  # every candle of the series is complete
@@ -228,7 +235,8 @@ def test_quiet_windows_after_missing_data_have_no_latest_observation():
     end = T0 + 360 * NS
 
     def build(cov):
-        c = builder(cal).process(MarketChunk("X", T0, end, t, cov)).candle.values
+        rows = builder(cal).process(MarketChunk("X", T0, end, t, cov))
+        c = rows.tables["candle_1m_1s"].values
         return c, c["status"] == 1  # EMPTY windows: covered, no trades
 
     quiet, empty = build(np.array([[T0, end]], np.int64))
@@ -238,3 +246,40 @@ def test_quiet_windows_after_missing_data_have_no_latest_observation():
     assert empty.any()
     for name in ("trade_age_s", "book_age_s", "depth_age_s", "book_spread_bps", "book_imbalance"):
         assert np.isnan(gapped[name][empty]).all(), name
+
+
+def test_empty_windows_carry_the_last_trade_price_into_price_indicators():
+    """Decided November 3, 2026 (plan finding 1): a window without trades is a known fact, the
+    price did not change, so price indicators advance with a flat candle at the last trade
+    price. Activity baselines and the window's own features describe trades and stay NULL;
+    nothing is carried across missing data."""
+    cal = calendar((0, 3))
+    end = T0 + 3 * HOUR
+    t = random_trades(T0, end, seed=31, rate=0.03)  # a trade every half minute: many empty windows
+    resume = T0 + 2 * HOUR + 120 * NS  # two missing minutes, then three quiet ones
+    t = t.take((t.ts_event < resume) | (t.ts_event >= resume + 180 * NS))
+    cov = np.array([[T0, T0 + 2 * HOUR], [resume, end]], np.int64)
+    c = builder(cal).process(MarketChunk("X", T0, end, t, cov)).tables["candle_1m_1s"].values
+    empty = c["status"] == 1
+    # past every indicator's warm-up, before the missing data (lookbacks span it afterwards)
+    late = (c["end_ns"] > T0 + HOUR) & (c["end_ns"] <= T0 + 2 * HOUR)
+    carried = empty & np.isfinite(c["trade_age_s"])  # a last trade, no missing data since
+    assert (empty & late).sum() > 500 and carried.sum() > 500
+    for name in ("rsi", "atr_bps", "ema21_atr", "macd_atr", "adx", "stoch_k", "bb_z"):
+        assert np.isfinite(c[name][carried & late]).mean() > 0.95, name
+    for name in ("range_bps", "vwap_atr", "delta_ratio", "rel_volume", "rel_trades", "sweep_ratio"):
+        assert np.isnan(c[name][empty]).all(), name
+    # after the missing two minutes, empty windows carry nothing until the next trade
+    after_gap = empty & (c["end_ns"] > resume) & (c["end_ns"] <= resume + 180 * NS)
+    assert after_gap.any() and np.isnan(c["rsi"][after_gap]).all()
+    # RSI of one phase equals the reference on its closes, an empty window's close being the
+    # last trade price before its end
+    phase = 23
+    sel = np.flatnonzero(((c["slot_ordinal"] % 60) == phase) & (c["end_ns"] <= T0 + 2 * HOUR))
+    assert (c["status"][sel][1:] <= 1).all() and (c["status"][sel] == 1).any()
+    assigned = assignment_times(t, 0, CONFIG.close_delay)
+    prices = t.price[np.argsort(assigned, kind="stable")]
+    times = np.sort(assigned)
+    closes = [prices[np.searchsorted(times, e, side="left") - 1] / PX for e in c["end_ns"][sel]]
+    ref = wilder_rsi_reference(closes[1:], 14)
+    assert c["rsi"][sel][-1] == pytest.approx(ref[-1])

@@ -101,6 +101,20 @@ def ema_prior(x, valid, phase, period, ema, count, out):
         count[p] += 1
 
 
+def ordered_sum(x: np.ndarray) -> np.ndarray:
+    """Row sums of a (rows, n) matrix whose columns run oldest to newest, added in that order.
+
+    The one summation order for floating-point values across windows, minutes, and indicator
+    histories (docs/project/plan-1h-and-pivots.md, finding 2): every path that sums the same
+    values gets the same bits, whatever the chunking."""
+    if x.shape[1] == 0:
+        return np.zeros(x.shape[0], x.dtype)
+    acc = x[:, 0].copy()
+    for j in range(1, x.shape[1]):
+        acc += x[:, j]
+    return acc
+
+
 class PhaseState:
     """Named per-phase state arrays for one indicator instance."""
 

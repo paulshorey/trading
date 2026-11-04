@@ -244,6 +244,16 @@ class Rollup:
         return combine(b.take(slice(0, cut)), group_end[:cut], self.group)
 
 
+def segment_sum(values: np.ndarray, starts: np.ndarray, count: np.ndarray) -> np.ndarray:
+    """Float sums of consecutive segments, each added oldest first: the order every window uses
+    (`kernels.ordered_sum`), so a minute equals the rolling window that ends with it."""
+    acc = values[starts].copy()
+    for k in range(1, int(count.max()) if len(count) else 0):
+        more = count > k
+        acc[more] += values[starts[more] + k]
+    return acc
+
+
 def combine(b: BaseBars, keys: np.ndarray, step: int) -> BaseBars:
     """Aggregate base bars sharing a group end (`keys`) into one bar per group."""
     starts = np.flatnonzero(np.r_[True, keys[1:] != keys[:-1]])
@@ -272,8 +282,9 @@ def combine(b: BaseBars, keys: np.ndarray, step: int) -> BaseBars:
     lo_i = np.minimum.reduceat(np.where(obs & (b.low == low[seg]), index, big), starts)
     out.high_at[has] = b.high_at[hi_i[has]]
     out.low_at[has] = b.low_at[lo_i[has]]
-    for name in ("volume", "buy", "sell", "trades", "pv"):
+    for name in ("volume", "buy", "sell", "trades"):
         getattr(out, name)[:] = np.add.reduceat(getattr(b, name), starts)
+    out.pv[:] = segment_sum(b.pv, starts, count)
     net = b.buy - b.sell
     before = np.cumsum(net) - net  # running delta at each slot start, from the series start
     base = before[starts][seg]

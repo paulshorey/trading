@@ -25,8 +25,15 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Rebuild `trading` on the baseline schema.** Completed November 4 with Paul's
       authorization: reset the four project schemas, migrate, register 2,182 files, rebuild
       GC/SI, and verify ([results](handoff.md#baseline-rebuild-gc-and-si)).
-- [ ] **Store `1h@1m` rows (PR B).** `market.bar_1m` and `market.candle_1h_1m`
-      ([plan](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
+- [x] **Store `1h@1m` rows (PR B1, #74).** `market.bar_1m` and `market.candle_1h_1m`
+      (migration `0002`), resolution-aware row replacement, and the engine on the stage graph.
+      Applied to `trading` and built for GC/SI on November 4 in 2 min 29 s; full-year checks
+      passed ([results](handoff.md#pr-b1-results-minute-stages)). Merge #74 before other
+      database work.
+- [ ] **Hourly-only metrics (PR B2).** Realized volatility from one-second returns,
+      minute-return statistics, drawdown/drawup in ATR, high/low position, session VWAP,
+      prior-session levels, price-flow correlation
+      ([handoff](handoff.md#pr-b-1h1m-rows), [plan 5.4](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
 - [ ] **Volatility tier (PR C).** Including bullish, bearish, and adverse-excursion ATR
       ([plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 - [ ] **Swing structure, signals, labels (PRs D–F)**
@@ -109,6 +116,11 @@ task live in [handoff: next steps](handoff.md#next-steps).
       real fills with the TBBO fill model.
 
 ## Housekeeping
+
+- [ ] **At the next `candle_1m_1s` rebuild**, delete the unused `features.FeaturePipeline`
+      and publish the `1m@1s` ATR from the stage, replacing `pipeline.FastAtr`
+      ([B1 decisions](handoff.md#pr-b-1h1m-rows)). Both files are in that stage's identity,
+      so the edits wait for a rebuild that happens anyway.
 
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to

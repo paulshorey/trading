@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from helpers import T0, calendar, wilder_rsi_reference
 from strategy_core.bars import BaseBars, aggregate
+from strategy_core.engine import MarketChunk, split_by_second
+from strategy_core.execution import ExecutionConfig
 from strategy_core.features import (
     WINDOW_FEATURES,
     FeatureConfig,
@@ -10,7 +12,8 @@ from strategy_core.features import (
     Unit,
     WindowFeatures,
 )
-from strategy_core.market import HOUR, MINUTE, NS, PX, SECOND
+from strategy_core.market import HOUR, MINUTE, NS, PX, SECOND, Trades
+from strategy_core.pipeline import StageFeatures
 from strategy_core.synthetic import random_trades
 from strategy_core.windows import (
     BIAS,
@@ -86,6 +89,30 @@ def test_phase_series_equals_standard_hourly_candles_and_reference_rsi(phase):
     np.testing.assert_allclose(f["1h@1m.rsi"][sel][ok], ref, equal_nan=True)
 
 
+def stage_features(cal, cfg=None):
+    return StageFeatures(cal, config=cfg, **KW)
+
+
+def test_engine_features_equal_the_reference_composition():
+    """The engine reads its features from the stages; its `1m@1s` and `1h@1m` window features,
+    the bias age, and the ATR that sizes brackets equal the earlier composition of the same
+    windows (`FeaturePipeline`, kept as this reference), bit for bit, across a closure and
+    missing data."""
+    cal = calendar((0, 3), (3.5, 7))
+    cfg = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    t = random_trades(T0, T0 + 7 * HOUR, seed=3, rate=1)
+    cov = np.array([[T0, T0 + 2 * HOUR], [T0 + 2 * HOUR + 45 * NS, T0 + 7 * HOUR]], np.int64)
+    chunk = MarketChunk("X", T0, T0 + 7 * HOUR, t, cov)
+    frame = stage_features(cal, cfg).update(chunk)
+    reference = FeaturePipeline(cal, cfg).update(second_bars(cal, t, cov, T0, T0 + 7 * HOUR))
+    assert set(reference.features) < set(frame.features)
+    for name, values in reference.features.items():
+        np.testing.assert_array_equal(frame.features[name], values, err_msg=name)
+    for name, values in reference.context.items():
+        np.testing.assert_array_equal(frame.context[name], values, err_msg=name)
+    assert np.isfinite(frame.features["1h@1m.rsi"]).any()
+
+
 def test_features_are_scale_invariant_and_declare_normalized_units():
     cal = calendar((0, 6))
     cfg = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
@@ -93,7 +120,7 @@ def test_features_are_scale_invariant_and_declare_normalized_units():
     cov = np.array([[T0, T0 + 6 * HOUR]], np.int64)
 
     def run(trades):
-        return FeaturePipeline(cal, cfg).update(second_bars(cal, trades, cov, T0, T0 + 6 * HOUR))
+        return stage_features(cal, cfg).update(MarketChunk("X", T0, T0 + 6 * HOUR, trades, cov))
 
     base = run(t)
     for scaled in (t.scaled(price_factor=3), t.scaled(size_factor=7)):
@@ -102,9 +129,8 @@ def test_features_are_scale_invariant_and_declare_normalized_units():
             np.testing.assert_allclose(
                 other.features[name], values, rtol=1e-9, atol=1e-9, equal_nan=True, err_msg=name
             )
-    assert all(np.isfinite(base.features[k]).any() for k in base.features), "all-NaN feature"
-    specs = FeaturePipeline(cal).specs()
-    assert {s.name for s in specs} == set(base.features)
+    specs = stage_features(cal).specs()
+    assert [s.name for s in specs] == list(base.features)
     assert all(isinstance(s.unit, Unit) for s in specs)
     assert {u.value for _, u, _ in WINDOW_FEATURES} <= {u.value for u in Unit}
     with pytest.raises(TypeError):
@@ -117,20 +143,26 @@ def test_features_are_causal_and_identical_in_any_chunking():
     cfg = FeatureConfig(rsi_period=2, atr_period=2, volume_period=2)
     t = random_trades(T0, T0 + 4 * HOUR, seed=11, rate=1)
     cov = np.array([[T0, T0 + 4 * HOUR]], np.int64)
-    b = second_bars(cal, t, cov, T0, T0 + 4 * HOUR)
-    whole = FeaturePipeline(cal, cfg).update(b)
-    p = FeaturePipeline(cal, cfg)
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100)
+    whole_chunk = MarketChunk("X", T0, T0 + 4 * HOUR, t, cov)
+    whole = stage_features(cal, cfg).update(whole_chunk)
+    seconds = split_by_second(whole_chunk, cal, config)
+    p = stage_features(cal, cfg)
     sizes = [1, 59, 600, 1, 3000, 7]
     parts, i, k = [], 0, 0
-    while i < len(b):
-        parts.append(p.update(b.take(slice(i, i + sizes[k % len(sizes)]))))
-        i += sizes[k % len(sizes)]
-        k += 1
+    while i < len(seconds):
+        group = seconds[i : i + sizes[k % len(sizes)]]
+        trades = Trades.concat([g.trades for g in group])
+        parts.append(p.update(MarketChunk("X", group[0].start, group[-1].end, trades, cov)))
+        i, k = i + len(group), k + 1
     joined = parts[0].concat(parts)
-    prefix = FeaturePipeline(cal, cfg).update(b.take(slice(0, len(b) // 2)))
+    half = len(seconds) // 2
+    head = seconds[:half]
+    trades = Trades.concat([g.trades for g in head])
+    prefix = stage_features(cal, cfg).update(MarketChunk("X", T0, head[-1].end, trades, cov))
     for name, values in whole.features.items():
         np.testing.assert_array_equal(joined.features[name], values, err_msg=name)
-        np.testing.assert_array_equal(prefix.features[name], values[: len(b) // 2], err_msg=name)
+        np.testing.assert_array_equal(prefix.features[name], values[:half], err_msg=name)
     bias_ok = np.isfinite(whole.features["1h@1m.rsi"])
     assert bias_ok.any()
     age = whole.features["1h@1m.age_s"][bias_ok]

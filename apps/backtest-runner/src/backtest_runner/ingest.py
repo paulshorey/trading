@@ -1,5 +1,7 @@
-"""Ingestion: Databento TBBO trades to stored one-second rows (`market.bar_1s`) and their
-rolling `1m@1s` candles and features (`market.candle_1m_1s`). See docs/project/ingestion.md.
+"""Ingestion: Databento TBBO trades to the stored rows of every stage (`pipeline.STAGES`): the
+one-second and one-minute base rows (`market.bar_1s`, `market.bar_1m`) and their rolling
+`1m@1s` and `1h@1m` candles and features (`market.candle_1m_1s`, `market.candle_1h_1m`). See
+docs/project/ingestion.md.
 
     uv run research ingest plan GC SI     # what would be built; writes no rows
     uv run research ingest run GC SI      # build new contracts and sessions, repair changes
@@ -742,6 +744,7 @@ def build_contract(
     )
     names = [cls.NAME for cls in STAGES]
     done, total_rows, started = 0, 0, time.time()
+    tables: set[str] = set()  # stages written
     with db.connect(url) as conn:
         conn.autocommit = True  # each session's transaction commits on its own
         locked = conn.execute("SELECT pg_try_advisory_lock(%s, %s)", (LOCK_SPACE, cid)).fetchone()
@@ -777,6 +780,7 @@ def build_contract(
                 "contract_unmapped_days": [d.isoformat() for d in unmapped],
                 "history_limited": bool(plan.get("history_limited")),
             }
+            # the session's second ordinals; each table's own rows follow (store.row_bounds)
             lo, hi = int(base["slot_ordinal"][0]), int(base["slot_ordinal"][-1])
             with conn.transaction():  # replace this session's records and rows atomically
                 if not source_current:  # a new source record; its stage records cascade
@@ -835,6 +839,7 @@ def build_contract(
                     )
             done += 1
             total_rows += len(rows)
+            tables.update(written)
             observed = (base["status"] == 2).mean()
             log(
                 f"{product.root} {symbol} {s.trade_date}: {len(rows):,} rows "
@@ -847,6 +852,7 @@ def build_contract(
         "sessions": done,
         "rows": total_rows,
         "seconds": time.time() - started,
+        "tables": sorted(tables),
     }
 
 
@@ -966,10 +972,11 @@ def run(
                         log(f"FAILED {result['contract']}: {result['error']}\n{result['trace']}")
         failed = [r for r in results if "error" in r]
         status = "done" if not failed else "partial" if len(failed) < len(results) else "failed"
-        if len(failed) < len(results):  # fresh planner statistics for the new rows
+        written = sorted({t for r in results for t in r.get("tables", [])})
+        if len(failed) < len(results) and written:  # fresh planner statistics for the new rows
+            tables = ", ".join(f"market.{name}" for name in written)
             with db.connect(url) as conn:
                 conn.autocommit = True
-                tables = ", ".join(f"market.{name}" for name in store.TABLES)
                 conn.execute(f"ANALYZE {tables}")
             log(f"Analyzed {tables}")
     finally:

@@ -14,7 +14,9 @@ from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
 from strategy_core.pipeline import Pipeline
+from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
+from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
 from strategy_core.synthetic import random_trades
 from test_runner import RECORD, FakeCache
@@ -75,6 +77,9 @@ DAYS = {
 @pytest.fixture
 def world(monkeypatch):
     monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
+    # The world has five sessions, fewer than the hourly stage's warm-up (about 10 sessions:
+    # test_stages checks it), so planning tests use a one-hour stand-in.
+    monkeypatch.setattr(HourCandleStage, "warmup", lambda self: 3600)
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -227,6 +232,11 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert {r[0]: r[1] for r in counts} == {ids["GCZ6"]: 165_600, ids["GCG7"]: 165_600}
         candles = conn.execute("SELECT count(*) FROM market.candle_1m_1s").fetchone()[0]
         assert candles == 2 * 165_600
+        minutes = conn.execute(
+            "SELECT (SELECT count(*) FROM market.bar_1m), "
+            "(SELECT count(*) FROM market.candle_1h_1m)"
+        ).fetchone()
+        assert minutes == (4 * 1380, 4 * 1380)  # one row per scheduled minute, per contract
         slices = conn.execute("SELECT count(*), sum(row_count) FROM market.ingest_slice").fetchone()
         assert slices == (4, 4 * 82_800)
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
@@ -365,6 +375,32 @@ def assert_continuous(conn, fronts: list[str]) -> None:
                  IS DISTINCT FROM (b.close, b.volume, b.session_cvd)"""
     ).fetchone()[0]
     assert mismatch == 0
+    # the minute series reads the same sessions: whole minutes inside each session's seconds
+    minutes = conn.execute(
+        """SELECT trade_date, contract, count(*), min(slot_ordinal), max(slot_ordinal)
+           FROM market.continuous_candle_1h_1m WHERE product = 'GC' GROUP BY 1, 2 ORDER BY 1"""
+    ).fetchall()
+    assert [m[:2] for m in minutes] == [s[:2] for s in sessions]
+    for m, s in zip(minutes, sessions, strict=True):
+        assert m[2] == 1380 and (m[3], m[4]) == ((s[4] + 59) // 60, s[5] // 60)
+    bars = conn.execute(
+        "SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_bar_1m "
+        "WHERE product = 'GC'"
+    ).fetchone()
+    assert bars == (1380 * len(fronts), 1380 * len(fronts))
+
+
+def test_minute_bounds_follow_the_session_seconds():
+    """Sessions are whole minutes: seconds 61 ... 180 hold minutes 2 and 3."""
+    assert store.row_bounds("bar_1s", 61, 180) == (61, 180)
+    assert store.row_bounds("bar_1m", 61, 180) == (2, 3)
+    assert store.row_bounds("candle_1h_1m", 61, 180) == (2, 3)
+    assert store.SLOT_SECONDS == {
+        "bar_1s": 1,
+        "bar_1m": 60,
+        "candle_1m_1s": 1,
+        "candle_1h_1m": 60,
+    }
 
 
 def test_spans_keep_each_delivery_of_a_repeated_symbol_apart():
@@ -450,9 +486,14 @@ def test_diff_rules():
     only_bar = stored_of(rows, {"bar_1s": {d: 1 for d, _, _ in rows}})
     _, i, delete_from, action, why = ingest.diff(s[:3], s, only_bar, builders(1), files, False)
     assert (i, delete_from, action) == (0, None, "add") and "candle_1m_1s" in why
+    # ... as the minute stages were added next to the stored second stages
+    seconds = {n: {d: 1 for d, _, _ in rows} for n in ("bar_1s", "candle_1m_1s")}
+    added = stored_of(rows, seconds)
+    _, i, _, action, why = ingest.diff(s[:3], s, added, builders(1), files, False)
+    assert (i, action, why) == (0, "add", "stages without stored rows: bar_1m, candle_1h_1m")
     # ... and an interrupted add resumes after the sessions it already stored
-    part = stored_of(rows, {"bar_1s": {d: 1 for d, _, _ in rows},
-                            "candle_1m_1s": {s[0].trade_date: 1}})  # fmt: skip
+    first = {s[0].trade_date: 1}
+    part = stored_of(rows, seconds | {"bar_1m": first, "candle_1h_1m": first})
     _, i, _, action, _ = ingest.diff(s, s, part, builders(1), files, False)
     assert (i, action) == (1, "add")
     # A missing stage next to changed files is a repair of the changed session
@@ -690,7 +731,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     with db.connect(database) as conn:
         after = slices(conn)
         for key, (builder, _, at) in after.items():
-            if key[0] == "bar_1s":
+            if key[0] != "candle_1m_1s":
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
                 assert at > before[key][2] and builder == before[key][0], key  # rewritten
@@ -717,10 +758,78 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     # the derived lead: at least the floor, and a lead below a stage's warm-up is refused
     [plan] = ingest.plan(["GC"], data=first, url=database, cache=cache, log=lambda line: None)
     assert plan["lead_sessions"] == max(ingest.LEAD_FLOOR, plan["required_lead"]["sessions"])
-    assert plan["warm_sessions"] == {"bar_1s": 0, "candle_1m_1s": 1}
+    assert plan["warm_sessions"] == {"bar_1s": 0, "bar_1m": 0, "candle_1m_1s": 1, "candle_1h_1m": 1}
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
     # a longer lead prepends sessions: every later value changes, so the plan says why
     [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **{**options, "lead": 2}))["products"]
     g7 = next(c for c in plan["contracts"] if c["contract"] == "GCG7")
     assert g7["action"] == "needs_rebuild" and "lead of 2 sessions" in g7["reason"]
+
+
+def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
+    """Minute tables count minutes: a stale `bar_1m` is replaced session by session at its own
+    resolution (no duplicate keys, no leftovers), together with `candle_1h_1m`, which reads it,
+    while the second tables stay untouched. The stored minutes equal an in-memory build."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    assert ingest.run(["GC"], workers=1, data=first, **options)["status"] == "done"
+
+    def slices(conn):
+        return {
+            (stage, cid, day): (builder, at)
+            for stage, cid, day, builder, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, builder_id, ingested_at "
+                "FROM market.stage_slice"
+            )
+        }
+
+    with db.connect(database) as conn:
+        before = slices(conn)
+        ids = dict(conn.execute("SELECT raw_symbol, id FROM market.contract").fetchall())
+        other = conn.execute(
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+            "VALUES (repeat('e', 64), 'GC', 'x', '{}', 'bar_1m') RETURNING id"
+        ).fetchone()[0]
+        conn.execute("UPDATE market.stage_slice SET builder_id = %s WHERE stage = 'bar_1m'",
+                     (other,))  # fmt: skip
+        conn.commit()
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in plan["contracts"]} == {"stale"}
+    result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
+    assert result["status"] == "done", result
+    assert {t for r in result["results"] for t in r["tables"]} == {"bar_1m", "candle_1h_1m"}
+    with db.connect(database) as conn:
+        after = slices(conn)
+        assert after.keys() == before.keys()
+        for key, (builder, at) in after.items():
+            if key[0] in ("bar_1s", "candle_1m_1s"):
+                assert (builder, at) == before[key], key  # untouched
+            else:
+                assert at > before[key][1] and builder == before[key][0], key  # rewritten
+        counts = conn.execute(
+            "SELECT (SELECT count(*) FROM market.bar_1m), "
+            "(SELECT count(*) FROM market.candle_1h_1m)"
+        ).fetchone()
+        assert counts == (4 * 1380, 4 * 1380)
+        assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
+        columns = [c.name for c in MINUTE_COLUMNS]
+        got = read(conn, "bar_1m", ids["GCG7"], columns)
+    expected = in_memory(cache, first, "GCG7", [date(2026, 9, 2), date(2026, 9, 3)])
+    want = {k: np.concatenate([p.tables["bar_1m"].values[k] for p in expected]) for k in columns}
+    null = {
+        k: np.concatenate(
+            [p.tables["bar_1m"].nulls.get(k, np.zeros(len(p.tables["bar_1m"]), bool))
+             for p in expected]
+        )
+        for k in columns
+    }  # fmt: skip
+    np.testing.assert_array_equal(got["slot_ordinal"].astype(np.int64), want["slot_ordinal"])
+    for k in columns:
+        is_null = np.array([v is None for v in got[k]])
+        np.testing.assert_array_equal(is_null, null[k], err_msg=k)
+        stored = got[k][~is_null].astype(want[k].dtype)
+        np.testing.assert_array_equal(stored, want[k][~is_null], err_msg=k)

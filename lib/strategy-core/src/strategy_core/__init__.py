@@ -4,6 +4,7 @@ from .engine import ChunkResult, Engine, MarketChunk
 from .execution import ExecutionConfig, Simulator
 from .features import FeatureConfig, FeatureFrame, FeaturePipeline, FeatureSpec, Unit
 from .market import PRODUCTS, Product, SessionCalendar, Trades
+from .pipeline import Pipeline, StageFeatures
 from .strategies import BiasPullback, Bracket, Strategy, make_strategy
 
 __all__ = [
@@ -15,12 +16,14 @@ __all__ = [
     "ExecutionConfig",
     "FeatureConfig",
     "FeatureFrame",
-    "FeaturePipeline",
+    "FeaturePipeline",  # superseded by StageFeatures; removed with features.py's next change
     "FeatureSpec",
     "MarketChunk",
+    "Pipeline",
     "Product",
     "SessionCalendar",
     "Simulator",
+    "StageFeatures",
     "Strategy",
     "Trades",
     "Unit",

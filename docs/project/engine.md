@@ -42,14 +42,14 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 | `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                                                             |
 | `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                              |
 | `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                  |
-| `features.py`                                   | Normalized feature pipeline and unit contract                                                                |
+| `features.py`                                   | Unit contract and window features (`FeaturePipeline`: the pre-stage composition, kept as a test reference)   |
 | `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                        |
 | `execution.py`                                  | Simulated fills against TBBO trades                                                                          |
 | `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                          |
 | `labels.py`                                     | One would-be trade per signal, for ML                                                                        |
 | `metrics.py`, `window_metrics.py`               | Per-second TBBO metrics and their rolling windows, for stored rows                                           |
 | `indicators.py`, `state.py`, `warmup.py`        | Stored-row features, exact checkpoints, and warm-ups derived from indicator parameters                       |
-| `stages.py`, `stage_*.py`, `pipeline.py`        | Stages (one stored table each, versioned on its own) and the pipeline that runs them in tier order           |
+| `stages.py`, `stage_*.py`, `pipeline.py`        | Stages (one stored table each, versioned on its own), the pipeline that runs them, and the engine's features |
 
 `apps/backtest-runner` adds the Databento file catalog, exchange calendars, the
 historical source (contract selection and rolls), run storage, the CLI, and the API.
@@ -109,8 +109,10 @@ uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 6
 
 `verify` runs the same sessions whole and second by second and requires identical
 features and trades. A vectorized step that reads a later row inside its chunk fails
-this check, so it also guards against look-ahead. On the sample day all 17 features
-and 13 trades matched. Tests also cover hand-checked fills, brute-force rolling
+this check, so it also guards against look-ahead. On the sample day all 165 features
+and 13 trades matched (November 4, 2026, with the engine on the stage graph). Whole, the
+session took 0.93 s; second by second 350 s, about 4 ms per second (54 s before the engine
+computed every stored feature), far inside the 100 ms close delay. Tests also cover hand-checked fills, brute-force rolling
 candles, phase parity with standard hourly candles, scale invariance, and prefix
 invariance.
 
@@ -125,12 +127,16 @@ Rows overlap in time; keep `decision_ns` and `exit_ns`
 for purged, chronological splits. Runs report a summary now; rows go to PostgreSQL
 with the ingestion milestone.
 
-## Stored one-second rows
+## Stored rows
 
-`research ingest` writes one row per scheduled-open second and its rolling `1m@1s`
-candle with features, computed by this engine's code (`bars.aggregate`, `windows`, the
-feature kernels, and the stages run by `pipeline.Pipeline`) with the backtest's default assignment
-timing; see [ingestion](ingestion.md). A backtest may read stored rows instead of
+`research ingest` writes one row per scheduled-open second and minute and their rolling
+`1m@1s` and `1h@1m` candles with features, computed by the stages that the engine itself
+runs (`pipeline.Pipeline`) with the backtest's default assignment timing; see
+[ingestion](ingestion.md). The engine reads its features from the same stages
+(`pipeline.StageFeatures`): every `candle_1m_1s` feature as `1m@1s.<name>`, and every
+`candle_1h_1m` feature of the latest completed minute as `1h@1m.<name>` with its age
+`1h@1m.age_s`. Their `1m@1s` and `1h@1m` window features equal the earlier engine's
+composition bit for bit (a test keeps `features.FeaturePipeline` as the reference). A backtest may read stored rows instead of
 rebuilding them only when their builder version and assignment settings match the run's
 configuration (not implemented yet); fills always come from the DBN trades.
 

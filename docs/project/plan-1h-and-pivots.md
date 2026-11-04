@@ -196,7 +196,8 @@ safeguard, if either is ever undefined, the segment ends exactly as for missing 
 The [pivot/structure contract](pivot-structure-design.md) defines the exact classes, trend,
 provisional relations, breaches, and their field names; this section summarizes them.
 
-Within one **segment** (a stretch without missing data), confirmed pivots alternate high,
+Within one **segment** (a stretch with data coverage and defined threshold inputs),
+confirmed pivots alternate high,
 low, high, … per scale. Missing data ends the segment, because the swing during the gap is
 unobserved: the next segment's first pivot may be of either kind, and it is never compared
 with pivots before the gap. Structure features (`low_change_atr`, `high_change_atr`, classes,

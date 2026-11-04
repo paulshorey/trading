@@ -46,9 +46,11 @@ benchmark baseline only; it is not stored and must not be called exact.
 ## Directional change and availability
 
 For an up leg with running high `H`, freeze
-`theta_bps = max(k * ATR_bps, 2 * spread_bps)` when its candidate is set. Use a usable
-trade-sampled spread under a declared observation-age policy. Mirror this for a down
-leg's running low `L`. Undefined ATR or unusable spread is never a zero threshold: it ends the epoch
+`theta_bps = max(k * ATR_bps, 2 * spread_bps)` when its candidate is set. The spread is the last
+usable trade-sampled spread (`book_spread_bps`) with no age cutoff; its age is a separate
+feature. It is undefined only before the first usable quote of an epoch or after missing
+data. Mirror this for a down
+leg's running low `L`. An undefined ATR or spread is never a zero threshold: it ends the epoch
 exactly as missing coverage does (state table below), and a new epoch starts at the first
 row where both inputs are defined. A ready candidate keeps its frozen threshold until a strict new extreme
 replaces it. Equal prices keep the first extreme occurrence and do not refresh scale.
@@ -177,7 +179,10 @@ them.
 
 **Pullback quality**, for the open candidate and for each confirmed low (mirrored for
 highs). The _impulse_ is the last completed leg toward the comparator's opposite pivot,
-and the _pullback_ is the leg from that pivot to the candidate low:
+and the _pullback_ is the leg from that pivot to the candidate low. A leg's duration is
+its row count, inclusive: `end ordinal − start ordinal + 1`, where start and end are the
+rows of its starting and ending extreme trades. A leg inside one row has duration 1, so
+no ratio below divides by zero:
 
 - `pullback_depth`: pullback size ÷ impulse size (a retracement ratio; above 1 means the
   low is no longer higher).
@@ -186,7 +191,8 @@ and the _pullback_ is the leg from that pivot to the candidate low:
   volume on pullbacks is the classic healthy-trend pattern).
 - `pullback_delta_ratio` and `impulse_delta_ratio`: buy − sell over sided volume in each
   leg.
-- `impulse_speed_atr`, `pullback_speed_atr`: leg size in ATR per minute of open time.
+- `impulse_speed_atr`, `pullback_speed_atr`: leg size in ATR per minute, from that
+  duration (rows × 60 s for slow scales, rows × 1 s for fast, converted to minutes).
 
 **Divergence at confirmed pivots**, compared with the previous same-kind pivot:
 
@@ -272,6 +278,7 @@ for reproducibility if later versions add or retire scales.
 | Price LL while cumulative delta rises between lows           | `low_change_atr` < 0 and `low_cvd_change_ratio` > 0 (bullish divergence)                       |
 | One trade reclaims the breached low and confirms the new low | Reclaim emitted, then the new low (an LL) confirms; both in that trade's row                   |
 | Confirmation trade's volume                                  | Counted in the new leg only; each trade belongs to exactly one leg                             |
+| Impulse and pullback both inside one second                  | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
 
 Prove price/size scale invariance, prefix invariance, checkpoint continuation, and
 whole-session versus incremental parity. Test threshold equality/overshoot, repeated

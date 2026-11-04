@@ -247,8 +247,10 @@ assigns the same outcome:
 - **Survival** is a separate label with its own frozen deadline `S`, in scheduled-open
   rows after the decision row (default `S = K`). `E` is broken by any trade strictly beyond
   it; a trade equal to `E` does not break it. Outcomes: survived (`S` rows fully observed
-  without a break), broken (with the breaking trade's ordinal), session end, and unknown
-  (missing data first).
+  without a break), broken (with the breaking trade's ordinal), session end, unknown
+  (missing data first), and **broken before decision**: a break within the candidate
+  row, at or after the trade that reached `q`. That last outcome is an observation, like a
+  first passage resolved before decision, not a survival target.
 - **Parameters are frozen in the PR D spec before any labels are computed**, and they
   stay identical in training and testing. The benchmark follows the
   reviewed research:

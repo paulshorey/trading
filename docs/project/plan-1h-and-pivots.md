@@ -446,7 +446,11 @@ recommended lead, which Paul accepted):
    (one session to warm the hourly ATR, then 20). Forty covers both with margin, so PRs
    B–F add only new tables. Each stage declares its need
    ([feature pipeline](feature-pipeline.md#database-properties)), and a test fails if any
-   exceeds the lead. The cost is about 75% more contract-sessions in the PR A rebuild;
+   exceeds the lead. From PR A the required lead is derived from the indicators'
+   parameters, not typed by hand ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)):
+   40 is the starting value, and the planner asks for a rebuild with the reason if a
+   change (such as EMA(200), about 30 sessions) needs more. The cost is about 75% more
+   contract-sessions in the PR A rebuild;
    lead sessions of a far delivery month trade thinly, which the session reports record.
 
 ## 7. Volatility tier: ATR family
@@ -454,12 +458,34 @@ recommended lead, which Paul accepted):
 ATR sets stop distances, position sizes, and the swing thresholds, so one ATR(14) per
 window is too little. The volatility family is tier 1 (PR C), with its own stage per
 resolution (`vol_1s`, `vol_1m`), computed before structure so swing thresholds can use
-it. Each value is per phase on same-phase candles, like ATR, normalized, and
+it. Each value is per phase on same-phase windows, like ATR, normalized, and
 scale-invariance tested.
 
+Following the [windows, not candles](feature-pipeline.md#principle-windows-not-candles)
+principle, every measure here describes the price path inside a window. A window's open,
+close, and wicks are not treated as signals.
+
+**Adverse excursion along the path (primary).** Range-based ATR sees only a window's
+extremes against its starting price. It misses a window in which price rallies, drops 8
+ticks, and recovers: a long was stopped out even though the window ended higher, and
+nothing says the low will not be revisited. The path order is known exactly from the
+trades:
+
+- **Tier-0 fields, added in PR A:** each second's `drawdown` (the largest drop from a
+  trade to any later, lower trade in that second) and `drawup`. They merge exactly into
+  minutes and windows together with the high and low:
+  `drawdown(a then b) = max(drawdown_a, drawdown_b, high_a − low_b)`.
+- **Long adverse excursion** of a window: the deepest drop a long would have sat through,
+  from the price at the window's start or any later high to any later low:
+  `max(drawdown, P₀ − low)`, where `P₀` is the last trade before the window (the previous
+  same-phase window's last price). **Short adverse excursion** mirrors it with drawup.
+- `long_adverse_atr_bps` and `short_adverse_atr_bps` are their Wilder(14) averages over
+  same-phase windows. The current window's excursions ÷ ATR are also stored. These are
+  the stop distances that recent windows would actually have hit, by side.
+
 **Bullish and bearish ATR.** True range splits exactly into an upward and a downward
-part. With `C` the previous same-phase close (the candle's open when there is none),
-`up = max(H, C) − C`, `down = C − min(L, C)`, and `TR = up + down`.
+part, measured from the same starting price `P₀` (the window's first trade when there is
+none): `up = max(H, P₀) − P₀`, `down = P₀ − min(L, P₀)`, and `TR = up + down`.
 
 - **Bullish ATR** (`bull_atr_bps`) is the Wilder(14) average of `2 × down`: volatility as
   a long position feels it. Rallies count as zero and declines count double, so in a
@@ -469,22 +495,18 @@ part. With `C` the previous same-phase close (the candle's open when there is no
   view.
 - With the same seeding, `(bull + bear) / 2 = ATR`. Their skew,
   `(bull − bear) / (bull + bear)` from −1 to 1, says which side drives the volatility.
+- Unlike adverse excursion, these use only the extremes, so a deep drop that recovered
+  within the window counts the same as one that did not. Both are stored so the
+  benchmark and models can compare them.
 
-**A step further: adverse excursion inside the candle.** True range sees only a candle's
-extremes against the previous close. It misses a candle that rallies, drops 8 ticks, and
-still closes up, stopping out a long inside a "bullish" candle. The path order is known
-exactly from the trades:
+**The window's extremes as levels.** The high and low a window reached remain levels after
+price leaves them:
 
-- **Tier-0 fields, added in PR A:** each second's `drawdown` (the largest drop from a
-  trade to any later, lower trade in that second) and `drawup`. They merge exactly into
-  minutes and windows together with the high and low:
-  `drawdown(a then b) = max(drawdown_a, drawdown_b, high_a − low_b)`.
-- **Long adverse excursion** of a candle: the larger of its drawdown and `C − low`, which
-  is the deepest drop a long would have sat through, from the previous close or any later
-  high. **Short adverse excursion** mirrors it with drawup.
-- `long_adverse_atr_bps` and `short_adverse_atr_bps` are their Wilder(14) averages, and
-  the current candle's excursions ÷ ATR are also stored. These are the stop distances
-  that recent candles would actually have hit, side by side.
+- `high_dist_atr`, `low_dist_atr`: the current price's distance to the window's high and
+  low, in ATR.
+- `high_age_s`, `low_age_s`: how long ago, in scheduled-open time, each was set
+  (`high_at_ns` and `low_at_ns` are already stored).
+- `low_first`: 1 when the low came before the high, 0 otherwise.
 
 **Also in the family:**
 
@@ -495,10 +517,12 @@ exactly from the trades:
   session, so ATR(14) right after 08:30 CT still reflects the quiet minutes before. Store
   ATR relative to the typical ATR at the same minute of the session over the previous
   20 sessions (log ratio).
-- **Daily scale.** ATR(14) of prior complete sessions' true ranges (bps); the current
+- **Daily scale.** The simple mean of the prior 14 complete sessions' true ranges (bps;
+  a fixed window, exact after 15 sessions, since a Wilder average at daily scale would
+  need about 90 sessions to forget its start); the current
   session's range so far as a share of it (how much of a typical day's move is used);
   distances to the session high and low in daily ATRs.
-- **The current candle against its ATR.** True range ÷ ATR (an expansion candle), and
+- **The current window against its ATR.** True range ÷ ATR (an expanding range), and
   the ATR's percentile within its own trailing sessions (a causal rank, 0–1).
 - **Other estimators.** Parkinson and Garman–Klass volatility from OHLC, and the ratio of
   realized volatility from one-second returns to ATR (noise versus trend; the `1h@1m`

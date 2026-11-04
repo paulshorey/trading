@@ -68,9 +68,11 @@ These are fundamental; changing any of them changes every stored value.
    contract. The front contract has the most volume in the previous complete session,
    switches at a session open, and only moves to a later month (`source.next_front`, the
    same in backtests and storage, `market.roll`). Each contract is computed from 5 sessions
-   before it becomes front, so its indicators are warm at the switch; the warm-up must
-   cover the slowest indicator (EMA(50) of hourly candles needs about 2.2 sessions; EMA(200)
-   of hourly candles would need 9 or more). The views `market.continuous_bar_1s` and
+   before it becomes front (40 from PR A), so its indicators are warm at the switch. The
+   warm-up must cover the slowest indicator until it forgets its starting point, not just
+   its first value: hourly EMA(50) gives values after 2.2 sessions but needs about 7.5 to
+   settle, and EMA(200) about 30. From PR A the lead is derived from indicator parameters
+   ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)). The views `market.continuous_bar_1s` and
    `market.continuous_candle_1m_1s` read each product as one series by taking every session
    from its front contract; only raw prices jump at a roll, flagged by `rolled`.
 

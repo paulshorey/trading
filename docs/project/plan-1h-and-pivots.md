@@ -303,9 +303,11 @@ benchmark follows the reviewed research:
 - Measure delay, location error, coverage, and false alarms per open hour.
 - Use chronological purged splits and an untouched newest holdout.
 
-Its result decides which scales to keep or add. Changing the grid changes the pivot
-stages' identities, so they and every descendant (labels included) rebuild; scales
-removed from the grid leave no stored rows or labels behind.
+Its result decides which scales to keep or add. Identity is per variant
+([feature pipeline](feature-pipeline.md#database-properties)): adding a scale builds only
+that scale and what depends on it; removing one deletes its rows, events, and labels;
+changing the detector's code rebuilds every scale. Cross-scale summaries change only when
+a new version declares a different scale set.
 
 ## 4. Extensibility: stages
 
@@ -338,16 +340,17 @@ it.
   checksums and covered windows, the calendar and its ordinal origin, and the
   trade-assignment timing. It is not stored: ingest reads it from DBN, and live sessions
   from the feed. Accepted, assigned trades in release order (`bars.aggregate`) come from
-  it. Then `market` → `bar_1s` → `candle_1m_1s` → `vol_1s`; `bar_1s` → `bar_1m` →
-  `candle_1h_1m` → `vol_1m`; (`market`, `candle_1m_1s`, `vol_1s`) → `pivot_1s`;
+  it. Then `market` → `bar_1s` → `candle_1m_1s`; (`bar_1s`, `candle_1m_1s`) → `vol_1s`;
+  `bar_1s` → `bar_1m` → `candle_1h_1m`; (`bar_1m`, `candle_1h_1m`) → `vol_1m`; (`market`, `candle_1m_1s`, `vol_1s`) → `pivot_1s`;
   (`market`, `candle_1h_1m`, `vol_1m`) → `pivot_1m`; each resolution's lower tiers and
   pivots → `signal_1s`, `signal_1m` (second rows read minute values as of their
   availability); (`market`, `pivot_1s`, `pivot_1m`) → `pivot_label`. The
-  [feature pipeline](feature-pipeline.md#stages) draws the graph.
+  [feature pipeline](feature-pipeline.md#stages) lists every stage's inputs.
   Pivot stages read the trade path from `market`, never from aggregated bars
   ([3.1](#31-input-stream)), and missing coverage from it too ([3.2](#32-detector-directional-change-with-a-frozen-scale)).
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
-  versions, plus its inputs' identities. A new stage never touches existing ones. Editing
+  versions, plus its inputs' identities; a stage with variants has one identity per
+  variant (the stage's plus the variant's parameters). A new stage never touches existing ones. Editing
   a shared kernel correctly invalidates every stage that uses it.
 - **Each stage owns its tables**: a dense table keyed `(contract_id, slot_ordinal, end_ns)`,
   with monthly partitions, plus any event tables it emits. `pivot_1s` and `pivot_1m` each

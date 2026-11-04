@@ -56,3 +56,17 @@ def test_register_files_is_idempotent(database):
         db.register_files(conn, [f])
         rows = conn.execute("SELECT job_id, parents, condition FROM market.source_file").fetchall()
         assert rows == [("JOB-1", ["GC.FUT", "NQ.FUT"], "available")]
+
+
+def test_a_database_from_before_the_baseline_is_refused_with_its_remedy(database):
+    """Migrations 0001-0004 were folded into 0001_baseline: a database that applied them is
+    rebuilt, never upgraded, and migrate says so instead of reporting changed files."""
+    with db.connect(database) as conn:
+        db.status(conn)  # creates meta.schema_migration
+        conn.execute(
+            "INSERT INTO meta.schema_migration (version, name, sha256) VALUES "
+            "(1, 'foundation', repeat('0', 64)), (2, 'second_rows', repeat('0', 64))"
+        )
+        conn.commit()
+        with pytest.raises(ValueError, match="folded into 0001_baseline"):
+            db.migrate(conn)

@@ -17,7 +17,7 @@ task live in [handoff: next steps](handoff.md#next-steps).
       rolls only move forward, in backtests too.
 - [x] **Run the GC and SI ingest.** Completed November 3: 11 min 2 s, 8 workers,
       46,503,000 rows per table, 57.65 GB. Both products have 257/257 front sessions;
-      degraded reports and the GCZ6 roll checked ([results](handoff.md#rebuild-with-stages-gc-and-si)).
+      degraded reports and the GCZ6 roll checked. Superseded by the stage rebuild below.
 - [x] **Stages (PR A).** Tiered stages with per-stage tables, versions, and checkpoints;
       registries; empty windows carry the last trade price; drawdown/drawup and high/low order; lead derived from
       indicator warm-ups (40 to start), with `warm` flags and a two-start warm-up test

@@ -192,23 +192,9 @@ rows. Compute alone is about 0.4 s per GC session for both stages. After compact
 `bar_1s` is 20.11 GB and `candle_1m_1s` 60.73 GB including indexes, 80.84 GB total
 ([details](handoff.md#rebuild-with-stages-gc-and-si)).
 
-Run #1, on November 3, 2026 on local PostgreSQL 18 database `trading`, built from
-`main` commit `738fd6a` (GC builder `a1e91462c0e0`, SI builder `62d8aa4402a4`):
-
-- **Full year:** 257 front sessions per product; 12 contracts, 564 contract-sessions
-  including warm-up; 46,503,000 rows **per table**, 93,006,000 across both tables.
-  All front sessions are published, with no missing rows. A fresh plan reports all
-  contracts `current` and no work remaining.
-- **Wall time:** 661.594 s (11 min 2 s), 8 workers, including planning and final
-  `ANALYZE`. Timing comes from the local process record; the database run itself records
-  659.857 s. The earlier single-worker 1.4 s/session benchmark did not predict this
-  full-run duration with concurrent workers.
-- **Size including indexes:** `bar_1s` 14.91 GB and `candle_1m_1s` 42.74 GB, total
-  **57.65 GB** (decimal GB). Free disk after the run: 254 GiB.
-- **Checks:** inspected all stored reports referencing degraded files and checked the
-  July 30 GCQ6-to-GCZ6 roll, including warm features at the open. Degraded metadata
-  remains a research-quality warning; complete file coverage does not certify a session
-  for training. Details and local evidence paths are in the [handoff](handoff.md#rebuild-with-stages-gc-and-si).
+Run #1 (November 3, 2026, one builder, 5-session lead) stored 46,503,000 rows per table in
+11 min 2 s with 8 workers, using 57.65 GB including indexes; its rows were replaced by run #2
+and the logs removed.
 
 Earlier throwaway-database measurements (November 1) found about 0.35 s to compute,
 0.5 s to encode, and 1.4 s including writes for one 23-hour session per worker.

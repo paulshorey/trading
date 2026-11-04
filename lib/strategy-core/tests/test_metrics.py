@@ -261,3 +261,40 @@ def test_windows_without_missing_data_never_bridge_across_it():
     for name in ("path_abs", "upticks", "side_switches"):
         assert (w[name][clean & after] == 0).all(), name  # no move or switch across the gap
     assert (w["path_abs"][gapped & after] > 0).any()  # gap windows join both sides (NULL features)
+
+
+def path_second(prices, offset=0):
+    rows = [
+        (T0 + offset * NS + (i + 1) * 100_000_000, px, 1, 1, 1000, px - TICK, px, 5, 5)
+        for i, px in enumerate(prices)
+    ]
+    return rows
+
+
+def test_drawdown_drawup_and_extreme_order_follow_the_trade_path():
+    """The path inside a second, which its OHLC cannot show: 99, 105, 100 falls 5 after its
+    high although it closes above its open; the low came first."""
+    _, m = one_second(path_second([99.0, 105.0, 100.0]))
+    assert m["drawdown"][0] == 5 * PX and m["drawup"][0] == 6 * PX
+    assert m["extreme_order"][0] == 1  # the first trade at the low (99) came before the high
+    _, m = one_second(path_second([105.0, 99.0, 104.0]))
+    assert (m["drawdown"][0], m["drawup"][0], m["extreme_order"][0]) == (6 * PX, 5 * PX, -1)
+    _, m = one_second(path_second([100.0]))  # one trade: no move, the same trade at both ends
+    assert (m["drawdown"][0], m["drawup"][0], m["extreme_order"][0]) == (0, 0, 0)
+    _, m = one_second(path_second([100.0, 100.0]))  # flat: the first trade is both extremes
+    assert m["extreme_order"][0] == 0
+
+
+def test_window_drawdown_spans_seconds():
+    """A high in one second and a lower trade in a later one are a drop of the window, even when
+    each second on its own only rises."""
+    cal = calendar((0, 0.1))
+    rows = path_second([100.0, 103.0]) + path_second([97.0, 98.0], offset=5)
+    t = trades(rows)
+    ends = cal.slot_ends(T0, T0 + 360 * NS, SECOND)
+    agg = aggregate(t, ends, SECOND, coverage(cal), **KW)
+    m = second_metrics(t, agg)
+    assert m["drawdown"][0] == 0 and m["drawdown"][5] == 0  # each second only rises
+    w = MetricWindow(60).update(agg.bars, m)
+    assert w["drawdown"][5] == 6 * PX  # 103 in second 0, then 97 in second 5
+    assert w["drawup"][5] == 3 * PX and w["extreme_order"][5] == -1  # the high came first

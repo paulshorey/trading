@@ -11,6 +11,10 @@ of its trades. Two statistics need more than their per-second values:
   observed second, so a window equals the direct count over its trades.
 - **CVD extremes.** Running buy - sell volume from the window start, from each second's net
   delta and its own extremes (`BaseBars.delta_high`, `delta_low`).
+- **Drawdown, drawup, and extreme order.** The largest drop over the window is the largest of
+  each second's own drawdown and of an earlier second's high minus a later second's low (the
+  same for drawup); which extreme came first follows the seconds of the window's first high
+  and first low, and that second's own order when they share it.
 
 It also carries the latest observation as of each row, from any earlier row: the last trade
 time, and the last sampled book (prices, displayed sizes, and imbalance) with the time of
@@ -25,10 +29,21 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from .bars import MISSING, OBSERVED, BaseBars
-from .metrics import FIELDS, FIRST, MAX, MIN, SUM
+from .metrics import DRAWDOWN, DRAWUP, FIELDS, FIRST, MAX, MIN, ORDER, SUM
 
 BIG = np.iinfo(np.int64).max
-BAR_INPUTS = ("status", "open", "close", "buy", "sell", "trades", "delta_high", "delta_low")
+BAR_INPUTS = (
+    "status",
+    "open",
+    "high",
+    "low",
+    "close",
+    "buy",
+    "sell",
+    "trades",
+    "delta_high",
+    "delta_low",
+)
 BRIDGES = ("bridge_abs", "bridge_up", "bridge_down", "bridge_pair", "bridge_switch")
 CARRY = {
     "close": np.int64,
@@ -105,8 +120,12 @@ class MetricWindow:
             return first, last, first <= r
 
         bounds = {}
+        path = self._path(x, m, w)
         for f in FIELDS:
             v = x[f.name]
+            if f.kind in path:
+                out[f.name] = path[f.kind]
+                continue
             if f.kind == SUM:
                 out[f.name] = window_sum(v)
                 continue
@@ -147,6 +166,35 @@ class MetricWindow:
         keep = max(n_tail + m - (w - 1), 0)
         self.tail = {k: v[pad + keep :].copy() for k, v in x.items()}
         return out
+
+    @staticmethod
+    def _path(x: dict[str, np.ndarray], m: int, w: int) -> dict[str, np.ndarray]:
+        """Window drawdown, drawup, and extreme order from each row's own and its high and
+        low, rows oldest to newest (0 without an observed row; NULL by the `trades` count)."""
+        obs = sliding_window_view(x["status"] == OBSERVED, w)[-m:]
+        high = np.where(obs, sliding_window_view(x["high"], w)[-m:], -BIG)
+        low = np.where(obs, sliding_window_view(x["low"], w)[-m:], BIG)
+        top = np.maximum.accumulate(high, axis=1)  # highest at or before each row
+        bottom = np.minimum.accumulate(low, axis=1)
+        before_top = np.c_[np.full(m, -BIG), top[:, :-1]]  # strictly earlier rows
+        before_bottom = np.c_[np.full(m, BIG), bottom[:, :-1]]
+        across_down = np.where(obs & (before_top > -BIG), before_top - low, 0)
+        across_up = np.where(obs & (before_bottom < BIG), high - before_bottom, 0)
+        own_down = np.where(obs, sliding_window_view(x["drawdown"], w)[-m:], 0)
+        own_up = np.where(obs, sliding_window_view(x["drawup"], w)[-m:], 0)
+        down = np.maximum(np.maximum(own_down, across_down).max(axis=1), 0)
+        up = np.maximum(np.maximum(own_up, across_up).max(axis=1), 0)
+        hi_row = np.argmax(high, axis=1)  # first row at the window's high
+        lo_row = np.argmin(low, axis=1)
+        own = sliding_window_view(x["extreme_order"], w)[-m:]
+        same = own[np.arange(m), hi_row]
+        order = np.where(lo_row < hi_row, 1, np.where(hi_row < lo_row, -1, same))
+        any_obs = obs.any(axis=1)
+        return {
+            DRAWDOWN: np.where(any_obs, down, 0),
+            DRAWUP: np.where(any_obs, up, 0),
+            ORDER: np.where(any_obs, order, 0),
+        }
 
     def _bridges(self, cur: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         """Bridges from the previous observed second's last trade to each observed second's

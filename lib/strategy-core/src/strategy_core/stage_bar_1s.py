@@ -37,6 +37,8 @@ WIDE = {
     "ask_depth_sum",
     "order_bid_size_sum",
     "order_ask_size_sum",
+    "drawdown",
+    "drawup",
 }
 RENAME = {
     "first_at": "first_at_ns",

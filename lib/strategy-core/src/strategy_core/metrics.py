@@ -22,17 +22,22 @@ from them are normalized in `indicators.py`.
 from dataclasses import dataclass
 
 import numpy as np
+from numba import njit
 
 from .bars import Aggregation
 from .market import F_MAYBE_BAD_BOOK, UNDEF_PRICE, UNDEF_SIZE, Trades
 
 SUM, MAX, MIN, FIRST, LAST = "sum", "max", "min", "first", "last"
+# Price-path statistics that merge with the high and low (window_metrics.py): the largest drop
+# from a trade to a later, lower one (drawdown), the largest rise (drawup), and which extreme came
+# first. They describe the path inside a slot, which its OHLC cannot show.
+DRAWDOWN, DRAWUP, ORDER = "drawdown", "drawup", "order"
 
 
 @dataclass(frozen=True)
 class Field:
     name: str
-    kind: str  # how slots merge: sum, max, min, first, or last
+    kind: str  # how slots merge: sum, max, min, first, last, drawdown, drawup, or order
     dtype: type
     valid: str  # count that must be positive for the value to be defined ("" = always)
     description: str
@@ -52,6 +57,28 @@ FIELDS = (
     Field("downticks", SUM, INT, "", "Consecutive-trade price decreases"),
     Field("side_pairs", SUM, INT, "", "Consecutive trade pairs with both aggressor sides known"),
     Field("side_switches", SUM, INT, "", "Known-side pairs whose aggressor side changed"),
+    Field(
+        "drawdown",
+        DRAWDOWN,
+        INT,
+        "trades",
+        "Largest drop from a trade to any later, lower trade in the slot (fixed-point price)",
+    ),
+    Field(
+        "drawup",
+        DRAWUP,
+        INT,
+        "trades",
+        "Largest rise from a trade to any later, higher trade in the slot (fixed-point price)",
+    ),
+    Field(
+        "extreme_order",
+        ORDER,
+        INT,
+        "trades",
+        "Which came first in release order, the first trade at the low or at the high: 1 low, "
+        "-1 high, 0 the same trade",
+    ),
     Field("first_side", FIRST, INT, "trades", "Side of the first trade: 1 buy, -1 sell, 0 unknown"),
     Field("last_side", LAST, INT, "trades", "Side of the last trade: 1 buy, -1 sell, 0 unknown"),
     # Sweeps: printed beyond the pre-trade opposite best
@@ -154,6 +181,30 @@ BY_NAME = {f.name: f for f in FIELDS}
 BIG = np.iinfo(np.int64).max
 
 
+@njit(cache=True)
+def path_extremes(price, starts, stops, drawdown, drawup, order):
+    """Per segment of trades in release order: the largest drop and rise from a trade to a later
+    one (0 for one trade), and whether the first trade at the low (1) or at the high (-1) came
+    first, 0 when it is the same trade."""
+    for k in range(starts.shape[0]):
+        a, b = starts[k], stops[k]
+        top = bottom = price[a]
+        hi_i = lo_i = a
+        down = up = 0
+        for i in range(a + 1, b):
+            p = price[i]
+            if top - p > down:
+                down = top - p
+            if p - bottom > up:
+                up = p - bottom
+            if p > top:
+                top, hi_i = p, i
+            if p < bottom:
+                bottom, lo_i = p, i
+        drawdown[k], drawup[k] = down, up
+        order[k] = 1 if lo_i < hi_i else -1 if hi_i < lo_i else 0
+
+
 def empty_metrics(n: int) -> dict[str, np.ndarray]:
     return {f.name: np.zeros(n, f.dtype) for f in FIELDS}
 
@@ -213,6 +264,10 @@ def second_metrics(trades: Trades, agg: Aggregation) -> dict[str, np.ndarray]:
     pair = same & known & np.r_[False, known[:-1]]
     put("side_pairs", pair.astype(np.int64))
     put("side_switches", (pair & (side != np.r_[0, side[:-1]])).astype(np.int64))
+    stops = np.r_[starts[1:], n]
+    down, up, order = (np.zeros(len(starts), np.int64) for _ in range(3))
+    path_extremes(p, starts, stops, down, up, order)
+    out["drawdown"][rows], out["drawup"][rows], out["extreme_order"][rows] = down, up, order
     first("first_side", side, np.ones(n, bool))  # windows bridge pairs across seconds with these
     last("last_side", side, np.ones(n, bool))
 

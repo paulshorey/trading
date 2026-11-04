@@ -3,7 +3,7 @@
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead; run #2 passed coverage, warm, parity, quality-report, and
 roll checks ([results](handoff.md#rebuild-with-stages-gc-and-si), [measurements](#measured)). The database
-must next be rebuilt on the baseline schema ([how](handoff.md#start-here-next-session)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+has since been rebuilt on the baseline schema ([results](handoff.md#baseline-rebuild-gc-and-si)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -186,6 +186,15 @@ letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
 
+The baseline rebuild completed November 4, 2026: 12 contracts, 868 contract-sessions,
+71,559,900 rows per table, and 257/257 front sessions per product. The initial 8-worker
+run took 14 min 47 s and ended `partial` after a stalled COPY connection was terminated;
+a 1-worker retry built only SIU6's remaining 84 sessions in 3 min 29 s and ended `done`.
+A fresh plan is entirely `current`; exact replay, warm-up, roll, and NULL checks passed
+([results and evidence](handoff.md#baseline-rebuild-gc-and-si)). Fresh partitions use
+21.28 GB for `bar_1s` and 61.79 GB for `candle_1m_1s`,
+83.07 GB total including indexes (decimal); no `VACUUM FULL` was needed.
+
 On November 4, 2026, run #2 (stages, 40-session lead, `--rebuild`, 8 workers) built 12
 contracts and 868 contract-sessions, 71,559,900 rows per table, in 1,423.9 s (23 min 44 s),
 about 1.6 s of wall time per contract-session per worker including deletes of the replaced
@@ -202,6 +211,17 @@ Earlier throwaway-database measurements (November 1) found about 0.35 s to compu
 An hour of `continuous_candle_1m_1s` queried in 7 ms; three sessions (248,400 rows)
 in 0.17 s. Features remain `double precision`, so stored features equal in-memory and
 live values exactly; the completed run did not retime those query benchmarks.
+
+## Confirm completion after an interrupted run
+
+Check the JSON `status`, not just the process exit code: ingestion currently exits 0 even
+when the result is `partial`. Rerun the same command to resume committed session checkpoints.
+If the rerun builds sessions, require `status: done`; a successful no-op instead returns
+`run_id: null`, empty `results`, and no `status` field. In either case, finish with a fresh
+plan reporting every contract `current`. An uncommitted session rolls back if its connection
+is closed; completed sessions remain readable. A stalled
+COPY was recovered this way during the [baseline rebuild](handoff.md#baseline-rebuild-gc-and-si);
+bounded transfer timeouts and a nonzero exit for incomplete runs remain reliability work.
 
 ## Row rules
 

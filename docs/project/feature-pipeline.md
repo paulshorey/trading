@@ -95,7 +95,7 @@ table. Everything else is designed to change.
 | Property                   | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Row grid                   | One row per scheduled-open slot and contract, keyed `(contract_id, slot_ordinal, end_ns)`; monthly partitions on `end_ns`                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| One table per stage        | Each stage owns its tables and replaces a session's rows (and events) in one transaction                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| One table per stage        | Each stage owns its tables and replaces a session's rows (and events) in one transaction; for a stage with variants, the replacement covers only the variant being built, `(stage, variant, session)`, so other variants' rows and events are untouched                                                                                                                                                                                                                                                                                           |
 | Variants are rows          | A family computed over a parameter grid whose members are never combined inside the stage (pivot scales, including their threshold normalizers) adds `variant_id` to the key, with parameters in a registry table. A new variant adds rows, not columns: no migration, and existing variants stay current. Values that are combined with each other, such as ATR(5), ATR(14), ATR(50) and their ratios, are columns of one stage; a new one is a column (a migration). Combinations across variants live in a summary with a declared variant set |
 | Feature registry           | `market.feature` lists every column: stage, tier, resolution, unit, description, parameters, the builder that introduced it, and status (active, deprecated). It is generated from the code registry, and a test keeps it equal to the schema                                                                                                                                                                                                                                                                                                     |
 | Names never change meaning | A different definition gets a new name (or a new variant); the old one is deprecated, then dropped by a migration once nothing reads it. Models record the names and stage identities they were trained on                                                                                                                                                                                                                                                                                                                                        |
@@ -119,17 +119,19 @@ values at the start of every new contract.
 20 values) is exact once its window is full. A recursive average (an EMA, or a Wilder
 average as in RSI and ATR) never fully forgets where it started; it is settled once the
 starting value's weight falls below a tolerance, `0.1%` by default:
-`updates = ln(0.001) / ln(1 − α)`, with `α = 2 / (n + 1)` for EMA(n) and `1 / n` for
-Wilder(n). Same-phase hourly indicators update once per open hour, about 23 per session:
+`updates = seed + ln(0.001) / ln(1 − α)`. An EMA(n) seeds with its first value
+(`seed = 1`, `α = 2 / (n + 1)`); a Wilder(n) average, as in RSI and ATR, first spends `n`
+values building its starting mean (`seed = n`, one more for RSI, whose changes need a
+previous close; `α = 1 / n`). Same-phase hourly indicators update once per open hour, about 23 per session:
 
 | Indicator on `1h@1m` | Updates | Sessions |
 | -------------------- | ------- | -------- |
-| RSI(14), ATR(14)     | 93      | 4.1      |
-| EMA(50)              | 173     | 7.5      |
-| ATR(50)              | 342     | 14.9     |
-| EMA(200)             | 691     | 30.0     |
+| RSI(14), ATR(14)     | 108     | 4.7      |
+| EMA(50)              | 174     | 7.6      |
+| ATR(50)              | 392     | 17.0     |
+| EMA(200)             | 692     | 30.1     |
 
-The same math at daily scale (one update per session) would need about 90 sessions for a
+The same math at daily scale (one update per session) would need about 107 sessions for a
 Wilder ATR(14), so daily-scale averages use fixed windows.
 
 **Mechanism (PR A):**

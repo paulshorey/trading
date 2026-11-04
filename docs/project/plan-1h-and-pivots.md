@@ -357,7 +357,9 @@ it.
   with monthly partitions, plus any event tables it emits. `pivot_1s` and `pivot_1m` each
   own their rows of `market.pivot_event` (marked by stage and builder). Building or
   rebuilding a session deletes and replaces that stage's dense rows _and_ events for the
-  session in one transaction, so events always match the features. Continuous views are generated from the column registry, so migrations stay
+  session in one transaction, so events always match the features. For a stage with
+  variants this is scoped to `(stage, variant, session)`: building one scale never
+  touches another scale's rows or events. Continuous views are generated from the column registry, so migrations stay
   consistent.
 - **Bookkeeping:** a new `market.stage_slice` table, keyed by stage, variant (none for
   stages without variants), contract, and session, so each variant keeps its own builder
@@ -519,7 +521,7 @@ price leaves them:
   20 sessions (log ratio).
 - **Daily scale.** The simple mean of the prior 14 complete sessions' true ranges (bps;
   a fixed window, exact after 15 sessions, since a Wilder average at daily scale would
-  need about 90 sessions to forget its start); the current
+  need about 107 sessions to forget its start); the current
   session's range so far as a share of it (how much of a typical day's move is used);
   distances to the session high and low in daily ATRs.
 - **The current window against its ATR.** True range ÷ ATR (an expanding range), and

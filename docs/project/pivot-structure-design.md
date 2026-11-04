@@ -226,8 +226,10 @@ breaching trade through the reclaiming trade, in the ATR snapshot of the breache
 event. Highs mirror this. `W` is a
 variant parameter (initially 60 rows for fast scales and 15 for slow).
 
-**Location:** `range_pos`, the close within the latest confirmed low–high range (0 at the
-low, 1 at the high; outside 0–1 once breached).
+**Location:** `range_pos`, the current price within the latest confirmed low–high range,
+clipped to 0 (at or below the low) through 1 (at or above the high). A breach is measured
+separately: `beyond_high_atr` and `beyond_low_atr`, the distance beyond the latest
+confirmed high or low in the high's or low's ATR snapshot, 0 inside the range.
 
 **Across scales** (one row per slot): each summary declares the variant set it covers, as
 part of its identity, so adding a scale never silently changes it; a new version that

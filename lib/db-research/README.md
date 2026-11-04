@@ -6,8 +6,10 @@ schemas `market`, `research`, and `ml`; the Databento file registry; contracts, 
 ingestion records; the stage tables `market.bar_1s` and `market.candle_1m_1s` with their
 per-product continuous views; and the stage records, variants, and column registry
 ([ingestion](../../docs/project/ingestion.md), [feature pipeline](../../docs/project/feature-pipeline.md)).
-It replaced migrations 0001–0004 on November 4, 2026, when the database was rebuilt from the
-DBN files; later changes are new numbered files. Runs and ML rows come next.
+It replaced migrations 0001–0004, folded on November 4, 2026; the local `trading` database,
+which applied those, is rebuilt on it from the DBN files (pending as of November 4; see the
+[handoff](../../docs/project/handoff.md#start-here-next-session)). Later changes are new
+numbered files. Runs and ML rows come next.
 
 ## Local setup
 

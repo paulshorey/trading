@@ -316,7 +316,14 @@ stays reviewable:
    validity, the price-path and side bridges between the minute's seconds (excluding the
    bridge into its first observed second), CVD extremes from the minute start, and the path
    fields (`drawdown`, `drawup`, `extreme_order`). Add `observed_seconds` (a sum) for the
-   hourly `active_ratio`, and `session_cvd` at the minute's last second. Live sessions feed
+   hourly `active_ratio`, and `session_cvd` at the minute's last second. For B2's realized
+   volatility, also store what one-second returns need, since minute OHLC cannot rebuild
+   them: `ret2_sum`, the sum of squared log returns between consecutive observed second
+   closes inside the minute, `ret_count`, and `first_close`, the first observed second's
+   close (with the minute's `close`, the last one). A window then adds, for each minute, its
+   own `ret2_sum` and the bridge return from the previous observed minute's `close` to its
+   `first_close`, excluding the bridge into the window's first observed minute, the same rule
+   as the price-path bridges. Live sessions feed
    one second at a time, so the stage buffers an unfinished minute in its checkpoint state
    (as `Rollup.pending` does).
 2. **`stage_candle_1h_1m.py`, stage `candle_1h_1m` (tier 1, input `bar_1m`).**
@@ -354,7 +361,7 @@ stays reviewable:
 
 **B2: hourly-only metrics** ([plan 5.4](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)),
 as new `candle_1h_1m` columns or a new tier-1 stage: realized volatility from one-second
-returns against ATR, minute-return statistics (standard deviation, skew, lag-1
+returns against ATR (from B1's `ret2_sum`, `ret_count`, and `first_close`), minute-return statistics (standard deviation, skew, lag-1
 autocorrelation, variance ratio VR(5), share of up minutes), maximum drawdown and drawup in
 ATR (now exact from the tier-0 path fields), where the window's high and low fell, the
 session-anchored VWAP, prior-session high, low, and close distances, and the correlation of

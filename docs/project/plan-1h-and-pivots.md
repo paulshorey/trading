@@ -252,8 +252,10 @@ assigns the same outcome:
   row, at or after the trade that reached `q`. That last outcome is an observation, like a
   first passage resolved before decision, not a survival target.
 - **Parameters are frozen in the PR D spec before any labels are computed**, and they
-  stay identical in training and testing. The benchmark follows the
-  reviewed research:
+  stay identical in training and testing.
+
+Labels are a stage (`pivot_label`) whose inputs are `market` and the pivot stages. The
+benchmark follows the reviewed research:
 
 - Compare DC scales, fixed left/right extrema, a slope-sign rule, and one CUSUM/FOCuS
   variant.
@@ -261,8 +263,9 @@ assigns the same outcome:
 - Measure delay, location error, coverage, and false alarms per open hour.
 - Use chronological purged splits and an untouched newest holdout.
 
-Its result decides which scales to keep or add. Changing the grid rebuilds only the pivot
-stages.
+Its result decides which scales to keep or add. Changing the grid changes the pivot
+stages' identities, so they and every descendant (labels included) rebuild; scales
+removed from the grid leave no stored rows or labels behind.
 
 ## 4. Extensibility: stages
 
@@ -294,7 +297,8 @@ it.
   trade-assignment timing. It is not stored: ingest reads it from DBN, and live sessions
   from the feed. Accepted, assigned trades in release order (`bars.aggregate`) come from
   it. Then `market` → `bar_1s` → `candle_1m_1s`; `bar_1s` → `bar_1m` → `candle_1h_1m`;
-  (`market`, `candle_1m_1s`) → `pivot_1s`; (`market`, `candle_1h_1m`) → `pivot_1m`.
+  (`market`, `candle_1m_1s`) → `pivot_1s`; (`market`, `candle_1h_1m`) → `pivot_1m`; (`market`, `pivot_1s`, `pivot_1m`) →
+  `pivot_label`.
   Pivot stages read the trade path from `market`, never from aggregated bars
   ([3.1](#31-input-stream)), and missing coverage from it too ([3.2](#32-detector-directional-change-with-a-frozen-scale)).
 - **Identity per stage** is a hash of the stage's modules, settings, columns, and package
@@ -316,8 +320,8 @@ numerical code, and the tables stay as they are. PR A must prove that rows are u
 with the empty-window policy off. Then it turns the policy on and rebuilds once. Adding a
 column to an existing stage stays as documented in [ingestion](ingestion.md#adding-a-metric-or-feature).
 It changes that stage's identity, so the stage and every stage downstream of it rebuild;
-stages upstream and on other branches stay current. For example, a new `bar_1s` column rebuilds every stored stage, while a new pivot column rebuilds only the pivot
-stages.
+stages upstream and on other branches stay current. For example, a new `bar_1s` column rebuilds every stored stage, while a new pivot column rebuilds the pivot
+stages and `pivot_label`.
 
 ## 5. `1h@1m`: amendments to the proposed plan
 

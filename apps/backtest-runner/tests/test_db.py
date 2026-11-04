@@ -63,9 +63,9 @@ def test_a_database_from_before_the_baseline_is_refused_with_its_remedy(database
     rebuilt, never upgraded, and migrate says so instead of reporting changed files."""
     with db.connect(database) as conn:
         db.status(conn)  # creates meta.schema_migration
-        conn.execute(
+        conn.execute(  # only the first folded migration: version 1 under its old name
             "INSERT INTO meta.schema_migration (version, name, sha256) VALUES "
-            "(1, 'foundation', repeat('0', 64)), (2, 'second_rows', repeat('0', 64))"
+            "(1, 'foundation', repeat('0', 64))"
         )
         conn.commit()
         with pytest.raises(ValueError, match="folded into 0001_baseline"):

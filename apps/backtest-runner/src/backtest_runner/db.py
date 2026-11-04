@@ -110,8 +110,8 @@ FOLDED = {(1, "foundation"), (2, "second_rows"), (3, "side_bridges"), (4, "stage
 def migrate(conn: psycopg.Connection, folder: Path = MIGRATIONS) -> list[str]:
     """Apply pending migrations in order. Refuses to run if an applied file changed."""
     current = status(conn, folder)
-    folded = {(r["version"], r["name"]) for r in current if r["state"] != "pending"} & FOLDED
-    if folded:
+    recorded = set(conn.execute("SELECT version, name FROM meta.schema_migration").fetchall())
+    if recorded & FOLDED:  # the recorded names, which differ from the current files
         raise ValueError(
             "This database predates the baseline schema: migrations 0001-0004 were folded into "
             "0001_baseline on 2026-11-04. Its rows are all derived from the DBN files: rebuild it "

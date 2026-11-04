@@ -40,8 +40,8 @@ when one changes. Add a new migration instead.
 Every stored row is derived from the DBN files, so the migrations can be folded into a new
 baseline when their history stops being useful, as on November 4, 2026. That replaces the
 database: with Paul's approval, drop the schemas (`DROP SCHEMA market, research, ml, meta
-CASCADE`), run `research db migrate` and `research db register`, then rebuild every product
-with `research ingest run`. Agents apply migrations to the local
+CASCADE`), run `research db migrate` and `research db register`, then rebuild every stored
+product with `research ingest run GC SI` (name each product stored before). Agents apply migrations to the local
 database when their code needs them ([AGENTS.md](../../AGENTS.md#local-database-agents-may-write-to-it)).
 
 ## One-second and one-minute rows

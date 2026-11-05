@@ -90,8 +90,12 @@ question, not the same question faster. That is why the contract keeps six fixed
 Measure distances in units of the candidate's frozen `θ`, as in the
 [PR F label](../../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f): `R` is the
 reversal barrier and `C` the invalidation buffer beyond the extreme `E`. The first-passage
-formula needs where price is now, so let `x` be the reversal from `E` of the last trade
-price at the decision row's close, ÷ `θ`. This is not the label's `progress` (`q`), which is
+formula needs where price is now, so let `x` be the reversal from `E` of the latest
+validated trade price at or before the decision row's close, ÷ `θ`. On a row without trades
+that is the carried price of the
+[empty-window decision](../../project/plan-1h-and-pivots.md#6-decisions), flagged and with
+its age recorded. It carries across scheduled closures with the detector state, but never
+across missing data, which ends the epoch and drops the candidate. This is not the label's `progress` (`q`), which is
 the _largest_ reversal since `E` and is what makes a candidate eligible at a stage. `q`
 can overshoot its stage (eligible at 0.25 but already 0.40), and price can fall back
 within the row (`q = 0.4` with `x = 0.1`), so `x ≤ q`. From the current price the reversal
@@ -143,7 +147,8 @@ session's real trade times with sign-randomized trade-to-trade returns), compute
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. If they disagree, replace the closed form with a causal simulation of trade arrivals
-at the recent trade rate. Call the result `P_null,K`; the formula above is its limit as `K`
+at the recent trade rate, with the fixed path budget and smoothing of PR F0 so that no
+outcome probability is zero. Call the result `P_null,K`; the formula above is its limit as `K`
 grows.
 
 PR F keeps **session end** as its own outcome: the session closed before the horizon was
@@ -469,7 +474,8 @@ one pooled model, examples within one contract, chronological tests.
 
 Implement the contract. Later steps need only what it already stores: events with the
 reference prices, the frozen `θ`, and ordinals; dense `progress` per row; and, for `x`, the
-candidate's reference price with the row's last trade price.
+candidate's reference price with the latest trade price at or before the row's close,
+carried through rows without trades.
 
 ### PR F0: random-walk nulls and the overshoot diagnostic
 
@@ -481,7 +487,11 @@ candidate's reference price with the row's last trade price.
     three outcome probabilities of `P_null,K`. Continuous monitoring uses the Brownian
     series, which depends only on `s·√k`. With a causal `trade_rate` (trades per row), it
     instead simulates trade arrivals over `k` rows, each trade's return scaled so the
-    variance per row stays `s²`, with a fixed seed;
+    variance per row stays `s²`, with a fixed seed. It uses at least 100,000 paths per grid
+    cell (a standard error of at most 0.0016 per outcome), cached by cell, and adds 0.5 to
+    each outcome count before normalizing (Jeffreys smoothing), so every outcome
+    probability, and `P(reversal | resolved)`, is positive and finite. The series is
+    deterministic and positive whenever `s > 0` and `k > 0`;
   - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
 - Tests: the `κ → 0` and `K → ∞` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
@@ -500,7 +510,8 @@ candidate's reference price with the row's last trade price.
 
 ### PR F: labels and detector benchmark, as planned, plus
 
-- The decision close's displacement `x` (from its last trade price) recorded on every label
+- The decision close's displacement `x` (from the latest trade price at or before the
+  close, carried through rows without trades, with its age) recorded on every label
   row next to its progress `q`, and `P_null,K` computed from `x`, the label's `R` and `C`,
   and the horizon, with `s` as defined in section 2.1: `K` rows when
   they fit before the scheduled session close, otherwise the rows left, in the separate

@@ -269,6 +269,12 @@ process (first alarms, overlapping candidates, timeouts) on training blocks for 
 false-alarm rate per open hour, and report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 
+Each first alarm is scored by the label of the row that raised it. A reversal is a true
+alarm. An invalidation or a timeout is a false alarm: the candidate did not confirm within
+the horizon it was given. A session end or an unknown outcome is unresolved: it is left out
+of both the true and false counts and reported with its own count. The false-alarm rate is
+false alarms divided by the open hours of the replayed blocks.
+
 Adaptive conformal inference is not a substitute. It controls the long-run miscoverage of
 online prediction sets once outcomes arrive
 ([Gibbs and Candès, 2024](https://jmlr.org/papers/v25/22-1218.html)), not first-alarm false

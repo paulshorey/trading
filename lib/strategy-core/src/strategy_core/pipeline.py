@@ -31,6 +31,7 @@ from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
 from .stage_stats_1h_1m import HourStatsStage
 from .stage_vol_1m import VolMinuteStage
+from .stage_vol_1s import VolSecondStage
 from .stages import Stage, StageContext
 from .state import export_state, import_state
 
@@ -42,6 +43,7 @@ STAGES: tuple[type[Stage], ...] = (
     HourCandleStage,
     HourStatsStage,
     VolMinuteStage,
+    VolSecondStage,
 )
 BY_NAME = {s.NAME: s for s in STAGES}
 
@@ -118,14 +120,19 @@ class FastAtr:
 
 class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
-    the candle ending then (`candle_1m_1s`) and the `1h@1m` features of the latest completed
-    minute (`candle_1h_1m`, `stats_1h_1m`, and `vol_1m`, one row each per minute), with that
-    minute's age, `1h@1m.age_s`. `context` holds the price-unit values execution needs (the latest
-    close and the `1m@1s` ATR), never inputs to signals or models."""
+    the window ending then (`candle_1m_1s` and `vol_1s`, one row each per second, joined row by
+    row) and the `1h@1m` features of the latest completed minute (`candle_1h_1m`, `stats_1h_1m`,
+    and `vol_1m`, one row each per minute), with that minute's age, `1h@1m.age_s`. `context` holds
+    the price-unit values execution needs (the latest close and the `1m@1s` ATR), never inputs to
+    signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
+    SECONDLY = (FAST, "vol_1s")  # rows per second, joined row by row
     HOURLY = (BIAS, "stats_1h_1m", "vol_1m")  # rows per completed minute, joined as of each second
-    PREFIX: ClassVar[dict[str, str]] = {FAST: "1m@1s", **{name: "1h@1m" for name in HOURLY}}
+    PREFIX: ClassVar[dict[str, str]] = {
+        **{name: "1m@1s" for name in SECONDLY},
+        **{name: "1h@1m" for name in HOURLY},
+    }
     AGE = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
 
     def __init__(
@@ -159,7 +166,7 @@ class StageFeatures:
     def specs(self) -> list[FeatureSpec]:
         out = [
             FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
-            for name in (self.FAST, *self.HOURLY)
+            for name in (*self.SECONDLY, *self.HOURLY)
             for c in BY_NAME[name].COLUMNS
             if c.unit
         ]
@@ -167,9 +174,13 @@ class StageFeatures:
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
-        fast = self.read(rows.tables[self.FAST], self.FAST)
-        features = {f"1m@1s.{n}": v for n, v in fast.items()}
         ends = rows.tables[self.FAST].values["end_ns"]
+        features: dict[str, np.ndarray] = {}
+        for stage in self.SECONDLY:
+            table = rows.tables[stage]
+            if not np.array_equal(table.values["end_ns"], ends):
+                raise AssertionError(f"{stage} rows must align with {self.FAST}")
+            features |= {f"1m@1s.{n}": v for n, v in self.read(table, stage).items()}
         bias_end = rows.tables[self.BIAS].values["end_ns"]
         minute_end = np.r_[self.last_bias_end, bias_end]
         values: dict[str, np.ndarray] = {}

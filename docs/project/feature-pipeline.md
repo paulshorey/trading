@@ -76,7 +76,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
 | `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
 | `stats_1h_1m`  | 1    | `bar_1m`, `candle_1h_1m` (its status, ATR, and path fields: a declared edge within tier 1)                           |
-| `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s`                                                                                             |
+| `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s` (its windows, path fields, ATR, and spread: a declared edge within tier 1)                  |
 | `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m` (its windows, path fields, ATR, and spread: a declared edge within tier 1)                  |
 | `pivot_1s`     | 2    | `market` (trade path), `candle_1m_1s`, `vol_1s`                                                                      |
 | `pivot_1m`     | 2    | `market` (trade path), `candle_1h_1m`, `vol_1m`                                                                      |

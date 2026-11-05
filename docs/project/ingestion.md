@@ -4,8 +4,9 @@ Status (November 4, 2026): GC and SI are stored in local database `trading` by t
 pipeline with a 40-session lead, rebuilt on the baseline schema
 ([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
 ([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
-hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), and run 5 the
-minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), run 5 the
+minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)), and run 6 the second
+volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -20,6 +21,7 @@ stage has its own table, version, and per-session checkpoint:
 | `market.candle_1m_1s` (tier 1) | second `o`                      | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                          |
 | `market.candle_1h_1m` (tier 1) | minute `m`                      | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)     |
 | `market.stats_1h_1m` (tier 1)  | minute `m`                      | 16 statistics of the same window: realized volatility, minute-return moments, path, session levels, price-flow correlation |
+| `market.vol_1s` (tier 1)       | second `o`                      | 28 volatility features of the `1m@1s` window: as `vol_1m`, plus realized volatility from its one-second returns            |
 | `market.vol_1m` (tier 1)       | minute `m`                      | 26 volatility features of the same window: ATR horizons, bullish/bearish and adverse ATR, extremes, time-of-day, daily ATR |
 
 Each is keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
@@ -33,8 +35,8 @@ as PostgreSQL comments (`\d+ market.candle_1h_1m`).
 
 Rows are stored per contract. Each product also reads as **one permanent series**,
 `product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,
-`continuous_candle_1m_1s`, `continuous_candle_1h_1m`, `continuous_stats_1h_1m`, and
-`continuous_vol_1m`: every session's rows from that
+`continuous_candle_1m_1s`, `continuous_candle_1h_1m`, `continuous_stats_1h_1m`,
+`continuous_vol_1s`, and `continuous_vol_1m`: every session's rows from that
 session's front contract ([continuous series](#continuous-series-per-product)).
 
 ## Run it
@@ -143,7 +145,7 @@ the plan prepend sessions, which shows as `needs_rebuild`.
 ## Continuous series per product
 
 `market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`,
-`continuous_candle_1h_1m`, `continuous_stats_1h_1m`, and `continuous_vol_1m` give each product
+`continuous_candle_1h_1m`, `continuous_stats_1h_1m`, `continuous_vol_1s`, and `continuous_vol_1m` give each product
 one series across
 contract rolls, with the columns of the stored tables plus `product`,
 `trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
@@ -198,6 +200,12 @@ Backtests use the same roll rule but warm a new contract by replaying `warmup_se
 letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
+
+Run 6 (November 4, 2026, PR C2) added `vol_1s` to the stored GC and SI contracts (`add`,
+8 workers): 868 contract-sessions in 5 min 47 s, computing every stage and writing only the new
+table, 71,559,900 rows in 24.05 GB including indexes, plus 159 MB of checkpoints. Every row equals
+an independent recomputation from the stored rows ([checks](handoff.md#pr-c2-results-second-volatility)).
+In live sessions the stage adds about 0.08 ms per second (`research verify`).
 
 Run 5 (November 4, 2026, PR C1) added `vol_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
@@ -332,6 +340,12 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   values of the window itself and of the session so far for complete windows, the daily ATR and its
   percentile at every row of the session. ATR in price units (`atr_price`) and dollars per contract
   (`atr_usd`) are context columns for stops and sizing, never features.
+- **The second volatility** (`vol_1s`, the same `volatility.py`) holds the same columns for the
+  rolling `1m@1s` window, per phase `o % 60` on same-phase windows 60 rows apart, plus realized
+  volatility from the window's one-second returns (`rv_bps`, `rv_atr` against the `1m@1s` ATR,
+  and the count `rv_returns` as context). Its time-of-day samples are the `1m@1s` ATR at each
+  minute's last second (ordinal `60m`), keyed by the minute's offset from the session's open; its
+  daily scale equals `vol_1m`'s at every minute end. Ages count rows, 0–59.
 
 ## Metrics
 
@@ -357,6 +371,7 @@ Definitions, units, and NULL rules are in the code and the column comments:
 | Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                                                               |
 | Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`                                             |
 | Realized volatility, return moments, variance ratio, prior-session levels (hourly window)     | `stats_1h_1m`: `rv_bps`, `rv_atr`, `ret_std_bps`, `ret_skew`, `ret_autocorr`, `vr_5`, `up_minute_ratio`, `drawdown_atr`, `drawup_atr`, `high_pos`, `low_pos`, `session_vwap_atr`, `prior_*_atr`, `cvd_close_corr` |
+| Volatility family (plan section 7, `1m@1s` window)                                            | `vol_1s`: the `vol_1m` columns below, plus `rv_bps` and `rv_atr` (realized volatility from the window's one-second returns) |
 | Volatility family (plan section 7, hourly window)                                             | `vol_1m`: `atr5_bps`, `atr50_bps`, `atr_*_log`, `bull_atr_bps`, `bear_atr_bps`, `bull_bear_skew`, `*_adverse_atr_bps`, `*_excursion_atr`, `*_dist_atr`, `*_age_s`, `extreme_order`, `atr_tod_log`, `day_*`, `tr_atr`, `parkinson_bps`, `gk_bps`, `spread_atr` |
 | Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                                                              |
 
@@ -452,10 +467,15 @@ plain-Python references from the stored candle rows and the trades (per-phase Wi
 the time-of-day normal, the daily scale from each session's trades), the split ATR against
 `kernels.wilder_atr`, the daily scale by hand, identical bits in any chunking and after
 checkpoints inside a minute, scale invariance, the engine's view, and the declared warm-up (two
-starts; the production chains). `apps/backtest-runner/tests/test_ingest.py`: the schema and
+starts; the production chains). `test_vol_seconds.py`: every `vol_1s` value against references
+from the stored second and candle rows and the trades (realized volatility from the observed
+second closes, the time-of-day samples at each minute's last second), the daily scale equal to
+`vol_1m`'s at every minute end, realized volatility by hand, identical bits in any chunking and
+after checkpoints inside a window, scale invariance and no name collision under `1m@1s.`, the
+engine's row-by-row view, and the declared warm-up. `apps/backtest-runner/tests/test_ingest.py`: the schema and
 `market.column_registry` equal the registry, binary COPY range checks, stages versioned on
 their own (a stale stage is rebuilt alone, including a minute stage at its own resolution, a
-missing one is added, as `stats_1h_1m` and `vol_1m` were next to the stored stages), warm flags and the
+missing one is added, as `stats_1h_1m`, `vol_1m`, and `vol_1s` were next to the stored stages), warm flags and the
 derived lead, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
 build), repair after a file changes, rebuild, and stale detection; the continuous series
@@ -464,6 +484,7 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. **Volatility tier, second resolution (PR C2)**: `vol_1s` ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)); `vol_1m` is stored (PR C1).
+1. **Swing structure (PR D)**: directional-change pivots sized by the stored volatility tier
+   (`vol_1s`, `vol_1m`) ([plan section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 2. Let backtests read stored rows when the builder matches the run.
 3. Load Databento `definition` records into `market.contract` (expirations).

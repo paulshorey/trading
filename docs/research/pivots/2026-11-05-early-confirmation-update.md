@@ -358,19 +358,23 @@ released trades
 ```
 
 - **Offset, not a free fit.** `f` learns only departures from the random walk. With no
-  signal, the model returns the null instead of fitting noise. For a three-outcome target
-  (reversal, invalidation, timeout), the log null probability of each outcome is that
-  class's offset. statsmodels GLMs take an `offset`. LightGBM takes an `init_score`, but only
-  as training metadata: it is not saved in the booster or added by `predict()`. Give
+  signal, the model returns the null instead of fitting noise. For the three outcomes,
+  split the target into two binary steps, each with its own offset: resolved within the
+  horizon (reversal or invalidation) vs. timeout, offset `logit P_null(resolved)`; then
+  reversal vs. invalidation among resolved candidates, offset
+  `logit P_null(reversal | resolved)`. Their product gives the three probabilities.
+  statsmodels' binary `GLM` takes an `offset` but its multinomial `MNLogit` does not, so the
+  logistic baseline is two offset GLMs. LightGBM takes an `init_score` for each binary step
+  (or per class with a multiclass objective), but only as training metadata: it is not saved in the booster or added by `predict()`. Give
   validation sets their own `init_score`, and at prediction add the row's offset to the raw
   score (`predict(..., raw_score=True)`) before the sigmoid or softmax. Test that stored and
   live predictions equal `sigmoid(offset + f)`.
 - **Monotone constraints only on binary targets.** LightGBM's monotone constraints act on
   each class's raw score before the softmax, so they do not make a multiclass probability
   monotone ([upstream issue](https://github.com/lightgbm-org/LightGBM/issues/3912)). To
-  constrain the reversal probability to rise with `x`, fit it as a binary target (reversal
-  vs. not, offset by the null's reversal probability). Fit the three-outcome model without
-  constraints and check monotonicity on held-out data.
+  make reversal more likely as `x` rises, put the constraint on the binary
+  reversal-vs.-invalidation step, and check the composed three-outcome probabilities on
+  held-out data.
 - **One model, not votes.** The detectors share price data: a CUSUM resembles a drawup, and
   adjacent `1m@1s` candles share 59 of 60 seconds. Their agreement is not independent
   evidence. A fitted model weighs correlated inputs. Business-cycle work likewise combines
@@ -383,11 +387,12 @@ released trades
   confirmation.
 - **Snapshots first, then every row.** Start with PR F's snapshots at stages
   `q ∈ {0.25, 0.5}`: few rows, simple grouping, and a check that any edge exists. Publishing
-  a probability on every row, and alarming at any row close, needs a per-row model: every
-  row while `0 < q < 1`, with the same target and null from that row's close price and
-  remaining horizon, fitted on
-  candidate-row data grouped by candidate for splits and weighted so each candidate counts
-  once. A snapshot probability carried between stages would be stale, so until the per-row
+  a probability on every row, and alarming at any row close, needs a per-row model with its
+  own per-row label (a new label ID beside PR F's snapshots). For every row while
+  `0 < q < 1`, the label uses the same barriers measured from that row's close, with a
+  horizon of `K` rows counted from that row: a rolling target, with session end and unknown
+  outcomes handled as in PR F. The null uses the same anchor. Fit on candidate-row data
+  grouped by candidate for splits and weighted so each candidate counts once. A snapshot probability carried between stages would be stale, so until the per-row
   model exists, the probability and alarm are defined only at the stage crossings.
 - **Walk-forward predictions only.** Stored probabilities used as features downstream must
   come from models fitted on earlier blocks, labeled with the model and fold that produced
@@ -490,10 +495,10 @@ candidate's reference price with the row's last trade price.
 
 - Rows: PR F candidate snapshots joined to tier 2–3 features as of their decision row
   (`available_at <= decision_at`).
-- Models, in order: `P_null,K` (nothing fitted); logistic regression with the null as
-  offset; LightGBM with the null as `init_score` on training and validation sets and added
-  back to the raw score at prediction (section 6), with a monotone constraint on `x` only
-  in the binary reversal model;
+- Models, in order: `P_null,K` (nothing fitted); logistic regression as two binary GLMs
+  with the null as offset (section 6); LightGBM on the same two steps with the null as
+  `init_score` on training and validation sets and added back to the raw score at
+  prediction, with a monotone constraint on `x` in the reversal-vs.-invalidation step;
   TabPFN-2.5 on subsamples of at most 50k rows, for research only.
 - Splits: chronological calendar blocks across GC and SI, grouped by candidate and episode,
   purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until one configuration is chosen.
@@ -507,10 +512,12 @@ candidate's reference price with the row's last trade price.
 
 ### PR G1b: per-row probability
 
-Required before publishing a probability on every row or alarming at any row close. The
-same models on per-row candidate data (section 6), each row scored from its own close
-price and remaining horizon, followed by the stopping-rule thresholds refitted on the per-row process. If
-G1 found no edge, the per-row output is `P_null,K` itself, which needs no fitted model.
+Required before publishing a probability on every row or alarming at any row close. It
+adds the per-row label of section 6 (its own label ID: the barriers from each row's close
+and a `K`-row horizon counted from that row), fits the same models on it, and computes the
+null from each row's close price and horizon. Then it refits the stopping-rule thresholds by
+replaying first alarms, each scored by the label of the row that raised it. If G1 found no
+edge, the per-row output is `P_null,K` itself, which needs no fitted model.
 
 ### PR G2: sequence and foundation-model challengers
 
@@ -526,7 +533,12 @@ and metrics:
   were released in 2025; check each training cutoff. Kronos starts with a low prior: it was
   far behind HAR-RV for volatility (section 4), and in a small third-party evaluation it did not beat a random walk ([kronos-market-eval](https://github.com/sumit-ai-ml/kronos-market-eval)). Toto 2.0, Chronos-2, or TimesFM qualify only with an explicit
   sampler that adds dependence, such as a copula. Holdout blocks after each model's training
-  cutoff only.
+  cutoff only. Their samples live on a grid (Toto on row returns, Kronos on minute OHLC
+  bars), so they miss barrier crossings inside a step, and a bar touching both barriers
+  does not say which came first. Sample Toto on the second grid even for slow scales, which
+  narrows the gap. Treat both models' first-passage probabilities as scores: calibrate them
+  on training blocks against the exact trade-path labels, report the grid bias measured on
+  the null replays of section 2.1, and count bars that touch both barriers as ambiguous.
 - Go on to pre-training a model on our own seven products' trade data (scale-invariant tokens,
   as in TradeFM) only if a sequence challenger beats G1 significantly. Compute permitting, it
   is the one deep-learning route the evidence supports.

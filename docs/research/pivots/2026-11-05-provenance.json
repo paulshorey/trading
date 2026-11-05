@@ -264,7 +264,10 @@
     "https://mathandmarkets.com/p/regime-detection-part-2-the-latency and https://aimultiple.com/time-series-classification: practitioner/third-party pages, not peer reviewed"
   ],
   "checks": [
-    "First-passage formula and drawdown-overshoot mean checked against a seeded Monte Carlo of a fine-step Gaussian walk (agreement within simulation and step-size error)."
+    "docs/research/pivots/2026-11-05-null-check.py (seed 7, 20,000 paths, step 0.0002; run with `uv run --no-sync python docs/research/pivots/2026-11-05-null-check.py`).",
+    "First passage, formula vs simulated: x=0.25,R=1,C=0.25,kappa=0: 0.4000 vs 0.3925; x=0.5,kappa=0: 0.6000 vs 0.5997; x=0.5,kappa=+1: 0.7395 vs 0.7385; x=0.25,kappa=-2: 0.1537 vs 0.1487 (tolerance 0.015).",
+    "Overshoot mean, formula vs simulated: kappa=0: 1.0000 vs 1.0154; kappa=+1: 1.7183 vs 1.7444; kappa=-1: 0.6321 vs 0.6261 (tolerance 0.04).",
+    "Discrete horizon, x=0.25,R=1,C=0.25 (reversal, invalidation, timeout): k=1,s=1: (0.227, 0.308, 0.464); k=100,s=0.1: (0.367, 0.546, 0.087)."
   ],
   "not_stored": "Raw search results, excerpts, and extracted page text stay out of git; no credentials are recorded.",
   "extraction_summary": "33 page extractions: 25 returned full text; 8 returned only an abstract or publisher preview (five arXiv abstract pages, the Springer preview, the Wildi and McElroy ScienceDirect abstract, and the MDPI change-point benchmark abstract).",

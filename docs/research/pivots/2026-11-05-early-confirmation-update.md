@@ -151,14 +151,24 @@ fully observed. Whether a candidate's `K` rows fit before the scheduled close is
 the decision, so split candidates by it without changing any label. Candidates whose
 horizon fits are scored on reversal, invalidation, and timeout against `P_null,K`. The rest
 form a separate group whose third outcome is session end, scored against the null over
-their known, shorter horizon and reported separately. Unknown outcomes (missing data) are
-censored: exclude them from scores and report their count.
+their known, shorter horizon and reported separately. A candidate decided on the session's
+last scheduled row has no rows left: its outcome is session end with certainty, so its
+`P_null(resolved)` is 0 and its offset infinite. Exclude such zero-row horizons from
+fitting and scoring and count them, for snapshot and per-row labels alike. Unknown outcomes
+(missing data) are censored: exclude them from scores and report their count.
 
 With drift `μ` per row in the reversal direction and variance `σ²` per row, let
 `κ = 2μθ/σ²` (dimensionless). The first-passage probability becomes
 ([derivation](https://quantvault.org/problem-416-first-passage-probabilities-and-optimal-barriers-for-brownia.html)):
 
     P_drift = (1 − exp(κ·d)) / (exp(−κ·u) − exp(κ·d))      → d / (u + d) as κ → 0
+
+A [seeded simulation](2026-11-05-null-check.py) checks both formulas, the overshoot mean of
+section 2.2, and the discrete-horizon example below. It uses seed 7, 20,000 paths, step
+0.0002, and four first-passage and three overshoot cases. The largest gaps from the formulas
+are 0.008 for first passage and 0.026 for the overshoot mean, inside tolerances of 0.015 and
+0.04; the fine step's barrier overshoot accounts for the rest. Run it with
+`uv run --no-sync python docs/research/pivots/2026-11-05-null-check.py` (about 20 seconds).
 
 Caveats, all measurable: trades are discrete and jump across barriers; bid/ask bounce
 mimics mean reversion at the smallest scales (the 2-spread floor exists for this); and `μ`
@@ -392,7 +402,7 @@ released trades
   `0 < q < 1`, the label uses the same barriers measured from that row's close, with a
   horizon of `K` rows counted from that row: a rolling target, with session end and unknown
   outcomes handled as in PR F. The null uses the same anchor. Fit on candidate-row data
-  grouped by candidate for splits and weighted so each candidate counts once. A snapshot probability carried between stages would be stale, so until the per-row
+  grouped by candidate for splits and uncertainty estimates, but fit and calibrated with one weight per row, as the model is called once per row. Weighting each candidate once would give a 100-row candidate the weight of a one-row candidate, and since lifetime is tied to outcome, that would miscalibrate the published probabilities. A snapshot probability carried between stages would be stale, so until the per-row
   model exists, the probability and alarm are defined only at the stage crossings.
 - **Walk-forward predictions only.** Stored probabilities used as features downstream must
   come from models fitted on earlier blocks, labeled with the model and fold that produced
@@ -584,7 +594,7 @@ Main sources are linked inline. Their claims rest on different levels of access:
   Bank of England slides; du Toit and Peskir (2009); Lehoczky (1977); Glattfelder et al.;
   Gibbs and Candès (2024); the order-imbalance studies; the Datadog Toto 2.0 blog and the
   TabPFN-2.5 license page; and the two first-passage derivation pages, whose formulas were
-  checked by simulation instead.
+  checked by the [seeded simulation](2026-11-05-null-check.py) instead.
 
 The [provenance file](2026-11-05-provenance.json) lists every search, extracted URL, and
 access limit.

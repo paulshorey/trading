@@ -256,10 +256,10 @@
     "https://www.norges-bank.no/globalassets/upload/english/publications/working-papers/2012/wp_2012_04.pdf?v=09032017122151"
   ],
   "access_limits": [
+    "Abstract pages only: https://arxiv.org/abs/2606.27100, https://arxiv.org/abs/2406.18332, https://arxiv.org/abs/2511.08667, https://arxiv.org/abs/2605.28554, https://arxiv.org/abs/2003.06222",
     "https://link.springer.com/article/10.1007/s10479-025-06542-7: publisher preview only (abstract); method and results unverified",
     "https://www.sciencedirect.com/science/article/abs/pii/S0169207019300573: abstract only (Wildi and McElroy, 2019)",
-    "https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347: highlights and abstract from search excerpts only (Kronos volatility study)",
-    "https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf: conference slides from search excerpts only",
+    "Search excerpts only (not extracted): Kronos volatility study https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347 (highlights and abstract); Bank of England slides https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf; du Toit and Peskir https://personalpages.manchester.ac.uk/staff/Goran.Peskir/stock.pdf; Lehoczky 1977 (Project Euclid abstract); Glattfelder et al. https://arxiv.org/html/0809.1040; Gibbs and Candes https://jmlr.org/papers/v25/22-1218.html; order-imbalance studies (Oxford 2024, arXiv:2507.22712); Datadog Toto 2.0 blog; TabPFN-2.5 license page; first-passage derivation pages (edgekit, quantvault), whose formulas were checked by simulation",
     "https://mathandmarkets.com/p/regime-detection-part-2-the-latency and https://aimultiple.com/time-series-classification: practitioner/third-party pages, not peer reviewed"
   ],
   "checks": [

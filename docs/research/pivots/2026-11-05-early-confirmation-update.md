@@ -25,9 +25,10 @@ TimesFM helps, and how to combine methods. Compute and budget are not constraint
    proposed models without stating this baseline.
 3. **The second baseline is the overshoot law.** For a random walk, the run beyond a
    confirmation before the next reversal is exponentially distributed with mean equal to the
-   threshold. FX tick data fit it closely. Measuring it on GC and SI by scale and time of day
-   shows where swings deviate from random, which is the only place a model can find an edge,
-   before any ML is built.
+   threshold. FX tick data fit it closely. Measuring it on GC and SI by scale and time of day,
+   against the same detector replayed on random paths, shows where swings deviate from
+   random on average. It is a sanity check before any ML; conditional departures can exist
+   even where the average matches.
 4. **Time-series foundation models are not the tool for this.** Independent 2025–2026
    studies on financial data find little or no gain over random-walk baselines. Pivot
    confirmation is a path event ("which barrier first"), which per-step quantile forecasts
@@ -83,8 +84,10 @@ question, not the same question faster. That is why the contract keeps six fixed
 
 ### 2.1 Probability of confirmation (gambler's ruin)
 
-Measure distances in units of the candidate's frozen `θ`. Let `q` be the current progress
-(reversal from the extreme ÷ `θ`), `R` the reversal barrier, and `C` the invalidation
+Measure distances in units of the candidate's frozen `θ`. Let `q` be the progress at the
+decision row's close (reversal from the extreme ÷ `θ`). This is the exact value at that
+close, not the stage that made the candidate eligible: a candidate first eligible at
+stage 0.25 may already be at 0.40. Let `R` be the reversal barrier and `C` the invalidation
 buffer beyond the extreme, as in the [PR F label](../../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f).
 From the current price the reversal barrier is `u = R − q` away and the invalidation
 barrier `d = q + C` away. For a driftless continuous random walk, the probability of
@@ -93,8 +96,20 @@ reaching the reversal barrier first is ([standard result](https://www.edgekit.pr
     P_null = d / (u + d) = (q + C) / (R + C)
 
 - With `C = 0` and `R = 1`, `P_null = q`: progress is the confirmation probability.
-- With the PR F defaults `R = 1`, `C = 0.25`: `q = 0.25` gives 0.40, `q = 0.5` gives 0.60,
+- With `R = 1`, `C = 0.25` and no horizon: `q = 0.25` gives 0.40, `q = 0.5` gives 0.60,
   `q = 0.75` gives 0.80. Reversal is not a rare class, so raw accuracy says nothing.
+
+This is the probability of _eventually_ reaching one barrier first. The PR F label adds a
+horizon of `K` scheduled-open rows and a timeout outcome, so the baseline used for scoring
+must include it. For Brownian motion the three outcome probabilities (reversal,
+invalidation, timeout) depend on `u`, `d`, and `s·√K`, where `s` is the per-row standard
+deviation in `θ` units, taken from the volatility tier as of the decision row. They have a
+series solution, but simulation is simpler and also handles the discrete trade path. Call
+this `P_null,K`; the formula above is its limit as `K` grows. The session end is scheduled,
+so it is known at the decision: use the shorter of `K` and the rows left in the session as
+the horizon, which turns a session-end outcome into a timeout with a known horizon. Only
+unknown outcomes (missing data) are censored: exclude them from scores and report their
+count.
 
 With drift `μ` per row in the reversal direction and variance `σ²` per row, let
 `κ = 2μθ/σ²` (dimensionless). The first-passage probability becomes
@@ -103,10 +118,9 @@ With drift `μ` per row in the reversal direction and variance `σ²` per row, l
     P_drift = (1 − exp(κ·d)) / (exp(−κ·u) − exp(κ·d))      → d / (u + d) as κ → 0
 
 Caveats, all measurable: trades are discrete and jump across barriers; bid/ask bounce
-mimics mean reversion at the smallest scales (the 2-spread floor exists for this); the
-finite horizon `K` adds a timeout outcome that the closed form ignores (simulate it); and
-`μ` is exactly what nobody knows. `P_drift` with a causal slope estimate is a feature, while
-`P_null` is the baseline.
+mimics mean reversion at the smallest scales (the 2-spread floor exists for this); and `μ`
+is exactly what nobody knows. `P_drift` with a causal slope estimate is a feature, while
+`P_null,K` is the baseline.
 
 Optimal-stopping results say the same thing from the other side. For geometric Brownian
 motion, the rule that sells closest to the ultimate maximum is set by the drift: sell at
@@ -134,17 +148,33 @@ overshoot of 0.61 `θ`, where an exponential with mean `θ` gives 0.69 `θ`
 ([Tsang, 2024](https://onlinelibrary.wiley.com/doi/full/10.1002/isaf.1552)).
 
 The diagnostic for GC and SI needs only PR D's events: the ratio `ρ` = mean overshoot ÷ `θ`
-and its survival curve against `exp(−l/θ)`, by product, scale, and session segment. It
-also needs the empirical `P(confirm before a new extreme | q)` against `q`. My reading of
-the outcomes (inference, to be tested):
+and its survival curve, by product, scale, and session segment. It also needs the empirical
+`P(confirm before a new extreme | q)` against `q`; each candidate keeps one frozen `θ` until
+it is replaced, so that comparison is direct.
 
-- `ρ ≈ 1` with exponential survival: swings at this scale behave like a random walk, and a
-  probability model has little to learn there.
-- `ρ < 1`: swings end sooner than random, so provisional pivots hold more often and early
-  alarms pay.
+The overshoot comparison is not. The exponential law assumes one fixed threshold, but PR D
+refreshes `θ` whenever a strict new extreme replaces the candidate, so a leg can pass
+through several thresholds before it ends. Comparing it with `exp(−l/θ)` for one event's
+`θ` can show departures even on a Brownian path. Use two references instead: a replay of
+the same detector with `θ` held fixed per leg, and the exact adaptive detector replayed on
+null paths, such as the session's real returns with randomized signs. That keeps the
+volatility path while removing drift and autocorrelation. Measure departures against the
+replay, not against the formula.
+
+My reading of the outcomes (inference, to be tested):
+
+- `ρ < 1` against the null replay: swings end sooner than random, so provisional pivots
+  hold more often and early alarms pay.
 - `ρ > 1`: swings trend, so early reversal calls fail more often.
 - Deviations that shrink as `θ` grows relative to the spread are probably microstructure,
   not swing behavior.
+- A match with the null is a marginal result only. Regimes or feature strata with opposite
+  departures can average out, while structure, time of day, or flow still separates them.
+  A flat diagnostic is a sanity check, not a reason to skip the conditional model.
+
+Run these diagnostics only on blocks before the untouched holdout (September–October 2026),
+since their results guide scale and model choices. Run them on the holdout only after the
+configuration is locked.
 
 ## 3. Deciding when to raise the alarm
 
@@ -170,12 +200,19 @@ positives; a 0.5 threshold took about 3 bars with about 6%
 ([Math and Markets, 2026](https://mathandmarkets.com/p/regime-detection-part-2-the-latency);
 an illustration, not evidence for futures).
 
-**Proposed rule.** Publish the calibrated probability on every row while a candidate is open.
-Raise an alarm at the first row close where `P ≥ b(scale, stage)`. Choose `b` on training
-blocks for a target false-alarm rate per open hour, and report the whole frontier. Online
-threshold adjustment such as adaptive conformal inference keeps a long-run error rate near
-its target under drift ([Gibbs and Candès, 2024](https://jmlr.org/papers/v25/22-1218.html)).
-It controls rates; it does not make probabilities calibrated.
+**Proposed rule.** Publish the calibrated probability on every row while a candidate is open;
+this needs the per-row model of [PR G1b](#pr-g1b-per-row-probability). Raise an alarm at the
+first row close where `P ≥ b(scale, stage)`. Choose `b` by replaying the complete alarm
+process (first alarms, overlapping candidates, timeouts) on training blocks for a target
+false-alarm rate per open hour, and report the whole frontier. With only the snapshot model
+of PR G1, alarms can fire only at the stage crossings.
+
+Adaptive conformal inference is not a substitute. It controls the long-run miscoverage of
+online prediction sets once outcomes arrive
+([Gibbs and Candès, 2024](https://jmlr.org/papers/v25/22-1218.html)), not first-alarm false
+positives per open hour for overlapping candidates with delayed outcomes. Until an online
+method with a matching target is found, recalibrate `b` on new blocks and monitor the
+realized false-alarm rate.
 
 ## 4. Foundation models: current state and verdict
 
@@ -197,16 +234,16 @@ It controls rates; it does not make probabilities calibrated.
 - Five US equities, TimesFM-2.5, Moirai-2.0, Chronos-2, TimeGPT, and trained-from-scratch
   networks: foundation models won 8 of 10 task rankings, but gains over the random walk
   were "small and sparse", significant in 2 of 10 tasks
-  ([arXiv:2606.27100](https://arxiv.org/abs/2606.27100)).
+  ([arXiv:2606.27100](https://arxiv.org/abs/2606.27100); abstract).
 - A LoRA-tuned TimesFM's apparent 80% directional accuracy was the always-up base rate;
   measured honestly it had no directional skill
   ([arXiv:2607.12248](https://arxiv.org/abs/2607.12248v2)).
 - Real-time daily macro and financial series since June 2025: foundation models beat
   benchmarks only in a few settings, and fine-tuning was worse than zero-shot
-  ([Bank of England conference slides, 2026](https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf)).
+  ([Bank of England conference slides, 2026](https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf); search excerpts).
 - Kronos forecasting next-day volatility for about 5,000 Chinese stocks: zero-shot error
   2.4–2.6 times that of a HAR-RV model; fine-tuning made it worse
-  ([Finance Research Letters, 2026](https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347)).
+  ([Finance Research Letters, 2026](https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347); highlights and abstract).
 - Not foundation models, but the same lesson: candle-based models of crypto extrema reached
   ROC AUC 0.87–0.90 yet average precision 0.12–0.13 at 2–3% prevalence, and their trading
   policies lost money ([arXiv:2607.19453](https://arxiv.org/abs/2607.19453)).
@@ -266,15 +303,20 @@ released trades
   L2  evidence per row (PR D/E, plus F0/G1 additions): structure, provisional HL/LH, breaches
       and reclaims, leg ratios, flow ratios, slope ÷ uncertainty, CUSUM, leg-extension
       hazard, cross-scale state, time-of-day volatility ratio
-  L3  calibrated probability per open candidate and scale:
-        logit P = logit P_null(q, R, C) + f(L2 features)
-  L4  alarm at the first row close with P ≥ b(scale, stage), b set for a target false-alarm
-      rate per open hour; optional online rate control
+  L3  calibrated probability per open candidate and scale, from decision-row progress q:
+        logit P = logit P_null,K(q, R, C, s·√K) + f(L2 features)
+  L4  alarm at the first row close with P ≥ b(scale, stage), b set by replaying the whole
+      alarm process for a target false-alarm rate per open hour; recalibrated on new blocks
 ```
 
 - **Offset, not a free fit.** `f` learns only departures from the random walk. With no
-  signal, the model returns the null instead of fitting noise. LightGBM accepts an
-  `init_score`, statsmodels GLMs an `offset`. Monotone constraints, such as probability
+  signal, the model returns the null instead of fitting noise. For a three-outcome target
+  (reversal, invalidation, timeout), the log null probability of each outcome is that
+  class's offset. statsmodels GLMs take an `offset`. LightGBM takes an `init_score`, but only
+  as training metadata: it is not saved in the booster or added by `predict()`. Give
+  validation sets their own `init_score`, and at prediction add the row's offset to the raw
+  score (`predict(..., raw_score=True)`) before the sigmoid or softmax. Test that stored and
+  live predictions equal `sigmoid(offset + f)`. Monotone constraints, such as probability
   rising with `q`, are available in LightGBM.
 - **One model, not votes.** The detectors share price data: a CUSUM resembles a drawup, and
   adjacent `1m@1s` candles share 59 of 60 seconds. Their agreement is not independent
@@ -286,12 +328,13 @@ released trades
   confirmations in the slow candidate's reversal direction since its extreme, fast trend, and
   provisional relations. These exact, early events are the natural precursors of a slow
   confirmation.
-- **Snapshot first, hazard second.** Start with PR F's snapshots at stages
-  `q ∈ {0.25, 0.5}`: few rows, simple grouping. A per-row hazard (every row while
-  `0 < q < 1`: "reversal before invalidation", or "confirmation within the next k rows")
-  gives a probability every second for indicator use. It is a logistic model on
-  candidate-row data, grouped by candidate for splits and weighted so each candidate counts
-  once.
+- **Snapshots first, then every row.** Start with PR F's snapshots at stages
+  `q ∈ {0.25, 0.5}`: few rows, simple grouping, and a check that any edge exists. Publishing
+  a probability on every row, and alarming at any row close, needs a per-row model: every
+  row while `0 < q < 1`, with the same target from that row's progress, fitted on
+  candidate-row data grouped by candidate for splits and weighted so each candidate counts
+  once. A snapshot probability carried between stages would be stale, so until the per-row
+  model exists, the probability and alarm are defined only at the stage crossings.
 - **Walk-forward predictions only.** Stored probabilities used as features downstream must
   come from models fitted on earlier blocks, labeled with the model and fold that produced
   them. In-sample predictions never become features.
@@ -318,10 +361,13 @@ index futures ([arXiv:2507.22712](https://arxiv.org/abs/2507.22712)).
 
 ## 7. Evaluation additions to the PR F benchmark
 
-- **Skill over the null:** Brier skill score `1 − Brier/Brier(P_null)` and the log-loss
-  gain, with intervals from session-block resampling; reliability diagrams.
+- **Skill over the null:** Brier skill score `1 − Brier/Brier(P_null,K)` and the log-loss
+  gain, over the three outcomes (reversal, invalidation, timeout), with the null from the
+  decision-row progress and horizon (section 2.1). Exclude unknown outcomes and report how
+  many. Add intervals from session-block resampling and reliability diagrams.
 - **Base rates:** prevalence per stage, and average precision next to ROC AUC.
-- **The overshoot diagnostic** of section 2.2, before any model is fitted.
+- **The overshoot diagnostic** of section 2.2, against null replays of the detector, on
+  pre-holdout blocks only, before any model is fitted.
 - **The frontier:** delay in open rows, false alarms per open hour, and lateness (the share
   of `θ` consumed at the alarm), compared at matched false-alarm rates.
 - **Placebo:** inputs shifted in time, or permuted within sessions, must show no skill. It
@@ -348,22 +394,30 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
 
 - `lib/strategy-core/src/strategy_core/pivot_null.py`: vectorized numpy functions in `θ`
   units, so scale-invariant by construction:
-  - `first_passage_prob(u, d, kappa=0.0)`: `P_drift`, with a series expansion near
-    `κ = 0`;
+  - `first_passage_prob(u, d, kappa=0.0)`: `P_drift` with no horizon, with a series
+    expansion near `κ = 0`;
+  - `first_passage_probs_k(u, d, s_sqrt_k)`: the three outcome probabilities of `P_null,K`,
+    by series or seeded simulation;
   - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
-- Tests: the `κ → 0` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`; agreement with a
-  seeded Monte Carlo of a fine-step Gaussian walk; vector and scalar inputs.
+- Tests: the `κ → 0` and `K → ∞` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
+  agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
+  probabilities summing to 1; vector and scalar inputs.
 - A diagnostic command in `apps/backtest-runner` over `market.pivot_event` and the dense
-  pivot stages. It reports `ρ`, overshoot survival against the exponential, and the
-  empirical `P(confirm before a new extreme | q)` against `q`, by product, scale, and session
-  segment, with session-block intervals. Output: JSON plus a markdown summary; charts later
-  in research-web.
-- Exit: a table showing which scales and segments depart from the random walk. It sets
-  priorities for G1, and a flat result is worth reporting.
+  pivot stages, restricted to blocks before the holdout. It reports `ρ` and overshoot
+  survival against the fixed-`θ` replay and the null replay of the adaptive detector
+  (section 2.2), and the empirical `P(confirm before a new extreme | q)` against `q`, by
+  product, scale, and session segment, with session-block intervals. Output: JSON plus a
+  markdown summary; charts later in research-web.
+- Exit: a table of marginal departures from the null by scale and segment, as a sanity
+  check. It does not decide whether G1 runs: a flat marginal result can hide conditional
+  departures.
 
 ### PR F: labels and detector benchmark, as planned, plus
 
-- `P_null` for every labeled candidate (computed from the label's `q`, `R`, `C`; not stored).
+- The decision-row progress `q` recorded on every label row, and `P_null,K` computed from it,
+  the label's `R` and `C`, and the effective horizon (the shorter of `K` and the rows left
+  in the session), with `s` from the volatility tier as of the decision row. Computed, not
+  stored.
 - The slope detector: a local-linear Kalman recursion in numba, checked against statsmodels'
   local-linear model on fixtures; one CUSUM; SuperSmoother if cheap.
 - The section 7 metrics next to those already specified.
@@ -372,22 +426,26 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
 
 - Rows: PR F candidate snapshots joined to tier 2–3 features as of their decision row
   (`available_at <= decision_at`).
-- Models, in order: `P_null` (nothing fitted); logistic regression with the null as offset;
-  LightGBM with `init_score = logit(P_null)` and a monotone constraint on `q`; TabPFN-2.5 on
-  subsamples of at most 50k rows, for research only.
+- Models, in order: `P_null,K` (nothing fitted); logistic regression with the null as
+  offset; LightGBM with the null as `init_score` on training and validation sets and added
+  back to the raw score at prediction (section 6), with a monotone constraint on `q`;
+  TabPFN-2.5 on subsamples of at most 50k rows, for research only.
 - Splits: chronological calendar blocks across GC and SI, grouped by candidate and episode,
   purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until one configuration is chosen.
-- Calibration on a later, disjoint training block; the stopping-rule thresholds from section
-  3; walk-forward predictions stored as a stage (for example `pivot_prob_1s` and
-  `pivot_prob_1m`) with model and fold IDs, available at row close.
-- Exit: a log-loss gain over `P_null`, significant under session-block resampling for at
+- Calibration on a later, disjoint training block; stopping-rule thresholds from section 3,
+  which at this step fire only at stage crossings; walk-forward predictions stored as a
+  stage (for example `pivot_prob_1s` and `pivot_prob_1m`) with model and fold IDs,
+  available at row close.
+- Exit: a log-loss gain over `P_null,K`, significant under session-block resampling for at
   least one scale on both GC and SI and stable across time blocks. Otherwise report the
-  negative result and keep `P_null` and the deterministic fields as the indicator.
+  negative result and keep `P_null,K` and the deterministic fields as the indicator.
 
-### PR G1b: per-row hazard (optional)
+### PR G1b: per-row probability
 
-The same models on per-row candidate data (section 6), to publish a probability on every
-row.
+Required before publishing a probability on every row or alarming at any row close. The
+same models on per-row candidate data (section 6), each row scored from its own progress
+and horizon, followed by the stopping-rule thresholds refitted on the per-row process. If
+G1 found no edge, the per-row output is `P_null,K` itself, which needs no fitted model.
 
 ### PR G2: sequence and foundation-model challengers
 
@@ -406,9 +464,9 @@ and metrics:
 
 ### Later: live integration
 
-The probability and alarm become engine features, recomputed at each row close with a
-pinned model version. The engine's whole-session and incremental runs must agree, as for
-every stage.
+After G1b, the probability and alarm become engine features, recomputed at each row close
+with a pinned model version, including its offset step. The engine's whole-session and
+incremental runs must agree, as for every stage.
 
 ## 9. Risks and open questions
 
@@ -428,12 +486,24 @@ every stage.
 
 ## Sources and access
 
-Main sources are linked inline. Full texts were read for the foundation-model evaluations,
-the forecast-form paper, the recession detection paper, ECOTS, the overshoot-law papers,
-Tsang (2024), Adegboye and Kampouridis (2021), De Angelis and Peskir, TradeFM, Billio et
-al. (2012), and the model READMEs and licenses. Only abstracts were available for the
-Annals of Operations Research high-frequency turning-point paper
-([2025](https://link.springer.com/article/10.1007/s10479-025-06542-7); it claims rapid,
-low-error detection, unverified here) and Wildi and McElroy (2019).
+Main sources are linked inline. Their claims rest on different levels of access:
+
+- **Full text read:** Rahimikia, Ni, and Wang (2025); arXiv:2607.12248; arXiv:2607.19453;
+  Perez-Diaz et al. (2025); the copula-sampling and PathFM papers; Toto 2.0; TradeFM; the
+  recession detection paper; ECOTS; the agent-based overshoot-law paper; Tsang (2024);
+  Adegboye and Kampouridis (2021); De Angelis and Peskir; Billio et al. (2012); the TimesFM
+  README and the Chronos-2 model card; the AIMultiple benchmark and the Math and Markets
+  post.
+- **Abstract only:** arXiv:2606.27100 (TSFMs on five equities); the early-classification
+  survey (arXiv:2406.18332); TabPFN-2.5 (arXiv:2511.08667); Wildi and McElroy (2019); and
+  the Annals of Operations Research high-frequency turning-point paper
+  ([2025](https://link.springer.com/article/10.1007/s10479-025-06542-7); it claims rapid,
+  low-error detection, unverified here).
+- **Search excerpts only:** the Kronos volatility study (Finance Research Letters, 2026); the
+  Bank of England slides; du Toit and Peskir (2009); Lehoczky (1977); Glattfelder et al.;
+  Gibbs and Candès (2024); the order-imbalance studies; the Datadog Toto 2.0 blog and the
+  TabPFN-2.5 license page; and the two first-passage derivation pages, whose formulas were
+  checked by simulation instead.
+
 The [provenance file](2026-11-05-provenance.json) lists every search, extracted URL, and
 access limit.

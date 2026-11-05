@@ -545,7 +545,10 @@ carried through rows without trades.
 ### PR G1: calibrated probability layer
 
 - Rows: PR F candidate snapshots joined to tier 2–3 features as of their decision row
-  (`available_at <= decision_at`).
+  (`available_at <= decision_at`). Every model is compared on the same rows: a row with a
+  NULL model input (warm-up, an incomplete window, an epoch reset) is excluded from all
+  models and counted by feature and cause, never imputed, so the GLMs and LightGBM see one
+  population.
 - Models, in order: `P_null,K` (nothing fitted); logistic regression as two binary GLMs
   with the null as offset (section 6); LightGBM on the same two steps with the null as
   `init_score` on training and validation sets and added back to the raw score at
@@ -585,13 +588,18 @@ before G2 runs, G2's final test needs a fresh chronological block of data after 
 
 - MiniRocket or MultiRocket features (aeon) on the last N normalized rows, then logistic
   regression: does raw sequence shape add anything to the engineered features?
+- One gap rule for every sequence challenger (MiniRocket, Toto, and Kronos below), on the
+  scheduled-row grid. A covered row without trades keeps the carried, flagged price, so its
+  return is zero and its volume zero. Missing coverage is never filled: the context starts
+  after the latest missing row, and a candidate whose context is shorter than the model's
+  required length is excluded and counted.
 - Path-sampling models, zero-shot: Toto 1.0 on normalized returns, and Kronos on minute
   OHLCV candles (slow scales first; second candles are outside its usual inputs), drawing
   one path per call. Kronos gets relative values, never stored prices: open, high, low, and
   close divided by the decision row's close, and volume and amount divided by their trailing
-  means. A covered minute without trades gets the carried, flagged price for all four prices
-  and zero volume and amount; Kronos takes no mask, so its context starts after the latest
-  missing minute, and a candidate with too short a context is excluded and counted. Before
+  means. Under the gap rule above, a covered minute without trades gets the carried price
+  for all four prices and zero volume and amount, and the context starts after the latest
+  missing minute. Before
   evaluation it must pass the price and size scale-invariance test: multiplying all prices
   or all sizes must leave its probabilities unchanged. Before any selection, freeze and record
   the sampling protocol: each model's exact checkpoint revision, the number of paths per

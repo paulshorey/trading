@@ -498,8 +498,10 @@ carried through rows without trades.
 
 - `lib/strategy-core/src/strategy_core/pivot_null.py`: vectorized numpy functions in `θ`
   units, so scale-invariant by construction:
-  - `first_passage_prob(u, d, kappa=0.0)`: `P_drift` with no horizon, with a series
-    expansion near `κ = 0`;
+  - `first_passage_prob(u, d, kappa=0.0)`: `P_drift` with no horizon, evaluated stably for
+    every `κ`: a series expansion near `κ = 0`, and a log-domain form elsewhere (dividing
+    through by the dominant exponential), so very small volatility, and so very large `|κ|`,
+    gives a finite probability between 0 and 1 rather than an overflow;
   - `first_passage_probs_k(u, d, s, k)`: the three outcome probabilities of `P_null,K` for
     continuously monitored Brownian motion, from the series, which depends only on `s·√k`
     and is deterministic and positive whenever `s > 0` and `k > 0`. Compute it in the log
@@ -512,7 +514,8 @@ carried through rows without trades.
     because an absolute standard error does not bound rare-outcome logits. It never returns
     a zero probability. And it is revalidated against the null replay before use;
   - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
-- Tests: the `κ → 0` and `K → ∞` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
+- Tests: the `κ → 0` and `K → ∞` limits; finite, monotone results at extreme drift such as
+  `κ = ±1000`; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
   probabilities summing to 1; finite logits for small `s·√k`; `s = 0` rejected; vector and
   scalar inputs.
@@ -592,7 +595,12 @@ before G2 runs, G2's final test needs a fresh chronological block of data after 
   scheduled-row grid. A covered row without trades keeps the carried, flagged price, so its
   return is zero and its volume zero. Missing coverage is never filled: the context starts
   after the latest missing row, and a candidate whose context is shorter than the model's
-  required length is excluded and counted.
+  required length is excluded and counted. So is a candidate whose trailing volume mean is
+  zero (no trades in the normalization window), since dividing by it is undefined.
+- Challengers and G1 are compared on one declared common population: the candidates
+  eligible for every model compared (the intersection of their context and input rules),
+  fixed before selection. Each model's own coverage is reported separately, so no model wins
+  by being scored on easier candidates.
 - Path-sampling models, zero-shot: Toto 1.0 on normalized returns, and Kronos on minute
   OHLCV candles (slow scales first; second candles are outside its usual inputs), drawing
   one path per call. Kronos gets relative values, never stored prices: open, high, low, and

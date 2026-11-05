@@ -403,9 +403,11 @@ released trades
   own per-row label (a new label ID beside PR F's snapshots). It covers every row close
   while the candidate is open and unconfirmed (`0 ≤ q < 1`), including rows right after a
   new extreme, where `q = 0` but the null still gives a nonzero confirmation probability.
-  The label uses the same barriers measured from that row's close, with a horizon of `K`
-  rows counted from that row: a rolling target, with session end and unknown outcomes
-  handled as in PR F. The null uses the same anchor. Group candidate rows by candidate for
+  The barriers stay where PR F puts them, fixed relative to the extreme `E` (reversal `R·θ`
+  from `E`, invalidation `C·θ` beyond it); only the horizon restarts, `K` rows counted from
+  that row: a rolling target, with session end and unknown outcomes handled as in PR F.
+  The null uses that row's close for the remaining distances (`u = R − x`, `d = x + C`), so
+  at `x = 0.9` confirmation is `0.1θ` away, not another `θ`. Group candidate rows by candidate for
   splits and uncertainty estimates, but fit and calibrate with one weight per row, since the
   model is called once per row. Weighting each candidate once would give a 100-row candidate
   the weight of a one-row candidate, and because lifetime is tied to outcome, that would
@@ -532,9 +534,9 @@ candidate's reference price with the row's last trade price.
 ### PR G1b: per-row probability
 
 Required before publishing a probability on every row or alarming at any row close. It
-adds the per-row label of section 6 (its own label ID: the barriers from each row's close
-and a `K`-row horizon counted from that row), fits the same models on it, and computes the
-null from each row's close price and horizon. Then it refits the stopping-rule thresholds by
+adds the per-row label of section 6 (its own label ID: PR F's barriers, fixed relative to
+the candidate's extreme, with a `K`-row horizon counted from each row), fits the same models
+on it, and computes the null from each row's displacement `x` and horizon. Then it refits the stopping-rule thresholds by
 replaying first alarms, each scored by the label of the row that raised it. If G1 found no
 edge, the per-row output is `P_null,K` itself, which needs no fitted model.
 

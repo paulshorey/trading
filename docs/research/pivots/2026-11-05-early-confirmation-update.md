@@ -18,9 +18,10 @@ TimesFM helps, and how to combine methods. Compute and budget are not constraint
    extreme, a reversal and a continuation share the same past, so no method can certify it
    on that row ([reviewed findings](2026-11-03-reviewed-findings.md)).
 2. **That probability has a known baseline.** If price were a driftless random walk, a
-   provisional high whose reversal has reached a fraction `q` of the threshold would be
-   confirmed before a new high with probability exactly `q`. The contract's `progress` is
-   this number. A model is worth only its calibrated improvement over this baseline
+   provisional high with price now a fraction `x` of the threshold below it would be
+   confirmed before a new high with probability exactly `x`. When price sits at its
+   largest reversal so far, `x` equals the contract's `progress`. A model is worth only its
+   calibrated improvement over this baseline
    ([section 2](#2-two-random-walk-baselines-every-model-must-beat)). The earlier research
    proposed models without stating this baseline.
 3. **The second baseline is the overshoot law.** For a random walk, the run beyond a
@@ -84,32 +85,42 @@ question, not the same question faster. That is why the contract keeps six fixed
 
 ### 2.1 Probability of confirmation (gambler's ruin)
 
-Measure distances in units of the candidate's frozen `θ`. Let `q` be the progress at the
-decision row's close (reversal from the extreme ÷ `θ`). This is the exact value at that
-close, not the stage that made the candidate eligible: a candidate first eligible at
-stage 0.25 may already be at 0.40. Let `R` be the reversal barrier and `C` the invalidation
-buffer beyond the extreme, as in the [PR F label](../../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f).
-From the current price the reversal barrier is `u = R − q` away and the invalidation
-barrier `d = q + C` away. For a driftless continuous random walk, the probability of
-reaching the reversal barrier first is ([standard result](https://www.edgekit.pro/probstats/random-walks-and-brownian-motion)):
+Measure distances in units of the candidate's frozen `θ`, as in the
+[PR F label](../../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f): `R` is the
+reversal barrier and `C` the invalidation buffer beyond the extreme `E`. The first-passage
+formula needs where price is now, so let `x` be the reversal from `E` of the last trade
+price at the decision row's close, ÷ `θ`. This is not the label's `progress` (`q`), which is
+the _largest_ reversal since `E` and is what makes a candidate eligible at a stage. `q`
+can overshoot its stage (eligible at 0.25 but already 0.40), and price can fall back
+within the row (`q = 0.4` with `x = 0.1`), so `x ≤ q`. From the current price the reversal
+barrier is `u = R − x` away and the invalidation barrier `d = x + C` away. For a driftless
+continuous random walk, the probability of reaching the reversal barrier first is
+([standard result](https://www.edgekit.pro/probstats/random-walks-and-brownian-motion)):
 
-    P_null = d / (u + d) = (q + C) / (R + C)
+    P_null = d / (u + d) = (x + C) / (R + C)
 
-- With `C = 0` and `R = 1`, `P_null = q`: progress is the confirmation probability.
-- With `R = 1`, `C = 0.25` and no horizon: `q = 0.25` gives 0.40, `q = 0.5` gives 0.60,
-  `q = 0.75` gives 0.80. Reversal is not a rare class, so raw accuracy says nothing.
+- With `C = 0` and `R = 1`, `P_null = x`, which equals the contract's progress when price
+  sits at its largest reversal.
+- With `R = 1`, `C = 0.25` and no horizon: `x = 0.25` gives 0.40, `x = 0.5` gives 0.60,
+  `x = 0.75` gives 0.80. Reversal is not a rare class, so raw accuracy says nothing.
 
 This is the probability of _eventually_ reaching one barrier first. The PR F label adds a
-horizon of `K` scheduled-open rows and a timeout outcome, so the baseline used for scoring
-must include it. For Brownian motion the three outcome probabilities (reversal,
-invalidation, timeout) depend on `u`, `d`, and `s·√K`, where `s` is the per-row standard
-deviation in `θ` units, taken from the volatility tier as of the decision row. They have a
-series solution, but simulation is simpler and also handles the discrete trade path. Call
-this `P_null,K`; the formula above is its limit as `K` grows. The session end is scheduled,
-so it is known at the decision: use the shorter of `K` and the rows left in the session as
-the horizon, which turns a session-end outcome into a timeout with a known horizon. Only
-unknown outcomes (missing data) are censored: exclude them from scores and report their
-count.
+horizon of `K` scheduled-open rows, with a timeout outcome when the whole horizon is
+observed, so the baseline used for scoring must include it. Let `s` be the per-row
+standard deviation in `θ` units, from the volatility tier as of the decision row. For
+continuously monitored Brownian motion, the three outcome probabilities (reversal,
+invalidation, timeout) depend on `u`, `d`, and `s·√K` only, and have a series solution. On a
+discrete path they depend on `K` and `s` separately (one step of `s = 1` is not 100 steps of
+`s = 0.1`), so a simulated baseline must take both. Call this `P_null,K`; the formula above
+is its limit as `K` grows.
+
+PR F keeps **session end** as its own outcome: the session closed before the horizon was
+fully observed. Whether a candidate's `K` rows fit before the scheduled close is known at
+the decision, so split candidates by it without changing any label. Candidates whose
+horizon fits are scored on reversal, invalidation, and timeout against `P_null,K`. The rest
+form a separate group whose third outcome is session end, scored against the null over
+their known, shorter horizon and reported separately. Unknown outcomes (missing data) are
+censored: exclude them from scores and report their count.
 
 With drift `μ` per row in the reversal direction and variance `σ²` per row, let
 `κ = 2μθ/σ²` (dimensionless). The first-passage probability becomes
@@ -147,10 +158,11 @@ total move from the previous extreme reached 1.61 `θ`: the confirming `θ` plus
 overshoot of 0.61 `θ`, where an exponential with mean `θ` gives 0.69 `θ`
 ([Tsang, 2024](https://onlinelibrary.wiley.com/doi/full/10.1002/isaf.1552)).
 
-The diagnostic for GC and SI needs only PR D's events: the ratio `ρ` = mean overshoot ÷ `θ`
-and its survival curve, by product, scale, and session segment. It also needs the empirical
-`P(confirm before a new extreme | q)` against `q`; each candidate keeps one frozen `θ` until
-it is replaced, so that comparison is direct.
+The diagnostic for GC and SI needs only PR D's stored rows and events: the ratio `ρ` = mean
+overshoot ÷ `θ` and its survival curve, by product, scale, and session segment. It also
+needs the empirical `P(confirm before a new extreme | x)` against `x`, where `x` is a row
+close's displacement (section 2.1); each candidate keeps one frozen `θ` until it is
+replaced, so that comparison is direct.
 
 The overshoot comparison is not. The exponential law assumes one fixed threshold, but PR D
 refreshes `θ` whenever a strict new extreme replaces the candidate, so a leg can pass
@@ -303,8 +315,8 @@ released trades
   L2  evidence per row (PR D/E, plus F0/G1 additions): structure, provisional HL/LH, breaches
       and reclaims, leg ratios, flow ratios, slope ÷ uncertainty, CUSUM, leg-extension
       hazard, cross-scale state, time-of-day volatility ratio
-  L3  calibrated probability per open candidate and scale, from decision-row progress q:
-        logit P = logit P_null,K(q, R, C, s·√K) + f(L2 features)
+  L3  calibrated probability per open candidate and scale, from the close's displacement x:
+        logit P = logit P_null,K(x, R, C, s, K) + f(L2 features)
   L4  alarm at the first row close with P ≥ b(scale, stage), b set by replaying the whole
       alarm process for a target false-alarm rate per open hour; recalibrated on new blocks
 ```
@@ -316,8 +328,13 @@ released trades
   as training metadata: it is not saved in the booster or added by `predict()`. Give
   validation sets their own `init_score`, and at prediction add the row's offset to the raw
   score (`predict(..., raw_score=True)`) before the sigmoid or softmax. Test that stored and
-  live predictions equal `sigmoid(offset + f)`. Monotone constraints, such as probability
-  rising with `q`, are available in LightGBM.
+  live predictions equal `sigmoid(offset + f)`.
+- **Monotone constraints only on binary targets.** LightGBM's monotone constraints act on
+  each class's raw score before the softmax, so they do not make a multiclass probability
+  monotone ([upstream issue](https://github.com/lightgbm-org/LightGBM/issues/3912)). To
+  constrain the reversal probability to rise with `x`, fit it as a binary target (reversal
+  vs. not, offset by the null's reversal probability). Fit the three-outcome model without
+  constraints and check monotonicity on held-out data.
 - **One model, not votes.** The detectors share price data: a CUSUM resembles a drawup, and
   adjacent `1m@1s` candles share 59 of 60 seconds. Their agreement is not independent
   evidence. A fitted model weighs correlated inputs. Business-cycle work likewise combines
@@ -331,7 +348,8 @@ released trades
 - **Snapshots first, then every row.** Start with PR F's snapshots at stages
   `q ∈ {0.25, 0.5}`: few rows, simple grouping, and a check that any edge exists. Publishing
   a probability on every row, and alarming at any row close, needs a per-row model: every
-  row while `0 < q < 1`, with the same target from that row's progress, fitted on
+  row while `0 < q < 1`, with the same target and null from that row's close price and
+  remaining horizon, fitted on
   candidate-row data grouped by candidate for splits and weighted so each candidate counts
   once. A snapshot probability carried between stages would be stale, so until the per-row
   model exists, the probability and alarm are defined only at the stage crossings.
@@ -363,8 +381,9 @@ index futures ([arXiv:2507.22712](https://arxiv.org/abs/2507.22712)).
 
 - **Skill over the null:** Brier skill score `1 − Brier/Brier(P_null,K)` and the log-loss
   gain, over the three outcomes (reversal, invalidation, timeout), with the null from the
-  decision-row progress and horizon (section 2.1). Exclude unknown outcomes and report how
-  many. Add intervals from session-block resampling and reliability diagrams.
+  decision close's displacement `x` and the horizon (section 2.1). Score candidates cut
+  short by the session end as their own group. Exclude unknown outcomes and report how many.
+  Add intervals from session-block resampling and reliability diagrams.
 - **Base rates:** prevalence per stage, and average precision next to ROC AUC.
 - **The overshoot diagnostic** of section 2.2, against null replays of the detector, on
   pre-holdout blocks only, before any model is fitted.
@@ -388,7 +407,8 @@ one pooled model, examples within one contract, chronological tests.
 ### PR D: unchanged
 
 Implement the contract. Later steps need only what it already stores: events with the
-reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
+reference prices, the frozen `θ`, and ordinals; dense `progress` per row; and, for `x`, the
+candidate's reference price with the row's last trade price.
 
 ### PR F0: random-walk nulls and the overshoot diagnostic
 
@@ -396,16 +416,19 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
   units, so scale-invariant by construction:
   - `first_passage_prob(u, d, kappa=0.0)`: `P_drift` with no horizon, with a series
     expansion near `κ = 0`;
-  - `first_passage_probs_k(u, d, s_sqrt_k)`: the three outcome probabilities of `P_null,K`,
-    by series or seeded simulation;
+  - `first_passage_probs_k(u, d, s, k, monitoring="continuous")`: the three outcome
+    probabilities of `P_null,K`. Continuous monitoring uses the Brownian series, which
+    depends only on `s·√k`; discrete monitoring simulates `k` steps of standard deviation
+    `s` with a fixed seed;
   - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
 - Tests: the `κ → 0` and `K → ∞` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
-  probabilities summing to 1; vector and scalar inputs.
+  probabilities summing to 1; discrete results converging to the continuous ones as `k`
+  grows at fixed `s·√k`, and differing for small `k`; vector and scalar inputs.
 - A diagnostic command in `apps/backtest-runner` over `market.pivot_event` and the dense
   pivot stages, restricted to blocks before the holdout. It reports `ρ` and overshoot
   survival against the fixed-`θ` replay and the null replay of the adaptive detector
-  (section 2.2), and the empirical `P(confirm before a new extreme | q)` against `q`, by
+  (section 2.2), and the empirical `P(confirm before a new extreme | x)` against `x`, by
   product, scale, and session segment, with session-block intervals. Output: JSON plus a
   markdown summary; charts later in research-web.
 - Exit: a table of marginal departures from the null by scale and segment, as a sanity
@@ -414,10 +437,12 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
 
 ### PR F: labels and detector benchmark, as planned, plus
 
-- The decision-row progress `q` recorded on every label row, and `P_null,K` computed from it,
-  the label's `R` and `C`, and the effective horizon (the shorter of `K` and the rows left
-  in the session), with `s` from the volatility tier as of the decision row. Computed, not
-  stored.
+- The decision close's displacement `x` (from its last trade price) recorded on every label
+  row next to its progress `q`, and `P_null,K` computed from `x`, the label's `R` and `C`,
+  and the horizon, with `s` from the volatility tier as of the decision row: `K` rows when
+  they fit before the scheduled session close, otherwise the rows left, in the separate
+  session-end group (section 2.1). Labels and their outcome classes are unchanged. The null
+  is computed, not stored.
 - The slope detector: a local-linear Kalman recursion in numba, checked against statsmodels'
   local-linear model on fixtures; one CUSUM; SuperSmoother if cheap.
 - The section 7 metrics next to those already specified.
@@ -428,7 +453,8 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
   (`available_at <= decision_at`).
 - Models, in order: `P_null,K` (nothing fitted); logistic regression with the null as
   offset; LightGBM with the null as `init_score` on training and validation sets and added
-  back to the raw score at prediction (section 6), with a monotone constraint on `q`;
+  back to the raw score at prediction (section 6), with a monotone constraint on `x` only
+  in the binary reversal model;
   TabPFN-2.5 on subsamples of at most 50k rows, for research only.
 - Splits: chronological calendar blocks across GC and SI, grouped by candidate and episode,
   purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until one configuration is chosen.
@@ -443,8 +469,8 @@ reference prices, the frozen `θ`, and ordinals; and dense `progress` per row.
 ### PR G1b: per-row probability
 
 Required before publishing a probability on every row or alarming at any row close. The
-same models on per-row candidate data (section 6), each row scored from its own progress
-and horizon, followed by the stopping-rule thresholds refitted on the per-row process. If
+same models on per-row candidate data (section 6), each row scored from its own close
+price and remaining horizon, followed by the stopping-rule thresholds refitted on the per-row process. If
 G1 found no edge, the per-row output is `P_null,K` itself, which needs no fitted model.
 
 ### PR G2: sequence and foundation-model challengers

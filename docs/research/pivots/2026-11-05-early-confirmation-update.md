@@ -200,8 +200,10 @@ total move from the previous extreme reached 1.61 `θ`: the confirming `θ` plus
 overshoot of 0.61 `θ`, where an exponential with mean `θ` gives 0.69 `θ`
 ([Tsang, 2024](https://onlinelibrary.wiley.com/doi/full/10.1002/isaf.1552)).
 
-The diagnostic for GC and SI needs only PR D's stored rows and events: the ratio `ρ` = mean
-overshoot ÷ `θ` and its survival curve, by product, scale, and session segment. It also
+The diagnostic for GC and SI reads PR D's stored rows and events, and, for the null replays
+below, the validated released TBBO trades from the DBN files in release order, as PR D's
+detector consumes them; the stored rows hold row-level state, not every trade-to-trade
+return. It reports the ratio `ρ` = mean overshoot ÷ `θ` and its survival curve, by product, scale, and session segment. It also
 needs the empirical `P(confirm before a new extreme | x)` against `x`, where `x` is a row
 close's displacement (section 2.1); each candidate keeps one frozen `θ` until it is
 replaced, so that comparison is direct.
@@ -398,12 +400,18 @@ released trades
 - **Snapshots first, then every row.** Start with PR F's snapshots at stages
   `q ∈ {0.25, 0.5}`: few rows, simple grouping, and a check that any edge exists. Publishing
   a probability on every row, and alarming at any row close, needs a per-row model with its
-  own per-row label (a new label ID beside PR F's snapshots). For every row while
-  `0 < q < 1`, the label uses the same barriers measured from that row's close, with a
-  horizon of `K` rows counted from that row: a rolling target, with session end and unknown
-  outcomes handled as in PR F. The null uses the same anchor. Fit on candidate-row data
-  grouped by candidate for splits and uncertainty estimates, but fit and calibrated with one weight per row, as the model is called once per row. Weighting each candidate once would give a 100-row candidate the weight of a one-row candidate, and since lifetime is tied to outcome, that would miscalibrate the published probabilities. A snapshot probability carried between stages would be stale, so until the per-row
-  model exists, the probability and alarm are defined only at the stage crossings.
+  own per-row label (a new label ID beside PR F's snapshots). It covers every row close
+  while the candidate is open and unconfirmed (`0 ≤ q < 1`), including rows right after a
+  new extreme, where `q = 0` but the null still gives a nonzero confirmation probability.
+  The label uses the same barriers measured from that row's close, with a horizon of `K`
+  rows counted from that row: a rolling target, with session end and unknown outcomes
+  handled as in PR F. The null uses the same anchor. Group candidate rows by candidate for
+  splits and uncertainty estimates, but fit and calibrate with one weight per row, since the
+  model is called once per row. Weighting each candidate once would give a 100-row candidate
+  the weight of a one-row candidate, and because lifetime is tied to outcome, that would
+  miscalibrate the published probabilities. A snapshot probability carried between stages
+  would be stale, so until the per-row model exists, the probability and alarm are defined
+  only at the stage crossings.
 - **Walk-forward predictions only.** Stored probabilities used as features downstream must
   come from models fitted on earlier blocks, labeled with the model and fold that produced
   them. In-sample predictions never become features.
@@ -477,8 +485,9 @@ candidate's reference price with the row's last trade price.
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
   probabilities summing to 1; simulated results converging to the continuous ones as the
   trade rate grows, and differing at low rates; `s = 0` rejected; vector and scalar inputs.
-- A diagnostic command in `apps/backtest-runner` over `market.pivot_event` and the dense
-  pivot stages, restricted to blocks before the holdout. It reports `ρ` and overshoot
+- A diagnostic command in `apps/backtest-runner` over `market.pivot_event`, the dense pivot
+  stages, and, for the null replays, the released TBBO trades replayed from DBN through the
+  engine's source, restricted to blocks before the holdout. It reports `ρ` and overshoot
   survival against the fixed-`θ` replay and the null replay of the adaptive detector
   (section 2.2), and the empirical `P(confirm before a new extreme | x)` against `x`, by
   product, scale, and session segment, with session-block intervals. Output: JSON plus a
@@ -538,7 +547,9 @@ and metrics:
   regression: does raw sequence shape add anything to the engineered features?
 - Path-sampling models, zero-shot: Toto 1.0 on normalized returns, and Kronos on minute
   OHLCV candles (slow scales first; second candles are outside its usual inputs), drawing
-  one path per call. Per candidate, a few hundred sampled paths over the label horizon,
+  one path per call. Kronos gets relative values, never stored prices: open, high, low, and
+  close divided by the decision row's close, and volume and amount divided by their trailing
+  means. Before evaluation, it must pass the price and size scale-invariance test: multiplying all prices or all sizes must leave its probabilities unchanged. Per candidate, a few hundred sampled paths over the label horizon,
   then the Monte Carlo first-passage probability, compared with `P_null,K` and G1. Both
   were released in 2025; check each training cutoff. Kronos starts with a low prior: it was
   far behind HAR-RV for volatility (section 4), and in a small third-party evaluation it did not beat a random walk ([kronos-market-eval](https://github.com/sumit-ai-ml/kronos-market-eval)). Toto 2.0, Chronos-2, or TimesFM qualify only with an explicit

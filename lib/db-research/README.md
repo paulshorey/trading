@@ -11,8 +11,9 @@ which applied those, was rebuilt on it from the DBN files on November 4 with Pau
 authorization ([results](../../docs/project/handoff.md#baseline-rebuild-gc-and-si)). Later changes are new
 numbered files: `0002_minute_rows` adds the minute stages' tables `market.bar_1m` and
 `market.candle_1h_1m` and their continuous views (PR B1); `0003_hour_stats` adds
-`market.stats_1h_1m`, the hourly window statistics, and its view (PR B2). Runs and ML rows
-come next.
+`market.stats_1h_1m`, the hourly window statistics, and its view (PR B2); `0004_minute_volatility`
+adds `market.vol_1m`, the volatility family of the hourly window, and its view (PR C1). Runs and
+ML rows come next.
 
 ## Local setup
 
@@ -52,8 +53,8 @@ database when their code needs them ([AGENTS.md](../../AGENTS.md#local-database-
 ## One-second and one-minute rows
 
 `market.bar_1s` and `market.bar_1m` (with `market.candle_1m_1s` and `market.candle_1h_1m`,
-their rolling `1m@1s` and `1h@1m` candles and features, and `market.stats_1h_1m`, the hourly
-window statistics) are implemented with the same design. There is one row for every scheduled-open slot per contract, including slots without trades or
+their rolling `1m@1s` and `1h@1m` candles and features, `market.stats_1h_1m`, the hourly
+window statistics, and `market.vol_1m`, its volatility family) are implemented with the same design. There is one row for every scheduled-open slot per contract, including slots without trades or
 with missing data, so every sliding window is exactly 60 consecutive rows (decided
 November 1, 2026). Closures have no rows.
 
@@ -129,7 +130,7 @@ per date from the files. `market.roll` holds the published front contract per se
 **Continuous series** (implemented): `market.front_session` maps each product session to its
 front contract and that session's stored index counters (in seconds); the views
 `market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`,
-`continuous_candle_1h_1m`, and `continuous_stats_1h_1m` select those rows, so each product reads as one series with one
+`continuous_candle_1h_1m`, `continuous_stats_1h_1m`, and `continuous_vol_1m` select those rows, so each product reads as one series with one
 row per scheduled second or minute. Sessions are whole minutes, so a session's minutes are
 `(first_ordinal + 59) / 60 … last_ordinal / 60`. They are views (`table.*` plus product columns): recreate them
 in the migration that adds columns to the tables. Bound `slot_ordinal` in queries so the

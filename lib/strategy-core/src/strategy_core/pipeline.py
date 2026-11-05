@@ -30,6 +30,7 @@ from .stage_bar_1s import BarStage
 from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
 from .stage_stats_1h_1m import HourStatsStage
+from .stage_vol_1m import VolMinuteStage
 from .stages import Stage, StageContext
 from .state import export_state, import_state
 
@@ -40,6 +41,7 @@ STAGES: tuple[type[Stage], ...] = (
     CandleStage,
     HourCandleStage,
     HourStatsStage,
+    VolMinuteStage,
 )
 BY_NAME = {s.NAME: s for s in STAGES}
 
@@ -117,12 +119,12 @@ class FastAtr:
 class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
     the candle ending then (`candle_1m_1s`) and the `1h@1m` features of the latest completed
-    minute (`candle_1h_1m` and `stats_1h_1m`, one row each per minute), with that minute's age,
-    `1h@1m.age_s`. `context` holds the price-unit values execution needs (the latest close and
-    the `1m@1s` ATR), never inputs to signals or models."""
+    minute (`candle_1h_1m`, `stats_1h_1m`, and `vol_1m`, one row each per minute), with that
+    minute's age, `1h@1m.age_s`. `context` holds the price-unit values execution needs (the latest
+    close and the `1m@1s` ATR), never inputs to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
-    HOURLY = (BIAS, "stats_1h_1m")  # rows per completed minute, joined as of each second
+    HOURLY = (BIAS, "stats_1h_1m", "vol_1m")  # rows per completed minute, joined as of each second
     PREFIX: ClassVar[dict[str, str]] = {FAST: "1m@1s", **{name: "1h@1m" for name in HOURLY}}
     AGE = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
 

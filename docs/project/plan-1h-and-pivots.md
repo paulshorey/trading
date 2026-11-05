@@ -34,7 +34,7 @@ volatility (ATR) tier, including bullish and bearish ATR.
 | PR  | Tier | Contents                                                                                                                                                                                         | Rebuild         |
 | --- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- |
 | A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, column and variant registries, summation order, empty-window policy, drawdown/drawup and high/low-order fields, derived lead (40 to start) | every stage     |
-| B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage), new hourly-only metrics                                                                                                                            | new tables only |
+| B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage, B1), and the hourly-only metrics as stage `stats_1h_1m` (B2)                                                                                        | new tables only |
 | C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                                                          | new tables only |
 | D   | 2    | Swing detector and structure of price and RSI: `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m`, `pivot_event`                                                                             | new tables only |
 | E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                                                     | new tables only |
@@ -429,6 +429,14 @@ resumable versioned stage, pilot then backfill). Amend them as follows:
    - Session-anchored VWAP distance, and the prior session's high, low, and close
      distances, all in hourly ATR.
    - Correlation of minute closes with minute cumulative delta inside the window.
+
+   Implemented in PR B2 as stage `stats_1h_1m` (tier 1, reading `bar_1m` and `candle_1h_1m`;
+   [results](handoff.md#pr-b2-results-hourly-statistics)). Derived details: a window's minute
+   returns run between consecutive minute closes inside it, carried through minutes without
+   trades from its first observed minute (59 when the oldest minute traded), so a window never
+   reads rows older than its own; the return statistics need 10 of them (two VR(5) horizons);
+   the share of up minutes counts minutes whose close changed; features need a complete window.
+
 5. **Engine parity.** The engine's `1h@1m` features equal the stored columns, and the
    engine reads the full stage.
 6. **Warm-up.** Measure NULL rates at each roll's first front session. The lead is set in

@@ -3,8 +3,9 @@
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema
 ([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
-([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), and run 4 the
-hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
+hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), and run 5 the
+minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -197,6 +198,13 @@ Backtests use the same roll rule but warm a new contract by replaying `warmup_se
 letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
+
+Run 5 (November 4, 2026, PR C1) added `vol_1m` to the stored GC and SI contracts (`add`,
+8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
+new table, 1,192,665 rows in 0.42 GB including indexes, plus 156 MB of checkpoints (the
+time-of-day buffer). Every complete window equals an independent recomputation from the stored
+rows ([checks](handoff.md#pr-c1-results-minute-volatility)). The stage sets the required lead:
+37 typical sessions (the daily percentile), inside the 40-session lead.
 
 Run 4 (November 4, 2026, PR B2) added `stats_1h_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the

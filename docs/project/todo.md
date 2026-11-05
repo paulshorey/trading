@@ -33,11 +33,16 @@ task live in [handoff: next steps](handoff.md#next-steps).
       volatility from one-second returns, minute-return statistics, drawdown/drawup in ATR,
       high/low position, session VWAP, prior-session levels, price-flow correlation. Applied to
       `trading` and built for GC/SI on November 4 in 1 min 55 s; full-year checks passed
-      ([results](handoff.md#pr-b2-results-hourly-statistics)). Merge #75 before other database
+      ([results](handoff.md#pr-b2-results-hourly-statistics)). Merged.
+- [x] **Minute volatility (PR C1, #76).** Stage `vol_1m` (migration `0004`) and the shared
+      module `volatility.py`: ATR(5)/ATR(50) and their log ratios, bullish/bearish and
+      adverse-excursion ATR, extremes as levels, time-of-day normal, daily ATR and its percentile,
+      true range, Parkinson and Garman–Klass, spread ÷ ATR; ATR in price and dollars as context.
+      Applied to `trading` and built for GC/SI on November 4 in 1 min 55 s; full-year checks passed
+      ([results](handoff.md#pr-c1-results-minute-volatility)). Merge #76 before other database
       work.
-- [ ] **Volatility tier (PR C), next.** Stages `vol_1m` (C1) and `vol_1s` (C2): ATR horizons,
-      bullish, bearish, and adverse-excursion ATR, time-of-day and daily ATR
-      ([handoff: what and how](handoff.md#pr-c-volatility-tier-next),
+- [ ] **Second-resolution volatility (PR C2), next.** Stage `vol_1s` (migration `0005`), reusing
+      `volatility.py`; measure live latency ([handoff: what and how](handoff.md#pr-c-volatility-tier),
       [plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 - [ ] **Swing structure, signals, labels (PRs D–F)**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).

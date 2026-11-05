@@ -1,18 +1,18 @@
 # Handoff
 
-As of November 4, 2026. Start here, then read [AGENTS.md](../../AGENTS.md). Tasks are
+As of November 4, 2026 (after PR C1). Start here, then read [AGENTS.md](../../AGENTS.md). Tasks are
 tracked in [todo.md](todo.md); this page explains the architecture, the decisions behind
 it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
 
-1. **Merge PR B2 (#75) first.** It adds the stage `stats_1h_1m` (the hourly window
-   statistics) and migration `0003_hour_stats`. `0003` is already applied to `trading` and
-   GC/SI are built and verified ([results](#pr-b2-results-hourly-statistics)), so `main`
-   cannot run `research db` or `research ingest` until #75 is merged; branches made before it
-   must rebase.
-2. **Then build PR C**, the volatility tier: new stages `vol_1m` and `vol_1s`, new tables
-   only. What to build and how, step by step: [PR C](#pr-c-volatility-tier-next).
+1. **Merge PR C1 (#76) first.** It adds the stage `vol_1m` (the minute volatility family),
+   the shared module `volatility.py`, and migration `0004_minute_volatility`. `0004` is already
+   applied to `trading` and GC/SI are built and verified
+   ([results](#pr-c1-results-minute-volatility)), so `main` cannot run `research db` or
+   `research ingest` until #76 is merged; branches made before it must rebase.
+2. **Then build PR C2**, stage `vol_1s` (second resolution, new table only), reusing
+   `volatility.py`. What to build and how: [PR C](#pr-c-volatility-tier).
 
 How to work in this repository:
 
@@ -67,8 +67,9 @@ lib/strategy-core                  The same code for history and live sessions
 Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
 (research backtest, verify)           one table per stage, per contract:
                                         bar_1s, bar_1m (tier 0)
-                                        candle_1m_1s, candle_1h_1m, stats_1h_1m (tier 1)
-                                        next: vol_* (C), pivot_* (D), signal_* (E),
+                                        candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1m
+                                        (tier 1)
+                                        next: vol_1s (C2), pivot_* (D), signal_* (E),
                                         pivot_label (F)
                                       market.continuous_*                  (per product)
                                                   │
@@ -81,8 +82,8 @@ the local API; `apps/research-web` is the UI (run setup, results, trade inspecto
 
 **Stages** ([feature pipeline](feature-pipeline.md)): each stored table is a `Stage`
 (`strategy_core/stages.py`) in its own module (`stage_bar_1s.py`, `stage_bar_1m.py`,
-`stage_candle_1m_1s.py`, `stage_candle_1h_1m.py`, `stage_stats_1h_1m.py`), registered in
-tier order in `pipeline.STAGES`. A stage declares its inputs, columns (with
+`stage_candle_1m_1s.py`, `stage_candle_1h_1m.py`, `stage_stats_1h_1m.py`, `stage_vol_1m.py`),
+registered in tier order in `pipeline.STAGES`. A stage declares its inputs, columns (with
 roles and units), `MODULES` (hashed into its builder identity), settings, checkpoint state,
 and `warmup()` in scheduled-open seconds. `Pipeline` runs them per chunk and passes in-memory
 products (bars, metrics, candles) and each stage's rows (`products["tables"]`) downstream. Ingest (`apps/backtest-runner/.../ingest.py`)
@@ -91,8 +92,8 @@ computes every stage from the DBN files but writes only stages that are not curr
 stage's builder, checkpoint, and `warm` flag, and the lead is derived from the warm-ups
 (at least 40 sessions). The engine reads its features from the same stages
 (`pipeline.StageFeatures`, PR B1): every `candle_1m_1s` feature as `1m@1s.<name>` and every
-`candle_1h_1m` and `stats_1h_1m` feature of the latest completed minute as `1h@1m.<name>`, with
-`1h@1m.age_s`; a stored NULL reads as NaN (181 features).
+`candle_1h_1m`, `stats_1h_1m`, and `vol_1m` feature of the latest completed minute as
+`1h@1m.<name>`, with `1h@1m.age_s`; a stored NULL reads as NaN (207 features).
 
 ## Core rules
 
@@ -156,10 +157,10 @@ These are fundamental; changing any of them changes every stored value.
 
 | Area     | State                                                                                                                                                                                                                                                                                                                                                                      |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70); baseline schema and cleanup (PR #71); minute stages and the engine on the stage graph (PR #74, B1); hourly window statistics (PR #75, B2, awaiting merge) |
+| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70); baseline schema and cleanup (PR #71); minute stages and the engine on the stage graph (PR #74, B1); hourly window statistics (PR #75, B2); minute volatility (PR #76, C1, awaiting merge) |
 | Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                                                                                                                                                                                    |
-| Database | PostgreSQL 18 database `trading`: `0001_baseline`, `0002_minute_rows`, and `0003_hour_stats` applied; GC and SI: 71,559,900 rows per second table ([baseline](#baseline-rebuild-gc-and-si)), 1,192,665 per minute table ([B1](#pr-b1-results-minute-stages), [B2](#pr-b2-results-hourly-statistics))                                                                       |
-| Ingest   | Baseline rebuild completed November 4 (runs 1–2); run 3 added the minute stages in 2 min 29 s, run 4 the hourly statistics in 1 min 55 s; 40-session lead, 257/257 front sessions per product; every stage `current`                                                                                                                                                       |
+| Database | PostgreSQL 18 database `trading`: `0001_baseline` through `0004_minute_volatility` applied; GC and SI: 71,559,900 rows per second table ([baseline](#baseline-rebuild-gc-and-si)), 1,192,665 per minute table ([B1](#pr-b1-results-minute-stages), [B2](#pr-b2-results-hourly-statistics), [C1](#pr-c1-results-minute-volatility))                         |
+| Ingest   | Baseline rebuild completed November 4 (runs 1–2); run 3 added the minute stages in 2 min 29 s, run 4 the hourly statistics in 1 min 55 s, run 5 the minute volatility in 1 min 55 s; 40-session lead (37 required, by `vol_1m`), 257/257 front sessions per product; every stage `current`                                                                       |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                                                                                                                                                                            |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                                                                                                                                                                           |
 
@@ -170,12 +171,65 @@ holds the rolling `1m@1s` candle and 87 normalized features. `market.bar_1m` hol
 statistics per minute, merged exactly from its 60 seconds, plus observed seconds and
 one-second returns; `market.candle_1h_1m` holds the rolling `1h@1m` candle and 77 features, and
 `market.stats_1h_1m` 16 statistics of the same window (realized volatility, minute-return
-moments, path, session levels). Each is a stage with its own
+moments, path, session levels), and `market.vol_1m` 26 volatility features of it (ATR horizons,
+bullish/bearish and adverse-excursion ATR, extremes as levels, time-of-day and daily ATR). Each
+is a stage with its own
 version and checkpoints ([pipeline](feature-pipeline.md)). Historical run #2 rebuilt GC and SI
 with a 40-session lead in 23 min 44 s with 8 workers and used 80.84 GB including indexes
 ([measurements](ingestion.md#measured)). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
 by rebuilding from the DBN files ([how](ingestion.md#adding-a-metric-or-feature)).
+
+## PR C1 results (minute volatility)
+
+Completed November 4, 2026, from PR #76 (head `58cddfd`, reviewed by Codex with no findings).
+`0004_minute_volatility` was applied to `trading`; `ingest plan GC SI` then showed `add` for all
+12 contracts with the reason `stages without stored rows: vol_1m`, every other builder
+unchanged, and the required lead 37 sessions (`vol_1m`), inside the 40 lead. Run 5
+(`ingest run GC SI --workers 8`) ended `done` in 1 min 55 s (868 contract-sessions, about
+0.4 s each), writing only `market.vol_1m`. Builders: GC `8412ccd99b66`, SI `916bd6359326`. A
+fresh plan reports every contract `current`.
+
+- **Coverage:** 596,235 GC and 596,430 SI rows, one per stored minute; keys and `status` equal
+  `candle_1h_1m` row for row (0 differences); the continuous view holds 353,100 minutes per
+  product (257/257 front sessions, each minute once).
+- **Reference:** an independent recomputation from the stored rows
+  (`~/ingest-gc-si-c1.reference.py`): plain-Python per-phase Wilder averages on the candle's
+  windows (carried price from `bar_1m`), the window path merged from `bar_1m`'s per-minute
+  drawdown, drawup, and extreme order, the time-of-day normal from the stored `atr_bps`, and the
+  daily scale from `bar_1m` and the calendar. All 1,190,467 complete windows match: 0 NULL
+  mismatches; averages within 2.3e-13 bps (seeding order), the daily ATR, its percentile, the
+  time-of-day normal, ages, order, distances, and the window estimators exactly.
+- **Checks:** (bull + bear) / 2 = `atr_bps` within 1e-9 relative everywhere; `atr_price` equals
+  `atr_bps` × close bit for bit (1,181,110 complete windows); skew and percentile in range;
+  ages 0–3599 and equal to 3599 × (1 − `stats_1h_1m.high_pos`/`low_pos`); high + low distances
+  equal the range; excursions at least the window's drawdown and drawup; true range at least
+  the range; the daily ATR constant within each session: 0 violations.
+- **Warm and rolls:** the stage needs 37 typical sessions (the daily percentile's 35 sessions as
+  whole days); 220/257 front sessions per product are warm, the cold ones the first 37
+  downloaded (2025-11-03 to 12-23, `history_limited`), which include the first roll
+  (2025-11-26: `atr_tod_log` and `day_atr_pct` still NULL). The four later rolls per product and
+  all September sessions have 0.00% NULL `atr50_bps`, `bull_atr_bps`, adverse ATR,
+  `atr_tod_log`, `tr_atr`, `day_atr_bps`, `day_atr_pct`, `day_range_ratio`, and `atr_usd`.
+- **Distributions** (front series, median and 5–95%): `atr_tod_log` −0.05 (−0.57–0.49 GC): the
+  hourly ATR typically sits within a factor of 1.7 of its time-of-day normal; `day_range_ratio`
+  0.58 (0.14–1.41); `bull_bear_skew` +0.04 GC, +0.03 SI (−0.24–0.29): declines from P₀ slightly
+  larger than rallies; long and short excursions 0.67 and 0.68 ATR; `tr_atr` 0.87; `spread_atr`
+  0.016 GC, 0.024 SI; daily ATR 230 bps GC, 484 SI; hourly ATR $1,869 GC and $2,910 SI per
+  contract.
+- **Size:** 0.42 GB including indexes; `vol_1m` checkpoints 156 MB over 868 sessions (the
+  time-of-day buffer, 1,440 × 20 values each).
+- **Pilot first:** a throwaway database built GC 2026-07-20..08-05 with `main`, then added this
+  stage (`add`, 0.4 s per session; the same reference: 0 mismatches over 28,862 windows), and
+  rebuilt it alone when marked stale (rows and checkpoints byte-identical). A second throwaway
+  database (GC 2026-05-01..08-05, built with the branch) filled the daily and time-of-day chains:
+  0 mismatches over 175,203 windows. Both dropped.
+- **Engine:** `research verify` on the MGC sample day matches all 207 features and 13 trades;
+  second by second 315.5 s (317 s before), whole session 0.67 s.
+
+Local evidence uses the prefix `~/ingest-gc-si-c1`: `.plan.json`, `.log`, `.summary.json`,
+`.replan.txt`, `.validation.sql` and `.validation.txt`, `.reference.py` and `.reference.json`,
+`.verify.json`, `.checks.log`; the pilots' are `~/ingest-pilot-c1-*`.
 
 ## PR B2 results (hourly statistics)
 
@@ -332,7 +386,8 @@ History: run #1 (November 3, 2026, 11 min 2 s) stored GC and SI with the one-bui
 and a 5-session lead; run #2 (November 4) rebuilt them with stages; the
 [baseline rebuild](#baseline-rebuild-gc-and-si) then recreated them from scratch,
 [run 3](#pr-b1-results-minute-stages) added the minute stages, and
-[run 4](#pr-b2-results-hourly-statistics) the hourly statistics.
+[run 4](#pr-b2-results-hourly-statistics) the hourly statistics, and
+[run 5](#pr-c1-results-minute-volatility) the minute volatility.
 
 To check current coverage or extend after new downloads:
 
@@ -484,7 +539,7 @@ Decisions made in B2 (derived, reported in the PR):
 - **NULLs reach the engine as NaN** (`StageFeatures.read`, from the PR #75 review): this
   stage keeps NaN behind its NULLs, and the engine applies every table's NULL masks.
 
-## PR C: volatility tier (next)
+## PR C: volatility tier
 
 The specification is [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family),
 with Paul's decisions in [section 6](plan-1h-and-pivots.md#6-decisions) (items 2, 4, and 6).
@@ -494,17 +549,30 @@ current. No fundamental question is open; decide the derived details and report 
 Paul only if a warm-up chain needs more than the 40-session lead, since raising the lead
 rebuilds every stage.
 
-**Recommended split** (decide and report), as B was split:
+**Split**, as B was split:
 
-- **C1: `vol_1m`** (inputs `bar_1m`, `candle_1h_1m`): about 1.2 million rows for GC+SI, about
-  2 minutes to add, no live-latency concern; the slow pivot scales of PR D need it. Put the
-  per-window calculations in a new shared module (for example `volatility.py`) and the stage
-  in `stage_vol_1m.py`. Migration `0004`.
-- **C2: `vol_1s`** (inputs `bar_1s`, `candle_1m_1s`): 71.6 million rows for GC+SI (roughly
-  20 GB at about 25 columns; 241 GiB were free on November 4), computed every second in live
-  sessions, so measure `research verify`'s second-by-second time (now 317 s for the MGC day,
-  about 4 ms per second, against the 100 ms close delay). Migration `0005`. Editing the shared
-  module in C2 makes `vol_1m` stale, a 2-minute rebuild; say so in the PR.
+- **C1: `vol_1m`: done (PR #76; [results](#pr-c1-results-minute-volatility)).** The
+  per-window calculations are in `strategy_core/volatility.py` (`split_atr`, `TimeOfDay`,
+  `DailyScale`, Parkinson and Garman–Klass), the stage in `stage_vol_1m.py`, migration `0004`.
+  26 features and the context columns `atr_price`, `atr_usd`.
+- **C2: `vol_1s`, next** (inputs `bar_1s`, `candle_1m_1s`): 71.6 million rows for GC+SI
+  (roughly 20 GB at about 25 columns; 232 GiB were free on November 4), computed every second
+  in live sessions, so measure `research verify`'s second-by-second time (315.5 s for the MGC
+  day after C1, about 4 ms per second, against the 100 ms close delay). Migration `0005`.
+  Reuse `volatility.py` unchanged if possible: `TimeOfDay` and `DailyScale` take any row step
+  (`session_minute` keys second rows by their minute; `DailyScale(calendar, SECOND, 14, 20)`
+  gives the same daily ATR as `vol_1m`), and `split_atr` any phase count. Editing the module
+  makes `vol_1m` stale, a 2-minute rebuild; say so in the PR. Its checkpoint will also hold a
+  1,440 × 20 time-of-day buffer (about 156 MB over GC/SI's 868 sessions).
+
+Decisions made in C1 (derived, reported in PR #76): averages (horizons, bull/bear, adverse,
+time-of-day) are defined like the ATR, for complete and carried empty windows; values of the
+window and the session so far need a complete window; the daily ATR and its percentile belong to
+the session. A daily true range needs a complete session whose previous interval was complete;
+each is stored in bps of its own close, and `day_range_ratio` uses the session's true range so
+far from the previous close. The percentile is decision 6's reading (the daily ATR among its
+previous 20 values, ties half). Ages at `1h@1m` equal 3599 × (1 − `stats_1h_1m.high_pos`), kept
+so both resolutions share columns. Dollars per contract come from the contract symbol's product.
 
 **What each stage stores**, per window, from same-phase windows like ATR, normalized, NULL
 unless defined:
@@ -598,10 +666,12 @@ The order and decisions (November 3, 2026) are in the
    lead, carried prices, and the path fields; GC and SI rebuilt
    ([results](#rebuild-with-stages-gc-and-si)).
 2. **Baseline rebuild**: done ([results](#baseline-rebuild-gc-and-si)).
-3. **`1h@1m` rows (PR B)**: done: B1 (PR #74) and B2 (PR #75, merge first)
+3. **`1h@1m` rows (PR B)**: done: B1 (PR #74) and B2 (PR #75)
    ([details](#pr-b-1h1m-rows)).
-4. **Volatility tier (PR C), next** ([details](#pr-c-volatility-tier-next)): ATR horizons, time-of-day and daily ATR, bullish and
-   bearish ATR, and adverse-excursion ATR ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
+4. **Volatility tier (PR C)** ([details](#pr-c-volatility-tier)): C1 `vol_1m` done (PR #76, merge
+   first); **C2 `vol_1s`, next**: ATR horizons, time-of-day and daily ATR, bullish and bearish
+   ATR, and adverse-excursion ATR at second resolution
+   ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 5. **Swing structure (PRs D–F)**: directional-change pivots at 0.5, 1, and 2 ATRs on both
    resolutions with higher/lower highs and lows (D), structure signals (E), then outcome
    labels and the benchmark (F).

@@ -11,8 +11,8 @@ it, where the work stands, and exactly how to continue.
    GC/SI are built and verified ([results](#pr-b2-results-hourly-statistics)), so `main`
    cannot run `research db` or `research ingest` until #75 is merged; branches made before it
    must rebase.
-2. **Then build PR C**, the volatility tier ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)):
-   new stages `vol_1s` and `vol_1m`, new tables only.
+2. **Then build PR C**, the volatility tier: new stages `vol_1m` and `vol_1s`, new tables
+   only. What to build and how, step by step: [PR C](#pr-c-volatility-tier-next).
 
 How to work in this repository:
 
@@ -484,6 +484,111 @@ Decisions made in B2 (derived, reported in the PR):
 - **NULLs reach the engine as NaN** (`StageFeatures.read`, from the PR #75 review): this
   stage keeps NaN behind its NULLs, and the engine applies every table's NULL masks.
 
+## PR C: volatility tier (next)
+
+The specification is [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family),
+with Paul's decisions in [section 6](plan-1h-and-pivots.md#6-decisions) (items 2, 4, and 6).
+It adds the stages `vol_1s` and `vol_1m` (tier 1; inputs in the
+[feature pipeline](feature-pipeline.md#stages)) as new tables only: every stored stage stays
+current. No fundamental question is open; decide the derived details and report them. Ask
+Paul only if a warm-up chain needs more than the 40-session lead, since raising the lead
+rebuilds every stage.
+
+**Recommended split** (decide and report), as B was split:
+
+- **C1: `vol_1m`** (inputs `bar_1m`, `candle_1h_1m`): about 1.2 million rows for GC+SI, about
+  2 minutes to add, no live-latency concern; the slow pivot scales of PR D need it. Put the
+  per-window calculations in a new shared module (for example `volatility.py`) and the stage
+  in `stage_vol_1m.py`. Migration `0004`.
+- **C2: `vol_1s`** (inputs `bar_1s`, `candle_1m_1s`): 71.6 million rows for GC+SI (roughly
+  20 GB at about 25 columns; 241 GiB were free on November 4), computed every second in live
+  sessions, so measure `research verify`'s second-by-second time (now 317 s for the MGC day,
+  about 4 ms per second, against the 100 ms close delay). Migration `0005`. Editing the shared
+  module in C2 makes `vol_1m` stale, a 2-minute rebuild; say so in the PR.
+
+**What each stage stores**, per window, from same-phase windows like ATR, normalized, NULL
+unless defined:
+
+1. **Horizons:** ATR(5) and ATR(50) in bps, `log(ATR5 / ATR14)`, `log(ATR14 / ATR50)`.
+   ATR(14) is already `atr_bps` in the candle tables: read it, do not store it again. Hourly
+   ATR(50) settles after 392 periods, about 17 sessions.
+2. **Bullish and bearish ATR:** Wilder(14) of `2 × down` and `2 × up`, where `up` and `down`
+   split each true range from `P₀`, the previous same-phase window's close (the `prev` that
+   `kernels.wilder_atr` keeps), or the window's first trade when there is none. Use the
+   ATR's own inputs (`Candles.analysis()`: complete windows, and empty ones at the carried
+   price), its seeding (the mean of the first 14, then Wilder), and its reset after a missing
+   window, so `(bull + bear) / 2` equals `atr_bps`: test that to rounding. Their skew
+   `(bull − bear) / (bull + bear)`.
+3. **Adverse excursion:** per window, long `max(drawdown, P₀ − low)` and short
+   `max(drawup, high − P₀)` from the window's exact path fields (`products["window"]` and
+   `products["hour_window"]`, `MetricWindow` output); their Wilder(14) averages in bps, and the
+   current window's excursions in ATR.
+4. **The window's extremes as levels:** `high_dist_atr`, `low_dist_atr`, `high_age_s`,
+   `low_age_s` (counted in rows, never clock time), `extreme_order`. `stats_1h_1m` already
+   stores where the hourly high and low fell (`high_pos`, `low_pos`).
+5. **Time-of-day normal:** `log(ATR / mean of the same session minute's samples over the
+previous 20 sessions)`, keyed by the minute's offset in scheduled-open minutes from the
+   session's open; one sample per minute (`vol_1m`: the `1h@1m` ATR at the minute row;
+   `vol_1s`: the `1m@1s` ATR at ordinal `60m`). The checkpoint holds at most 1,380 × 20 values.
+6. **Daily scale:** the mean true range of the prior 14 complete sessions (bps; the previous
+   session's close as `P₀`; within the contract, never across a roll), the session's range so
+   far as a share of it, distances to the session high and low in daily ATRs, and the daily
+   ATR's percentile among its previous 20 values: decision 6's 35-session chain. (Section 7
+   says "the ATR's percentile within its own trailing sessions"; confirm that reading in the
+   PR.) Sessions are the calendar's intervals, as for `session_cvd` and `stats_1h_1m`.
+7. **The current window:** true range ÷ ATR; Parkinson and Garman–Klass volatility in bps;
+   spread ÷ ATR (`spread_bps / atr_bps` of the candle row); at `1m@1s`, realized volatility
+   from the window's one-second returns ÷ ATR (the `1h@1m` one is `stats_1h_1m.rv_atr`).
+8. **Risk context, never features:** ATR in price units and in dollars per contract, as
+   context columns for stops and sizing.
+
+**Warm-up** ([derived](feature-pipeline.md#warm-up-is-derived-never-typed)):
+`Stage.warmup()` is in scheduled-open seconds, and `stages.py` is in every stage's identity, so
+do not change it. For a chain counted in sessions, declare sessions × 86,400 s (no session is
+longer than a day, as `stats_1h_1m.DAY_SECONDS` does); the planner rounds up with the
+product's typical session. The daily chain, 15 + 20 = 35 sessions, becomes 37 typical GC
+sessions, inside the 40-session lead.
+
+**How: the B2 procedure, which worked** (PR #75):
+
+1. **New modules only.** A stage reads its inputs' rows from `products["tables"][name]` and
+   their in-memory products (`bars`, `minutes`, `candles`, `window`, `hour_candles`,
+   `hour_window`, …), never by editing their modules. A same-tier input is a declared edge:
+   list it in `INPUTS` and register the stage after it in `pipeline.STAGES`.
+2. **Determinism.** Leave NaN behind NULL floats in `Table.values` (the engine also reads NULL
+   as NaN, `StageFeatures.read`). Compute floats in one fixed order (numba loops per window
+   and per phase; running sums with the carry prepended), so any chunking gives identical bits.
+3. **The engine.** Join `vol_1s` into the `1m@1s.` features row by row with `candle_1m_1s`, and
+   add `vol_1m` to `StageFeatures.HOURLY`; names must not collide within a prefix (test it).
+4. **Tests,** as `lib/strategy-core/tests/test_hour_stats.py`: direct references (plain-Python
+   Wilder averages, like `helpers.wilder_rsi_reference`, and values from the trades); any
+   chunking (`[1, 7, 59, 61, 300, 1, 1000]` seconds) and checkpoints inside a minute; the
+   two-start warm-up test (agrees at the declared warm-up, differs at half); scale invariance
+   (prices ×3, sizes ×7); the engine's view. In `test_ingest.py`, stub the new warm-ups in the
+   `world` fixture (it has five sessions), and update `SLOT_SECONDS`, the plan reasons,
+   `warm_sessions`, and an "added alone" test like `test_the_hourly_statistics_are_added_alone`.
+5. **Before migrating,** compute the stage identities on the branch (`ingest.identities`) and
+   check that every existing stage's `sha256` is already in `market.builder` with stored
+   slices; only the new stage may be new.
+6. **Pilot** on a throwaway `trading_test_*` database: build GC 2026-07-20..08-05 with `main`
+   (a detached worktree with `uv sync --frozen`), migrate with the branch, require `ingest plan`
+   to show only `add` for the new stage, run it, recompute it independently from the stored
+   rows (adapt `~/ingest-gc-si-b2.reference.py`), mark it stale and `--rebuild` it alone
+   (byte-identical by `md5(string_agg(...))`), then drop the database.
+7. **Open the PR ready for review,** and apply the migration to `trading` only after Codex has
+   reviewed the code head: an applied migration cannot change. Then
+   `ingest run GC SI --workers 8`, a fresh plan (`current`), the SQL checks (adapt
+   `~/ingest-gc-si-b2.validation.sql`: coverage, keys equal the candle table, the continuous
+   view, warm, NULL rates at each roll's first front session and in September, bounds), the
+   full-year reference, `research verify`, `pnpm lint && pnpm test && pnpm build`, the docs,
+   and a prompt merge.
+
+Practical notes: a worktree's `node_modules` can be stale (`pnpm install --frozen-lockfile
+--config.confirmModulesPurge=false`); session scratch folders can vanish when a session is
+interrupted, so keep scripts and evidence under `~/ingest-<name>.*`; `research verify` takes
+about 6 minutes; `~/.agents/skills/git-management/scripts/pr-context.py` reports whether
+Codex's review covers the head.
+
 ## Next steps
 
 The order and decisions (November 3, 2026) are in the
@@ -495,7 +600,7 @@ The order and decisions (November 3, 2026) are in the
 2. **Baseline rebuild**: done ([results](#baseline-rebuild-gc-and-si)).
 3. **`1h@1m` rows (PR B)**: done: B1 (PR #74) and B2 (PR #75, merge first)
    ([details](#pr-b-1h1m-rows)).
-4. **Volatility tier (PR C), next**: ATR horizons, time-of-day and daily ATR, bullish and
+4. **Volatility tier (PR C), next** ([details](#pr-c-volatility-tier-next)): ATR horizons, time-of-day and daily ATR, bullish and
    bearish ATR, and adverse-excursion ATR ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 5. **Swing structure (PRs D–F)**: directional-change pivots at 0.5, 1, and 2 ATRs on both
    resolutions with higher/lower highs and lows (D), structure signals (E), then outcome

@@ -35,8 +35,10 @@ task live in [handoff: next steps](handoff.md#next-steps).
       `trading` and built for GC/SI on November 4 in 1 min 55 s; full-year checks passed
       ([results](handoff.md#pr-b2-results-hourly-statistics)). Merge #75 before other database
       work.
-- [ ] **Volatility tier (PR C), next.** Including bullish, bearish, and adverse-excursion ATR
-      ([plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
+- [ ] **Volatility tier (PR C), next.** Stages `vol_1m` (C1) and `vol_1s` (C2): ATR horizons,
+      bullish, bearish, and adverse-excursion ATR, time-of-day and daily ATR
+      ([handoff: what and how](handoff.md#pr-c-volatility-tier-next),
+      [plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 - [ ] **Swing structure, signals, labels (PRs D–F)**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.

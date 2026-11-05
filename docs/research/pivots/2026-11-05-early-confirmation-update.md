@@ -146,9 +146,8 @@ offset. On pre-holdout blocks, run the exact PR F labeler on null trade paths (e
 session's real trade times with sign-randomized trade-to-trade returns), compute the
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
-input. If they disagree, replace the closed form with a causal simulation of trade arrivals
-at the recent trade rate, with the fixed path budget and smoothing of PR F0 so that no
-outcome probability is zero. Call the result `P_null,K`; the formula above is its limit as `K`
+input. If they disagree, the closed form must be replaced by a fallback that meets the
+requirements in PR F0, and then revalidated the same way. Call the result `P_null,K`; the formula above is its limit as `K`
 grows.
 
 PR F keeps **session end** as its own outcome: the session closed before the horizon was
@@ -263,10 +262,12 @@ an illustration, not evidence for futures).
 
 **Proposed rule.** Publish the calibrated probability on every row while a candidate is open;
 this needs the per-row model of [PR G1b](#pr-g1b-per-row-probability). Raise an alarm at the
-first row close where `P ≥ b(scale, stage)`. Choose `b` by replaying the complete alarm
+first row close where `P ≥ b(scale, band)`, where the band is the row's progress `q`:
+below 0.25, from 0.25 to 0.5, or 0.5 and above (the snapshot stages' edges), so rows before
+the first stage have their own threshold. Choose `b` by replaying the complete alarm
 process (first alarms, overlapping candidates, timeouts) on training blocks for a target
 false-alarm rate per open hour, and report the whole frontier. With only the snapshot model
-of PR G1, alarms can fire only at the stage crossings.
+of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 
 Adaptive conformal inference is not a substitute. It controls the long-run miscoverage of
 online prediction sets once outcomes arrive
@@ -370,7 +371,7 @@ released trades
       hazard, cross-scale state, time-of-day volatility ratio
   L3  calibrated probability per open candidate and scale, from the close's displacement x:
         logit P = logit P_null,K(x, R, C, s, K) + f(L2 features)
-  L4  alarm at the first row close with P ≥ b(scale, stage), b set by replaying the whole
+  L4  alarm at the first row close with P ≥ b(scale, progress band), b set by replaying the whole
       alarm process for a target false-alarm rate per open hour; recalibrated on new blocks
 ```
 
@@ -483,20 +484,22 @@ carried through rows without trades.
   units, so scale-invariant by construction:
   - `first_passage_prob(u, d, kappa=0.0)`: `P_drift` with no horizon, with a series
     expansion near `κ = 0`;
-  - `first_passage_probs_k(u, d, s, k, monitoring="continuous", trade_rate=None)`: the
-    three outcome probabilities of `P_null,K`. Continuous monitoring uses the Brownian
-    series, which depends only on `s·√k`. With a causal `trade_rate` (trades per row), it
-    instead simulates trade arrivals over `k` rows, each trade's return scaled so the
-    variance per row stays `s²`, with a fixed seed. It uses at least 100,000 paths per grid
-    cell (a standard error of at most 0.0016 per outcome), cached by cell, and adds 0.5 to
-    each outcome count before normalizing (Jeffreys smoothing), so every outcome
-    probability, and `P(reversal | resolved)`, is positive and finite. The series is
-    deterministic and positive whenever `s > 0` and `k > 0`;
+  - `first_passage_probs_k(u, d, s, k)`: the three outcome probabilities of `P_null,K` for
+    continuously monitored Brownian motion, from the series, which depends only on `s·√k`
+    and is deterministic and positive whenever `s > 0` and `k > 0`. Compute it in the log
+    domain so small probabilities keep their precision as logits;
+  - only if the section 2.1 validation fails, a fallback for sparse trading. It is designed
+    in F0 and must meet four requirements. It takes the causal, product-specific law of
+    trade-to-trade returns (tick size and return magnitudes), not only a trade rate and
+    variance, since equal rate and variance can give different hit rates. It controls error
+    in logit space, through adaptive or importance sampling or a deterministic method,
+    because an absolute standard error does not bound rare-outcome logits. It never returns
+    a zero probability. And it is revalidated against the null replay before use;
   - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
 - Tests: the `κ → 0` and `K → ∞` limits; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
-  probabilities summing to 1; simulated results converging to the continuous ones as the
-  trade rate grows, and differing at low rates; `s = 0` rejected; vector and scalar inputs.
+  probabilities summing to 1; finite logits for small `s·√k`; `s = 0` rejected; vector and
+  scalar inputs.
 - A diagnostic command in `apps/backtest-runner` over `market.pivot_event`, the dense pivot
   stages, and, for the null replays, the released TBBO trades replayed from DBN through the
   engine's source, restricted to blocks before the holdout. It reports `ρ` and overshoot
@@ -533,7 +536,8 @@ carried through rows without trades.
   prediction, with a monotone constraint on `x` in the reversal-vs.-invalidation step;
   TabPFN-2.5 on subsamples of at most 50k rows, for research only.
 - Splits: chronological calendar blocks across GC and SI, grouped by candidate and episode,
-  purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until one configuration is chosen.
+  purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until the G1 configuration, and the G2 configuration if G2 will run, are
+  both locked (see PR G2).
 - Calibration on a later, disjoint training block; stopping-rule thresholds from section 3,
   which at this step fire only at stage crossings; walk-forward predictions stored as a
   stage (for example `pivot_prob_1s` and `pivot_prob_1m`) with model and fold IDs,
@@ -553,8 +557,12 @@ edge, the per-row output is `P_null,K` itself, which needs no fitted model.
 
 ### PR G2: sequence and foundation-model challengers
 
-Only after G1 has a measured baseline. Every challenger uses the same candidates, splits,
-and metrics:
+Only after G1 has a measured baseline. Every challenger uses the same candidates and
+metrics, and the same splits before the holdout: challenger selection, including the
+decision to pre-train, uses pre-holdout validation blocks only. Open the September–October
+2026 holdout once, after both G1 and G2 are locked. If G1 must be reported on that holdout
+before G2 runs, G2's final test needs a fresh chronological block of data after October
+2026:
 
 - MiniRocket or MultiRocket features (aeon) on the last N normalized rows, then logistic
   regression: does raw sequence shape add anything to the engineered features?

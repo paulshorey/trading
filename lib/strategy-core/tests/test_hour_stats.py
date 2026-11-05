@@ -217,6 +217,8 @@ def test_identical_in_any_chunking_and_from_checkpoints_inside_a_minute(world):
         resumed.restore(name, state)
     tail = [resumed.process(c) for c in parts[5:]]
     a, an = join(whole, "stats_1h_1m")
+    for name in (*FEATURE_COLUMNS, "session_vwap"):  # undefined floats are NaN, as stored NULL
+        assert an[name].any() and np.array_equal(np.isnan(a[name]), an[name]), name
     for other in (stepwise, head + tail):
         b, bn = join(other, "stats_1h_1m")
         for k in a:
@@ -309,12 +311,15 @@ def test_the_engine_reads_the_stored_statistics_as_of_each_second(world):
     assert {f"1h@1m.{n}" for n in FEATURE_COLUMNS} <= names
     assert names == set(frame.features)
     p = builder(cal)
-    st, _ = join([p.process(c) for c in chunks], "stats_1h_1m")
+    st, null = join([p.process(c) for c in chunks], "stats_1h_1m")
     ends = frame.end
     at = np.searchsorted(ends, st["end_ns"])
     np.testing.assert_array_equal(ends[at], st["end_ns"])
     for n in FEATURE_COLUMNS:
-        np.testing.assert_array_equal(frame.features[f"1h@1m.{n}"][at], st[n], err_msg=n)
+        got = frame.features[f"1h@1m.{n}"][at]
+        np.testing.assert_array_equal(np.isnan(got), null[n], err_msg=n)  # NULL is NaN, never 0
+        np.testing.assert_array_equal(got[~null[n]], st[n][~null[n]], err_msg=n)
+        assert null[n].any() and (~null[n]).any(), n
     assert np.isfinite(frame.features["1h@1m.rv_bps"]).sum() > 1000
 
 

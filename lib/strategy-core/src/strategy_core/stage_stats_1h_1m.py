@@ -464,7 +464,7 @@ class HourStatsStage(Stage):
             "status": status.astype(np.int16),
             "rv_returns": counts["rv_n"],
             "minute_returns": counts["n_ret"],
-            "session_vwap": np.where(np.isfinite(levels["vwap"]), levels["vwap"], 0.0),
+            "session_vwap": levels["vwap"],  # NaN behind NULL, as in the candle tables
             "prior_high": levels["prior_high"],
             "prior_low": levels["prior_low"],
             "prior_close": levels["prior_close"],
@@ -480,5 +480,5 @@ class HourStatsStage(Stage):
         for name, values in features.items():
             values = np.where(complete, values, np.nan)
             nulls[name] = ~np.isfinite(values)
-            v[name] = np.where(nulls[name], 0.0, values)
+            v[name] = values  # NaN behind NULL, as in the candle tables
         return Table(v, {k: nulls[k] for k in NULLABLE})

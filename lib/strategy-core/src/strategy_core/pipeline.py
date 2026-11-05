@@ -145,6 +145,15 @@ class StageFeatures:
     def names(stage: str) -> list[str]:
         return [c.name for c in BY_NAME[stage].COLUMNS if c.unit]
 
+    @classmethod
+    def read(cls, table: Table, stage: str) -> dict[str, np.ndarray]:
+        """A stage's features as stored: NaN wherever the stored value is NULL."""
+        out = {}
+        for n in cls.names(stage):
+            null = table.nulls.get(n)
+            out[n] = table.values[n] if null is None else np.where(null, np.nan, table.values[n])
+        return out
+
     def specs(self) -> list[FeatureSpec]:
         out = [
             FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
@@ -156,18 +165,18 @@ class StageFeatures:
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
-        fast = rows.tables[self.FAST].values
-        features = {f"1m@1s.{n}": fast[n] for n in self.names(self.FAST)}
-        ends = fast["end_ns"]
+        fast = self.read(rows.tables[self.FAST], self.FAST)
+        features = {f"1m@1s.{n}": v for n, v in fast.items()}
+        ends = rows.tables[self.FAST].values["end_ns"]
         bias_end = rows.tables[self.BIAS].values["end_ns"]
         minute_end = np.r_[self.last_bias_end, bias_end]
         values: dict[str, np.ndarray] = {}
         for stage in self.HOURLY:
-            table = rows.tables[stage].values
-            if not np.array_equal(table["end_ns"], bias_end):
+            table = rows.tables[stage]
+            if not np.array_equal(table.values["end_ns"], bias_end):
                 raise AssertionError(f"{stage} rows must align with {self.BIAS}")
-            for n in self.names(stage):
-                values[n] = np.r_[self.last_bias.get(n, []), table[n]]
+            for n, v in self.read(table, stage).items():
+                values[n] = np.r_[self.last_bias.get(n, []), v]
         # As-of join: the latest minute completed at or before each second. The minute ending at
         # T completes with the second ending at T, so its age is then zero.
         i = np.searchsorted(minute_end, ends, side="right") - 1

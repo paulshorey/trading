@@ -1,7 +1,8 @@
 # Early pivot (swing high/low) prediction: research notes
 
 Historical proposal, November 2, 2026. Use the newer
-[reviewed findings](research/pivots/2026-11-03-reviewed-findings.md) and
+[reviewed findings](research/pivots/2026-11-03-reviewed-findings.md),
+[early-confirmation update](research/pivots/2026-11-05-early-confirmation-update.md), and
 [next-agent handoff](project/pivot-detection-handoff.md) for current recommendations.
 They correct this proposal's future-label leakage claim, trade-label reuse, timeout
 handling, and profitability selection gate. The original text is retained below as

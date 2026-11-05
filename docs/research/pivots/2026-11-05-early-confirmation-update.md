@@ -273,16 +273,20 @@ Each first alarm is scored by the label of the row that raised it. A reversal is
 alarm. An invalidation or a timeout is a false alarm: the candidate did not confirm within
 the horizon it was given. So is a session end, since an alarm whose horizon ran past the
 scheduled close had that shorter horizon known when it fired. Only an unknown outcome
-(missing data) is unresolved: it is left out of both counts and reported, and the
-missing-coverage hours are left out of the denominator. The false-alarm rate is false alarms
-divided by the covered open hours of the replayed blocks.
+(missing data) is unresolved. Exposure counts only decision rows whose whole horizon is
+covered: rows whose horizon would reach missing coverage are dropped from the denominator
+together with any alarm they raise, which is reported with its own count. The false-alarm
+rate is false alarms divided by the open hours of those fully observable decision rows.
 
-Alarms are also matched one-to-one to confirmed pivot events, by product, scale, and
-direction. One reversal can resolve overlapping candidates, such as an extreme replaced by
-less than `C` and its replacement. The first alarm matched to the event is the true alarm;
-any further alarm resolved by the same event is a duplicate. Duplicates are reported as
-duplicates per open hour and included in the frontier's alarm burden, as the
-[reviewed findings](2026-11-03-reviewed-findings.md) require.
+The alarm's target is its label event: the label's reversal barrier reached before
+invalidation within the horizon. Alarms are matched one-to-one to these events by product,
+scale, and direction: alarms whose reversals are reached by the same trade share one event,
+as when an extreme replaced by less than `C` and its replacement both resolve on one move.
+The first alarm on an event is the true alarm and any further one a duplicate. Duplicates are
+reported per open hour and included in the frontier's alarm burden, as the
+[reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
+no confirmed pivot event (the replacement's refreshed `θ` was not reached) still counts as
+true for this target; their number is reported as a separate diagnostic.
 
 Adaptive conformal inference is not a substitute. It controls the long-run miscoverage of
 online prediction sets once outcomes arrive
@@ -504,8 +508,10 @@ carried through rows without trades.
     gives a finite probability between 0 and 1 rather than an overflow;
   - `first_passage_probs_k(u, d, s, k)`: the three outcome probabilities of `P_null,K` for
     continuously monitored Brownian motion, from the series, which depends only on `s·√k`
-    and is deterministic and positive whenever `s > 0` and `k > 0`. Compute it in the log
-    domain so small probabilities keep their precision as logits;
+    and is deterministic and positive whenever `s > 0` and `k > 0`. It returns log
+    probabilities (and the two binary steps' logits) computed in the log domain, never
+    plain probabilities, because a hit probability for very small `s·√k` underflows a
+    float. Offsets and log loss are computed from these logs;
   - only if the section 2.1 validation fails, a fallback for sparse trading. It is designed
     in F0 and must meet four requirements. It takes the causal, product-specific law of
     trade-to-trade returns (tick size and return magnitudes), not only a trade rate and
@@ -517,11 +523,14 @@ carried through rows without trades.
 - Tests: the `κ → 0` and `K → ∞` limits; finite, monotone results at extreme drift such as
   `κ = ±1000`; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
-  probabilities summing to 1; finite logits for small `s·√k`; `s = 0` rejected; vector and
+  probabilities summing to 1; finite log probabilities and logits for small `s·√k`, including cases whose plain probability would underflow; `s = 0` rejected; vector and
   scalar inputs.
 - A diagnostic command in `apps/backtest-runner` over `market.pivot_event`, the dense pivot
   stages, and, for the null replays, the released TBBO trades replayed from DBN through the
-  engine's source, restricted to blocks before the holdout. It reports `ρ` and overshoot
+  engine's source, restricted to blocks before the holdout. Its randomization protocol is
+  fixed and recorded before use: 20 independent sign randomizations per session, each with
+  a seed derived from a recorded base seed and the session, results averaged across
+  randomizations, and the randomization standard error reported next to every statistic. It reports `ρ` and overshoot
   survival against the fixed-`θ` replay and the null replay of the adaptive detector
   (section 2.2), and the empirical `P(confirm before a new extreme | x)` against `x`, by
   product, scale, and session segment, with session-block intervals. Output: JSON plus a
@@ -576,9 +585,13 @@ carried through rows without trades.
 Required before publishing a probability on every row or alarming at any row close. It
 adds the per-row label of section 6 (its own label ID: PR F's barriers, fixed relative to
 the candidate's extreme, with a `K`-row horizon counted from each row), fits the same models
-on it, and computes the null from each row's displacement `x` and horizon. Then it refits the stopping-rule thresholds by
-replaying first alarms, each scored by the label of the row that raised it. If G1 found no
-edge, the per-row output is `P_null,K` itself, which needs no fitted model.
+on it, and computes the null from each row's displacement `x` and horizon. A row the fitted
+model cannot score (a NULL input from warm-up, an incomplete window, or an epoch reset)
+publishes `P_null,K` instead, flagged as the fallback; such rows stay in the threshold
+replay and alarm under the same thresholds, and their share is reported. Then it refits the
+stopping-rule thresholds by replaying first alarms, each scored by the label of the row
+that raised it. If G1 found no edge, the per-row output is `P_null,K` itself, which needs
+no fitted model.
 
 ### PR G2: sequence and foundation-model challengers
 

@@ -271,9 +271,18 @@ of PR G1, alarms can fire only at the stage crossings, using the band each stage
 
 Each first alarm is scored by the label of the row that raised it. A reversal is a true
 alarm. An invalidation or a timeout is a false alarm: the candidate did not confirm within
-the horizon it was given. A session end or an unknown outcome is unresolved: it is left out
-of both the true and false counts and reported with its own count. The false-alarm rate is
-false alarms divided by the open hours of the replayed blocks.
+the horizon it was given. So is a session end, since an alarm whose horizon ran past the
+scheduled close had that shorter horizon known when it fired. Only an unknown outcome
+(missing data) is unresolved: it is left out of both counts and reported, and the
+missing-coverage hours are left out of the denominator. The false-alarm rate is false alarms
+divided by the covered open hours of the replayed blocks.
+
+Alarms are also matched one-to-one to confirmed pivot events, by product, scale, and
+direction. One reversal can resolve overlapping candidates, such as an extreme replaced by
+less than `C` and its replacement. The first alarm matched to the event is the true alarm;
+any further alarm resolved by the same event is a duplicate. Duplicates are reported as
+duplicates per open hour and included in the frontier's alarm burden, as the
+[reviewed findings](2026-11-03-reviewed-findings.md) require.
 
 Adaptive conformal inference is not a substitute. It controls the long-run miscoverage of
 online prediction sets once outcomes arrive
@@ -460,7 +469,8 @@ index futures ([arXiv:2507.22712](https://arxiv.org/abs/2507.22712)).
 - **Base rates:** prevalence per stage, and average precision next to ROC AUC.
 - **The overshoot diagnostic** of section 2.2, against null replays of the detector, on
   pre-holdout blocks only, before any model is fitted.
-- **The frontier:** delay in open rows, false alarms per open hour, and lateness (the share
+- **The frontier:** delay in open rows, false alarms and duplicate alarms per covered open
+  hour (section 3), and lateness (the share
   of `θ` consumed at the alarm), compared at matched false-alarm rates.
 - **Placebo:** inputs shifted in time, or permuted within sessions, must show no skill. It
   catches leakage cheaply.
@@ -548,8 +558,11 @@ carried through rows without trades.
   which at this step fire only at stage crossings; walk-forward predictions stored as a
   stage (for example `pivot_prob_1s` and `pivot_prob_1m`) with model and fold IDs,
   available at row close.
-- Exit: a log-loss gain over `P_null,K`, significant under session-block resampling for at
-  least one scale on both GC and SI and stable across time blocks. Otherwise report the
+- Exit: one primary scale, predeclared from pre-holdout validation blocks, shows a log-loss
+  gain over `P_null,K` that is significant under session-block resampling on both GC and SI
+  and stable across time blocks. The other five scales are secondary results, reported with
+  a Holm correction across scales, so picking whichever scale happens to succeed cannot pass
+  the gate. Otherwise report the
   negative result and keep `P_null,K` and the deterministic fields as the indicator.
 
 ### PR G1b: per-row probability
@@ -576,7 +589,15 @@ before G2 runs, G2's final test needs a fresh chronological block of data after 
   OHLCV candles (slow scales first; second candles are outside its usual inputs), drawing
   one path per call. Kronos gets relative values, never stored prices: open, high, low, and
   close divided by the decision row's close, and volume and amount divided by their trailing
-  means. Before evaluation, it must pass the price and size scale-invariance test: multiplying all prices or all sizes must leave its probabilities unchanged. Per candidate, a few hundred sampled paths over the label horizon,
+  means. A covered minute without trades gets the carried, flagged price for all four prices
+  and zero volume and amount; Kronos takes no mask, so its context starts after the latest
+  missing minute, and a candidate with too short a context is excluded and counted. Before
+  evaluation it must pass the price and size scale-invariance test: multiplying all prices
+  or all sizes must leave its probabilities unchanged. Before any selection, freeze and record
+  the sampling protocol: each model's exact checkpoint revision, the number of paths per
+  candidate, the seeds, and the sampling settings (Kronos's temperature and nucleus
+  threshold), and report the Monte Carlo standard error of each probability. Per candidate,
+  a few hundred sampled paths over the label horizon,
   then the Monte Carlo first-passage probability, compared with `P_null,K` and G1. Both
   were released in 2025; check each training cutoff. Kronos starts with a low prior: it was
   far behind HAR-RV for volatility (section 4), and in a small third-party evaluation it did not beat a random walk ([kronos-market-eval](https://github.com/sumit-ai-ml/kronos-market-eval)). Toto 2.0, Chronos-2, or TimesFM qualify only with an explicit

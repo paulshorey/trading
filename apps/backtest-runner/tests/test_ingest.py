@@ -22,6 +22,8 @@ from strategy_core.stage_stats_1h_1m import COLUMNS as STATS_COLUMNS
 from strategy_core.stage_stats_1h_1m import HourStatsStage
 from strategy_core.stage_vol_1m import COLUMNS as VOL_COLUMNS
 from strategy_core.stage_vol_1m import VolMinuteStage
+from strategy_core.stage_vol_1s import COLUMNS as VOL_SECOND_COLUMNS
+from strategy_core.stage_vol_1s import VolSecondStage
 from strategy_core.synthetic import random_trades
 from test_runner import RECORD, FakeCache
 
@@ -81,11 +83,13 @@ DAYS = {
 @pytest.fixture
 def world(monkeypatch):
     monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
-    # The world has five sessions, fewer than the hourly stages' warm-ups (about 10, 5, and 37
-    # sessions: test_stages checks them), so planning tests use one-hour stand-ins.
+    # The world has five sessions, fewer than the hourly and volatility stages' warm-ups (about
+    # 10, 5, 37, and 37 sessions: test_stages checks them), so planning tests use one-hour
+    # stand-ins.
     monkeypatch.setattr(HourCandleStage, "warmup", lambda self: 3600)
     monkeypatch.setattr(HourStatsStage, "warmup", lambda self: 3600)
     monkeypatch.setattr(VolMinuteStage, "warmup", lambda self: 3600)
+    monkeypatch.setattr(VolSecondStage, "warmup", lambda self: 3600)
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -236,8 +240,11 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
             "SELECT contract_id, count(*), count(close), sum(volume) FROM market.bar_1s GROUP BY 1"
         ).fetchall()
         assert {r[0]: r[1] for r in counts} == {ids["GCZ6"]: 165_600, ids["GCG7"]: 165_600}
-        candles = conn.execute("SELECT count(*) FROM market.candle_1m_1s").fetchone()[0]
-        assert candles == 2 * 165_600
+        candles = conn.execute(
+            "SELECT (SELECT count(*) FROM market.candle_1m_1s), "
+            "(SELECT count(*) FROM market.vol_1s)"
+        ).fetchone()
+        assert candles == (2 * 165_600,) * 2  # one row per scheduled second, per contract
         minutes = conn.execute(
             "SELECT (SELECT count(*) FROM market.bar_1m), "
             "(SELECT count(*) FROM market.candle_1h_1m), "
@@ -404,6 +411,7 @@ def test_minute_bounds_follow_the_session_seconds():
     assert store.row_bounds("candle_1h_1m", 61, 180) == (2, 3)
     assert store.row_bounds("stats_1h_1m", 61, 180) == (2, 3)
     assert store.row_bounds("vol_1m", 61, 180) == (2, 3)
+    assert store.row_bounds("vol_1s", 61, 180) == (61, 180)
     assert store.SLOT_SECONDS == {
         "bar_1s": 1,
         "bar_1m": 60,
@@ -411,6 +419,7 @@ def test_minute_bounds_follow_the_session_seconds():
         "candle_1h_1m": 60,
         "stats_1h_1m": 60,
         "vol_1m": 60,
+        "vol_1s": 1,
     }
 
 
@@ -504,21 +513,28 @@ def test_diff_rules():
     assert (i, action, why) == (
         0,
         "add",
-        "stages without stored rows: bar_1m, candle_1h_1m, stats_1h_1m, vol_1m",
+        "stages without stored rows: bar_1m, candle_1h_1m, stats_1h_1m, vol_1m, vol_1s",
     )
     # ... the hourly statistics next to the stages before them (PR B2)
-    before_b2 = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in ("stats_1h_1m", "vol_1m")}
+    later = ("stats_1h_1m", "vol_1m", "vol_1s")
+    before_b2 = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in later}
     _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, before_b2), builders(1),
                                        files, False)  # fmt: skip
-    assert (i, action, why) == (0, "add", "stages without stored rows: stats_1h_1m, vol_1m")
-    # ... and the minute volatility next to every other stored stage (PR C1)
-    stored_five = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n != "vol_1m"}
+    assert (i, action, why) == (0, "add", f"stages without stored rows: {', '.join(later)}")
+    # ... the minute volatility next to the stages before it (PR C1)
+    stored_five = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in later[1:]}
     _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_five), builders(1),
                                        files, False)  # fmt: skip
-    assert (i, action, why) == (0, "add", "stages without stored rows: vol_1m")
+    assert (i, action, why) == (0, "add", "stages without stored rows: vol_1m, vol_1s")
+    # ... and the second volatility next to every other stored stage (PR C2)
+    stored_six = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n != "vol_1s"}
+    _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_six), builders(1),
+                                       files, False)  # fmt: skip
+    assert (i, action, why) == (0, "add", "stages without stored rows: vol_1s")
     # ... and an interrupted add resumes after the sessions it already stored
     first = {s[0].trade_date: 1}
-    minute = {"bar_1m": first, "candle_1h_1m": first, "stats_1h_1m": first, "vol_1m": first}
+    minute = {"bar_1m": first, "candle_1h_1m": first, "stats_1h_1m": first, "vol_1m": first,
+              "vol_1s": first}  # fmt: skip
     part = stored_of(rows, seconds | minute)
     _, i, _, action, _ = ingest.diff(s, s, part, builders(1), files, False)
     assert (i, action) == (1, "add")
@@ -714,9 +730,10 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
 
 
 def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
-    """A stage built by other code is rebuilt alone, leaving the rows of the stages it does not
-    depend on untouched; a stage without rows is added without --rebuild; every stage records
-    whether its values had settled; the lead follows the stages' derived warm-ups."""
+    """A stage built by other code is rebuilt with the stages that read it (`vol_1s` reads
+    `candle_1m_1s`), leaving the rows of the stages they do not depend on untouched; a stage
+    without rows is added without --rebuild; every stage records whether its values had settled;
+    the lead follows the stages' derived warm-ups."""
     cache, data = world
     options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
     with db.connect(database) as conn:
@@ -757,7 +774,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     with db.connect(database) as conn:
         after = slices(conn)
         for key, (builder, _, at) in after.items():
-            if key[0] != "candle_1m_1s":
+            if key[0] not in ("candle_1m_1s", "vol_1s"):
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
                 assert at > before[key][2] and builder == before[key][0], key  # rewritten
@@ -791,6 +808,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "candle_1h_1m": 1,
         "stats_1h_1m": 1,
         "vol_1m": 1,
+        "vol_1s": 1,
     }
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
@@ -845,7 +863,7 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            if key[0] in ("bar_1s", "candle_1m_1s"):
+            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s"):
                 assert (builder, at) == before[key], key  # untouched
             else:
                 assert at > before[key][1] and builder == before[key][0], key  # rewritten
@@ -876,16 +894,18 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
 
 
 @pytest.mark.parametrize(
-    ("stage", "columns", "defined"),
+    ("stage", "columns", "defined", "per", "every"),
     [
-        ("stats_1h_1m", STATS_COLUMNS, ("rv_bps", "prior_close_atr")),  # PR B2
-        ("vol_1m", VOL_COLUMNS, ("bull_atr_bps", "tr_atr", "atr_usd")),  # PR C1
+        ("stats_1h_1m", STATS_COLUMNS, ("rv_bps", "prior_close_atr"), 1380, 1),  # PR B2
+        ("vol_1m", VOL_COLUMNS, ("bull_atr_bps", "tr_atr", "atr_usd"), 1380, 1),  # PR C1
+        ("vol_1s", VOL_SECOND_COLUMNS, ("bull_atr_bps", "rv_atr", "atr_usd"), 82_800, 7),  # C2
     ],
 )
-def test_a_new_minute_stage_is_added_alone(database, world, stage, columns, defined):
+def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, per, every):
     """A new stage next to stored ones. With every other stage current, the plan adds only that
     stage (no --rebuild), the run writes only its table, every other stage's records stay
-    untouched, and the stored rows equal an in-memory build, NULLs included."""
+    untouched, and the stored rows equal an in-memory build, NULLs included (`per` rows per
+    contract session; every `every`-th slot is compared)."""
     cache, data = world
     options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
     with db.connect(database) as conn:
@@ -919,14 +939,14 @@ def test_a_new_minute_stage_is_added_alone(database, world, stage, columns, defi
         after = slices(conn)
         assert {k: v for k, v in after.items() if k[0] != stage} == before  # untouched
         assert {k[1:] for k in after if k[0] == stage} == {k[1:] for k in before}
-        assert conn.execute(f"SELECT count(*) FROM market.{stage}").fetchone()[0] == 4 * 1380
+        assert conn.execute(f"SELECT count(*) FROM market.{stage}").fetchone()[0] == 4 * per
         series = conn.execute(
             f"SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_{stage} "
             "WHERE product = 'GC'"
         ).fetchone()
-        assert series == (3 * 1380, 3 * 1380)
+        assert series == (3 * per, 3 * per)
         columns = [c.name for c in columns]
-        got = read(conn, stage, ids["GCG7"], columns)
+        got = read(conn, stage, ids["GCG7"], columns, every=every)
     [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
     assert {c["action"] for c in plan["contracts"]} == {"current"}
     expected = in_memory(cache, first, "GCG7", [date(2026, 9, 2), date(2026, 9, 3)])
@@ -935,6 +955,9 @@ def test_a_new_minute_stage_is_added_alone(database, world, stage, columns, defi
     null = {
         k: np.concatenate([t.nulls.get(k, np.zeros(len(t), bool)) for t in tables]) for k in columns
     }
+    sample = want["slot_ordinal"] % every == 0
+    want = {k: v[sample] for k, v in want.items()}
+    null = {k: v[sample] for k, v in null.items()}
     np.testing.assert_array_equal(got["slot_ordinal"].astype(np.int64), want["slot_ordinal"])
     assert all((~null[k]).sum() > 1000 for k in defined)
     for k in columns:

@@ -573,7 +573,7 @@ the front-contract sequence: a roll-day true range would compare the new contrac
 and low with the old contract's close, a false volatility spike.
 
 **Implemented at minute resolution in PR C1** as stage `vol_1m` (tier 1, reading `bar_1m` and
-`candle_1h_1m`; calculations in `strategy_core/volatility.py`, which `vol_1s` will share). Derived
+`candle_1h_1m`; calculations in `strategy_core/volatility.py`, shared with `vol_1s`). Derived
 details: averages (ATR(5), ATR(50), bullish/bearish, adverse excursion, the time-of-day normal)
 are defined like the ATR, for complete windows and empty ones at the carried price; values of the
 window itself and of the session so far need a complete window; the daily ATR and its percentile
@@ -586,6 +586,17 @@ scheduled-open seconds from the extreme's second to the window's newest; at `1h@
 `stats_1h_1m.high_pos` and `low_pos` (age = 3599 × (1 − pos)), kept so both resolutions share
 columns. Dollars per contract come from the contract symbol's product (`market.PRODUCTS`).
 Warm-up: the daily percentile, 35 sessions declared as 35 × 86,400 s (37 typical sessions).
+
+**Implemented at second resolution in PR C2** as stage `vol_1s` (tier 1, reading `bar_1s` and
+`candle_1m_1s`; `volatility.py` unchanged, so `vol_1m` stays current). The same 26 features with
+the same names and rules, per phase `o % 60` on same-phase `1m@1s` windows, plus `rv_bps` and
+`rv_atr`: realized volatility from the window's one-second returns (between consecutive observed
+second closes inside the window, none into its first observed second), in bps and against the
+`1m@1s` ATR (the hourly one is `stats_1h_1m.rv_atr`), with its return count `rv_returns` as
+context. Time-of-day samples are the `1m@1s` ATR at ordinal `60m`, keyed by the minute's offset;
+every second of a minute compares its own phase's ATR with that minute's samples from earlier
+sessions. The daily scale is computed from the second rows and equals `vol_1m`'s at every
+minute's last second. Ages count rows, 0–59. Warm-up: 37 typical sessions, as for `vol_1m`.
 
 **Swing thresholds.** The initial pivot grid uses ATR(14) (decision 4). Because the
 threshold normalizer is a variant parameter, the benchmark can add variants without a

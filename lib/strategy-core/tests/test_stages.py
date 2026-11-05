@@ -14,6 +14,7 @@ from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS, CandleStage
 from strategy_core.stage_stats_1h_1m import HourStatsStage
 from strategy_core.stage_vol_1m import VolMinuteStage
+from strategy_core.stage_vol_1s import VolSecondStage
 from strategy_core.stages import StageContext
 from strategy_core.synthetic import random_trades
 
@@ -42,6 +43,9 @@ def test_warmup_follows_the_parameters():
     # typical 23-hour session rounds up to 37, inside the 40-session lead
     vol = VolMinuteStage(StageContext(None, 0, 0, FeatureConfig())).warmup()
     assert vol == 35 * 86_400 and warmup.sessions(vol, 1, 82_800) == 37
+    # ... at both resolutions: the same daily chain; the 1m@1s ATR(50) needs only 392 minutes
+    seconds = VolSecondStage(StageContext(None, 0, 0, FeatureConfig())).warmup()
+    assert seconds == vol
 
 
 def test_the_graph_reads_only_earlier_stages():
@@ -53,6 +57,7 @@ def test_the_graph_reads_only_earlier_stages():
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
+        "vol_1s",
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
     assert {s.NAME: s.INPUTS for s in STAGES if s.RESOLUTION == "1m"} == {
@@ -60,6 +65,12 @@ def test_the_graph_reads_only_earlier_stages():
         "candle_1h_1m": ("bar_1m",),
         "stats_1h_1m": ("bar_1m", "candle_1h_1m"),  # a declared edge within tier 1
         "vol_1m": ("bar_1m", "candle_1h_1m"),
+    }
+    # ... and no second stage reads a minute stage
+    assert {s.NAME: s.INPUTS for s in STAGES if s.RESOLUTION == "1s"} == {
+        "bar_1s": ("market",),
+        "candle_1m_1s": ("bar_1s",),
+        "vol_1s": ("bar_1s", "candle_1m_1s"),  # a declared edge within tier 1
     }
     with pytest.raises(ValueError, match="not an earlier stage"):
         check_graph((CandleStage, BarStage))

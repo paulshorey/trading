@@ -133,7 +133,8 @@ with the ingestion milestone.
 `1m@1s` and `1h@1m` candles with features, computed by the stages that the engine itself
 runs (`pipeline.Pipeline`) with the backtest's default assignment timing; see
 [ingestion](ingestion.md). The engine reads its features from the same stages
-(`pipeline.StageFeatures`): every `candle_1m_1s` feature as `1m@1s.<name>`, and every
+(`pipeline.StageFeatures`): every `candle_1m_1s` and `vol_1s` feature of the window ending at
+each second as `1m@1s.<name>` (joined row by row), and every
 `candle_1h_1m`, `stats_1h_1m`, and `vol_1m` feature of the latest completed minute as
 `1h@1m.<name>` with its age `1h@1m.age_s` (their names never collide; a test checks it). Their `1m@1s` and `1h@1m` window features equal the earlier engine's
 composition bit for bit (a test keeps `features.FeaturePipeline` as the reference). A backtest may read stored rows instead of

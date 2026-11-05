@@ -572,6 +572,21 @@ including their inputs' warm-up, which the 40 lead sessions provide ([decision 6
 the front-contract sequence: a roll-day true range would compare the new contract's high
 and low with the old contract's close, a false volatility spike.
 
+**Implemented at minute resolution in PR C1** as stage `vol_1m` (tier 1, reading `bar_1m` and
+`candle_1h_1m`; calculations in `strategy_core/volatility.py`, which `vol_1s` will share). Derived
+details: averages (ATR(5), ATR(50), bullish/bearish, adverse excursion, the time-of-day normal)
+are defined like the ATR, for complete windows and empty ones at the carried price; values of the
+window itself and of the session so far need a complete window; the daily ATR and its percentile
+belong to the session. A daily true range needs a complete session (seen from its open, no
+missing data) whose previous calendar interval was complete; the daily ATR averages the last 14
+such ranges, each in bps of its session's close, and the percentile ranks it among the previous
+20 sessions' values (ties count half). The time-of-day normal averages the last 20 samples of
+`atr_bps` at the same session minute, read before the current one joins. Ages count rows: the
+scheduled-open seconds from the extreme's second to the window's newest; at `1h@1m` they carry
+`stats_1h_1m.high_pos` and `low_pos` (age = 3599 × (1 − pos)), kept so both resolutions share
+columns. Dollars per contract come from the contract symbol's product (`market.PRODUCTS`).
+Warm-up: the daily percentile, 35 sessions declared as 35 × 86,400 s (37 typical sessions).
+
 **Swing thresholds.** The initial pivot grid uses ATR(14) (decision 4). Because the
 threshold normalizer is a variant parameter, the benchmark can add variants without a
 migration. Candidates: time-of-day ATR, which may stop the open from producing a burst of

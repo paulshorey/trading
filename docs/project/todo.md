@@ -39,12 +39,15 @@ task live in [handoff: next steps](handoff.md#next-steps).
       adverse-excursion ATR, extremes as levels, time-of-day normal, daily ATR and its percentile,
       true range, Parkinson and Garman–Klass, spread ÷ ATR; ATR in price and dollars as context.
       Applied to `trading` and built for GC/SI on November 4 in 1 min 55 s; full-year checks passed
-      ([results](handoff.md#pr-c1-results-minute-volatility)). Merge #76 before other database
+      ([results](handoff.md#pr-c1-results-minute-volatility)). Merged.
+- [x] **Second-resolution volatility (PR C2, #77).** Stage `vol_1s` (migration `0005`) on
+      `volatility.py` unchanged: the 26 `vol_1m` features for the `1m@1s` window plus realized
+      volatility from its one-second returns; joined into the engine's `1m@1s.` features. Live
+      cost about 0.08 ms per second (`research verify` 321.7 s for the MGC day). Applied to
+      `trading` and built for GC/SI on November 4 in 5 min 47 s; full-year checks passed
+      ([results](handoff.md#pr-c2-results-second-volatility)). Merge #77 before other database
       work.
-- [ ] **Second-resolution volatility (PR C2), next.** Stage `vol_1s` (migration `0005`), reusing
-      `volatility.py`; measure live latency ([handoff: what and how](handoff.md#pr-c-volatility-tier),
-      [plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
-- [ ] **Swing structure, signals, labels (PRs D–F)**
+- [ ] **Swing structure, signals, labels (PRs D–F), next**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
       Check run time and memory, rolls and warmup at every contract change, and the

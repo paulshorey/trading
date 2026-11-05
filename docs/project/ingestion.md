@@ -4,8 +4,9 @@ Status (November 4, 2026): GC and SI are stored in local database `trading` by t
 pipeline with a 40-session lead, rebuilt on the baseline schema
 ([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
 ([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
-hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), and run 5 the
-minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), run 5 the
+minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)), and run 6 the second
+volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -199,6 +200,12 @@ Backtests use the same roll rule but warm a new contract by replaying `warmup_se
 letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
+
+Run 6 (November 4, 2026, PR C2) added `vol_1s` to the stored GC and SI contracts (`add`,
+8 workers): 868 contract-sessions in 5 min 47 s, computing every stage and writing only the new
+table, 71,559,900 rows in 24.05 GB including indexes, plus 159 MB of checkpoints. Every row equals
+an independent recomputation from the stored rows ([checks](handoff.md#pr-c2-results-second-volatility)).
+In live sessions the stage adds about 0.08 ms per second (`research verify`).
 
 Run 5 (November 4, 2026, PR C1) added `vol_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
@@ -477,6 +484,7 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. **Volatility tier, second resolution (PR C2)**: `vol_1s` ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)); `vol_1m` is stored (PR C1).
+1. **Swing structure (PR D)**: directional-change pivots sized by the stored volatility tier
+   (`vol_1s`, `vol_1m`) ([plan section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 2. Let backtests read stored rows when the builder matches the run.
 3. Load Databento `definition` records into `market.contract` (expirations).

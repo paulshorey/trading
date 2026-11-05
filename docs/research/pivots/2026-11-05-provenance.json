@@ -265,5 +265,6 @@
   "checks": [
     "First-passage formula and drawdown-overshoot mean checked against a seeded Monte Carlo of a fine-step Gaussian walk (agreement within simulation and step-size error)."
   ],
-  "not_stored": "Raw search results, excerpts, and extracted page text stay out of git; no credentials are recorded."
+  "not_stored": "Raw search results, excerpts, and extracted page text stay out of git; no credentials are recorded.",
+  "extraction_summary": "33 page extractions: 27 returned full text; 6 returned only an abstract or publisher preview (listed first in access_limits)."
 }

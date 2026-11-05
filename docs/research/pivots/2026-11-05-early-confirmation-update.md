@@ -1,7 +1,9 @@
 # Confirming pivots as early as possible: research update and implementation plan
 
 Researched November 5, 2026 with the Parallel search API: four search batches (24 research
-angles) and 33 full-text extractions ([provenance](2026-11-05-provenance.json)). This
+angles) and 33 page extractions, of which 27 returned full text and 6 only an abstract or
+publisher preview ([provenance](2026-11-05-provenance.json); access levels under
+[Sources and access](#sources-and-access)). This
 extends the [reviewed findings of November 3](2026-11-03-reviewed-findings.md) and the
 PR D–F plan ([plan, section 3](../../project/plan-1h-and-pivots.md#3-pivot-and-structure-design),
 [pivot/structure contract](../../project/pivot-structure-design.md)). It changes no recorded

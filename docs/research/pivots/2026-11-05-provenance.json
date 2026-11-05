@@ -259,6 +259,7 @@
     "Abstract pages only: https://arxiv.org/abs/2606.27100, https://arxiv.org/abs/2406.18332, https://arxiv.org/abs/2511.08667, https://arxiv.org/abs/2605.28554, https://arxiv.org/abs/2003.06222",
     "https://link.springer.com/article/10.1007/s10479-025-06542-7: publisher preview only (abstract); method and results unverified",
     "https://www.sciencedirect.com/science/article/abs/pii/S0169207019300573: abstract only (Wildi and McElroy, 2019)",
+    "https://www.mdpi.com/2813-0324/16/1/2: extraction returned the abstract only (online change-point benchmark; not cited)",
     "Search excerpts only (not extracted): Kronos volatility study https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347 (highlights and abstract); Bank of England slides https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf; du Toit and Peskir https://personalpages.manchester.ac.uk/staff/Goran.Peskir/stock.pdf; Lehoczky 1977 (Project Euclid abstract); Glattfelder et al. https://arxiv.org/html/0809.1040; Gibbs and Candes https://jmlr.org/papers/v25/22-1218.html; order-imbalance studies (Oxford 2024, arXiv:2507.22712); Datadog Toto 2.0 blog; TabPFN-2.5 license page; first-passage derivation pages (edgekit, quantvault), whose formulas were checked by simulation",
     "https://mathandmarkets.com/p/regime-detection-part-2-the-latency and https://aimultiple.com/time-series-classification: practitioner/third-party pages, not peer reviewed"
   ],
@@ -266,5 +267,5 @@
     "First-passage formula and drawdown-overshoot mean checked against a seeded Monte Carlo of a fine-step Gaussian walk (agreement within simulation and step-size error)."
   ],
   "not_stored": "Raw search results, excerpts, and extracted page text stay out of git; no credentials are recorded.",
-  "extraction_summary": "33 page extractions: 27 returned full text; 6 returned only an abstract or publisher preview (listed first in access_limits)."
+  "extraction_summary": "33 page extractions: 25 returned full text; 8 returned only an abstract or publisher preview (five arXiv abstract pages, the Springer preview, the Wildi and McElroy ScienceDirect abstract, and the MDPI change-point benchmark abstract)."
 }

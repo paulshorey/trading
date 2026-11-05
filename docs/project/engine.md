@@ -134,8 +134,8 @@ with the ingestion milestone.
 runs (`pipeline.Pipeline`) with the backtest's default assignment timing; see
 [ingestion](ingestion.md). The engine reads its features from the same stages
 (`pipeline.StageFeatures`): every `candle_1m_1s` feature as `1m@1s.<name>`, and every
-`candle_1h_1m` feature of the latest completed minute as `1h@1m.<name>` with its age
-`1h@1m.age_s`. Their `1m@1s` and `1h@1m` window features equal the earlier engine's
+`candle_1h_1m` and `stats_1h_1m` feature of the latest completed minute as `1h@1m.<name>`
+with its age `1h@1m.age_s` (their names never collide; a test checks it). Their `1m@1s` and `1h@1m` window features equal the earlier engine's
 composition bit for bit (a test keeps `features.FeaturePipeline` as the reference). A backtest may read stored rows instead of
 rebuilding them only when their builder version and assignment settings match the run's
 configuration (not implemented yet); fills always come from the DBN trades.

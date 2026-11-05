@@ -39,7 +39,7 @@ below it, and every floor is finished before anything reads from it.
 | Tier | Contents                                                                                                          | Stages (per resolution)                                                  |
 | ---- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                                       |
-| 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), and the volatility family (ATR variants)        | `candle_1m_1s`, `candle_1h_1m`, `vol_1s`, `vol_1m`                       |
+| 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), window statistics, and the volatility family    | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m`        |
 | 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m` (+ `pivot_event`) |
 | 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                                                 |
 | —    | Labels: future outcomes for training and evaluation, never inputs                                                 | `pivot_label` (later: trade outcomes)                                    |
@@ -75,6 +75,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `bar_1m`       | 0    | `bar_1s`                                                                                                             |
 | `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
 | `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
+| `stats_1h_1m`  | 1    | `bar_1m`, `candle_1h_1m` (its status, ATR, and path fields: a declared edge within tier 1)                           |
 | `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s`                                                                                             |
 | `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m`                                                                                             |
 | `pivot_1s`     | 2    | `market` (trade path), `candle_1m_1s`, `vol_1s`                                                                      |

@@ -28,14 +28,17 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Store `1h@1m` rows (PR B1, #74).** `market.bar_1m` and `market.candle_1h_1m`
       (migration `0002`), resolution-aware row replacement, and the engine on the stage graph.
       Applied to `trading` and built for GC/SI on November 4 in 2 min 29 s; full-year checks
-      passed ([results](handoff.md#pr-b1-results-minute-stages)). Merge #74 before other
-      database work.
-- [ ] **Hourly-only metrics (PR B2).** Realized volatility from one-second returns,
-      minute-return statistics, drawdown/drawup in ATR, high/low position, session VWAP,
-      prior-session levels, price-flow correlation
-      ([handoff](handoff.md#pr-b-1h1m-rows), [plan 5.4](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)).
-- [ ] **Volatility tier (PR C).** Including bullish, bearish, and adverse-excursion ATR
-      ([plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
+      passed ([results](handoff.md#pr-b1-results-minute-stages)). Merged.
+- [x] **Hourly-only metrics (PR B2, #75).** Stage `stats_1h_1m` (migration `0003`): realized
+      volatility from one-second returns, minute-return statistics, drawdown/drawup in ATR,
+      high/low position, session VWAP, prior-session levels, price-flow correlation. Applied to
+      `trading` and built for GC/SI on November 4 in 1 min 55 s; full-year checks passed
+      ([results](handoff.md#pr-b2-results-hourly-statistics)). Merge #75 before other database
+      work.
+- [ ] **Volatility tier (PR C), next.** Stages `vol_1m` (C1) and `vol_1s` (C2): ATR horizons,
+      bullish, bearish, and adverse-excursion ATR, time-of-day and daily ATR
+      ([handoff: what and how](handoff.md#pr-c-volatility-tier-next),
+      [plan](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 - [ ] **Swing structure, signals, labels (PRs D–F)**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 - [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.

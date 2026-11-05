@@ -5,6 +5,9 @@ one second at a time, and returns each stage's table. Upstream stages pass their
 products (bars, metrics, candles) to the stages that read them, so each stage is computed once
 per chunk. Each stage keeps its own state and is checkpointed on its own (`export`, `restore`).
 
+A stage reads its inputs' in-memory products and, through `products["tables"]`, the rows they
+return for the chunk: the values they store.
+
 `StageFeatures` is the engine's view of the same graph: one feature row per second, so
 backtests, rehearsals, and stored rows compute every feature with the same code.
 
@@ -26,11 +29,18 @@ from .stage_bar_1m import MinuteBarStage
 from .stage_bar_1s import BarStage
 from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
+from .stage_stats_1h_1m import HourStatsStage
 from .stages import Stage, StageContext
 from .state import export_state, import_state
 
 # In dependency (tier) order; the two resolutions are independent branches.
-STAGES: tuple[type[Stage], ...] = (BarStage, MinuteBarStage, CandleStage, HourCandleStage)
+STAGES: tuple[type[Stage], ...] = (
+    BarStage,
+    MinuteBarStage,
+    CandleStage,
+    HourCandleStage,
+    HourStatsStage,
+)
 BY_NAME = {s.NAME: s for s in STAGES}
 
 
@@ -73,9 +83,11 @@ class Pipeline:
         self.stages: dict[str, Stage] = {s.NAME: s(self.context) for s in stages}
 
     def process(self, chunk: MarketChunk) -> PipelineRows:
-        products: dict[str, Any] = {}
-        tables = {name: stage.process(chunk, products) for name, stage in self.stages.items()}
-        return PipelineRows(tables, products["report"], products)
+        tables: dict[str, Table] = {}
+        products: dict[str, Any] = {"tables": tables}  # each stage's rows, for those after it
+        for name, stage in self.stages.items():
+            tables[name] = stage.process(chunk, products)
+        return PipelineRows(dict(tables), products["report"], products)
 
     def export(self, name: str) -> dict:
         return export_state(self.stages[name])
@@ -105,12 +117,13 @@ class FastAtr:
 class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
     the candle ending then (`candle_1m_1s`) and the `1h@1m` features of the latest completed
-    minute (`candle_1h_1m`), with that minute's age, `1h@1m.age_s`. `context` holds the
-    price-unit values execution needs (the latest close and the `1m@1s` ATR), never inputs to
-    signals or models."""
+    minute (`candle_1h_1m` and `stats_1h_1m`, one row each per minute), with that minute's age,
+    `1h@1m.age_s`. `context` holds the price-unit values execution needs (the latest close and
+    the `1m@1s` ATR), never inputs to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
-    PREFIX: ClassVar[dict[str, str]] = {FAST: "1m@1s", BIAS: "1h@1m"}
+    HOURLY = (BIAS, "stats_1h_1m")  # rows per completed minute, joined as of each second
+    PREFIX: ClassVar[dict[str, str]] = {FAST: "1m@1s", **{name: "1h@1m" for name in HOURLY}}
     AGE = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
 
     def __init__(
@@ -128,10 +141,23 @@ class StageFeatures:
         self.last_bias: dict[str, np.ndarray] = {}  # the latest minute's values, one row each
         self.last_bias_end = np.zeros(0, np.int64)
 
+    @staticmethod
+    def names(stage: str) -> list[str]:
+        return [c.name for c in BY_NAME[stage].COLUMNS if c.unit]
+
+    @classmethod
+    def read(cls, table: Table, stage: str) -> dict[str, np.ndarray]:
+        """A stage's features as stored: NaN wherever the stored value is NULL."""
+        out = {}
+        for n in cls.names(stage):
+            null = table.nulls.get(n)
+            out[n] = table.values[n] if null is None else np.where(null, np.nan, table.values[n])
+        return out
+
     def specs(self) -> list[FeatureSpec]:
         out = [
             FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
-            for name in (self.FAST, self.BIAS)
+            for name in (self.FAST, *self.HOURLY)
             for c in BY_NAME[name].COLUMNS
             if c.unit
         ]
@@ -139,12 +165,18 @@ class StageFeatures:
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
-        fast, bias = rows.tables[self.FAST].values, rows.tables[self.BIAS].values
-        names = {k: [c.name for c in BY_NAME[k].COLUMNS if c.unit] for k in (self.FAST, self.BIAS)}
-        features = {f"1m@1s.{n}": fast[n] for n in names[self.FAST]}
-        ends = fast["end_ns"]
-        minute_end = np.r_[self.last_bias_end, bias["end_ns"]]
-        values = {n: np.r_[self.last_bias.get(n, []), bias[n]] for n in names[self.BIAS]}
+        fast = self.read(rows.tables[self.FAST], self.FAST)
+        features = {f"1m@1s.{n}": v for n, v in fast.items()}
+        ends = rows.tables[self.FAST].values["end_ns"]
+        bias_end = rows.tables[self.BIAS].values["end_ns"]
+        minute_end = np.r_[self.last_bias_end, bias_end]
+        values: dict[str, np.ndarray] = {}
+        for stage in self.HOURLY:
+            table = rows.tables[stage]
+            if not np.array_equal(table.values["end_ns"], bias_end):
+                raise AssertionError(f"{stage} rows must align with {self.BIAS}")
+            for n, v in self.read(table, stage).items():
+                values[n] = np.r_[self.last_bias.get(n, []), v]
         # As-of join: the latest minute completed at or before each second. The minute ending at
         # T completes with the second ending at T, so its age is then zero.
         i = np.searchsorted(minute_end, ends, side="right") - 1

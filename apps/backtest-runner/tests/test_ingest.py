@@ -18,6 +18,8 @@ from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
 from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
+from strategy_core.stage_stats_1h_1m import COLUMNS as STATS_COLUMNS
+from strategy_core.stage_stats_1h_1m import HourStatsStage
 from strategy_core.synthetic import random_trades
 from test_runner import RECORD, FakeCache
 
@@ -77,9 +79,10 @@ DAYS = {
 @pytest.fixture
 def world(monkeypatch):
     monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
-    # The world has five sessions, fewer than the hourly stage's warm-up (about 10 sessions:
-    # test_stages checks it), so planning tests use a one-hour stand-in.
+    # The world has five sessions, fewer than the hourly stages' warm-ups (about 10 and 5
+    # sessions: test_stages checks them), so planning tests use one-hour stand-ins.
     monkeypatch.setattr(HourCandleStage, "warmup", lambda self: 3600)
+    monkeypatch.setattr(HourStatsStage, "warmup", lambda self: 3600)
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -234,9 +237,9 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         assert candles == 2 * 165_600
         minutes = conn.execute(
             "SELECT (SELECT count(*) FROM market.bar_1m), "
-            "(SELECT count(*) FROM market.candle_1h_1m)"
+            "(SELECT count(*) FROM market.candle_1h_1m), (SELECT count(*) FROM market.stats_1h_1m)"
         ).fetchone()
-        assert minutes == (4 * 1380, 4 * 1380)  # one row per scheduled minute, per contract
+        assert minutes == (4 * 1380,) * 3  # one row per scheduled minute, per contract
         slices = conn.execute("SELECT count(*), sum(row_count) FROM market.ingest_slice").fetchone()
         assert slices == (4, 4 * 82_800)
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
@@ -395,11 +398,13 @@ def test_minute_bounds_follow_the_session_seconds():
     assert store.row_bounds("bar_1s", 61, 180) == (61, 180)
     assert store.row_bounds("bar_1m", 61, 180) == (2, 3)
     assert store.row_bounds("candle_1h_1m", 61, 180) == (2, 3)
+    assert store.row_bounds("stats_1h_1m", 61, 180) == (2, 3)
     assert store.SLOT_SECONDS == {
         "bar_1s": 1,
         "bar_1m": 60,
         "candle_1m_1s": 1,
         "candle_1h_1m": 60,
+        "stats_1h_1m": 60,
     }
 
 
@@ -490,10 +495,20 @@ def test_diff_rules():
     seconds = {n: {d: 1 for d, _, _ in rows} for n in ("bar_1s", "candle_1m_1s")}
     added = stored_of(rows, seconds)
     _, i, _, action, why = ingest.diff(s[:3], s, added, builders(1), files, False)
-    assert (i, action, why) == (0, "add", "stages without stored rows: bar_1m, candle_1h_1m")
+    assert (i, action, why) == (
+        0,
+        "add",
+        "stages without stored rows: bar_1m, candle_1h_1m, stats_1h_1m",
+    )
+    # ... and the hourly statistics next to every other stored stage (PR B2)
+    stored_four = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n != "stats_1h_1m"}
+    _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_four), builders(1),
+                                       files, False)  # fmt: skip
+    assert (i, action, why) == (0, "add", "stages without stored rows: stats_1h_1m")
     # ... and an interrupted add resumes after the sessions it already stored
     first = {s[0].trade_date: 1}
-    part = stored_of(rows, seconds | {"bar_1m": first, "candle_1h_1m": first})
+    minute = {"bar_1m": first, "candle_1h_1m": first, "stats_1h_1m": first}
+    part = stored_of(rows, seconds | minute)
     _, i, _, action, _ = ingest.diff(s, s, part, builders(1), files, False)
     assert (i, action) == (1, "add")
     # A missing stage next to changed files is a repair of the changed session
@@ -758,7 +773,13 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     # the derived lead: at least the floor, and a lead below a stage's warm-up is refused
     [plan] = ingest.plan(["GC"], data=first, url=database, cache=cache, log=lambda line: None)
     assert plan["lead_sessions"] == max(ingest.LEAD_FLOOR, plan["required_lead"]["sessions"])
-    assert plan["warm_sessions"] == {"bar_1s": 0, "bar_1m": 0, "candle_1m_1s": 1, "candle_1h_1m": 1}
+    assert plan["warm_sessions"] == {
+        "bar_1s": 0,
+        "bar_1m": 0,
+        "candle_1m_1s": 1,
+        "candle_1h_1m": 1,
+        "stats_1h_1m": 1,
+    }
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
     # a longer lead prepends sessions: every later value changes, so the plan says why
@@ -769,8 +790,9 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
 
 def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
     """Minute tables count minutes: a stale `bar_1m` is replaced session by session at its own
-    resolution (no duplicate keys, no leftovers), together with `candle_1h_1m`, which reads it,
-    while the second tables stay untouched. The stored minutes equal an in-memory build."""
+    resolution (no duplicate keys, no leftovers), together with `candle_1h_1m` and `stats_1h_1m`,
+    which read it, while the second tables stay untouched. The stored minutes equal an in-memory
+    build."""
     cache, data = world
     options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
     with db.connect(database) as conn:
@@ -801,7 +823,11 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
     assert {c["action"] for c in plan["contracts"]} == {"stale"}
     result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
     assert result["status"] == "done", result
-    assert {t for r in result["results"] for t in r["tables"]} == {"bar_1m", "candle_1h_1m"}
+    assert {t for r in result["results"] for t in r["tables"]} == {
+        "bar_1m",
+        "candle_1h_1m",
+        "stats_1h_1m",
+    }
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
@@ -812,9 +838,9 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
                 assert at > before[key][1] and builder == before[key][0], key  # rewritten
         counts = conn.execute(
             "SELECT (SELECT count(*) FROM market.bar_1m), "
-            "(SELECT count(*) FROM market.candle_1h_1m)"
+            "(SELECT count(*) FROM market.candle_1h_1m), (SELECT count(*) FROM market.stats_1h_1m)"
         ).fetchone()
-        assert counts == (4 * 1380, 4 * 1380)
+        assert counts == (4 * 1380,) * 3
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
         columns = [c.name for c in MINUTE_COLUMNS]
         got = read(conn, "bar_1m", ids["GCG7"], columns)
@@ -828,6 +854,68 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         for k in columns
     }  # fmt: skip
     np.testing.assert_array_equal(got["slot_ordinal"].astype(np.int64), want["slot_ordinal"])
+    for k in columns:
+        is_null = np.array([v is None for v in got[k]])
+        np.testing.assert_array_equal(is_null, null[k], err_msg=k)
+        stored = got[k][~is_null].astype(want[k].dtype)
+        np.testing.assert_array_equal(stored, want[k][~is_null], err_msg=k)
+
+
+def test_the_hourly_statistics_are_added_alone(database, world):
+    """PR B2: a new stage next to stored ones. With every other stage current, the plan adds only
+    `stats_1h_1m` (no --rebuild), the run writes only its table, every other stage's records
+    stay untouched, and the stored statistics equal an in-memory build, NULLs included."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    assert ingest.run(["GC"], workers=1, data=first, **options)["status"] == "done"
+
+    def slices(conn):
+        return {
+            (stage, cid, day): (builder, at)
+            for stage, cid, day, builder, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, builder_id, ingested_at "
+                "FROM market.stage_slice"
+            )
+        }
+
+    with db.connect(database) as conn:  # as before PR B2: the stage has no rows
+        conn.execute("DELETE FROM market.stage_slice WHERE stage = 'stats_1h_1m'")
+        conn.execute("DELETE FROM market.stats_1h_1m")
+        conn.commit()
+        before = slices(conn)
+        ids = dict(conn.execute("SELECT raw_symbol, id FROM market.contract").fetchall())
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {(c["action"], c["reason"]) for c in plan["contracts"]} == {
+        ("add", "stages without stored rows: stats_1h_1m")
+    }
+    result = ingest.run(["GC"], workers=1, data=first, **options)
+    assert result["status"] == "done", result
+    assert {t for r in result["results"] for t in r["tables"]} == {"stats_1h_1m"}
+    with db.connect(database) as conn:
+        after = slices(conn)
+        assert {k: v for k, v in after.items() if k[0] != "stats_1h_1m"} == before  # untouched
+        assert {k[1:] for k in after if k[0] == "stats_1h_1m"} == {k[1:] for k in before}
+        assert conn.execute("SELECT count(*) FROM market.stats_1h_1m").fetchone()[0] == 4 * 1380
+        series = conn.execute(
+            "SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_stats_1h_1m "
+            "WHERE product = 'GC'"
+        ).fetchone()
+        assert series == (3 * 1380, 3 * 1380)
+        columns = [c.name for c in STATS_COLUMNS]
+        got = read(conn, "stats_1h_1m", ids["GCG7"], columns)
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in plan["contracts"]} == {"current"}
+    expected = in_memory(cache, first, "GCG7", [date(2026, 9, 2), date(2026, 9, 3)])
+    tables = [p.tables["stats_1h_1m"] for p in expected]
+    want = {k: np.concatenate([t.values[k] for t in tables]) for k in columns}
+    null = {
+        k: np.concatenate([t.nulls.get(k, np.zeros(len(t), bool)) for t in tables]) for k in columns
+    }
+    np.testing.assert_array_equal(got["slot_ordinal"].astype(np.int64), want["slot_ordinal"])
+    assert (~null["rv_bps"]).sum() > 1000 and (~null["prior_close_atr"]).sum() > 1000
     for k in columns:
         is_null = np.array([v is None for v in got[k]])
         np.testing.assert_array_equal(is_null, null[k], err_msg=k)

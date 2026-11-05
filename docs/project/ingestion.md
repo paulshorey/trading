@@ -3,7 +3,8 @@
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema
 ([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
-([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), and run 4 the
+hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads Databento TBBO files and stores, for every contract
@@ -11,12 +12,13 @@ and every scheduled-open second and minute, one row per **stage**, computed by
 `strategy-core`, the code live sessions run ([stages and tiers](feature-pipeline.md)). Each
 stage has its own table, version, and per-session checkpoint:
 
-| Table                          | One row per                     | Holds                                                                                                                     |
-| ------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `market.bar_1s` (tier 0)       | second `o`                      | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book at trades |
-| `market.bar_1m` (tier 0)       | minute `m` (seconds 60m−59…60m) | The same statistics merged exactly from the minute's 60 second rows, plus observed seconds and one-second returns         |
-| `market.candle_1m_1s` (tier 1) | second `o`                      | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                         |
-| `market.candle_1h_1m` (tier 1) | minute `m`                      | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)    |
+| Table                          | One row per                     | Holds                                                                                                                      |
+| ------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `market.bar_1s` (tier 0)       | second `o`                      | The second's own exact statistics: OHLC, volume by aggressor side, CVD extremes, path drawdown and drawup, book at trades  |
+| `market.bar_1m` (tier 0)       | minute `m` (seconds 60m−59…60m) | The same statistics merged exactly from the minute's 60 second rows, plus observed seconds and one-second returns          |
+| `market.candle_1m_1s` (tier 1) | second `o`                      | The rolling `1m@1s` candle of rows `o − 59 … o`, and 87 normalized features of it                                          |
+| `market.candle_1h_1m` (tier 1) | minute `m`                      | The rolling `1h@1m` candle of minute rows `m − 59 … m`, and 77 normalized features of it (per-phase hourly indicators)     |
+| `market.stats_1h_1m` (tier 1)  | minute `m`                      | 16 statistics of the same window: realized volatility, minute-return moments, path, session levels, price-flow correlation |
 
 Each is keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters) at its own resolution,
@@ -29,7 +31,8 @@ as PostgreSQL comments (`\d+ market.candle_1h_1m`).
 
 Rows are stored per contract. Each product also reads as **one permanent series**,
 `product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,
-`continuous_candle_1m_1s`, and `continuous_candle_1h_1m`: every session's rows from that
+`continuous_candle_1m_1s`, `continuous_candle_1h_1m`, and `continuous_stats_1h_1m`: every
+session's rows from that
 session's front contract ([continuous series](#continuous-series-per-product)).
 
 ## Run it
@@ -137,8 +140,9 @@ the plan prepend sessions, which shows as `needs_rebuild`.
 
 ## Continuous series per product
 
-`market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`, and
-`continuous_candle_1h_1m` give each product one series across contract rolls, with the columns of the stored tables plus `product`,
+`market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`,
+`continuous_candle_1h_1m`, and `continuous_stats_1h_1m` give each product one series across
+contract rolls, with the columns of the stored tables plus `product`,
 `trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
 over the per-contract tables (`market.front_session` maps sessions to contracts), so they
 take no storage. `run` publishes each session's front contract to `market.roll` only once
@@ -191,6 +195,11 @@ Backtests use the same roll rule but warm a new contract by replaying `warmup_se
 letting backtests read stored rows removes the difference ([next](#next)).
 
 ## Measured
+
+Run 4 (November 4, 2026, PR B2) added `stats_1h_1m` to the stored GC and SI contracts (`add`,
+8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
+new table, 1,192,665 rows in 0.35 GB including indexes. Every complete window equals an
+independent recomputation from the stored rows ([checks](handoff.md#pr-b2-results-hourly-statistics)).
 
 Run 3 (November 4, 2026, PR B1) added the minute stages to the stored GC and SI contracts
 (`add`, 8 workers): 868 contract-sessions in 2 min 29 s, about 1.4 s of wall time per
@@ -290,6 +299,14 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   out the session features and the latest observation with its age (`trade_age_s`,
   `book_age_s`, `depth_age_s`, `book_spread_bps`, `book_imbalance`): at a minute's end they
   repeat the second row at `60m`.
+- **The hourly statistics** (`stats_1h_1m`) describe the same window with values that are not
+  window sums: realized volatility from the one-second returns (`ret2_sum` plus the bridges
+  between minutes, not the one into the window's first observed minute), statistics of the
+  minute returns between consecutive minute closes inside the window (carried through minutes
+  without trades; at least 10 needed), drawdown and drawup from the candle's path fields, where
+  the high and low fell, and the close against the session VWAP and the previous session's
+  levels (calendar intervals; undefined after missing data). Every feature is in hourly ATRs,
+  bps, or a ratio, and NULL unless the window is complete.
 
 ## Metrics
 
@@ -297,24 +314,25 @@ Definitions, units, and NULL rules are in the code and the column comments:
 `strategy_core/metrics.py` (per second), `window_metrics.py` (over the window), and
 `indicators.py` and `features.py` (features).
 
-| Handoff entries                                                                               | Stored as                                                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                                      |
-| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                                        |
-| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                             |
-| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`, `drawdown`, `drawup`, `extreme_order`; features `path_*`, `uptick_ratio`, `side_switch_ratio` |
-| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                                 |
-| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*`           |
-| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                               |
-| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`                                 |
-| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_bid_size_sum`, `order_ask_size_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                            |
-| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                                             |
-| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                                          |
-| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                                                     |
-| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                           |
-| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                                         |
-| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`                       |
-| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                                        |
+| Handoff entries                                                                               | Stored as                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                                                            |
+| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                                                              |
+| `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                                                   |
+| `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`, `drawdown`, `drawup`, `extreme_order`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                       |
+| `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                                                       |
+| Quote coverage (A27), retained quote state (A28), `last_quote_observation_age_ms`             | `quote_trades`, `depth_trades`, `order_trades` and their volumes, `last_bid`/`last_ask`/sizes, `quote_at_ns`, `depth_at_ns`; `trade_age_s`, `book_age_s`, `depth_age_s`, `book_*`                                 |
+| Quoted spread (A29), sampled midpoint (A30)                                                   | `spread_sum`, `spread_max`, `mid2_open`/`high`/`low`; `spread_bps`, `spread_max_bps`, `mid_rsi`, `rel_spread`                                                                                                     |
+| Displayed imbalance and depth (A34, A35), weighted midpoint (A36)                             | `imbalance_*`, `bid_depth_sum`, `ask_depth_sum`, `tilt_sum`; `imbalance_mean`, `imbalance_vw`, `depth_imbalance`, `tilt_bps`, `book_imbalance`, `rel_depth`                                                       |
+| Order counts (A37)                                                                            | `bid_orders_sum`, `ask_orders_sum`, `order_bid_size_sum`, `order_ask_size_sum`, `order_imbalance_sum`; `order_imbalance`, `order_size_log_ratio`                                                                  |
+| Trade–quote interaction (A39)                                                                 | `eff_spread_sum`, `alignment_sum`, `buy_take_sum`, `sell_take_sum`; `eff_spread_bps`, `alignment`, `take_ratio`                                                                                                   |
+| `source_quality_diagnostics`                                                                  | `bad_book_trades`, `late_trades`, `status`; `quote_ratio`, `bad_book_ratio`; per-session reports in `ingest_slice`                                                                                                |
+| Candle geometry, momentum, VWAP distance (A8, A11)                                            | `range_bps`, `body_bps`, `body_ratio`, wick ratios, `vwap_bps`, `ret_5_atr`, `ret_15_atr`, engine `ret_atr`, `vwap_atr`                                                                                           |
+| Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                                                 |
+| Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                                                               |
+| Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`                                             |
+| Realized volatility, return moments, variance ratio, prior-session levels (hourly window)     | `stats_1h_1m`: `rv_bps`, `rv_atr`, `ret_std_bps`, `ret_skew`, `ret_autocorr`, `vr_5`, `up_minute_ratio`, `drawdown_atr`, `drawup_atr`, `high_pos`, `low_pos`, `session_vwap_atr`, `prior_*_atr`, `cvd_close_corr` |
+| Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                                                              |
 
 Indicators on the candle follow the [per-phase rule](../sliding-windows/design.md#4-indicators-per-phase):
 recursive ones (EMA, MACD, Wilder RSI, ATR, ADX) keep one state per phase, and lookback
@@ -335,7 +353,8 @@ Not stored yet; each can be added later by rebuilding from the DBN files:
 - **On the candle** (from stored rows): StochRSI, Williams %R (a linear transform of %K),
   CMO, TRIX, KAMA, Keltner, parabolic SAR, Supertrend, ATR trailing references, OBV, the A/D
   line, the Chaikin oscillator, PVT, force index, ease of movement, the volume oscillator,
-  return skewness, kurtosis, and autocorrelation, prior-session pivots, confirmed pivots and
+  return kurtosis (skewness and autocorrelation are stored for `1h@1m` only), floor-trader
+  pivot levels, confirmed pivots and
   candlestick patterns, generic transforms (A26), and past-outcome context (A40). Labels
   (Appendix B) belong with the ML rows.
 
@@ -399,10 +418,13 @@ warm-ups, and that each declared warm-up settles every candle feature (built fro
 starting points). Minutes: a hand-checked minute; every minute field equal to
 `MetricWindow(60)` and to the `1m@1s` candle at ordinal `60m` in any chunking; closures,
 early closes, empty and missing minutes; checkpoints inside a minute; hourly scale
-invariance. `apps/backtest-runner/tests/test_ingest.py`: the schema and
+invariance. `test_hour_stats.py`: every hourly statistic against references computed from
+the trades (realized volatility from the one-second closes), identical bits in any chunking and
+after checkpoints inside a minute, session levels by hand, scale invariance, the engine's view
+(stored NULL is NaN), and the declared warm-up. `apps/backtest-runner/tests/test_ingest.py`: the schema and
 `market.column_registry` equal the registry, binary COPY range checks, stages versioned on
 their own (a stale stage is rebuilt alone, including a minute stage at its own resolution, a
-missing one is added), warm flags and the
+missing one is added, as `stats_1h_1m` was next to the stored stages), warm flags and the
 derived lead, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
 build), repair after a file changes, rebuild, and stale detection; the continuous series
@@ -411,8 +433,6 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 ## Next
 
-1. **Hourly-only metrics (PR B2)**: realized volatility from the minutes' one-second returns,
-   minute-return statistics, and the other [plan 5.4](plan-1h-and-pivots.md#5-1h1m-amendments-to-the-proposed-plan)
-   metrics, on `candle_1h_1m` or a new tier-1 stage.
+1. **Volatility tier (PR C)**: `vol_1s` and `vol_1m` ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
 2. Let backtests read stored rows when the builder matches the run.
 3. Load Databento `definition` records into `market.contract` (expirations).

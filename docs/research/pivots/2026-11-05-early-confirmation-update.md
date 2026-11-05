@@ -107,8 +107,25 @@ continuous random walk, the probability of reaching the reversal barrier first i
 This is the probability of _eventually_ reaching one barrier first. The PR F label adds a
 horizon of `K` scheduled-open rows, with a timeout outcome when the whole horizon is
 observed, so the baseline used for scoring must include it. Let `s` be the per-row
-standard deviation in `θ` units, from the volatility tier as of the decision row. For
-continuously monitored Brownian motion, the three outcome probabilities (reversal,
+standard deviation in `θ` units (log-bps ÷ the candidate's frozen `theta_bps`), as of the
+decision row:
+
+- **Fast scales (second rows):** `s = vol_1s.rv_bps / √59 / theta_bps`. `rv_bps` is the
+  square root of the summed squared log returns between observed second closes in the
+  `1m@1s` window, whose 60 rows span 59 one-second steps. Divide by the step count, not by
+  `rv_returns`: a return across several quiet seconds covers several rows, and the price
+  does not move on rows without trades. When the window's first seconds have no trades the
+  span is shorter and `s` slightly understated, so keep `rv_returns` as a quality field.
+- **Slow scales (minute rows):** `s = stats_1h_1m.ret_std_bps / theta_bps`, the population
+  standard deviation of the hour's minute log returns, with closes carried through minutes
+  without trades, as of the latest completed minute. `vol_1m` has no realized-volatility
+  field.
+- **Sensitivity check for fast scales:** the hour's realized volatility of second closes,
+  `stats_1h_1m.rv_bps / √3599`, joined as of the latest completed minute.
+- A NULL input or an incomplete window leaves `s`, and so the null, undefined: exclude the
+  candidate from scores and count it.
+
+For continuously monitored Brownian motion, the three outcome probabilities (reversal,
 invalidation, timeout) depend on `u`, `d`, and `s·√K` only, and have a series solution. On a
 discrete path they depend on `K` and `s` separately (one step of `s = 1` is not 100 steps of
 `s = 0.1`), so a simulated baseline must take both. Call this `P_null,K`; the formula above
@@ -233,7 +250,7 @@ realized false-alarm rate.
 | [TimesFM 3.0](https://github.com/google-research/timesfm/blob/master/README.md) (Google) | Aug 2026 | 9 per-step quantiles; multivariate, covariates            | Non-commercial, non-production; commercial use only through Google Cloud       | Ranked first among foundation models on fev-bench, TIME, GIFT-Eval (its README) |
 | TimesFM 2.5                                                                              | Sep 2025 | Univariate quantiles, covariates via XReg                 | Apache-2.0                                                                     |                                                                                 |
 | [Chronos-2](https://huggingface.co/amazon/chronos-2) (Amazon)                            | Oct 2025 | 21 per-step quantiles; multivariate, covariates; 120M     | Apache-2.0                                                                     |                                                                                 |
-| [Toto 2.0](https://www.datadoghq.com/blog/ai/toto-2) (Datadog)                           | May 2026 | Sampled trajectories                                      | Open weights (check the model card)                                            | 4M–2.5B parameters                                                              |
+| [Toto 2.0](https://github.com/DataDog/toto) (Datadog)                                    | Apr 2026 | 9 per-step quantiles                                      | Apache-2.0 repository (check each model card)                                  | 4M–2.5B parameters; the legacy Toto 1.0 (151M, 2025) samples paths              |
 | Kronos                                                                                   | 2025     | Generative model of OHLCV candles                         | Open weights (license not checked)                                             | Finance-specific                                                                |
 | [TradeFM](https://arxiv.org/html/2602.23784) (J.P. Morgan)                               | Feb 2026 | Generative trade-flow model, scale-invariant tokens, 524M | Paper                                                                          | Trained on more than 9,000 equities                                             |
 | [TabPFN-2.5](https://arxiv.org/abs/2511.08667) (Prior Labs)                              | Nov 2025 | In-context tabular classifier                             | [Non-commercial, non-production](https://huggingface.co/Prior-Labs/tabpfn_2_5) | Up to 50k rows, 2k features                                                     |
@@ -267,7 +284,9 @@ realized false-alarm rate.
    first-passage probabilities without an added dependence model
    ([Perez-Diaz et al., 2025](https://arxiv.org/html/2510.19345v1)). Copula samplers
    ([Amazon, 2025](https://arxiv.org/html/2510.02224v1)) and trajectory models
-   ([PathFM, 2026](https://arxiv.org/html/2610.22358)) add dependence; Toto samples paths.
+   ([PathFM, 2026](https://arxiv.org/html/2610.22358)) add dependence. Of the models in the
+   table, only the legacy Toto 1.0 samples paths (`forecast.samples`); Toto 2.0 returns nine
+   per-step quantiles ([Toto README](https://github.com/DataDog/toto)).
 2. **A realistic market model predicts the null.** TradeFM's rollouts reproduce the absence
    of return autocorrelation, as a good generative market model should. Such a model will
    assign first-passage probabilities near the random-walk values of section 2 (my
@@ -305,7 +324,7 @@ roles there; this table adds the new ones and places all of them in the plan.
 | TabPFN-2.5                                                                    | Same, fitted in context                     | Research-only challenger (license)                                                                                                                                                                             | PR G1                 |
 | Hidden-Markov filtering, BOCPD                                                | Regime posterior                            | Later challengers                                                                                                                                                                                              | Later                 |
 | MiniRocket / MultiRocket on normalized windows                                | Sequence-shape evidence                     | Sequence challenger                                                                                                                                                                                            | PR G2                 |
-| Toto 2.0 trajectories                                                         | Monte Carlo first passage                   | Foundation-model challenger                                                                                                                                                                                    | PR G2                 |
+| Toto 1.0 sampled paths, or a quantile model with a copula sampler             | Monte Carlo first passage                   | Foundation-model challenger                                                                                                                                                                                    | PR G2                 |
 
 ## 6. Recommended architecture: one probability, one stopping rule
 
@@ -439,7 +458,7 @@ candidate's reference price with the row's last trade price.
 
 - The decision close's displacement `x` (from its last trade price) recorded on every label
   row next to its progress `q`, and `P_null,K` computed from `x`, the label's `R` and `C`,
-  and the horizon, with `s` from the volatility tier as of the decision row: `K` rows when
+  and the horizon, with `s` as defined in section 2.1: `K` rows when
   they fit before the scheduled session close, otherwise the rows left, in the separate
   session-end group (section 2.1). Labels and their outcome classes are unchanged. The null
   is computed, not stored.
@@ -480,10 +499,11 @@ and metrics:
 
 - MiniRocket or MultiRocket features (aeon) on the last N normalized rows, then logistic
   regression: does raw sequence shape add anything to the engineered features?
-- Toto 2.0 zero-shot: per candidate, a few hundred sampled paths of normalized returns over
-  the label horizon, then the Monte Carlo first-passage probability, compared with `P_null`
-  and G1. Optionally, Chronos-2 with a copula sampler. Holdout blocks after each model's
-  training cutoff only.
+- Toto 1.0 zero-shot, the only listed model that samples paths: per candidate, a few
+  hundred sampled paths of normalized returns over the label horizon, then the Monte Carlo
+  first-passage probability, compared with `P_null,K` and G1. Its 2025 release predates our
+  data. Toto 2.0, Chronos-2, or TimesFM qualify only with an explicit sampler that adds
+  dependence, such as a copula. Holdout blocks after each model's training cutoff only.
 - Go on to pre-training a model on our own seven products' trade data (scale-invariant tokens,
   as in TradeFM) only if a sequence challenger beats G1 significantly. Compute permitting, it
   is the one deep-learning route the evidence supports.
@@ -515,7 +535,8 @@ incremental runs must agree, as for every stage.
 Main sources are linked inline. Their claims rest on different levels of access:
 
 - **Full text read:** Rahimikia, Ni, and Wang (2025); arXiv:2607.12248; arXiv:2607.19453;
-  Perez-Diaz et al. (2025); the copula-sampling and PathFM papers; Toto 2.0; TradeFM; the
+  Perez-Diaz et al. (2025); the copula-sampling and PathFM papers; Toto 2.0 and the Toto
+  repository README; TradeFM; the
   recession detection paper; ECOTS; the agent-based overshoot-law paper; Tsang (2024);
   Adegboye and Kampouridis (2021); De Angelis and Peskir; Billio et al. (2012); the TimesFM
   README and the Chronos-2 model card; the AIMultiple benchmark and the Math and Markets

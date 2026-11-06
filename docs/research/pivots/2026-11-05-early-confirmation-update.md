@@ -157,7 +157,11 @@ steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reve
 resolved. The closed form is kept only if, for both steps in every such stratum with at
 least 20 sessions, the whole 95% session-block bootstrap interval for the difference lies
 within ±0.02 (equivalence, not a failure to reject). A stratum too uncertain to show this
-counts as a failure. Otherwise it is replaced by a fallback that
+counts as a failure. A stratum short of 500 candidates or 20 sessions is merged, by a fixed
+order, first with its neighboring trade-rate tercile and then with its neighboring `x` band,
+within the same product and scale, until it meets both minimums. Candidates in a stratum
+that still cannot be validated are excluded from scoring and fitting and counted. If any
+stratum fails, the closed form is replaced by a fallback that
 meets the requirements in PR F0, and that fallback is validated by the same rule. Call the
 result `P_null,K`; the formula above is its limit as `K` grows.
 
@@ -307,8 +311,9 @@ stretch between two consecutive confirmed opposite pivots of that scale, or the 
 Alarms whose label reversals are reached with no new extreme in the leg's direction between
 them belong to the same episode, so an extreme replaced by less than `C` and its
 replacement form one episode even when their slightly different barriers are crossed on
-successive trades. A new extreme in the leg's direction ends the episode, and a later
-reversal starts a new one. In an episode, the first alarm whose label resolves as a reversal
+successive trades. Only a new extreme at least `C·θ` beyond the extreme of the episode's
+first alarmed candidate (in its frozen `θ`) ends the episode, and a later reversal then
+starts a new one; a sub-`C` refresh of the candidate does not. In an episode, the first alarm whose label resolves as a reversal
 is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
@@ -678,9 +683,11 @@ before G2 runs, G2's final test needs a fresh chronological block of data after 
   narrows the gap. Treat both models' first-passage probabilities as scores: calibrate them
   on training blocks against the exact trade-path labels, report the grid bias measured on
   the null replays of section 2.1, and count bars that touch both barriers as ambiguous.
-  Score each challenger twice, assigning ambiguous paths to invalidation (a lower bound on
-  its reversal probability) and to reversal (an upper bound). Selection uses the lower
-  bound, and both are reported.
+  Score each challenger under the worst admissible assignment of its ambiguous mass for the
+  declared score: for each candidate, the ambiguous paths' mass goes to reversal or to
+  invalidation, whichever makes that candidate's three-outcome log loss (or Brier score)
+  worse. Selection requires a significant gain over G1 under that worst case, and the
+  best-case score is reported beside it.
 - Go on to pre-training a model on our own seven products' trade data (scale-invariant tokens,
   as in TradeFM) only if a sequence challenger beats G1 significantly. Compute permitting, it
   is the one deep-learning route the evidence supports.

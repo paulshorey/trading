@@ -130,7 +130,7 @@ decision row:
   without trades, as of the latest completed minute. `vol_1m` has no realized-volatility
   field.
 - **Hourly estimate (fast-scale fallback and sensitivity check):** the hour's realized
-  volatility of second closes, `stats_1h_1m.rv_bps / √n_h`, where `n_h` is the difference in
+  volatility of second closes, `stats_1h_1m.rv_bps / √n_h / theta_bps`, where `n_h` is the difference in
   second `slot_ordinal` between the hour's first and last observed closes (at most 3,599
   scheduled-open steps, however long any closure inside the window), joined as of
   the latest completed minute and rejected under the same half-span rule.
@@ -320,11 +320,12 @@ target, so every target has a reproducible operating point; a scale that ends wi
 bands off is reported as disabled. The vector is chosen on a calibration block and then
 validated on a later, disjoint pre-holdout block. There, each product's false-alarm rate
 gets a one-sided 95% upper bound that accounts for sessions and stays positive at zero
-counts. The bound comes from a negative-binomial model of per-session false-alarm counts,
-with covered open hours as exposure, fitted on the validation block itself (profile
-likelihood). With no false alarms on the block, it is the exact Poisson limit, 3.0 divided
-by the covered open hours. The procedure is fixed in the pre-registration record before the
-block is opened. If either product's bound is above the target, the scale is set to all bands
+counts. It uses a negative-binomial model of per-session false-alarm counts with covered
+open hours as exposure. The dispersion is fixed in advance from independent data: the upper
+95% bound of the dispersion estimated on the calibration block. With that dispersion fixed,
+the rate's one-sided 95% upper bound on the validation block is finite and positive even
+when every session has zero false alarms. The procedure is fixed in the pre-registration
+record before the block is opened. If either product's bound is above the target, the scale is set to all bands
 `off` and reported as failing its target; the vector is kept only when both bounds are
 within it. Report the
 whole frontier on both blocks. With only the snapshot model
@@ -339,10 +340,12 @@ is a true alarm (episodes below); a reversal reached only in a later episode is 
 alarm, since the alarm did not cover its episode. An invalidation or a timeout is a false alarm: the candidate did not confirm within
 the horizon it was given. So is a session end, since an alarm whose horizon ran past the
 scheduled close had that shorter horizon known when it fired. Only an unknown outcome
-(missing data) is unresolved. Exposure counts only decision rows whose whole horizon is
-covered: rows whose horizon would reach missing coverage are dropped from the denominator
-together with any alarm they raise, which is reported with its own count. The false-alarm
-rate is false alarms divided by the open hours of those fully observable decision rows.
+(missing data) is unresolved. The replay itself stays causal: an alarm fires and stops its
+candidate exactly as it would live, whatever happens later. Censoring is applied only when
+scoring: an alarm whose horizon reaches missing coverage has an unknown outcome, counts as
+neither true nor false, and is reported with its own count. Decision rows whose horizon
+reaches missing coverage leave the denominator, so the false-alarm rate is false alarms
+divided by the open hours of fully observable decision rows.
 
 The alarm's target is its label event: the label's reversal barrier reached before
 invalidation within the horizon. Alarms are matched one-to-one to reversal episodes by
@@ -713,8 +716,10 @@ raised it.
 ### PR G2: sequence and foundation-model challengers
 
 Only after G1 has a measured baseline. Every challenger uses the same candidates and
-metrics, and the same splits before the holdout: challenger selection, including the
-decision to pre-train, uses pre-holdout validation blocks only. Open the September–October
+metrics, and the same splits before the holdout. One challenger is chosen on earlier
+pre-holdout blocks and then tested once against G1 on later, disjoint pre-holdout gate
+blocks. Only that test can trigger the decision to pre-train; the other challengers are
+reported but cannot. Open the September–October
 2026 holdout once, after G1, G1b, and G2 are all locked. If it must be opened before G1b or
 G2 is locked, that later step's final test needs a fresh chronological block of data after
 October 2026:

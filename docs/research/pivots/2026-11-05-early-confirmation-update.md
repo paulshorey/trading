@@ -297,8 +297,10 @@ below 0.25, from 0.25 to 0.5, or 0.5 and above (the snapshot stages' edges), so 
 the first stage have their own threshold. Choose `b` by replaying the complete alarm
 process (first alarms, overlapping candidates, timeouts) on training blocks. Because an
 alarm in an earlier band stops the candidate from alarming later, a scale's three band
-thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
-each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
+thresholds are chosen jointly: a grid search over `b ∈ {0.05, 0.10, …, 0.95, off}` for
+each band (20³ = 8,000 combinations per scale, where `off` means that band never alarms).
+The grid starts low because early bands score low: with `R = 1` and `C = 0.25`, the
+null's reversal probability below the first stage is under 0.4. The search maximizes
 true-event coverage subject to the scale's target false-alarm rate per open hour, which
 must hold separately on GC and on SI (each product's rate within the target, not a pooled
 rate). Both products share one threshold vector, so every criterion uses the worse

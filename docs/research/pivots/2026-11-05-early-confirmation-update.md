@@ -289,8 +289,11 @@ thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95,
 each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
 true-event coverage subject to the scale's target false-alarm rate per open hour, which
 must hold separately on GC and on SI (each product's rate within the target, not a pooled
-rate). Ties go
-first to fewer duplicate alarms per open hour, then to the lower median delay (a vector that catches no true episode has infinite delay), then
+rate). Both products share one threshold vector, so every criterion uses the worse
+product: the objective is the lower of the two products' coverage. Ties go first to the
+vector whose worse product has fewer duplicate alarms per open hour, then to the one whose
+worse product has the lower median delay (a product that catches no true episode has
+infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
@@ -570,7 +573,9 @@ carried through rows without trades.
     replay's realized trade times are not available to it. It controls error
     in logit space, through adaptive or importance sampling or a deterministic method,
     because an absolute standard error does not bound rare-outcome logits. It never returns
-    a zero probability. And it is revalidated against the null replay before use;
+    a zero probability. And it is fitted on earlier pre-holdout blocks (arrival profile,
+    return law, sampling settings) and validated by the section 2.1 rule on later,
+    disjoint pre-holdout blocks and fresh randomizations it was not fitted on;
   - `log_overshoot_mean(kappa)`: the log of `(e^κ − 1)/κ` in `θ` units, computed stably
     (`κ + log1p(−e^(−κ)) − log κ` for large positive `κ`), 0 at `κ = 0`. It returns the
     log because the mean itself overflows a float for large positive `κ`.

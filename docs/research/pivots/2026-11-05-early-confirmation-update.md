@@ -117,7 +117,8 @@ standard deviation in `θ` units (log-bps ÷ the candidate's frozen `theta_bps`)
 decision row:
 
 - **Fast scales (second rows):** `s = vol_1s.rv_bps / √n / theta_bps`, where `n` is the
-  number of one-second steps between the window's first and last observed closes (from
+  difference in `slot_ordinal` (scheduled-open one-second steps) between the window's first
+  and last observed closes (from
   `bar_1s`). `rv_bps` is the square root of the summed squared log returns between
   observed second closes in the `1m@1s` window. Divide by the steps those returns span, not
   by `rv_returns`: a return across several quiet seconds covers several rows, and the price
@@ -129,8 +130,9 @@ decision row:
   without trades, as of the latest completed minute. `vol_1m` has no realized-volatility
   field.
 - **Hourly estimate (fast-scale fallback and sensitivity check):** the hour's realized
-  volatility of second closes, `stats_1h_1m.rv_bps / √n_h`, where `n_h` is the span in
-  seconds between the hour's first and last observed closes (at most 3,599), joined as of
+  volatility of second closes, `stats_1h_1m.rv_bps / √n_h`, where `n_h` is the difference in
+  second `slot_ordinal` between the hour's first and last observed closes (at most 3,599
+  scheduled-open steps, however long any closure inside the window), joined as of
   the latest completed minute and rejected under the same half-span rule.
 - `s` must be positive. A NULL input, an incomplete window, or a flat window (`rv_bps = 0`
   or `ret_std_bps = 0`: every close at one price) gives no usable estimate. Fast scales then
@@ -309,15 +311,16 @@ must hold separately on GC and on SI (each product's rate within the target, not
 rate). Both products share one threshold vector, so every criterion uses the worse
 product: the objective is the lower of the two products' coverage. Ties go first to the
 lower maximum of the two products' duplicate-alarm rates per open hour, then to the lower
-maximum of their median delays, each delay measured in open rows from the extreme where the episode's finer-detector move starts (fixed before replay) to the true alarm's availability (a product that catches no true episode has infinite delay), then
+maximum of their median delays, each delay measured in open rows from the finer-detector extreme the alarm was assigned to when it fired (frozen then, even if a later sub-threshold refresh moves the episode's extreme) to the true alarm's availability (a product that catches no true episode has infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. The vector is chosen on a calibration block and then
 validated on a later, disjoint pre-holdout block. If the validation block's false-alarm
-rate is above the target for either product (its 95% session-block interval entirely above
-it), the scale is set to all bands `off` and reported as failing its target. Report the
+rate's 95% session-block upper bound is above the target for either product, the scale is
+set to all bands `off` and reported as failing its target; the vector is kept only when
+both products' upper bounds are within it. Report the
 whole frontier on both blocks. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 A row is evaluated once, in the band of its own progress: when progress jumps past two
@@ -325,8 +328,9 @@ stages within one row, only the highest stage reached is eligible at that close.
 
 A candidate may alarm once per session: one carried across a scheduled close becomes
 eligible again after the reopen, with a new horizon. Each alarm is scored by the label of the
-row that raised it. A reversal is a true
-alarm. An invalidation or a timeout is a false alarm: the candidate did not confirm within
+row that raised it. A reversal reached within the episode underway when the alarm fired
+is a true alarm (episodes below); a reversal reached only in a later episode is a false
+alarm, since the alarm did not cover its episode. An invalidation or a timeout is a false alarm: the candidate did not confirm within
 the horizon it was given. So is a session end, since an alarm whose horizon ran past the
 scheduled close had that shorter horizon known when it fired. Only an unknown outcome
 (missing data) is unresolved. Exposure counts only decision rows whose whole horizon is
@@ -340,15 +344,18 @@ product, scale, and direction. Episodes are fixed from the trade path before any
 policy is replayed, so every threshold vector is scored against the same events. They come
 from the same directional-change detector run on the same released trades with a finer
 threshold, `min(max(C, 0.25), R)` times the scale's threshold rule (frozen per candidate in
-the usual way). The 0.25 floor keeps episodes defined when `C = 0`; the cap at `R` means the
-finer detector has always started a reversal move by the time a label reaches its reversal
-barrier. Each of that finer detector's moves in the reversal direction is one episode, from
+the usual way). The 0.25 floor keeps episodes defined when `C = 0`, and the cap at `R` keeps the finer
+threshold no larger than the label's reversal distance under the same threshold inputs;
+because the two freeze their thresholds at different times, the one-label-episode rule
+below covers the remaining case. Each of that finer detector's moves in the reversal direction is one episode, from
 the extreme where it starts until the finer detector confirms the next move the other way.
 An alarm belongs to the episode underway when it fires: the reversal move starting from the
 finer detector's latest extreme at or before the alarm. It covers that episode only if its
 label's reversal barrier is reached before that episode ends. An alarm whose label reverses
-only in a later episode is credited to no episode: it is neither true nor false, adds to
-the alarm burden like a duplicate, and is counted separately.
+only in a later episode covers nothing and counts as a false alarm in the constraint. A
+label that reaches its reversal barrier before the finer detector has started any reversal
+move from its extreme (possible when that detector froze a larger threshold than the
+label's) forms its own one-label episode, starting at the label's extreme.
 Price must retrace at least that finer threshold to end a move, so any rebound that large
 starts a new episode, whether or not it creates a new candidate. A sub-`C` refresh of the
 extreme stays in one episode, even when its slightly different barrier is crossed on a

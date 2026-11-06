@@ -281,7 +281,9 @@ alarm in an earlier band stops the candidate from alarming later, a scale's thre
 thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
 each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
 true-event coverage subject to the scale's target false-alarm rate per open hour. Ties go
-to the lower median delay, then to the higher thresholds. All bands `off` always meets the
+to the lower median delay, then to the vector that is higher in band order, compared band
+by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
+this is a total order, so one vector is always chosen. All bands `off` always meets the
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. Report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
@@ -296,10 +298,13 @@ together with any alarm they raise, which is reported with its own count. The fa
 rate is false alarms divided by the open hours of those fully observable decision rows.
 
 The alarm's target is its label event: the label's reversal barrier reached before
-invalidation within the horizon. Alarms are matched one-to-one to these events by product,
-scale, and direction: alarms whose reversals are reached by the same trade share one event,
-as when an extreme replaced by less than `C` and its replacement both resolve on one move.
-The first alarm on an event is the true alarm and any further one a duplicate. Duplicates are
+invalidation within the horizon. Alarms are matched one-to-one to reversal episodes by
+product, scale, and direction. An episode is one leg of the detector: every candidate whose
+extreme lies in the same leg (between two consecutive confirmed opposite pivots of that
+scale, or the open leg) belongs to it, so an extreme replaced by less than `C` and its
+replacement form one episode even when their slightly different barriers are crossed on
+successive trades.
+In an episode, the first alarm whose label resolves as a reversal is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
 no confirmed pivot event (the replacement's refreshed `θ` was not reached) still counts as
@@ -416,7 +421,10 @@ released trades
   split the target into two binary steps, each with its own offset: resolved within the
   horizon (reversal or invalidation) vs. timeout, offset `logit P_null(resolved)`; then
   reversal vs. invalidation among resolved candidates, offset
-  `logit P_null(reversal | resolved)`. Their product gives the three probabilities.
+  `logit P_null(reversal | resolved)`. Their product gives the three probabilities. A
+  session-end row is a negative in the first step (not resolved within its known, shorter
+  horizon), with the first offset computed over that shorter horizon, and does not enter
+  the second step; its scores are still reported in the session-end group.
   statsmodels' binary `GLM` takes an `offset` but its multinomial `MNLogit` does not, so the
   logistic baseline is two offset GLMs. LightGBM takes an `init_score` for each binary step
   (or per class with a multiclass objective), but only as training metadata: it is not saved in the booster or added by `predict()`. Give

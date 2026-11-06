@@ -318,10 +318,12 @@ this is a total order, so one vector is always chosen. All bands `off` always me
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. The vector is chosen on a calibration block and then
 validated on a later, disjoint pre-holdout block. There, each product's false-alarm rate
-gets a one-sided 95% upper bound that stays positive at zero counts: the exact Poisson upper
-limit on the false-alarm count (3.0 when none occur), divided by the covered open hours, and
-multiplied by the count's overdispersion across sessions measured on the calibration block
-(at least 1). If either product's bound is above the target, the scale is set to all bands
+gets a one-sided 95% upper bound that accounts for sessions and stays positive at zero
+counts. The bound comes from a negative-binomial model of per-session false-alarm counts,
+with covered open hours as exposure, fitted on the validation block itself (profile
+likelihood). With no false alarms on the block, it is the exact Poisson limit, 3.0 divided
+by the covered open hours. The procedure is fixed in the pre-registration record before the
+block is opened. If either product's bound is above the target, the scale is set to all bands
 `off` and reported as failing its target; the vector is kept only when both bounds are
 within it. Report the
 whole frontier on both blocks. With only the snapshot model
@@ -358,9 +360,12 @@ label's reversal barrier is reached before that episode ends. An alarm whose lab
 only in a later episode covers nothing and counts as a false alarm in the constraint. A
 label that reaches its reversal barrier before the finer detector has started any reversal
 move from its extreme (possible when that detector froze a larger threshold than the
-label's) joins a fallback episode for that candidate extreme. All such labels sharing the
-extreme, whether stage snapshots or per-row labels, form that one episode, starting at the
-extreme, so one market reversal stays one true event.
+label's) joins a fallback episode. There is one per finer-detector move in the leg's
+direction: every label whose extreme lies in that move, including labels on extremes
+refreshed by less than the finer threshold, and that reverses before the finer detector
+starts a reversal move, belongs to it. Stage snapshots and per-row labels alike count, and
+the episode starts at the earliest such extreme, so one market reversal stays one true
+event.
 Price must retrace at least that finer threshold to end a move, so any rebound that large
 starts a new episode, whether or not it creates a new candidate. A sub-`C` refresh of the
 extreme stays in one episode, even when its slightly different barrier is crossed on a

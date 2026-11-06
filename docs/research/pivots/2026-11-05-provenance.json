@@ -1,0 +1,277 @@
+{
+  "researched": "2026-11-05",
+  "document": "2026-11-05-early-confirmation-update.md",
+  "tool": "engineering-research skill, scripts/parallel.py (Parallel Search API, default advanced mode; Extract API with full content)",
+  "search_batches": [
+    {
+      "batch": 1,
+      "searches": [
+        {
+          "objective": "Find the latest versions, capabilities and published benchmark evidence (2025-2026) of time-series foundation models such as Google TimesFM 2.5, Amazon Chronos-2, Salesforce Moirai 2, NX-AI TiRex, Datadog Toto, and Sundial, including support for covariates, quantile/probabilistic outputs, context length, and fine-tuning.",
+          "search_queries": [
+            "TimesFM 2.5 release covariates quantile forecast",
+            "Chronos-2 Moirai 2 TiRex benchmark GIFT-Eval 2026",
+            "time series foundation model leaderboard fev-bench 2026"
+          ]
+        },
+        {
+          "objective": "Find independent empirical evaluations of time-series foundation models (TimesFM, Chronos, Moirai, Lag-Llama, TimeGPT, Kronos, FinCast) applied to financial market prices or returns, especially intraday/high-frequency data, direction or turning-point prediction, and whether they beat simple baselines after fine-tuning.",
+          "search_queries": [
+            "time series foundation models financial returns evaluation zero-shot fine-tuning",
+            "Kronos foundation model financial candlestick K-line",
+            "TimesFM stock returns direction accuracy study"
+          ]
+        },
+        {
+          "objective": "Find research on detecting price turning points (peaks/troughs, swing highs/lows, trend reversals) in real time or as early as possible in financial time series using machine learning or deep learning, published 2022-2026, with honest evaluation of detection delay.",
+          "search_queries": [
+            "real-time turning point detection financial time series deep learning",
+            "early detection of price reversal swing high low machine learning futures",
+            "predict local extrema stock price classification transformer 2025"
+          ]
+        },
+        {
+          "objective": "Find the directional change (DC) literature on predicting trend reversals or overshoot length in intrinsic time, including Kampouridis/Adegboye machine-learning DC reversal prediction, Tsang directional change nowcasting, and multi-threshold DC methods.",
+          "search_queries": [
+            "directional change trend reversal prediction machine learning Kampouridis",
+            "directional change overshoot prediction multiple thresholds",
+            "directional change nowcasting Tsang Chinthalapati"
+          ]
+        },
+        {
+          "objective": "Find signal-processing and econometric theory on real-time filtering and the end-point problem for turning point detection, including Marc Wildi's Direct Filter Approach (DFA), McElroy-Wildi accuracy-timeliness-smoothness trilemma, and one-sided filters designed for early turning-point detection.",
+          "search_queries": [
+            "Wildi direct filter approach real-time turning point detection",
+            "McElroy Wildi accuracy timeliness smoothness trilemma",
+            "one-sided filter end-point problem turning points real time"
+          ]
+        },
+        {
+          "objective": "Find methods from business-cycle dating for identifying turning points in real time with minimal delay, such as Markov-switching models, Bry-Boschan, Chauvet-Piger real-time probabilities, and vector quantization, and their reported detection delays and false-alarm trade-offs.",
+          "search_queries": [
+            "real-time business cycle turning point identification Markov switching delay",
+            "Giusto Piger vector quantization turning points real time",
+            "Chauvet Piger speed and accuracy turning point detection"
+          ]
+        },
+        {
+          "objective": "Find optimal stopping and quickest change-point detection results relevant to detecting that a price has reached its maximum or that drift changed sign, such as Shiryaev-Roberts, Bayesian quickest detection of drift change in Brownian motion, and 'selling at the ultimate maximum' problems.",
+          "search_queries": [
+            "quickest detection drift change Brownian motion trend reversal trading",
+            "optimal stopping selling stock ultimate maximum du Toit Peskir",
+            "Shiryaev Roberts procedure financial trend change detection"
+          ]
+        },
+        {
+          "objective": "Find practical and academic approaches for combining multiple detectors or signals for event detection, such as stacking, meta-labeling, ensemble alarm fusion, and conformal prediction for calibrated online alarms under nonstationarity (adaptive conformal inference).",
+          "search_queries": [
+            "adaptive conformal inference online time series nonstationary alarm",
+            "meta-labeling ensemble primary model secondary model financial machine learning",
+            "event detection evaluation early detection metric time tolerance NAB score"
+          ]
+        }
+      ],
+      "failed_searches": []
+    },
+    {
+      "batch": 2,
+      "searches": [
+        {
+          "objective": "Find empirical research on market microstructure signals that precede short-term price reversals at local highs or lows in futures or equities, such as trade-sign imbalance exhaustion, Hawkes process intensity, absorption by passive liquidity, stop-run sweeps, and volume climax, using trade and top-of-book data.",
+          "search_queries": [
+            "order flow exhaustion short-term price reversal futures trade imbalance",
+            "Hawkes process predict mid-price reversal intraday",
+            "stop hunting liquidity sweep reversal empirical market microstructure"
+          ]
+        },
+        {
+          "objective": "Find closed-form or analytical first-passage probabilities for Brownian motion with drift hitting an upper barrier before a lower barrier (gambler's ruin), and their use as a null baseline for triple-barrier labeling or reversal probability in trading.",
+          "search_queries": [
+            "probability Brownian motion with drift hits upper barrier before lower barrier formula",
+            "triple barrier label probability analytical baseline random walk",
+            "first passage two barriers drifted Brownian motion trading stop loss take profit probability"
+          ]
+        },
+        {
+          "objective": "Find the latest tabular foundation models (TabPFN v2/2.5, TabICL, Mitra, TabPFN-TS) and evidence of their accuracy on financial or time-series classification tasks versus gradient boosted trees, including dataset size limits and calibration.",
+          "search_queries": [
+            "TabPFN 2.5 release limits rows features benchmark versus XGBoost",
+            "TabPFN time series TabPFN-TS financial classification",
+            "tabular foundation model vs gradient boosting calibration 2026"
+          ]
+        },
+        {
+          "objective": "Find state-of-the-art early time series classification methods (ECTS) from 2022-2026, such as ELECTS, CALIMERA, TEASER, ECEC, Stop&Hop, and surveys comparing their accuracy-earliness trade-off, including any applications to streaming event detection.",
+          "search_queries": [
+            "early classification of time series survey 2024 2025 benchmark earliness",
+            "ELECTS end-to-end learned early classification time series",
+            "CALIMERA early classification calibrated"
+          ]
+        },
+        {
+          "objective": "Determine which time-series foundation models produce joint sample paths (not only per-step marginal quantiles), which is required to estimate path-dependent probabilities such as first passage or barrier hitting, e.g. Toto, Moirai, Lag-Llama, Chronos, TimesFM, and how to use them for event probabilities.",
+          "search_queries": [
+            "time series foundation model sample paths vs quantiles path-dependent probability",
+            "Toto foundation model Student-t mixture samples forecast",
+            "foundation model forecast barrier hitting probability Monte Carlo samples"
+          ]
+        },
+        {
+          "objective": "Find the directional-change 'Alpha Engine' by Golub, Glattfelder and Olsen and related work on the intrinsic-time probability/surprise indicator, overshoot scaling laws, and coastline trading, including how they estimate the likelihood of a trend reversal causally.",
+          "search_queries": [
+            "Alpha Engine Golub Glattfelder Olsen intrinsic time probability indicator",
+            "directional change overshoot scaling law average overshoot equals threshold",
+            "intrinsic network information theoretic surprise directional change"
+          ]
+        },
+        {
+          "objective": "Find research on using time-series foundation model embeddings or fine-tuned foundation models (MOMENT, Mantis, Chronos, TimesFM) for time-series classification or event detection rather than forecasting, including financial applications and comparisons with feature-engineered gradient boosting.",
+          "search_queries": [
+            "time series foundation model embeddings classification MOMENT Mantis benchmark",
+            "foundation model embeddings features gradient boosting financial time series classification",
+            "fine-tune TimesFM classification head event detection"
+          ]
+        },
+        {
+          "objective": "Find causal low-lag smoothing and trend filters used to detect swing turns early, such as Ehlers SuperSmoother and instantaneous trendline, causal Savitzky-Golay, one-sided Hodrick-Prescott, online L1 trend filtering, and Kalman local linear trend, with evidence on lag versus false turns.",
+          "search_queries": [
+            "Ehlers SuperSmoother lag reduction turning point detection",
+            "online l1 trend filtering real time kink detection",
+            "Kalman filter local linear trend slope sign change turning point detection delay"
+          ]
+        }
+      ],
+      "failed_searches": []
+    },
+    {
+      "batch": 3,
+      "searches": [
+        {
+          "objective": "Find maneuver onset detection methods from target tracking (interacting multiple model filters, GLR maneuver detectors) and their detection delay versus false alarm trade-offs, as a cross-domain analogue for detecting a reversal in price direction as soon as possible.",
+          "search_queries": [
+            "maneuver onset detection delay interacting multiple model GLR",
+            "quickest maneuver detection target tracking false alarm delay",
+            "IMM filter financial trend regime detection"
+          ]
+        },
+        {
+          "objective": "Find benchmarks of online change point detection algorithms (such as TCPDBench by van den Burg and Williams and newer 2023-2026 benchmarks) that report which methods detect changes earliest with fewest false alarms, and whether simple baselines are competitive.",
+          "search_queries": [
+            "evaluation of change point detection algorithms benchmark van den Burg Williams results",
+            "online change point detection benchmark 2025 detection delay comparison",
+            "FOCuS online changepoint python package performance"
+          ]
+        },
+        {
+          "objective": "Find evidence about look-ahead bias and leakage when training machine learning models on ZigZag or swing-high/low labels, and correct ways to label pivots for supervised learning without repainting.",
+          "search_queries": [
+            "zigzag labels machine learning look-ahead bias repainting pivots",
+            "label swing highs lows supervised learning leakage financial",
+            "predict zigzag pivot LSTM unrealistic results future leakage"
+          ]
+        },
+        {
+          "objective": "Find empirical studies on whether short-horizon intraday price reversals in futures (gold, silver, equity index futures) are predictable from trade intensity, volume spikes, or Hawkes-type self-excitation, including CME futures studies.",
+          "search_queries": [
+            "intraday reversal predictability futures trade intensity volume spike CME",
+            "Hawkes process trade arrivals predicts reversal futures high frequency",
+            "gold futures intraday mean reversion high frequency evidence"
+          ]
+        },
+        {
+          "objective": "Find research on probabilistic combination of multiple turning-point or event detectors, e.g., Bayesian model averaging of recession probability models, stacking classifiers on detector outputs, and sequential fusion of alarms, with evidence on improved timeliness or accuracy.",
+          "search_queries": [
+            "combining turning point probability models forecast combination recession timeliness",
+            "stacking multiple change point detectors ensemble improved detection delay",
+            "fusion of sequential detectors quickest detection multiple sensors"
+          ]
+        },
+        {
+          "objective": "Find the 2025-2026 state of financial-market-specific foundation models (Kronos, FinCast, MarketGPT, LOB foundation models, TradeFM) trained on tick or order-book data, and whether any target intraday futures turning points or order flow.",
+          "search_queries": [
+            "foundation model trained on tick data order book futures 2026",
+            "FinCast foundation model financial time series",
+            "limit order book foundation model pretraining message data 2025"
+          ]
+        }
+      ],
+      "failed_searches": []
+    },
+    {
+      "batch": 4,
+      "searches": [
+        {
+          "objective": "Find the license terms of the TabPFN-2.5 model weights (Prior Labs), Datadog Toto 2.0 open weights, and Amazon Chronos-2 weights, specifically whether commercial or production use is permitted.",
+          "search_queries": [
+            "TabPFN-2.5 license commercial use weights",
+            "Toto 2.0 Datadog open weights license Apache",
+            "amazon chronos-2 license apache-2.0 hugging face"
+          ]
+        },
+        {
+          "objective": "Find the classical result that for Brownian motion the running maximum at the first time the drawdown reaches a fixed size is exponentially distributed (Taylor 1975, Lehoczky 1977), including the formula with drift.",
+          "search_queries": [
+            "Lehoczky 1977 formulas for stopped diffusion drawdown maximum exponential distribution",
+            "Taylor 1975 stopping time Brownian motion drawdown maximum exponential",
+            "maximum before drawdown of size a Brownian motion with drift distribution"
+          ]
+        }
+      ],
+      "failed_searches": []
+    }
+  ],
+  "extracted_urls": [
+    "https://www.census.gov/content/dam/Census/library/working-papers/2015/adrm/dfa-10-14-15.pdf",
+    "https://qffe2018.sciencesconf.org/197191/Agent_Based_Model_in_Intrinsic_Time_9_.pdf",
+    "https://personalpages.manchester.ac.uk/staff/goran.peskir/levels.pdf",
+    "https://wp.lancs.ac.uk/fofi2026/files/2026/03/FoFI-2026-020-Eghbal-Rahimikia.pdf",
+    "https://proceedings.mlr.press/v189/achenchabe23a/achenchabe23a.pdf",
+    "https://aimultiple.com/time-series-classification",
+    "https://arxiv.org/abs/2406.18332",
+    "https://arxiv.org/html/2607.12248",
+    "https://www.gildedage.ai/en/news/googles-timesfm-3-tops-its-category-but-you-cant-ship-it",
+    "https://arxiv.org/abs/2511.08667",
+    "https://arxiv.org/abs/2606.27100",
+    "https://arxiv.org/html/2607.19453v1",
+    "https://www.sciencedirect.com/science/article/abs/pii/S0957417421000865",
+    "https://arxiv.org/abs/2605.28554",
+    "https://github.com/sumit-ai-ml/kronos-market-eval",
+    "https://github.com/google-research/timesfm/blob/master/README.md",
+    "https://arxiv.org/html/2610.22358",
+    "https://link.springer.com/article/10.1007/s10479-025-06542-7",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC7944410",
+    "https://arxiv.org/html/2510.19345v1",
+    "https://jeremypiger.com/assets/files/Giusto_Piger_IJOF_2017.pdf",
+    "https://www.journals.vu.lt/open-series/en/article/download/46760/42295/136414",
+    "https://www.sciencedirect.com/science/article/abs/pii/S0169207019300573",
+    "https://mathandmarkets.com/p/regime-detection-part-2-the-latency",
+    "https://arxiv.org/html/2610.20104v1",
+    "https://www.mdpi.com/2813-0324/16/1/2",
+    "https://arxiv.org/abs/2003.06222",
+    "https://onlinelibrary.wiley.com/doi/full/10.1002/isaf.1552",
+    "https://arxiv.org/html/2605.20119v1",
+    "https://arxiv.org/html/2602.23784",
+    "https://arxiv.org/html/2510.02224v1",
+    "https://huggingface.co/amazon/chronos-2",
+    "https://www.norges-bank.no/globalassets/upload/english/publications/working-papers/2012/wp_2012_04.pdf?v=09032017122151"
+  ],
+  "access_limits": [
+    "Abstract pages only: https://arxiv.org/abs/2606.27100, https://arxiv.org/abs/2406.18332, https://arxiv.org/abs/2511.08667, https://arxiv.org/abs/2605.28554, https://arxiv.org/abs/2003.06222",
+    "https://link.springer.com/article/10.1007/s10479-025-06542-7: publisher preview only (abstract); method and results unverified",
+    "https://www.sciencedirect.com/science/article/abs/pii/S0169207019300573: abstract only (Wildi and McElroy, 2019)",
+    "https://www.mdpi.com/2813-0324/16/1/2: extraction returned the abstract only (online change-point benchmark; not cited)",
+    "Search excerpts only (not extracted): Kronos volatility study https://www.sciencedirect.com/science/article/abs/pii/S1544612326011347 (highlights and abstract); Bank of England slides https://www.bankofengland.co.uk/-/media/boe/files/events/2026/y-stucki-slides.pdf; du Toit and Peskir https://personalpages.manchester.ac.uk/staff/Goran.Peskir/stock.pdf; Lehoczky 1977 (Project Euclid abstract); Glattfelder et al. https://arxiv.org/html/0809.1040; Gibbs and Candes https://jmlr.org/papers/v25/22-1218.html; order-imbalance studies (Oxford 2024, arXiv:2507.22712); Datadog Toto 2.0 blog; TabPFN-2.5 license page; first-passage derivation pages (edgekit, quantvault), whose formulas were checked by simulation",
+    "https://mathandmarkets.com/p/regime-detection-part-2-the-latency and https://aimultiple.com/time-series-classification: practitioner/third-party pages, not peer reviewed"
+  ],
+  "checks": [
+    "docs/research/pivots/2026-11-05-null-check.py (seed 7, 20,000 paths, step 0.0002; run with `uv run --no-sync python docs/research/pivots/2026-11-05-null-check.py`).",
+    "First passage, formula vs simulated: x=0.25,R=1,C=0.25,kappa=0: 0.4000 vs 0.3925; x=0.5,kappa=0: 0.6000 vs 0.5997; x=0.5,kappa=+1: 0.7395 vs 0.7385; x=0.25,kappa=-2: 0.1537 vs 0.1487 (tolerance 0.015).",
+    "Overshoot mean, formula vs simulated: kappa=0: 1.0000 vs 1.0154; kappa=+1: 1.7183 vs 1.7444; kappa=-1: 0.6321 vs 0.6261 (tolerance 0.04).",
+    "Discrete horizon, x=0.25,R=1,C=0.25 (reversal, invalidation, timeout): k=1,s=1: (0.227, 0.308, 0.464); k=100,s=0.1: (0.367, 0.546, 0.087)."
+  ],
+  "not_stored": "Raw search results, excerpts, and extracted page text stay out of git; no credentials are recorded.",
+  "extraction_summary": "33 page extractions: 25 returned full text; 8 returned only an abstract or publisher preview (five arXiv abstract pages, the Springer preview, the Wildi and McElroy ScienceDirect abstract, and the MDPI change-point benchmark abstract).",
+  "access_notes": [
+    "https://www.sciencedirect.com/science/article/abs/pii/S0957417421000865 (Adegboye and Kampouridis, 2021): despite the /abs/ URL, the extraction returned the full article (sections 1-6, results, conclusions), so it counts as full text."
+  ]
+}

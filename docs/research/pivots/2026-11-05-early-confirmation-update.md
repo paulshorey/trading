@@ -168,11 +168,13 @@ session-block bootstrap interval lies within ±0.02 for the difference in probab
 within ±0.25 for the difference in log-odds (equivalence, not a failure to reject). The
 log-odds margin protects rare outcomes, whose logits become the offsets. A stratum too
 uncertain to show this counts as a failure. A stratum short of 500 candidates, 20 sessions,
-or 50 rarer outcomes is merged, by a fixed
-order, first with an adjacent trade-rate tercile, then with an adjacent resolution band,
-and then with an adjacent `x` band, always
-the lower neighbor when there is one and otherwise the upper,
-within the same product and scale, until it meets both minimums. Candidates in a stratum
+or 50 rarer outcomes is merged by one deterministic pass per dimension, in the order
+trade-rate tercile, resolution band, `x` band, never across product, scale, or horizon
+group. In each pass, for each fixed combination of the other dimensions, the bins are
+visited from lowest to highest. A bin that fails a minimum merges into its lower neighbor
+(the lowest bin into its upper neighbor), and the merged bin replaces both before the visit
+continues. The pass repeats until no bin fails or one bin remains, and the next dimension's
+pass starts from the result. Candidates in a stratum
 that still cannot be validated are excluded from scoring and fitting and counted. If any
 stratum fails, the closed form is replaced by a fallback that
 meets the requirements in PR F0, and that fallback is validated by the same rule. Call the

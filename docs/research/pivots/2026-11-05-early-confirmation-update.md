@@ -151,16 +151,21 @@ session's real trade times with sign-randomized trade-to-trade returns), compute
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
-product × scale × horizon group × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) ×
-trade-rate tercile, where the horizon group is the full `K` or, for candidates cut short by
-the session close, a band of the remaining rows (under 25%, 25–50%, or 50–100% of `K`). In
-each stratum
-with at least 500 candidates, compare observed and predicted frequencies for both binary
-steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal given
-resolved. The closed form is kept only if, for both steps in every such stratum with at
-least 20 sessions, the whole 95% session-block bootstrap interval for the difference lies
-within ±0.02 (equivalence, not a failure to reject). A stratum too uncertain to show this
-counts as a failure. A stratum short of 500 candidates or 20 sessions is merged, by a fixed
+product × scale × horizon group × `x` band × trade-rate tercile, all half-open so every
+value has one bin. `x` bands are [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1). The horizon
+group is the full `K` or, for candidates cut short by the session close, the remaining rows
+in (0, 0.25·K), [0.25·K, 0.5·K), or [0.5·K, K). Trade-rate terciles use cut points fixed on
+the earliest pre-holdout blocks, with bins below the first cut, from it to below the
+second, and from the second up, so a value equal to a cut goes to the higher bin. In each
+stratum with at least 500 candidates, compare observed and predicted frequencies for both
+binary steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal
+given resolved. The closed form is kept only if, for both steps in every such stratum with
+at least 20 sessions and at least 50 of each step's rarer outcome, the whole 95%
+session-block bootstrap interval lies within ±0.02 for the difference in probability and
+within ±0.25 for the difference in log-odds (equivalence, not a failure to reject). The
+log-odds margin protects rare outcomes, whose logits become the offsets. A stratum too
+uncertain to show this counts as a failure. A stratum short of 500 candidates, 20 sessions,
+or 50 rarer outcomes is merged, by a fixed
 order, first with an adjacent trade-rate tercile and then with an adjacent `x` band, always
 the lower neighbor when there is one and otherwise the upper,
 within the same product and scale, until it meets both minimums. Candidates in a stratum
@@ -293,8 +298,7 @@ must hold separately on GC and on SI (each product's rate within the target, not
 rate). Both products share one threshold vector, so every criterion uses the worse
 product: the objective is the lower of the two products' coverage. Ties go first to the
 lower maximum of the two products' duplicate-alarm rates per open hour, then to the lower
-maximum of their median delays (a product that catches no true episode has infinite
-delay), then
+maximum of their median delays, each delay measured in open rows from the episode's reference extreme (fixed before replay) to the true alarm's availability (a product that catches no true episode has infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
@@ -657,8 +661,11 @@ validation stratum could not be validated even after merging) publishes no proba
 flagged as undefined or unvalidated. It cannot alarm, is dropped from the replay's
 exposure, and is counted; the flag carries into live integration unchanged. Then it refits the
 stopping-rule thresholds by replaying first alarms, each scored by the label of the row
-that raised it. If G1 found no edge, the per-row output is `P_null,K` itself, which needs
-no fitted model.
+that raised it. The fitted per-row model is published only if it passes its own
+chronological gate, the same as G1's exit rule but on per-row candidates in held-out
+pre-holdout blocks: a significant, stable log-loss gain over `P_null,K` on the primary scale
+for both products. If G1 or this gate fails, the per-row output is `P_null,K` itself, which
+needs no fitted model.
 
 ### PR G2: sequence and foundation-model challengers
 

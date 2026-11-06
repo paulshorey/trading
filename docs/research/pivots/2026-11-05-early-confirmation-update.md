@@ -645,7 +645,10 @@ carried through rows without trades.
 Required before publishing a probability on every row or alarming at any row close. It
 adds the per-row label of section 6 (its own label ID: PR F's barriers, fixed relative to
 the candidate's extreme, with a `K`-row horizon counted from each row), fits the same models
-on it, and computes the null from each row's displacement `x` and horizon. A row the fitted
+on it, and computes the null from each row's displacement `x` and horizon. Before any
+fitting or replay, the null passes the section 2.1 validation again on these per-row
+candidates (including `q = 0` and carried-price rows), with the same strata, minimums, and
+equivalence margin, since passing on the stage snapshots does not cover this denser mix. A row the fitted
 model cannot score (a NULL input from warm-up, an incomplete window, or an epoch reset)
 publishes `P_null,K` instead, flagged as the fallback; such rows stay in the threshold
 replay and alarm under the same thresholds, and their share is reported. A row where

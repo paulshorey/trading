@@ -309,7 +309,7 @@ must hold separately on GC and on SI (each product's rate within the target, not
 rate). Both products share one threshold vector, so every criterion uses the worse
 product: the objective is the lower of the two products' coverage. Ties go first to the
 lower maximum of the two products' duplicate-alarm rates per open hour, then to the lower
-maximum of their median delays, each delay measured in open rows from the episode's reference extreme (fixed before replay) to the true alarm's availability (a product that catches no true episode has infinite delay), then
+maximum of their median delays, each delay measured in open rows from the extreme where the episode's finer-detector move starts (fixed before replay) to the true alarm's availability (a product that catches no true episode has infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
@@ -332,17 +332,16 @@ rate is false alarms divided by the open hours of those fully observable decisio
 
 The alarm's target is its label event: the label's reversal barrier reached before
 invalidation within the horizon. Alarms are matched one-to-one to reversal episodes by
-product, scale, and direction. Episodes are fixed from the detector and label path before
-any alarm policy is replayed, so every threshold vector is scored against the same events.
-Within a detector leg (the stretch between two consecutive confirmed opposite pivots of that
-scale, or the open leg), the first candidate opens an episode, and the episode's reference is
-that candidate's extreme and frozen `θ`. A later candidate in the leg starts a new episode
-when its extreme lies at least `C·θ` beyond the current episode's reference, or when it
-follows a completed reversal in the current episode (any of the episode's candidates has
-reached its reversal barrier), however close its extreme is. Otherwise a sub-`C` refresh
-stays in the same episode, even when its slightly different barrier is crossed on a later
-trade. An episode is a true event when any of its candidates' labels resolves as a
-reversal. In an episode, the first alarm whose label resolves as a reversal
+product, scale, and direction. Episodes are fixed from the trade path before any alarm
+policy is replayed, so every threshold vector is scored against the same events. They come
+from the same directional-change detector run on the same released trades with a finer
+threshold, `C` times the scale's threshold rule (frozen per candidate in the usual way).
+Each of that finer detector's moves in the reversal direction is one episode. A label's
+reversal belongs to the episode containing the trade that reached its reversal barrier.
+Price must retrace at least that finer threshold to end a move, so any rebound that large
+starts a new episode, whether or not it creates a new candidate. A sub-`C` refresh of the
+extreme stays in one episode, even when its slightly different barrier is crossed on a
+later trade. An episode is a true event when any label reversal falls in it. In an episode, the first alarm whose label resolves as a reversal
 is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with

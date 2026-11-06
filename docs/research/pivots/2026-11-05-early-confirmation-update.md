@@ -652,9 +652,10 @@ equivalence margin, since passing on the stage snapshots does not cover this den
 model cannot score (a NULL input from warm-up, an incomplete window, or an epoch reset)
 publishes `P_null,K` instead, flagged as the fallback; such rows stay in the threshold
 replay and alarm under the same thresholds, and their share is reported. A row where
-`P_null,K` itself is undefined (section 2.1: no usable volatility estimate) publishes no
-probability, flagged as undefined. It cannot alarm, is dropped from the replay's exposure,
-and is counted. Then it refits the
+`P_null,K` is undefined (section 2.1: no usable volatility estimate) or unvalidated (its
+validation stratum could not be validated even after merging) publishes no probability,
+flagged as undefined or unvalidated. It cannot alarm, is dropped from the replay's
+exposure, and is counted; the flag carries into live integration unchanged. Then it refits the
 stopping-rule thresholds by replaying first alarms, each scored by the label of the row
 that raised it. If G1 found no edge, the per-row output is `P_null,K` itself, which needs
 no fitted model.

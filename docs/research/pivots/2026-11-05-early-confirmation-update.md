@@ -116,18 +116,22 @@ observed, so the baseline used for scoring must include it. Let `s` be the per-r
 standard deviation in `θ` units (log-bps ÷ the candidate's frozen `theta_bps`), as of the
 decision row:
 
-- **Fast scales (second rows):** `s = vol_1s.rv_bps / √59 / theta_bps`. `rv_bps` is the
-  square root of the summed squared log returns between observed second closes in the
-  `1m@1s` window, whose 60 rows span 59 one-second steps. Divide by the step count, not by
-  `rv_returns`: a return across several quiet seconds covers several rows, and the price
-  does not move on rows without trades. When the window's first seconds have no trades the
-  span is shorter and `s` slightly understated, so keep `rv_returns` as a quality field.
+- **Fast scales (second rows):** `s = vol_1s.rv_bps / √n / theta_bps`, where `n` is the
+  number of one-second steps between the window's first and last observed closes (from
+  `bar_1s`). `rv_bps` is the square root of the summed squared log returns between
+  observed second closes in the `1m@1s` window. Divide by the steps those returns span, not
+  by `rv_returns`: a return across several quiet seconds covers several rows, and the price
+  does not move on rows without trades. If the span covers fewer than 30 of the window's
+  59 steps (trades only late in the minute), the window estimate is rejected and the
+  hourly estimate below is used.
 - **Slow scales (minute rows):** `s = stats_1h_1m.ret_std_bps / theta_bps`, the population
   standard deviation of the hour's minute log returns, with closes carried through minutes
   without trades, as of the latest completed minute. `vol_1m` has no realized-volatility
   field.
-- **Sensitivity check for fast scales:** the hour's realized volatility of second closes,
-  `stats_1h_1m.rv_bps / √3599`, joined as of the latest completed minute.
+- **Hourly estimate (fast-scale fallback and sensitivity check):** the hour's realized
+  volatility of second closes, `stats_1h_1m.rv_bps / √n_h`, where `n_h` is the span in
+  seconds between the hour's first and last observed closes (at most 3,599), joined as of
+  the latest completed minute and rejected under the same half-span rule.
 - `s` must be positive. A NULL input, an incomplete window, or a flat window (`rv_bps = 0`
   or `ret_std_bps = 0`: every close at one price) gives no usable estimate. Fast scales then
   fall back to the hourly estimate above. If that is also missing or zero, or a slow-scale
@@ -150,8 +154,10 @@ input. The acceptance rule is fixed before any diagnostic block is opened. Strat
 scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
 with at least 500 candidates, compare observed and predicted frequencies for both binary
 steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal given
-resolved. The closed form is kept if, for both steps in every such stratum, the 95%
-session-block bootstrap interval for the difference contains zero or lies within ±0.02. Otherwise it is replaced by a fallback that
+resolved. The closed form is kept only if, for both steps in every such stratum with at
+least 20 sessions, the whole 95% session-block bootstrap interval for the difference lies
+within ±0.02 (equivalence, not a failure to reject). A stratum too uncertain to show this
+counts as a failure. Otherwise it is replaced by a fallback that
 meets the requirements in PR F0, and that fallback is validated by the same rule. Call the
 result `P_null,K`; the formula above is its limit as `K` grows.
 
@@ -272,10 +278,12 @@ below 0.25, from 0.25 to 0.5, or 0.5 and above (the snapshot stages' edges), so 
 the first stage have their own threshold. Choose `b` by replaying the complete alarm
 process (first alarms, overlapping candidates, timeouts) on training blocks. Because an
 alarm in an earlier band stops the candidate from alarming later, a scale's three band
-thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95}` for each band
-(1,000 combinations per scale) maximizes true-event coverage subject to the scale's target
-false-alarm rate per open hour. Ties go to the lower median delay, then to the higher
-thresholds. Report the whole frontier. With only the snapshot model
+thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
+each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
+true-event coverage subject to the scale's target false-alarm rate per open hour. Ties go
+to the lower median delay, then to the higher thresholds. All bands `off` always meets the
+target, so every target has a reproducible operating point; a scale that ends with all
+bands off is reported as disabled. Report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 
 Each first alarm is scored by the label of the row that raised it. A reversal is a true
@@ -605,7 +613,10 @@ the candidate's extreme, with a `K`-row horizon counted from each row), fits the
 on it, and computes the null from each row's displacement `x` and horizon. A row the fitted
 model cannot score (a NULL input from warm-up, an incomplete window, or an epoch reset)
 publishes `P_null,K` instead, flagged as the fallback; such rows stay in the threshold
-replay and alarm under the same thresholds, and their share is reported. Then it refits the
+replay and alarm under the same thresholds, and their share is reported. A row where
+`P_null,K` itself is undefined (section 2.1: no usable volatility estimate) publishes no
+probability, flagged as undefined. It cannot alarm, is dropped from the replay's exposure,
+and is counted. Then it refits the
 stopping-rule thresholds by replaying first alarms, each scored by the label of the row
 that raised it. If G1 found no edge, the per-row output is `P_null,K` itself, which needs
 no fitted model.

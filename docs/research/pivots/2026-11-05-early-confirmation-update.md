@@ -170,11 +170,12 @@ log-odds margin protects rare outcomes, whose logits become the offsets. A strat
 uncertain to show this counts as a failure. A stratum short of 500 candidates, 20 sessions,
 or 50 rarer outcomes is merged by one deterministic pass per dimension, in the order
 trade-rate tercile, resolution band, `x` band, never across product, scale, or horizon
-group. In each pass, for each fixed combination of the other dimensions, the bins are
-visited from lowest to highest. A bin that fails a minimum merges into its lower neighbor
-(the lowest bin into its upper neighbor), and the merged bin replaces both before the visit
-continues. The pass repeats until no bin fails or one bin remains, and the next dimension's
-pass starts from the result. Candidates in a stratum
+group. Merges keep the strata a full grid: in a pass, a bin of that dimension fails if it
+fails a minimum in any combination of the other dimensions, and a failing bin merges into
+its lower neighbor (the lowest bin into its upper neighbor) across all those combinations
+at once, the merged bin replacing both. Bins are visited from lowest to highest; the pass
+repeats until no bin fails or one bin remains, and the next dimension's pass starts from
+the result. Candidates in a stratum
 that still cannot be validated are excluded from scoring and fitting and counted. If any
 stratum fails, the closed form is replaced by a fallback that
 meets the requirements in PR F0, and that fallback is validated by the same rule. Call the
@@ -336,9 +337,11 @@ any alarm policy is replayed, so every threshold vector is scored against the sa
 Within a detector leg (the stretch between two consecutive confirmed opposite pivots of that
 scale, or the open leg), the first candidate opens an episode, and the episode's reference is
 that candidate's extreme and frozen `θ`. A later candidate in the leg starts a new episode
-only when its extreme lies at least `C·θ` beyond the current episode's reference; a sub-`C`
-refresh stays in the same episode, even when its slightly different barrier is crossed on a
-later trade. An episode is a true event when any of its candidates' labels resolves as a
+when its extreme lies at least `C·θ` beyond the current episode's reference, or when it
+follows a completed reversal in the current episode (any of the episode's candidates has
+reached its reversal barrier), however close its extreme is. Otherwise a sub-`C` refresh
+stays in the same episode, even when its slightly different barrier is crossed on a later
+trade. An episode is a true event when any of its candidates' labels resolves as a
 reversal. In an episode, the first alarm whose label resolves as a reversal
 is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the

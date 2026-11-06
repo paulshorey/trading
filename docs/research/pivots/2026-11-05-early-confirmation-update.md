@@ -157,7 +157,8 @@ product × scale × horizon group × `x` band × trade-rate tercile × resolutio
 half-open so every value has one bin. The resolution band is the null's own predicted
 P(resolved): [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1]. It separates candidates whose
 volatility relative to the barriers (`s·√K`) differs, where discrete-observation error
-differs. `x` bands are [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1). The horizon
+differs. `x` bands are fractions of `R`: [0, 0.25·R), [0.25·R, 0.5·R), [0.5·R, 0.75·R),
+[0.75·R, R). The horizon
 group is the full `K` or, for candidates cut short by the session close, the remaining rows
 in (0, 0.25·K), [0.25·K, 0.5·K), or [0.5·K, K). Trade-rate terciles use cut points fixed on
 the earliest pre-holdout blocks, with bins below the first cut, from it to below the
@@ -701,12 +702,13 @@ replay and alarm under the same thresholds, and their share is reported. A row w
 validation stratum could not be validated even after merging) publishes no probability,
 flagged as undefined or unvalidated. It cannot alarm, is dropped from the replay's
 exposure, and is counted; the flag carries into live integration unchanged. The fitted
-per-row model is published only if it passes its own chronological gate, the same as G1's
-exit rule but on per-row candidates in held-out pre-holdout blocks: a significant, stable
-log-loss gain over `P_null,K` on the primary scale for both products. If G1 or this gate
-fails, the per-row output is `P_null,K` itself, which needs no fitted model. Only after the
-published output is chosen are the stopping-rule thresholds fitted, by replaying first
-alarms of that output, each scored by the label of the row that raised it.
+per-row model is published scale by scale, only at a scale that passes its own
+chronological gate: G1's exit rule on per-row candidates in held-out pre-holdout blocks, a
+significant, stable log-loss gain over `P_null,K` for both products, Holm-corrected across
+the six scales. Every other scale, and every scale if G1 failed, publishes `P_null,K`, which needs no fitted
+model. Only after each scale's published output is chosen are its stopping-rule thresholds
+fitted, by replaying first alarms of that output, each scored by the label of the row that
+raised it.
 
 ### PR G2: sequence and foundation-model challengers
 

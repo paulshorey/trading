@@ -151,8 +151,11 @@ session's real trade times with sign-randomized trade-to-trade returns), compute
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
-product × scale × horizon group × `x` band × trade-rate tercile, all half-open so every
-value has one bin. `x` bands are [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1). The horizon
+product × scale × horizon group × `x` band × trade-rate tercile × resolution band, all
+half-open so every value has one bin. The resolution band is the null's own predicted
+P(resolved): [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1]. It separates candidates whose
+volatility relative to the barriers (`s·√K`) differs, where discrete-observation error
+differs. `x` bands are [0, 0.25), [0.25, 0.5), [0.5, 0.75), [0.75, 1). The horizon
 group is the full `K` or, for candidates cut short by the session close, the remaining rows
 in (0, 0.25·K), [0.25·K, 0.5·K), or [0.5·K, K). Trade-rate terciles use cut points fixed on
 the earliest pre-holdout blocks, with bins below the first cut, from it to below the
@@ -166,7 +169,8 @@ within ±0.25 for the difference in log-odds (equivalence, not a failure to reje
 log-odds margin protects rare outcomes, whose logits become the offsets. A stratum too
 uncertain to show this counts as a failure. A stratum short of 500 candidates, 20 sessions,
 or 50 rarer outcomes is merged, by a fixed
-order, first with an adjacent trade-rate tercile and then with an adjacent `x` band, always
+order, first with an adjacent trade-rate tercile, then with an adjacent resolution band,
+and then with an adjacent `x` band, always
 the lower neighbor when there is one and otherwise the upper,
 within the same product and scale, until it meets both minimums. Candidates in a stratum
 that still cannot be validated are excluded from scoring and fitting and counted. If any
@@ -286,7 +290,9 @@ an illustration, not evidence for futures).
 
 **Proposed rule.** Publish the calibrated probability on every row while a candidate is open;
 this needs the per-row model of [PR G1b](#pr-g1b-per-row-probability). Raise an alarm at the
-first row close where `P ≥ b(scale, band)`, where the band is the row's progress `q`:
+first row close where `P ≥ b(scale, band)`. `P` is the probability of a reversal within the
+horizon, the product of the two binary steps, P(resolved) × P(reversal | resolved). The band
+is the row's progress `q`:
 below 0.25, from 0.25 to 0.5, or 0.5 and above (the snapshot stages' edges), so rows before
 the first stage have their own threshold. Choose `b` by replaying the complete alarm
 process (first alarms, overlapping candidates, timeouts) on training blocks. Because an
@@ -659,13 +665,13 @@ replay and alarm under the same thresholds, and their share is reported. A row w
 `P_null,K` is undefined (section 2.1: no usable volatility estimate) or unvalidated (its
 validation stratum could not be validated even after merging) publishes no probability,
 flagged as undefined or unvalidated. It cannot alarm, is dropped from the replay's
-exposure, and is counted; the flag carries into live integration unchanged. Then it refits the
-stopping-rule thresholds by replaying first alarms, each scored by the label of the row
-that raised it. The fitted per-row model is published only if it passes its own
-chronological gate, the same as G1's exit rule but on per-row candidates in held-out
-pre-holdout blocks: a significant, stable log-loss gain over `P_null,K` on the primary scale
-for both products. If G1 or this gate fails, the per-row output is `P_null,K` itself, which
-needs no fitted model.
+exposure, and is counted; the flag carries into live integration unchanged. The fitted
+per-row model is published only if it passes its own chronological gate, the same as G1's
+exit rule but on per-row candidates in held-out pre-holdout blocks: a significant, stable
+log-loss gain over `P_null,K` on the primary scale for both products. If G1 or this gate
+fails, the per-row output is `P_null,K` itself, which needs no fitted model. Only after the
+published output is chosen are the stopping-rule thresholds fitted, by replaying first
+alarms of that output, each scored by the label of the row that raised it.
 
 ### PR G2: sequence and foundation-model challengers
 

@@ -148,9 +148,10 @@ baseline causally for the same candidates, and compare outcome frequencies by sc
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
 scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
-with at least 500 candidates, compare the observed and predicted reversal frequencies. The
-closed form is kept if every such stratum's 95% session-block bootstrap interval for the
-difference contains zero or lies within ±0.02. Otherwise it is replaced by a fallback that
+with at least 500 candidates, compare observed and predicted frequencies for both binary
+steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal given
+resolved. The closed form is kept if, for both steps in every such stratum, the 95%
+session-block bootstrap interval for the difference contains zero or lies within ±0.02. Otherwise it is replaced by a fallback that
 meets the requirements in PR F0, and that fallback is validated by the same rule. Call the
 result `P_null,K`; the formula above is its limit as `K` grows.
 
@@ -533,7 +534,9 @@ carried through rows without trades.
     in logit space, through adaptive or importance sampling or a deterministic method,
     because an absolute standard error does not bound rare-outcome logits. It never returns
     a zero probability. And it is revalidated against the null replay before use;
-  - `overshoot_mean(kappa)`: `(e^κ − 1)/κ`, equal to 1 at `κ = 0`.
+  - `log_overshoot_mean(kappa)`: the log of `(e^κ − 1)/κ` in `θ` units, computed stably
+    (`κ + log1p(−e^(−κ)) − log κ` for large positive `κ`), 0 at `κ = 0`. It returns the
+    log because the mean itself overflows a float for large positive `κ`.
 - Tests: the `κ → 0` and `K → ∞` limits; finite, monotone results at extreme drift such as
   `κ = ±1000`; the symmetry `P(u, d, κ) = 1 − P(d, u, −κ)`;
   agreement with a seeded Monte Carlo of a fine-step Gaussian walk; the three outcome
@@ -651,6 +654,9 @@ before G2 runs, G2's final test needs a fresh chronological block of data after 
   narrows the gap. Treat both models' first-passage probabilities as scores: calibrate them
   on training blocks against the exact trade-path labels, report the grid bias measured on
   the null replays of section 2.1, and count bars that touch both barriers as ambiguous.
+  Score each challenger twice, assigning ambiguous paths to invalidation (a lower bound on
+  its reversal probability) and to reversal (an upper bound). Selection uses the lower
+  bound, and both are reported.
 - Go on to pre-training a model on our own seven products' trade data (scale-invariant tokens,
   as in TradeFM) only if a sequence challenger beats G1 significantly. Compute permitting, it
   is the one deep-learning route the evidence supports.

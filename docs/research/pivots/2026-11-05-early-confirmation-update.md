@@ -285,7 +285,7 @@ alarm in an earlier band stops the candidate from alarming later, a scale's thre
 thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
 each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
 true-event coverage subject to the scale's target false-alarm rate per open hour. Ties go
-to the lower median delay (a vector that catches no true episode has infinite delay), then
+first to fewer duplicate alarms per open hour, then to the lower median delay (a vector that catches no true episode has infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
@@ -306,14 +306,15 @@ rate is false alarms divided by the open hours of those fully observable decisio
 
 The alarm's target is its label event: the label's reversal barrier reached before
 invalidation within the horizon. Alarms are matched one-to-one to reversal episodes by
-product, scale, and direction. An episode is one reversal move within a detector leg (the
-stretch between two consecutive confirmed opposite pivots of that scale, or the open leg).
-Alarms whose label reversals are reached with no new extreme in the leg's direction between
-them belong to the same episode, so an extreme replaced by less than `C` and its
-replacement form one episode even when their slightly different barriers are crossed on
-successive trades. Only a new extreme at least `C·θ` beyond the extreme of the episode's
-first alarmed candidate (in its frozen `θ`) ends the episode, and a later reversal then
-starts a new one; a sub-`C` refresh of the candidate does not. In an episode, the first alarm whose label resolves as a reversal
+product, scale, and direction. Episodes are fixed from the detector and label path before
+any alarm policy is replayed, so every threshold vector is scored against the same events.
+Within a detector leg (the stretch between two consecutive confirmed opposite pivots of that
+scale, or the open leg), the first candidate opens an episode, and the episode's reference is
+that candidate's extreme and frozen `θ`. A later candidate in the leg starts a new episode
+only when its extreme lies at least `C·θ` beyond the current episode's reference; a sub-`C`
+refresh stays in the same episode, even when its slightly different barrier is crossed on a
+later trade. An episode is a true event when any of its candidates' labels resolves as a
+reversal. In an episode, the first alarm whose label resolves as a reversal
 is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
@@ -547,7 +548,10 @@ carried through rows without trades.
     gives a finite probability between 0 and 1 rather than an overflow;
   - `first_passage_probs_k(u, d, s, k)`: the three outcome probabilities of `P_null,K` for
     continuously monitored Brownian motion, from the series, which depends only on `s·√k`
-    and is deterministic and positive whenever `s > 0` and `k > 0`. It returns log
+    and is deterministic and positive whenever `u > 0`, `d > 0`, `s > 0`, and `k > 0`. It
+    rejects `u ≤ 0` (the reversal barrier is already reached: resolved before decision) and
+    `d = 0` (possible only with `C = 0` at the extreme itself); such rows get no null, are
+    excluded, and are counted. The PR F default `C = 0.25` keeps `d > 0`. It returns log
     probabilities (and the two binary steps' logits) computed in the log domain, never
     plain probabilities, because a hit probability for very small `s·√k` underflows a
     float. Offsets and log loss are computed from these logs;

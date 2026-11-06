@@ -161,7 +161,8 @@ resolved. The closed form is kept only if, for both steps in every such stratum 
 least 20 sessions, the whole 95% session-block bootstrap interval for the difference lies
 within ±0.02 (equivalence, not a failure to reject). A stratum too uncertain to show this
 counts as a failure. A stratum short of 500 candidates or 20 sessions is merged, by a fixed
-order, first with its neighboring trade-rate tercile and then with its neighboring `x` band,
+order, first with an adjacent trade-rate tercile and then with an adjacent `x` band, always
+the lower neighbor when there is one and otherwise the upper,
 within the same product and scale, until it meets both minimums. Candidates in a stratum
 that still cannot be validated are excluded from scoring and fitting and counted. If any
 stratum fails, the closed form is replaced by a fallback that
@@ -291,9 +292,9 @@ true-event coverage subject to the scale's target false-alarm rate per open hour
 must hold separately on GC and on SI (each product's rate within the target, not a pooled
 rate). Both products share one threshold vector, so every criterion uses the worse
 product: the objective is the lower of the two products' coverage. Ties go first to the
-vector whose worse product has fewer duplicate alarms per open hour, then to the one whose
-worse product has the lower median delay (a product that catches no true episode has
-infinite delay), then
+lower maximum of the two products' duplicate-alarm rates per open hour, then to the lower
+maximum of their median delays (a product that catches no true episode has infinite
+delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the

@@ -151,7 +151,7 @@ session's real trade times with sign-randomized trade-to-trade returns), compute
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
-scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
+product × scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
 with at least 500 candidates, compare observed and predicted frequencies for both binary
 steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal given
 resolved. The closed form is kept only if, for both steps in every such stratum with at
@@ -281,14 +281,17 @@ alarm in an earlier band stops the candidate from alarming later, a scale's thre
 thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
 each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
 true-event coverage subject to the scale's target false-alarm rate per open hour. Ties go
-to the lower median delay, then to the vector that is higher in band order, compared band
+to the lower median delay (a vector that catches no true episode has infinite delay), then
+to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. Report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 
-Each first alarm is scored by the label of the row that raised it. A reversal is a true
+A candidate may alarm once per session: one carried across a scheduled close becomes
+eligible again after the reopen, with a new horizon. Each alarm is scored by the label of the
+row that raised it. A reversal is a true
 alarm. An invalidation or a timeout is a false alarm: the candidate did not confirm within
 the horizon it was given. So is a session end, since an alarm whose horizon ran past the
 scheduled close had that shorter horizon known when it fired. Only an unknown outcome
@@ -299,12 +302,14 @@ rate is false alarms divided by the open hours of those fully observable decisio
 
 The alarm's target is its label event: the label's reversal barrier reached before
 invalidation within the horizon. Alarms are matched one-to-one to reversal episodes by
-product, scale, and direction. An episode is one leg of the detector: every candidate whose
-extreme lies in the same leg (between two consecutive confirmed opposite pivots of that
-scale, or the open leg) belongs to it, so an extreme replaced by less than `C` and its
+product, scale, and direction. An episode is one reversal move within a detector leg (the
+stretch between two consecutive confirmed opposite pivots of that scale, or the open leg).
+Alarms whose label reversals are reached with no new extreme in the leg's direction between
+them belong to the same episode, so an extreme replaced by less than `C` and its
 replacement form one episode even when their slightly different barriers are crossed on
-successive trades.
-In an episode, the first alarm whose label resolves as a reversal is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
+successive trades. A new extreme in the leg's direction ends the episode, and a later
+reversal starts a new one. In an episode, the first alarm whose label resolves as a reversal
+is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
 no confirmed pivot event (the replacement's refreshed `θ` was not reached) still counts as

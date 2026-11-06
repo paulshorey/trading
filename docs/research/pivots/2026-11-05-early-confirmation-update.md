@@ -146,9 +146,13 @@ offset. On pre-holdout blocks, run the exact PR F labeler on null trade paths (e
 session's real trade times with sign-randomized trade-to-trade returns), compute the
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
-input. If they disagree, the closed form must be replaced by a fallback that meets the
-requirements in PR F0, and then revalidated the same way. Call the result `P_null,K`; the formula above is its limit as `K`
-grows.
+input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
+scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
+with at least 500 candidates, compare the observed and predicted reversal frequencies. The
+closed form is kept if every such stratum's 95% session-block bootstrap interval for the
+difference contains zero or lies within ±0.02. Otherwise it is replaced by a fallback that
+meets the requirements in PR F0, and that fallback is validated by the same rule. Call the
+result `P_null,K`; the formula above is its limit as `K` grows.
 
 PR F keeps **session end** as its own outcome: the session closed before the horizon was
 fully observed. Whether a candidate's `K` rows fit before the scheduled close is known at
@@ -265,8 +269,12 @@ this needs the per-row model of [PR G1b](#pr-g1b-per-row-probability). Raise an 
 first row close where `P ≥ b(scale, band)`, where the band is the row's progress `q`:
 below 0.25, from 0.25 to 0.5, or 0.5 and above (the snapshot stages' edges), so rows before
 the first stage have their own threshold. Choose `b` by replaying the complete alarm
-process (first alarms, overlapping candidates, timeouts) on training blocks for a target
-false-alarm rate per open hour, and report the whole frontier. With only the snapshot model
+process (first alarms, overlapping candidates, timeouts) on training blocks. Because an
+alarm in an earlier band stops the candidate from alarming later, a scale's three band
+thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95}` for each band
+(1,000 combinations per scale) maximizes true-event coverage subject to the scale's target
+false-alarm rate per open hour. Ties go to the lower median delay, then to the higher
+thresholds. Report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 
 Each first alarm is scored by the label of the row that raised it. A reversal is a true
@@ -489,7 +497,11 @@ The order of the [plan](../../project/plan-1h-and-pivots.md#6-decisions) stays: 
 (structure), E (structure signals), F (labels and benchmark). This adds a small F0 and a
 G track after F. Training follows the
 [training-across-contracts decision](../../project/handoff.md#training-across-contracts-decided-november-2-2026):
-one pooled model, examples within one contract, chronological tests.
+one pooled model, examples within one contract, chronological tests. Each PR below writes a
+pre-registration record (a file committed with the PR) before it opens any evaluation
+block: the metrics, strata, tolerances and acceptance rules, search spaces, objectives and
+tie-breaks, seeds, and holdout boundaries it will use. Choices this document leaves open are
+settled there, not after seeing results.
 
 ### PR D: unchanged
 
@@ -513,9 +525,11 @@ carried through rows without trades.
     plain probabilities, because a hit probability for very small `s·√k` underflows a
     float. Offsets and log loss are computed from these logs;
   - only if the section 2.1 validation fails, a fallback for sparse trading. It is designed
-    in F0 and must meet four requirements. It takes the causal, product-specific law of
-    trade-to-trade returns (tick size and return magnitudes), not only a trade rate and
-    variance, since equal rate and variance can give different hit rates. It controls error
+    in F0 and must meet four requirements. It takes a causal, product-specific model of
+    both trade arrivals (counts per row, from a trailing window and the time-of-day profile)
+    and trade-to-trade returns (tick size and return magnitudes), since the same jump law
+    with one or a hundred trades per row resolves at very different rates; the validation
+    replay's realized trade times are not available to it. It controls error
     in logit space, through adaptive or importance sampling or a deterministic method,
     because an absolute standard error does not bound rare-outcome logits. It never returns
     a zero probability. And it is revalidated against the null replay before use;

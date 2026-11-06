@@ -335,7 +335,8 @@ invalidation within the horizon. Alarms are matched one-to-one to reversal episo
 product, scale, and direction. Episodes are fixed from the trade path before any alarm
 policy is replayed, so every threshold vector is scored against the same events. They come
 from the same directional-change detector run on the same released trades with a finer
-threshold, `C` times the scale's threshold rule (frozen per candidate in the usual way).
+threshold, `max(C, 0.25)` times the scale's threshold rule (frozen per candidate in the
+usual way), so a label with `C = 0` still has well-defined episodes.
 Each of that finer detector's moves in the reversal direction is one episode. A label's
 reversal belongs to the episode containing the trade that reached its reversal barrier.
 Price must retrace at least that finer threshold to end a move, so any rebound that large
@@ -643,8 +644,7 @@ carried through rows without trades.
   prediction, with a monotone constraint on `x` in the reversal-vs.-invalidation step;
   TabPFN-2.5 on subsamples of at most 50k rows, for research only.
 - Splits: chronological calendar blocks across GC and SI, grouped by candidate and episode,
-  purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until the G1 configuration, and the G2 configuration if G2 will run, are
-  both locked (see PR G2).
+  purged by label intervals, with an embargo; the newest two months (September–October 2026) untouched until the G1, G1b, and G2 configurations (those that will run) are all locked (see PR G2).
 - Calibration on a later, disjoint training block; stopping-rule thresholds from section 3,
   which at this step fire only at stage crossings; walk-forward predictions stored as a
   stage (for example `pivot_prob_1s` and `pivot_prob_1m`) with model and fold IDs,
@@ -684,9 +684,9 @@ alarms of that output, each scored by the label of the row that raised it.
 Only after G1 has a measured baseline. Every challenger uses the same candidates and
 metrics, and the same splits before the holdout: challenger selection, including the
 decision to pre-train, uses pre-holdout validation blocks only. Open the September–October
-2026 holdout once, after both G1 and G2 are locked. If G1 must be reported on that holdout
-before G2 runs, G2's final test needs a fresh chronological block of data after October
-2026:
+2026 holdout once, after G1, G1b, and G2 are all locked. If it must be opened before G1b or
+G2 is locked, that later step's final test needs a fresh chronological block of data after
+October 2026:
 
 - MiniRocket or MultiRocket features (aeon) on the last N normalized rows, then logistic
   regression: does raw sequence shape add anything to the engineered features?

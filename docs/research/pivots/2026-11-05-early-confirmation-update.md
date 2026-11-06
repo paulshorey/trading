@@ -314,7 +314,11 @@ to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
 this is a total order, so one vector is always chosen. All bands `off` always meets the
 target, so every target has a reproducible operating point; a scale that ends with all
-bands off is reported as disabled. Report the whole frontier. With only the snapshot model
+bands off is reported as disabled. The vector is chosen on a calibration block and then
+validated on a later, disjoint pre-holdout block. If the validation block's false-alarm
+rate is above the target for either product (its 95% session-block interval entirely above
+it), the scale is set to all bands `off` and reported as failing its target. Report the
+whole frontier on both blocks. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 A row is evaluated once, in the band of its own progress: when progress jumps past two
 stages within one row, only the highest stage reached is eligible at that close.
@@ -335,15 +339,22 @@ invalidation within the horizon. Alarms are matched one-to-one to reversal episo
 product, scale, and direction. Episodes are fixed from the trade path before any alarm
 policy is replayed, so every threshold vector is scored against the same events. They come
 from the same directional-change detector run on the same released trades with a finer
-threshold, `max(C, 0.25)` times the scale's threshold rule (frozen per candidate in the
-usual way), so a label with `C = 0` still has well-defined episodes.
-Each of that finer detector's moves in the reversal direction is one episode. A label's
-reversal belongs to the episode containing the trade that reached its reversal barrier.
+threshold, `min(max(C, 0.25), R)` times the scale's threshold rule (frozen per candidate in
+the usual way). The 0.25 floor keeps episodes defined when `C = 0`; the cap at `R` means the
+finer detector has always started a reversal move by the time a label reaches its reversal
+barrier. Each of that finer detector's moves in the reversal direction is one episode, from
+the extreme where it starts until the finer detector confirms the next move the other way.
+An alarm belongs to the episode underway when it fires: the reversal move starting from the
+finer detector's latest extreme at or before the alarm. It covers that episode only if its
+label's reversal barrier is reached before that episode ends. An alarm whose label reverses
+only in a later episode is credited to no episode: it is neither true nor false, adds to
+the alarm burden like a duplicate, and is counted separately.
 Price must retrace at least that finer threshold to end a move, so any rebound that large
 starts a new episode, whether or not it creates a new candidate. A sub-`C` refresh of the
 extreme stays in one episode, even when its slightly different barrier is crossed on a
-later trade. An episode is a true event when any label reversal falls in it. In an episode, the first alarm whose label resolves as a reversal
-is the true alarm and any further alarm resolving as a reversal is a duplicate. Duplicates are
+later trade. An episode is a true event when any label reversal falls in it. In an
+episode, the first alarm that covers it is the true alarm and any further covering alarm is
+a duplicate. Duplicates are
 reported per open hour and included in the frontier's alarm burden, as the
 [reviewed findings](2026-11-03-reviewed-findings.md) require. A fixed-barrier reversal with
 no confirmed pivot event (the replacement's refreshed `θ` was not reached) still counts as
@@ -649,11 +660,12 @@ carried through rows without trades.
   which at this step fire only at stage crossings; walk-forward predictions stored as a
   stage (for example `pivot_prob_1s` and `pivot_prob_1m`) with model and fold IDs,
   available at row close.
-- Exit: one primary scale, predeclared from pre-holdout validation blocks, shows a log-loss
+- Exit: one primary model and one primary scale, chosen on earlier pre-holdout blocks and
+  then tested once on later, disjoint gate blocks, show a log-loss
   gain over `P_null,K` that is significant under session-block resampling on both GC and SI
   and stable across time blocks. The other five scales are secondary results, reported with
-  a Holm correction across scales, so picking whichever scale happens to succeed cannot pass
-  the gate. Otherwise report the
+  a Holm correction across scales, and the other models are reported but cannot pass the
+  gate, so picking whichever model or scale happens to succeed cannot pass it. Otherwise report the
   negative result and keep `P_null,K` and the deterministic fields as the indicator.
 
 ### PR G1b: per-row probability

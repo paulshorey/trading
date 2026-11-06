@@ -151,7 +151,10 @@ session's real trade times with sign-randomized trade-to-trade returns), compute
 baseline causally for the same candidates, and compare outcome frequencies by scale, `x`,
 and trade rate. The replay uses later trade times only to test the baseline, never as an
 input. The acceptance rule is fixed before any diagnostic block is opened. Strata are
-product × scale × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) × trade-rate tercile. In each stratum
+product × scale × horizon group × `x` band (0–0.25, 0.25–0.5, 0.5–0.75, 0.75–1) ×
+trade-rate tercile, where the horizon group is the full `K` or, for candidates cut short by
+the session close, a band of the remaining rows (under 25%, 25–50%, or 50–100% of `K`). In
+each stratum
 with at least 500 candidates, compare observed and predicted frequencies for both binary
 steps the offsets use: resolved (reversal or invalidation) vs. timeout, and reversal given
 resolved. The closed form is kept only if, for both steps in every such stratum with at
@@ -284,7 +287,9 @@ process (first alarms, overlapping candidates, timeouts) on training blocks. Bec
 alarm in an earlier band stops the candidate from alarming later, a scale's three band
 thresholds are chosen jointly: a grid search over `b ∈ {0.50, 0.55, …, 0.95, off}` for
 each band (11³ combinations per scale, where `off` means that band never alarms) maximizes
-true-event coverage subject to the scale's target false-alarm rate per open hour. Ties go
+true-event coverage subject to the scale's target false-alarm rate per open hour, which
+must hold separately on GC and on SI (each product's rate within the target, not a pooled
+rate). Ties go
 first to fewer duplicate alarms per open hour, then to the lower median delay (a vector that catches no true episode has infinite delay), then
 to the vector that is higher in band order, compared band
 by band from the earliest band (below 0.25) to the latest, with `off` ranked above 0.95;
@@ -292,6 +297,8 @@ this is a total order, so one vector is always chosen. All bands `off` always me
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. Report the whole frontier. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
+A row is evaluated once, in the band of its own progress: when progress jumps past two
+stages within one row, only the highest stage reached is eligible at that close.
 
 A candidate may alarm once per session: one carried across a scheduled close becomes
 eligible again after the reopen, with a new horizon. Each alarm is scored by the label of the

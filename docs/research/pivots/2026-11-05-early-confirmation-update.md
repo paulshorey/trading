@@ -317,10 +317,13 @@ by band from the earliest band (below 0.25) to the latest, with `off` ranked abo
 this is a total order, so one vector is always chosen. All bands `off` always meets the
 target, so every target has a reproducible operating point; a scale that ends with all
 bands off is reported as disabled. The vector is chosen on a calibration block and then
-validated on a later, disjoint pre-holdout block. If the validation block's false-alarm
-rate's 95% session-block upper bound is above the target for either product, the scale is
-set to all bands `off` and reported as failing its target; the vector is kept only when
-both products' upper bounds are within it. Report the
+validated on a later, disjoint pre-holdout block. There, each product's false-alarm rate
+gets a one-sided 95% upper bound that stays positive at zero counts: the exact Poisson upper
+limit on the false-alarm count (3.0 when none occur), divided by the covered open hours, and
+multiplied by the count's overdispersion across sessions measured on the calibration block
+(at least 1). If either product's bound is above the target, the scale is set to all bands
+`off` and reported as failing its target; the vector is kept only when both bounds are
+within it. Report the
 whole frontier on both blocks. With only the snapshot model
 of PR G1, alarms can fire only at the stage crossings, using the band each stage opens.
 A row is evaluated once, in the band of its own progress: when progress jumps past two
@@ -355,7 +358,9 @@ label's reversal barrier is reached before that episode ends. An alarm whose lab
 only in a later episode covers nothing and counts as a false alarm in the constraint. A
 label that reaches its reversal barrier before the finer detector has started any reversal
 move from its extreme (possible when that detector froze a larger threshold than the
-label's) forms its own one-label episode, starting at the label's extreme.
+label's) joins a fallback episode for that candidate extreme. All such labels sharing the
+extreme, whether stage snapshots or per-row labels, form that one episode, starting at the
+extreme, so one market reversal stays one true event.
 Price must retrace at least that finer threshold to end a move, so any rebound that large
 starts a new episode, whether or not it creates a new candidate. A sub-`C` refresh of the
 extreme stays in one episode, even when its slightly different barrier is crossed on a

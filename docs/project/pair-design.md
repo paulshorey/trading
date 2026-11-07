@@ -24,7 +24,9 @@ slots, so that `slot_ordinal` `o` is the same second (or minute) in both:
   sessions from 2010 through November 2026 (checked November 6, 2026).
 - ES and NQ share one equity-index calendar.
 
-The builder checks this for every session it builds and refuses a pair whose slots differ.
+The builder checks that the two calendars are equal from the phase origin (January 1, 2010,
+where `slot_ordinal` counting starts) through the last session it builds, and that every
+joined row has the same `end_ns` in both legs. It refuses a pair otherwise.
 No row is ever matched by clock time.
 
 ## Directed pairs
@@ -93,20 +95,21 @@ These extend the [read rules](feature-pipeline.md#tiers-calculations-in-dependen
 
 ## First stage: `pair_1m`
 
-Minute rows from both legs' `candle_1h_1m`, `stats_1h_1m`, and `vol_1m`. Every value is
+Minute rows from both legs' `bar_1m` (for trade counts and the partner's last row with
+trades), `candle_1h_1m`, `stats_1h_1m`, and `vol_1m`. Every value is
 normalized by each leg's own ATR or is a ratio:
 
-| Column                | Definition                                                                                                                       | Unit    |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| `partner_ret_atr`     | Partner's `1h@1m` window return ÷ partner's ATR                                                                                  | ATR     |
-| `rel_ret_atr`         | Target's window return in target ATR − partner's in partner ATR                                                                  | ATR     |
-| `ret_corr_1h`         | Correlation of the two legs' 59 minute returns inside the window (the same internal returns as `stats_1h_1m`)                    | ratio   |
-| `beta_resid_atr`      | Target's window return minus β × partner's (β from the same 59 internal minute returns), ÷ target ATR                            | ATR     |
-| `nonconf_low_atr`     | When the target is within 0.1 ATR of its window low: partner's distance above its own window low, in partner ATR; NULL otherwise | ATR     |
-| `nonconf_high_atr`    | Mirror for highs                                                                                                                 | ATR     |
-| `partner_delta_ratio` | Partner's window (buy − sell) ÷ volume                                                                                           | ratio   |
-| `partner_status`      | Partner row status (complete, quiet, missing)                                                                                    | context |
-| `partner_age_s`       | Seconds since the partner's latest trade                                                                                         | seconds |
+| Column                | Definition                                                                                                                                               | Unit    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `partner_ret_atr`     | Partner's `1h@1m` window return ÷ partner's ATR                                                                                                          | ATR     |
+| `rel_ret_atr`         | Target's window return in target ATR − partner's in partner ATR                                                                                          | ATR     |
+| `ret_corr_1h`         | Correlation of the two legs' 59 minute returns inside the window (the same internal returns as `stats_1h_1m`)                                            | ratio   |
+| `beta_resid_atr`      | Target's window return minus β × partner's (β from the same 59 internal minute returns), ÷ target ATR                                                    | ATR     |
+| `nonconf_low_atr`     | When the target is within 0.1 ATR of its window low: partner's distance above its own window low, in partner ATR; NULL otherwise                         | ATR     |
+| `nonconf_high_atr`    | Mirror for highs                                                                                                                                         | ATR     |
+| `partner_delta_ratio` | Partner's window (buy − sell) ÷ volume                                                                                                                   | ratio   |
+| `partner_status`      | Partner row status (complete, quiet, missing)                                                                                                            | context |
+| `partner_age_s`       | Scheduled-open seconds since the end of the partner's latest `bar_1m` row with trades (state carried in the pair stage, reset at gaps and session opens) | seconds |
 
 The 0.1-ATR band and the use of window extremes (rather than confirmed pivots) are a first
 version. After PR D, P3 replaces them with the partner's pivot state.

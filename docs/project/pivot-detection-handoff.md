@@ -15,15 +15,17 @@ constraint; outputs will be calculated every second. Two or three algorithms are
 welcome if they add distinct information. Python fits the existing engine, but the
 research was not restricted by language.
 
-| Read                                                                                    | Purpose                                                                                                           |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md)                 | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark |
-| [Pivot and structure contract](pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                  |
-| [Early-confirmation update](../research/pivots/2026-11-05-early-confirmation-update.md) | November 5 follow-up: random-walk baselines, stopping rule, foundation-model evidence, proposed PRs F0 and G      |
-| [Parallel report](../research/pivots/2026-11-03-parallel-report.md)                     | Supporting deep-research output, with references; distinguish provider recommendations from established results   |
-| [Research brief](../research/pivots/2026-11-03-research-question.md)                    | Exact question and constraints sent to the research provider                                                      |
-| [Provenance](../research/pivots/2026-11-03-provenance.json)                             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                        |
-| [Source-access notes](../research/pivots/2026-11-03-source-access.md)                   | Full-text limitations and failed fetches                                                                          |
+| Read                                                                                    | Purpose                                                                                                                  |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md)                 | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark        |
+| [Pivot and structure contract](pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                         |
+| [Early-confirmation update](../research/pivots/2026-11-05-early-confirmation-update.md) | November 5 follow-up: random-walk baselines, stopping rule, foundation-model evidence, proposed PRs F0 and G             |
+| [Order-flow predictors](../research/pivots/2026-11-05-order-flow-predictors.md)         | November 5: inventory of flow, absorption, location, and cross-market metrics; data options and costs; first event study |
+| [Second scale and MBP-1](../research/pivots/2026-11-06-second-scale-and-mbp1.md)        | November 6: second and sub-second metrics, latency limits, MBP-1 against TBBO (cost, equality check, effort)             |
+| [Parallel report](../research/pivots/2026-11-03-parallel-report.md)                     | Supporting deep-research output, with references; distinguish provider recommendations from established results          |
+| [Research brief](../research/pivots/2026-11-03-research-question.md)                    | Exact question and constraints sent to the research provider                                                             |
+| [Provenance](../research/pivots/2026-11-03-provenance.json)                             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                               |
+| [Source-access notes](../research/pivots/2026-11-03-source-access.md)                   | Full-text limitations and failed fetches                                                                                 |
 
 **Research conclusion and proposed architecture.**
 

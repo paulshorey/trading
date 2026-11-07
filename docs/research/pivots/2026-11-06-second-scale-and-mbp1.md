@@ -64,7 +64,9 @@ stored as context only; their features are rates relative to a trailing same-pha
 **Gaps (applies to every metric below):** a coverage gap or session open resets all
 running state (runs, decaying intensities, fits, per-price levels, timers). A metric over
 N rows, N trades, or N seconds is NULL until its whole window lies in covered rows after
-the reset. Missing data is never treated as zero activity. "Queue" means the displayed size at the best
+the reset. Missing data is never treated as zero activity. **Zero denominators:** any ratio, mean, correlation, or z-score whose denominator is
+zero (no qualifying trades, no volume, no variation, no baseline) is NULL with a state
+flag saying why, never NaN, infinity, or an invented zero. "Queue" means the displayed size at the best
 bid or ask.
 
 ### Book state (MBP-1)

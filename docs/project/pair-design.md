@@ -107,7 +107,7 @@ normalized by each leg's own ATR or is a ratio:
 | `beta_resid_atr`      | Target's window return minus β × partner's (β from the same 59 internal minute returns), ÷ target ATR; NULL with a "flat" state when the partner's returns have zero variance        | ATR     |
 | `nonconf_low_atr`     | When the target is within 0.1 ATR of its window low: partner's distance above its own window low, in partner ATR; NULL otherwise                                                     | ATR     |
 | `nonconf_high_atr`    | Mirror for highs                                                                                                                                                                     | ATR     |
-| `partner_delta_ratio` | Partner's window (buy − sell) ÷ volume                                                                                                                                               | ratio   |
+| `partner_delta_ratio` | Partner's window (buy − sell) ÷ (buy + sell), as `delta_ratio`; NULL when the window has no sided volume                                                                             | ratio   |
 | `partner_status`      | Partner row status (complete, quiet, missing)                                                                                                                                        | context |
 | `partner_age_s`       | Scheduled-open seconds from the partner's latest trade (`bar_1m.last_at_ns`, carried in the pair stage) to the row's end; reset at gaps and session opens                            | seconds |
 

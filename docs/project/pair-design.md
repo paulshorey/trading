@@ -99,7 +99,9 @@ These extend the [read rules](feature-pipeline.md#tiers-calculations-in-dependen
 
 Minute rows from both legs' `bar_1m` (for trade counts and the partner's last row with
 trades), `candle_1h_1m`, `stats_1h_1m`, and `vol_1m`. Every value is
-normalized by each leg's own ATR or is a ratio:
+normalized by each leg's own ATR or is a ratio. Every ATR-normalized column is NULL, with
+a "flat volatility" state, whenever the target's or the partner's ATR is zero (stored as 0,
+not NULL, for a fully flat lookback):
 
 | Column                | Definition                                                                                                                                                                                                                                                                                      | Unit    |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |

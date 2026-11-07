@@ -59,8 +59,12 @@ ones below.
 3. **Across resolutions:** only through an as-of join on availability
    (`available_at <= decision_at`): a second row sees the latest _completed_ minute,
    with its age. A minute row may read the second row at its own end (ordinal `60m`).
-4. **Across contracts:** never. Every stage is computed within one contract; products
-   read as one series only through the continuous views.
+4. **Across contracts:** never, for single-product stages. Each is computed within one
+   contract; products read as one series only through the continuous views. A pair stage
+   (rule 5) reads exactly one contract per leg, and never two delivery months of one product.
+5. **Across products:** only in pair stages (decided November 6, 2026; not implemented),
+   which read two products' stages at the same `slot_ordinal` under the rules in
+   [pair-design.md](pair-design.md). Single-product stages never read them.
 
 ## Stages
 

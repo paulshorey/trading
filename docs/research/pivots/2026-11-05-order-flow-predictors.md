@@ -311,8 +311,12 @@ A small event study that runs before PR F, without new storage or data:
    indicator and NULL values set to the training block's median. Bin edges and medians
    come from the training block only. Pre-register the metrics, these parameters, the NULL policy, these periods, and the success rule: positive Brier skill over the baseline whose
    session-block 95% interval excludes zero, in both products.
+   **Per-metric rule:** a metric passes only if a logistic model with that metric alone
+   (plus the baseline offset) has positive Brier skill on April–August whose session-block
+   interval excludes zero after a Holm correction across the six metrics, in both products.
+   The quintile tables are descriptive only and never decide a pass.
 4. **Report.** Which families moved the probability, by how much, and in which sessions.
-   Metrics that pass become tier-1 or tier-3 stage features with migrations, if they are
+   Metrics that pass the per-metric rule become tier-1 or tier-3 stage features with migrations, if they are
    computed causally from past rows alone. A metric with parameters fitted on a training
    block becomes versioned, split-specific model preprocessing instead, never a shared
    stored column. Metrics that fail are recorded and dropped.

@@ -61,10 +61,20 @@ the same row rules. Every model feature is a ratio, a log ratio, a time, a flag,
 current or typical spread, in basis points, or in ATR, never a raw price. Raw counts are
 stored as context only; their features are rates relative to a trailing same-phase baseline.
 
-**Gaps (applies to every metric below):** a coverage gap or session open resets all
-running state (runs, decaying intensities, fits, per-price levels, timers). A metric over
-N rows, N trades, or N seconds is NULL until its whole window lies in covered rows after
-the reset. Missing data is never treated as zero activity. **Zero denominators:** any ratio, mean, correlation, or z-score whose denominator is
+**Gaps and closures (applies to every metric below):**
+
+- **Row windows** (N rows, same-phase baselines, rolling fits) follow the row rules: they
+  continue across scheduled closures, including an early close and reopen, because closures
+  add no rows. Only a coverage gap (missing data) invalidates them: a window containing a
+  missing row is NULL until N covered rows follow the gap.
+- **Book and trade-sequence state** (queue episodes, level and refill timers, per-price
+  levels, trade runs, decaying intensities, inter-trade timers, N-trade windows) also resets
+  at each session open, since the book and trade sequence are not observed across a closure
+  and the reopening auction.
+- **Session-scoped metrics** (session VWAP, session high and low, level tests) reset at
+  session opens by definition.
+
+Missing data is never treated as zero activity. **Zero denominators:** any ratio, mean, correlation, or z-score whose denominator is
 zero (no qualifying trades, no volume, no variation, no baseline) is NULL with a state
 flag saying why, never NaN, infinity, or an invented zero. "Queue" means the displayed size at the best
 bid or ask.
@@ -93,7 +103,7 @@ bid or ask.
 | S13 | Signed volume, nested  | Delta ratio, (buy − sell) ÷ (buy + sell), over the last 100 ms of the current row, the current row, and the latest five scheduled-open rows; each horizon is NULL unless every row it spans is covered, and NULL with a "no sided flow" state when it has no buy or sell volume                                                                                            | Acceleration of pressure: the short window running ahead of the long one                              |
 | S14 | Take against queue     | Per row: the mean and the maximum of trade size ÷ the opposing queue before it, over trades with a known side and positive opposing depth; needs a new count of those trades (`buy_take_sum`, `sell_take_sum` hold only the sums); NULL when there are none                                                                                                                | A take that nearly clears the queue tends to be followed through to the next tick                     |
 | S15 | Trade clustering       | Trades sharing one `ts_event` and side: cluster size ÷ the trailing median trade size (14% of GC trades shared a `ts_event` in the sample hour, not always on one side)                                                                                                                                                                                                    | Usually one aggressor matching several resting orders: impatient size from one order rather than many |
-| S16 | Inter-trade time       | Over trade clusters (trades sharing one `ts_event` count once): log(scheduled-open time since the previous cluster ÷ its trailing median). NULL until the first cluster after a session open or coverage gap, so closures never count as lulls                                                                                                                             | Bursts against lulls; the state in which flow signals are read                                        |
+| S16 | Inter-trade time       | Over trade clusters (trades sharing one assignment time count once, so consecutive clusters always differ in time): log(scheduled-open time since the previous cluster ÷ its trailing median). NULL until the first cluster after a session open or coverage gap                                                                                                           | Bursts against lulls; the state in which flow signals are read                                        |
 | S17 | Buy and sell intensity | Exponentially decaying counts of buy and sell trades (a simple Hawkes intensity, stored as context), reset at session opens and coverage gaps. Features: the buy share buy ÷ (buy + sell), bounded 0 to 1, and the total ÷ its trailing same-phase mean; both NULL with an "inactive" flag until trades after the reset (or whenever the intensities or baseline are zero) | Self-exciting runs that overshoot, then snap back                                                     |
 | S18 | Impact per unit flow   | Mid change in bps ÷ (net signed volume ÷ trailing median volume per trade) over the last N trades, within one covered stretch: the window resets at coverage gaps and session opens, and S18 is NULL until N trades follow the reset; NULL with a "balanced" flag when the absolute net signed volume is below 5% of the window's volume                                   | Absorption at the touch: heavy aggression with no tick progress                                       |
 

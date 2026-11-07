@@ -67,10 +67,12 @@ These extend the [read rules](feature-pipeline.md#tiers-calculations-in-dependen
 2. Both legs publish row `o` at its close, under the same trade-assignment timing, so pair
    row `o` is published when both legs' row `o` has closed. Live, both products arrive on
    one Databento subscription, and the pair row waits for the slower leg.
-3. Only missing partner data gives NULL partner features. A quiet (covered, no-trade)
-   partner row keeps every value its own stages define there, with carried prices as in
-   [decision 1](plan-1h-and-pivots.md#6-decisions), plus the partner's status and age.
-   Missing data is never filled in or inferred.
+3. Missing partner data makes every partner feature NULL. A quiet (covered, no-trade)
+   partner row is not missing: it keeps every value its own stages define there, with
+   carried prices as in [decision 1](plan-1h-and-pivots.md#6-decisions), plus the
+   partner's status and age. Each pair feature can still be NULL under its own declared
+   condition (no sided volume, flat returns, the target not at an extreme). Missing data
+   is never filled in or inferred.
 4. Single-product stages never read pair stages, so a single-product rebuild never depends
    on another product. A pair stage becomes stale when either leg's input stage changes.
 5. Across delivery months of one product: still never.

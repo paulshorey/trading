@@ -59,7 +59,12 @@ assignment time `max(ts_event, ts_recv + feed_latency − close_delay)`, the sam
 values inside the row (for example the last 100 ms), or a 500 ms row grid can be added under
 the same row rules. Every model feature is a ratio, a log ratio, a time, a flag, or a price distance ÷ the
 current or typical spread, in basis points, or in ATR, never a raw price. Raw counts are
-stored as context only; their features are rates relative to a trailing same-phase baseline. "Queue" means the displayed size at the best
+stored as context only; their features are rates relative to a trailing same-phase baseline.
+
+**Gaps (applies to every metric below):** a coverage gap or session open resets all
+running state (runs, decaying intensities, fits, per-price levels, timers). A metric over
+N rows, N trades, or N seconds is NULL until its whole window lies in covered rows after
+the reset. Missing data is never treated as zero activity. "Queue" means the displayed size at the best
 bid or ask.
 
 ### Book state (MBP-1)
@@ -90,12 +95,12 @@ bid or ask.
 | S17 | Buy and sell intensity | Exponentially decaying counts of buy and sell trades (a simple Hawkes intensity, stored as context), reset at session opens and coverage gaps. Features: the buy share buy ÷ (buy + sell), bounded 0 to 1, and the total ÷ its trailing same-phase mean; both NULL with an "inactive" flag until trades after the reset (or whenever the intensities or baseline are zero) | Self-exciting runs that overshoot, then snap back                                                     |
 | S18 | Impact per unit flow   | Mid change in bps ÷ (net signed volume ÷ trailing median volume per trade) over the last N trades, within one covered stretch: the window resets at coverage gaps and session opens, and S18 is NULL until N trades follow the reset; NULL with a "balanced" flag when the absolute net signed volume is below 5% of the window's volume                                   | Absorption at the touch: heavy aggression with no tick progress                                       |
 
-### Other markets (pair stages, MBP-1 or TBBO)
+### Other markets (pair stages, MBP-1)
 
-| #   | Metric                    | How to calculate                                                                                                                                                                                                                                          | How it may contribute                                                                                              |
-| --- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| S19 | Partner move not yet seen | Each leg's mid change over the last 0.1–1 s in bps ÷ that leg's trailing deviation of such changes; S19 = partner value − target value (a partner move the target has not matched); NULL with a "flat" state when either leg's trailing deviation is zero | Microsecond reactions belong to colocated firms; measure whether any residual survives at 1 s before relying on it |
-| S20 | Partner book pressure     | Partner's S1 and S7                                                                                                                                                                                                                                       | Pressure building in NQ (or SI) while ES (or GC) is quiet                                                          |
+| #   | Metric                    | How to calculate                                                                                                                                                                                                                                                                                                                                        | How it may contribute                                                                                              |
+| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| S19 | Partner move not yet seen | Each leg's mid change over the last 0.1–1 s in bps ÷ that leg's trailing deviation of such changes; S19 = partner value − target value (a partner move the target has not matched); NULL with a "flat" state when either leg's trailing deviation is zero MBP-1 only: TBBO has no midpoint between trades, so a quote move there would read as no move. | Microsecond reactions belong to colocated firms; measure whether any residual survives at 1 s before relying on it |
+| S20 | Partner book pressure     | Partner's S1 and S7                                                                                                                                                                                                                                                                                                                                     | Pressure building in NQ (or SI) while ES (or GC) is quiet                                                          |
 
 ### Labels for short horizons
 

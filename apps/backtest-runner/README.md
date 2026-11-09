@@ -15,6 +15,9 @@ uv run research serve --port 8001
 
 A spec selects the product, sessions, optional contract, warmup sessions, strategy
 parameters, execution settings, and indicator periods; see [examples](examples/).
+Without `warmup_sessions`, each contract first replays the lead the stored rows have
+(40 sessions, at the start and after every roll), so its features equal the stored rows;
+fewer sessions run faster but start cold.
 `mgc-sample.json` uses shorter indicator periods because one day cannot warm up
 14-hour indicators. Runs are saved as JSON under `data/runs/` with full provenance
 until PostgreSQL storage lands.

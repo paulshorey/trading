@@ -488,11 +488,15 @@ def test_sessions_follow_the_exchange_calendar():
 
 def test_run_spec_validation():
     good = {"product": "GC", "start": "2026-09-01", "end": "2026-09-02"}
-    assert service.RunSpec.parse(good).warmup_sessions == 1
+    assert service.RunSpec.parse(good).warmup_sessions is None  # the stored lead
+    for warm in (0, 40, service.MAX_WARMUP):
+        assert service.RunSpec.parse({**good, "warmup_sessions": warm}).warmup_sessions == warm
     for bad in [
         {**good, "product": "ZZ"},
         {**good, "contract": "GCZ6-GCG7"},
-        {**good, "warmup_sessions": 11},
+        {**good, "warmup_sessions": service.MAX_WARMUP + 1},
+        {**good, "warmup_sessions": -1},
+        {**good, "warmup_sessions": 2.0},
         {**good, "extra": 1},
         {**good, "end": "2028-01-01"},
     ]:

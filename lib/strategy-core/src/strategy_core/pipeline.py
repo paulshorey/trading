@@ -23,7 +23,7 @@ import numpy as np
 from .bars import AggregationReport
 from .columns import Table
 from .engine import MarketChunk
-from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit, WindowFeatures
+from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
 from .stage_bar_1m import MinuteBarStage
 from .stage_bar_1s import BarStage
@@ -100,31 +100,13 @@ class Pipeline:
         import_state(self.stages[name], state)
 
 
-class FastAtr:
-    """The `1m@1s` ATR in price units, which sizes the engine's brackets. The candle stage
-    computes it but stores only `atr_bps`, and its module is part of the stored rows' identity,
-    so until the stage's next rebuild publishes it, this records it as the stage's window
-    features return it."""
-
-    def __init__(self, window: WindowFeatures):
-        self.values = np.zeros(0)
-        update = window.update
-
-        def record(bars):
-            candles, features, atr = update(bars)
-            self.values = atr
-            return candles, features, atr
-
-        window.update = record
-
-
 class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
     the window ending then (`candle_1m_1s` and `vol_1s`, one row each per second, joined row by
     row) and the `1h@1m` features of the latest completed minute (`candle_1h_1m`, `stats_1h_1m`,
     and `vol_1m`, one row each per minute), with that minute's age, `1h@1m.age_s`. `context` holds
-    the price-unit values execution needs (the latest close and the `1m@1s` ATR), never inputs to
-    signals or models."""
+    the price-unit values execution needs (the latest close and the `1m@1s` ATR from `vol_1s`),
+    never inputs to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
     SECONDLY = (FAST, "vol_1s")  # rows per second, joined row by row
@@ -146,7 +128,6 @@ class StageFeatures:
         self.pipeline = Pipeline(
             calendar, feed_latency=feed_latency, close_delay=close_delay, config=config
         )
-        self.atr = FastAtr(self.pipeline.stages[self.FAST].fast)
         self.last_bias: dict[str, np.ndarray] = {}  # the latest minute's values, one row each
         self.last_bias_end = np.zeros(0, np.int64)
 
@@ -171,6 +152,16 @@ class StageFeatures:
             if c.unit
         ]
         return [*out, self.AGE]
+
+    @classmethod
+    def sources(cls) -> dict[str, str]:
+        """The stage each feature comes from, by name (the bias age from the bias candle)."""
+        out = {
+            f"{cls.PREFIX[name]}.{n}": name
+            for name in (*cls.SECONDLY, *cls.HOURLY)
+            for n in cls.names(name)
+        }
+        return out | {cls.AGE.name: cls.BIAS}
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
@@ -205,4 +196,13 @@ class StageFeatures:
             self.last_bias = {n: v[-1:] for n, v in values.items()}
             self.last_bias_end = minute_end[-1:]
         candles = rows.products["candles"]
-        return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr.values})
+        return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr(rows)})
+
+    @staticmethod
+    def atr(rows: PipelineRows) -> np.ndarray:
+        """The `1m@1s` ATR in price units, which sizes brackets: `vol_1s.atr_price`, NaN where it
+        is NULL (the same ATR the candle stage normalizes `atr_bps` with, bit for bit)."""
+        table = rows.tables["vol_1s"]
+        atr = table.values["atr_price"]
+        null = table.nulls.get("atr_price")
+        return atr if null is None else np.where(null, np.nan, atr)

@@ -195,9 +195,12 @@ WHERE contract_id = :c AND slot_ordinal BETWEEN :o - 60 * 14 AND :o
 ORDER BY slot_ordinal;
 ```
 
-Backtests use the same roll rule but warm a new contract by replaying `warmup_sessions`
-(default 1), so their features can differ from the stored series for a while after a roll;
-letting backtests read stored rows removes the difference ([next](#next)).
+Backtests use the same roll rule and, by default, warm each contract for the same lead
+(`warmup_sessions` unset), so from every roll on they compute exactly the stored rows:
+all seven stages matched bit for bit at GCZ6 2026-07-30, SIZ6 2026-08-28, SIK6 2026-02-26,
+and GCG6 2025-11-26 (whose lead reaches back before the data; empty sessions leave every stage
+as fresh as storage's later start), and `test_a_backtest_warmed_for_the_lead_computes_the_stored_rows`
+keeps it so. Reading stored rows instead would only be faster ([next](#next)).
 
 ## Measured
 
@@ -486,5 +489,6 @@ move forward (`test_runner.py`, `test_ingest.py`).
 
 1. **Swing structure (PR D)**: directional-change pivots sized by the stored volatility tier
    (`vol_1s`, `vol_1m`) ([plan section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
-2. Let backtests read stored rows when the builder matches the run.
+2. Let backtests read stored rows when the builder matches the run: the values are already
+   equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

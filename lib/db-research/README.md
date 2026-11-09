@@ -119,8 +119,10 @@ from the research (CVD, spread, top-of-book size and imbalance at trades, and so
 - Stored raw aggregates may use price units; model features derived from them must
   be normalized (see `strategy_core.features.Unit`).
 - Measured (November 4, 2026, compacted): about 281 bytes per `bar_1s` row and 849 per
-  `candle_1m_1s` row with indexes; GC and SI with a 40-session lead use 80.84 GB, about
-  40 GB per product-year ([measured](../../docs/project/ingestion.md#measured)).
+  `candle_1m_1s` row with indexes; GC and SI with a 40-session lead used 80.84 GB, about
+  40 GB per product-year ([measured](../../docs/project/ingestion.md#measured)). With
+  `vol_1s` (307 bytes per row) the database was 102 GB on November 5, 2026, about 50 GB
+  per product-year.
 
 **Contracts and rolls** (implemented): `market.contract` has one row per contract keyed
 by product, raw symbol, and delivery month (raw symbols repeat each decade); expirations

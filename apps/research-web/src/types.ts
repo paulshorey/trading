@@ -48,7 +48,7 @@ export interface RunSpec {
   start: string;
   end: string;
   contract: string | null;
-  warmup_sessions: number;
+  warmup_sessions: number | null; // null: the stored lead
   strategy: "bias_pullback";
   strategy_params: StrategyParams;
   execution: ExecutionParams;
@@ -100,6 +100,7 @@ export interface FeatureSpec {
   name: string;
   unit: string;
   description: string;
+  stage?: string | null; // the stage that produced it; absent in older runs
 }
 export interface Candidates {
   rows: number;

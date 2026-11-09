@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   PriceChart,
   type ChartEvent,
@@ -8,10 +8,21 @@ import {
 import { api, money, num, seconds, utc } from "@/api";
 import type { FeatureSpec, Run, TradeWindow } from "@/types";
 
+// Headings for the stages that produce the features (runs saved before stages were recorded
+// show one flat list).
+const STAGE_TITLES: Record<string, string> = {
+  candle_1m_1s: "Window",
+  candle_1h_1m: "Window",
+  vol_1s: "Volatility",
+  vol_1m: "Volatility",
+  stats_1h_1m: "Statistics",
+};
+
 /** One trade in detail: one-second candles around it and the exact inputs at the decision. */
 export function TradeInspector({ run, index }: { run: Run; index: number }) {
   const [window, setWindow] = useState<TradeWindow | null>(null);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("");
   const trade = run.trades[index];
   useEffect(() => {
     // Cancel the previous trade's request so a slow response cannot replace this one.
@@ -64,6 +75,19 @@ export function TradeInspector({ run, index }: { run: Run; index: number }) {
     ["Entry timing · 1m@1s", "1m@1s."],
     ["Bias · 1h@1m", "1h@1m."],
   ] as const;
+  const query = filter.trim().toLowerCase();
+  // A resolution's features in run order, grouped by the stage that produced them.
+  const byStage = (prefix: string) => {
+    const out = new Map<string, [string, number | null][]>();
+    for (const [name, value] of Object.entries(trade.features)) {
+      if (!name.startsWith(prefix)) continue;
+      if (query && !name.slice(prefix.length).toLowerCase().includes(query))
+        continue;
+      const stage = specs.get(name)?.stage ?? "";
+      out.set(stage, [...(out.get(stage) ?? []), [name, value]]);
+    }
+    return [...out];
+  };
   return (
     <section className="panel inspector">
       <div className="panel-title padded">
@@ -91,6 +115,15 @@ export function TradeInspector({ run, index }: { run: Run; index: number }) {
           <p className="hint padding">Rebuilding one-second bars from DBN…</p>
         )
       )}
+      <label className="feature-filter padding">
+        Filter features
+        <input
+          type="search"
+          placeholder="name contains…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+      </label>
       <div className="inspector-grid">
         <table>
           <tbody>
@@ -123,15 +156,24 @@ export function TradeInspector({ run, index }: { run: Run; index: number }) {
               </tr>
             </thead>
             <tbody>
-              {Object.entries(trade.features)
-                .filter(([name]) => name.startsWith(prefix))
-                .map(([name, value]) => (
-                  <tr key={name} title={specs.get(name)?.description}>
-                    <td>{name.slice(prefix.length)}</td>
-                    <td>{value === null ? "—" : value.toFixed(3)}</td>
-                    <td>{specs.get(name)?.unit}</td>
-                  </tr>
-                ))}
+              {byStage(prefix).map(([stage, rows]) => (
+                <Fragment key={stage}>
+                  {stage && (
+                    <tr className="stage-row">
+                      <td colSpan={3}>
+                        {STAGE_TITLES[stage] ?? stage} · {stage}
+                      </td>
+                    </tr>
+                  )}
+                  {rows.map(([name, value]) => (
+                    <tr key={name} title={specs.get(name)?.description}>
+                      <td>{name.slice(prefix.length)}</td>
+                      <td>{value === null ? "—" : value.toFixed(3)}</td>
+                      <td>{specs.get(name)?.unit}</td>
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         ))}

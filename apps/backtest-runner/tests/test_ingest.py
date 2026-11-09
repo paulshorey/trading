@@ -7,9 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from backtest_runner import db, ingest, store
+from backtest_runner import db, ingest, service, store
 from backtest_runner.catalog import DbnFile
-from backtest_runner.source import HistoricalSource, next_front
+from backtest_runner.source import DayCache, HistoricalSource, next_front
 from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
@@ -584,6 +584,62 @@ def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(
             "GROUP BY 1, 2 ORDER BY 1"
         ).fetchall()
         assert fronts == [(date(2026, 9, 1), "GCZ6", 82_800), (date(2026, 9, 4), "GCG7", 82_800)]
+
+
+def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world, monkeypatch):
+    """A backtest's default warm-up is the lead storage gives each contract, so from a roll on it
+    computes exactly the stored rows of every stage, even when that lead reaches back before the
+    downloaded data (those sessions are empty, as storage never had them)."""
+    cache, _ = world
+    files = {d: dbn(d) for d in DAYS}
+    ranges = [(day_ns(date(2026, 8, 30)), day_ns(date(2026, 9, 5)))]  # sessions 08-31 .. 09-04
+    data = {"GC": ingest.ProductData(GC, files, ranges)}
+    options = {"url": database, "cache": cache, "log": lambda line: None}  # the default lead
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    [plan] = ingest.plan(["GC"], data=data, **options)
+    assert plan["lead_sessions"] == ingest.LEAD_FLOOR
+    assert ingest.run(["GC"], workers=1, data=data, **options)["status"] == "done"
+
+    monkeypatch.setattr(service, "files_for", lambda parent, dataset: files)
+    monkeypatch.setattr(service, "job_ranges", lambda parent, dataset: ranges)
+    monkeypatch.setattr(DayCache, "get", lambda self, file: cache.get(file))
+    rows = []
+    process = Pipeline.process
+
+    def capture(self, chunk):
+        out = process(self, chunk)
+        if chunk.tradable:
+            rows.append(out)
+        return out
+
+    monkeypatch.setattr(Pipeline, "process", capture)
+    # GCG7 becomes front on 09-03 (it traded more in the 09-02 session).
+    body = {"product": "GC", "contract": "GCG7", "start": "2026-09-03", "end": "2026-09-03"}
+    p = service.prepare(service.RunSpec.parse(body))
+    assert p.spec.warmup_sessions == plan["lead_sessions"]
+    engine = p.engine()
+    for chunk in p.source.chunks():
+        engine.process(chunk)
+    [computed] = rows
+    with db.connect(database) as conn:
+        cid = conn.execute("SELECT id FROM market.contract WHERE raw_symbol = 'GCG7'").fetchone()
+        for stage, table in computed.tables.items():
+            ends = table.values["end_ns"]
+            stored = conn.execute(
+                f"SELECT {', '.join(table.values)} FROM market.{stage} "
+                "WHERE contract_id = %s AND end_ns BETWEEN %s AND %s ORDER BY end_ns",
+                (cid[0], int(ends[0]), int(ends[-1])),
+            ).fetchall()
+            assert len(stored) == len(ends), stage
+            for j, (name, values) in enumerate(table.values.items()):
+                null = table.nulls.get(name, np.zeros(len(values), bool))
+                if values.dtype.kind == "f":
+                    null = null | np.isnan(values)
+                want_null = np.array([r[j] is None for r in stored])
+                want = np.array([0 if r[j] is None else r[j] for r in stored], values.dtype)
+                assert np.array_equal(null, want_null), (stage, name)
+                assert np.array_equal(values[~null], want[~null]), (stage, name)
 
 
 def test_cached_scans_and_stored_rows_follow_the_code_that_made_them(database, world, monkeypatch):

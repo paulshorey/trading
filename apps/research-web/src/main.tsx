@@ -112,6 +112,7 @@ function App() {
         <aside>
           <RunForm
             catalog={catalog}
+            loaded={online}
             spec={spec}
             setSpec={setSpec}
             busy={busy}

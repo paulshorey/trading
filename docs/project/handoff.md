@@ -216,8 +216,9 @@ November 5, 2026, on `main` after #77. Evidence (outside git): `~/verify-{GC,SI}
   warm-up whole instead of in real time.
 - **Engine ATR.** Brackets read `vol_1s.atr_price`, bit-identical to what `pipeline.FastAtr`
   recorded, so `FastAtr` is gone (no stage identity changed; all 12 contracts stay `current`).
-- **UI.** Multi-day charts label ticks with dates, the inspector groups features by stage with
-  a filter, and the form says "Loading products…" until the catalog arrives.
+- **UI.** Multi-day charts label ticks with dates and the equity chart fits every trade of a
+  long run, the inspector groups features by stage with a filter and keeps the trade summary
+  compact, and the form says "Loading products…" until the catalog arrives.
 - **Edge case left for a `source.py` rebuild.** If a download started partway through a session,
   a backtest whose warm-up reaches before it would read that partial session while storage skips
   it. No current download does this (all start on Saturday 2025-11-01). Fixing it means

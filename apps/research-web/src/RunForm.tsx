@@ -36,12 +36,14 @@ type Section = "strategy_params" | "execution" | "features";
 
 export function RunForm({
   catalog,
+  loaded,
   spec,
   setSpec,
   busy,
   onSubmit,
 }: {
   catalog: CatalogProduct[];
+  loaded: boolean;
   spec: RunSpec;
   setSpec: (spec: RunSpec) => void;
   busy: boolean;
@@ -79,12 +81,12 @@ export function RunForm({
   const s = spec.strategy_params;
   const x = spec.execution;
   // The automatic front month is chosen from the previous session's volume, so it needs at
-  // least one warmup session.
+  // least one warmup session (blank, the stored lead, has many).
   const withContract = (next: RunSpec, contract: string | null): RunSpec => ({
     ...next,
     contract,
     warmup_sessions:
-      contract === null
+      contract === null && next.warmup_sessions !== null
         ? Math.max(1, next.warmup_sessions)
         : next.warmup_sessions,
   });
@@ -92,7 +94,16 @@ export function RunForm({
     const p = catalog.find((c) => c.root === root);
     const last = p?.dates.filter((d) => d.present).at(-1)?.date ?? spec.end;
     setSpec(
-      withContract({ ...spec, product: root, start: last, end: last }, null),
+      withContract(
+        {
+          ...spec,
+          product: root,
+          start: last,
+          end: last,
+          warmup_sessions: null,
+        },
+        null,
+      ),
     );
   }
   return (
@@ -118,7 +129,9 @@ export function RunForm({
         <p className="hint">
           {product
             ? `$${product.tick_value} per ${product.tick_size} tick · ${product.calendar}`
-            : "No TBBO files found under data/."}
+            : loaded
+              ? "No TBBO files found under data/."
+              : "Loading products…"}
         </p>
         <label>
           Contract
@@ -152,9 +165,29 @@ export function RunForm({
             />
           </label>
         </div>
-        {field("Warmup sessions", spec.warmup_sessions, (v) =>
-          setSpec({ ...spec, warmup_sessions: v }),
-        )}
+        <label>
+          Warmup sessions
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            placeholder="stored lead"
+            value={spec.warmup_sessions ?? ""}
+            onChange={(e) =>
+              setSpec({
+                ...spec,
+                warmup_sessions:
+                  e.target.value === "" ? null : e.target.valueAsNumber,
+              })
+            }
+          />
+        </label>
+        <p className="hint">
+          Sessions each contract replays before it trades, at the start and
+          after every roll. Blank uses the stored rows&apos; lead, so features
+          match them; fewer run faster but start cold.
+        </p>
         <div className="rule" />
         <h3>Bias · 1h@1m</h3>
         <label className="check">

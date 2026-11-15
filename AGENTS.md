@@ -16,6 +16,12 @@ every product: trades are exact, but the book is seen only at trades (see
 `docs/project/engine.md#data-limits-tbbo-only`). Validate TBBO trades and their
 pre-trade top of book before deriving candles or dependent metrics and models.
 
+## Workspace
+
+Prefer the primary local checkout when free; use a worktree when another task is
+using it. After merging a PR, return the primary checkout to `main` and run
+`git pull --ff-only` when free, leaving it clean.
+
 ## Normalized features (required)
 
 Features, strategy signals, and model inputs must never use raw price units. Use basis

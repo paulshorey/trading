@@ -45,15 +45,15 @@ task live in [handoff: next steps](handoff.md#next-steps).
       volatility from its one-second returns; joined into the engine's `1m@1s.` features. Live
       cost about 0.08 ms per second (`research verify` 321.7 s for the MGC day). Applied to
       `trading` and built for GC/SI on November 4 in 5 min 47 s; full-year checks passed
-      ([results](handoff.md#pr-c2-results-second-volatility)). Merge #77 before other database
-      work.
+      ([results](handoff.md#pr-c2-results-second-volatility)). Merged.
 - [ ] **Swing structure, signals, labels (PRs D–F), next**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
-- [ ] **Test backtests on real data at full scale.** Run a full year of GC and SI.
-      Check run time and memory, rolls and warmup at every contract change, and the
-      per-session quality reports. Run `research verify` on a week of GC and SI:
-      whole-session versus second-by-second parity has been proven only on the MGC
-      sample day. Load a large run in the UI.
+- [x] **Test backtests on real data at full scale.** November 5: a GC year in 161 s with
+      2.6 GB, `research verify` on a GC and an SI week (identical), a 43 MB run in the UI, and
+      backtests equal to the stored rows at rolls. Fixed what it found: backtests now warm
+      each contract for the stored lead, and `verify` holds one session in memory
+      ([checks](handoff.md#full-scale-checks-after-pr-c2)). The per-session quality reports
+      belong to the session quality policy below.
 - [ ] **Session quality policy.** Backtests currently include degraded sessions with
       only a report. Decide and implement a default: skip, or mark and exclude from
       ML rows. Examples are 2025-11-28 (CME outage; NQ, YM, and RTY records flag a
@@ -108,9 +108,10 @@ task live in [handoff: next steps](handoff.md#next-steps).
     fills one tick worse; report both results and flag those that flip.
   - **Done when** every rule has unit tests and whole-session versus second-by-second
     parity still holds.
-- [ ] **Roll warmup.** Backtests replay `warmup_sessions` on a new contract, while stored
-      rows warm it for the derived lead (40 sessions) before the roll. Let backtests read the continuous series
-      so both see the same features.
+- [x] **Roll warmup.** Backtests warm each contract for the stored lead by default and compute
+      exactly the stored rows from every roll on
+      ([checks](handoff.md#full-scale-checks-after-pr-c2)). Reading stored rows would only be
+      faster ([next steps](handoff.md#next-steps)).
 - [ ] **More products.** Add PL, YM, RTY, ES, and NQ once GC and SI ingestion is proven;
       all are on disk with specs.
 - [ ] **Slower bias.** Optionally a `1d@1h` window.
@@ -129,9 +130,14 @@ task live in [handoff: next steps](handoff.md#next-steps).
 ## Housekeeping
 
 - [ ] **At the next `candle_1m_1s` rebuild**, delete the unused `features.FeaturePipeline`
-      and publish the `1m@1s` ATR from the stage, replacing `pipeline.FastAtr`
-      ([B1 decisions](handoff.md#pr-b-1h1m-rows)). Both files are in that stage's identity,
-      so the edits wait for a rebuild that happens anyway.
+      ([B1 decisions](handoff.md#pr-b-1h1m-rows)); `features.py` is in that stage's identity,
+      so the edit waits for a rebuild that happens anyway. (`pipeline.FastAtr` is gone: the
+      engine reads `vol_1s.atr_price`.)
+- [ ] **At the next `source.py` rebuild**, give `HistoricalSource` the roll warm-up count
+      apart from its warm-up list, and skip warm-up sessions outside the downloaded data, so a
+      download that starts partway through a session cannot make a backtest differ from storage
+      ([edge case](handoff.md#full-scale-checks-after-pr-c2)). `source.py` is in every stage's
+      identity.
 
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to

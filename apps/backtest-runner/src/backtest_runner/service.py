@@ -5,7 +5,7 @@ import json
 import tempfile
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -20,7 +20,8 @@ from strategy_core.market import NS, PRODUCTS, SECOND, Product, SessionCalendar
 from strategy_core.strategies import Strategy, make_strategy
 
 from .calendars import load_sessions
-from .catalog import ROOT, files_for
+from .catalog import ROOT, files_for, job_ranges
+from .ingest import LEAD_FLOOR, ProductData, required_lead, session_seconds
 from .source import HistoricalSource
 
 RUNS = ROOT / "data/runs"
@@ -38,6 +39,8 @@ def code_digest() -> str:
 
 
 LOADED_CODE_SHA256 = code_digest()
+MAX_WARMUP = 100  # sessions; the stored lead is 40
+VERIFY_BLOCK = 3_600  # one-second frames compared at a time
 
 
 @dataclass(frozen=True)
@@ -49,7 +52,9 @@ class RunSpec:
     start: date
     end: date
     contract: str | None = None
-    warmup_sessions: int = 1
+    # Sessions each contract replays before it trades, at the start and after every roll. None
+    # means the lead the stored rows have (`stored_lead`), so the features equal the stored rows.
+    warmup_sessions: int | None = None
     strategy: str = "bias_pullback"
     strategy_params: dict = field(default_factory=dict)
     execution: dict = field(default_factory=dict)
@@ -82,8 +87,12 @@ class RunSpec:
             raise ValueError(f"Unknown product {spec.product!r}; known: {sorted(PRODUCTS)}")
         if spec.contract is not None and not PRODUCTS[spec.product].is_outright(spec.contract):
             raise ValueError(f"{spec.contract!r} is not a {spec.product} outright contract")
-        if type(spec.warmup_sessions) is not int or not 0 <= spec.warmup_sessions <= 10:
-            raise ValueError("warmup_sessions must be an integer from 0 to 10")
+        w = spec.warmup_sessions
+        if w is not None and (type(w) is not int or not 0 <= w <= MAX_WARMUP):
+            raise ValueError(
+                f"warmup_sessions must be an integer from 0 to {MAX_WARMUP}, or null for the "
+                "stored lead"
+            )
         if (spec.end - spec.start).days > 400:
             raise ValueError("Run at most 400 days at a time")
         for name in ("strategy_params", "execution", "features"):
@@ -111,13 +120,28 @@ class Prepared:
         return Engine(self.product, self.calendar, self.strategy, self.execution, self.features)
 
 
+def stored_lead(product: Product, files: dict) -> int:
+    """Sessions stored before a contract becomes front, as `ingest.plan_product` derives its
+    default: what the stages need to settle, at least `LEAD_FLOOR`. A backtest that warms each
+    contract this long computes exactly the stored rows from every roll on (sessions before the
+    downloaded data are empty, which leaves every stage as fresh as storage's later start)."""
+    data = ProductData(product, files, job_ranges(product.parent_symbol, product.dataset))
+    _, calendar, downloaded = data.sessions()
+    period = [
+        s for s in calendar if downloaded and downloaded[0].open <= s.open <= downloaded[-1].open
+    ]
+    return max(LEAD_FLOOR, required_lead(session_seconds(period))[0])
+
+
 def prepare(spec: RunSpec) -> Prepared:
     product = PRODUCTS[spec.product]
-    calendar, warmup, trading = load_sessions(product, spec.start, spec.end, spec.warmup_sessions)
-    execution = ExecutionConfig(**spec.execution)
     files = files_for(product.parent_symbol, product.dataset)
     if not any(f.present for f in files.values()):
         raise ValueError(f"No {product.parent_symbol} TBBO files found under data/")
+    if spec.warmup_sessions is None:
+        spec = replace(spec, warmup_sessions=stored_lead(product, files))
+    calendar, warmup, trading = load_sessions(product, spec.start, spec.end, spec.warmup_sessions)
+    execution = ExecutionConfig(**spec.execution)
     source = HistoricalSource(product, files, warmup, trading, execution, spec.contract)
     return Prepared(
         spec,
@@ -134,8 +158,7 @@ def backtest(body: dict, *, save: bool = True) -> dict:
     """Run sessions as whole chunks, as fast as the data can be read."""
     if code_digest() != LOADED_CODE_SHA256:
         raise ValueError("Python source changed; restart the API before creating another run")
-    spec = RunSpec.parse(body)
-    p = prepare(spec)
+    p = prepare(RunSpec.parse(body))
     engine = p.engine()
     sim = Simulator(p.product, p.execution, p.strategy.bracket, p.calendar)
     candidates = CandidateSummary()  # streamed: rows are folded in, not kept
@@ -161,6 +184,7 @@ def backtest(body: dict, *, save: bool = True) -> dict:
     for label, raw in p.source.quality.items():
         out["quality"].setdefault(label, {}).update({f"raw_{k}": v for k, v in raw.items()})
     identity = provenance(p)
+    sources = engine.pipeline.sources()
     out.update(
         {
             "id": hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[
@@ -168,10 +192,15 @@ def backtest(body: dict, *, save: bool = True) -> dict:
             ],
             "schema_version": SCHEMA_VERSION,
             "created_at": datetime.now(UTC).isoformat(),
-            "spec": spec.to_dict(),
+            "spec": p.spec.to_dict(),
             "provenance": identity,
             "feature_specs": [
-                {"name": s.name, "unit": s.unit.value, "description": s.description}
+                {
+                    "name": s.name,
+                    "unit": s.unit.value,
+                    "description": s.description,
+                    "stage": sources.get(s.name),
+                }
                 for s in engine.pipeline.specs()
             ],
             "assumptions": assumptions(p),
@@ -220,7 +249,8 @@ def assumptions(p: Prepared) -> list[str]:
         f"One position at a time, {c.contracts} contract(s), ${c.commission_per_contract:g} per "
         f"contract per side; flat {c.flat_before_close_s} s before each scheduled close.",
         "Contracts roll at a session open by previous-session volume unless a contract is set; "
-        "features restart on the new contract after warmup sessions.",
+        f"each contract first replays its {p.spec.warmup_sessions} previous sessions to warm its "
+        "features, at the start and after every roll.",
         "Candidate statistics simulate every signal independently with the same rules; they are "
         "overlapping ML training rows, not a portfolio.",
         "No claim of strategy profitability follows from these runs.",
@@ -280,33 +310,59 @@ def session_chunks(p: Prepared, sessions: int | None) -> Iterator[MarketChunk]:
 
 
 def verify(body: dict, sessions: int | None = 1) -> dict:
-    """Run the same sessions whole and second by second (the live path) and compare."""
+    """Run the same trading sessions whole and second by second (the live path) and compare
+    every feature and the trades. Both engines replay the warm-up sessions whole first, as a live
+    session prepares before it trades. Frames are compared in blocks as they arrive, so memory
+    holds one session, not every one-second frame."""
     p = prepare(RunSpec.parse(body))
-    chunks = list(session_chunks(p, sessions))
     whole, stepwise = p.engine(), p.engine()
-    t0 = time.perf_counter()
-    whole_frames = [whole.process(c).frame for c in chunks]
-    t1 = time.perf_counter()
-    step_frames = [
-        stepwise.process(s).frame
-        for c in chunks
-        for s in split_by_second(c, p.calendar, p.execution)
-    ]
-    t2 = time.perf_counter()
+    labels: list[str] = []
+    mismatched: set[str] = set()
+    seconds = warm = 0
+    whole_s = step_s = 0.0
+
+    def compare(a: FeatureFrame, i: int, block: list[FeatureFrame]) -> int:
+        b = FeatureFrame.concat(block)
+        n = len(b)
+        if not np.array_equal(a.end[i : i + n], b.end) or set(a.features) != set(b.features):
+            mismatched.add("end_or_names")
+        for k, v in b.features.items():
+            if k in a.features and not np.array_equal(a.features[k][i : i + n], v, equal_nan=True):
+                mismatched.add(k)
+        return i + n
+
+    for chunk in session_chunks(p, sessions):
+        labels.append(chunk.session)
+        if not chunk.tradable:
+            whole.process(chunk)
+            stepwise.process(chunk)
+            warm += 1
+            continue
+        t0 = time.perf_counter()
+        a = whole.process(chunk).frame
+        whole_s += time.perf_counter() - t0
+        i, block = 0, []
+        for second in split_by_second(chunk, p.calendar, p.execution):
+            t0 = time.perf_counter()
+            block.append(stepwise.process(second).frame)
+            step_s += time.perf_counter() - t0
+            if len(block) == VERIFY_BLOCK:
+                i, block = compare(a, i, block), []
+        i = compare(a, i, block) if block else i
+        if i != len(a):
+            mismatched.add("row_count")
+        seconds += len(a)
     a, b = whole.finish(), stepwise.finish()
-    fa, fb = FeatureFrame.concat(whole_frames), FeatureFrame.concat(step_frames)
-    mismatched = [
-        k for k in fa.features if not np.array_equal(fa.features[k], fb.features[k], equal_nan=True)
-    ]
     return {
-        "sessions": [c.session for c in chunks],
-        "seconds": len(fa),
+        "sessions": labels,
+        "warmup_sessions": warm,
+        "seconds": seconds,
         "identical_features": not mismatched,
-        "mismatched_features": mismatched,
+        "mismatched_features": sorted(mismatched),
         "identical_trades": a["trades"] == b["trades"],
         "trades": len(a["trades"]),
-        "whole_session_s": round(t1 - t0, 3),
-        "second_by_second_s": round(t2 - t1, 3),
+        "whole_session_s": round(whole_s, 3),
+        "second_by_second_s": round(step_s, 3),
     }
 
 
@@ -320,6 +376,9 @@ def rehearse(
     wall0 = market0 = None
     seen_order = seen_position = None
     for chunk in session_chunks(p, sessions):
+        if not chunk.tradable:  # warm-up: replayed whole before trading, as a live session would
+            engine.process(chunk)
+            continue
         for second in split_by_second(chunk, p.calendar, p.execution):
             if speed > 0:
                 due = second.end + p.execution.close_delay

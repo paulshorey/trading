@@ -28,6 +28,9 @@ export function LineChart({
     );
     const line = chart.addSeries(LineSeries, { color, lineWidth: 2, title });
     line.setData(points.map((p) => ({ ...p, time: p.time as UTCTimestamp })));
+    // Fit every point, even thousands (the default keeps at least 0.5 px per point and so
+    // shows only the latest part of a long run).
+    chart.timeScale().applyOptions({ minBarSpacing: 0.001 });
     chart.timeScale().fitContent();
     return () => chart.remove();
   }, [points, height, color, title]);

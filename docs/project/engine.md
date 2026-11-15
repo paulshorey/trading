@@ -79,7 +79,9 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
 
 One position at a time; no entries and a forced exit `flat_before_close_s` before each
 scheduled close. Contracts roll at a session open (previous-session volume, only to a later
-delivery month) after the new contract's warmup sessions. Every run records these settings as assumptions.
+delivery month). Each contract first replays its warm-up sessions, by default the stored rows'
+lead (40), so its features equal the stored rows from every roll on. Every run records these
+settings as assumptions.
 
 ## Normalized features
 
@@ -97,8 +99,9 @@ Within a chunk, base bars and rolling candles are vectorized with numpy, and
 per-phase indicators are compiled loops whose state carries between calls. On the
 sample day, a 23-hour session of one-second steps took 0.18 s including DBN decoding
 (about 450,000 market seconds per second), or roughly 5 minutes per contract-year of
-one-second data. The one-second path costs about 0.5 ms per second: ample for live,
-too slow for research, which is why backtests pass whole sessions.
+one-second data. The one-second path costs about 4 ms per second with every stored feature
+(November 5, 2026): ample for live, too slow for research, which is why backtests pass whole
+sessions. Ten months of GC (2026) run whole in about 4 minutes, warm-up included.
 
 ## Verification
 
@@ -107,14 +110,16 @@ uv run research verify apps/backtest-runner/examples/mgc-sample.json
 uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
 ```
 
-`verify` runs the same sessions whole and second by second and requires identical
-features and trades. A vectorized step that reads a later row inside its chunk fails
-this check, so it also guards against look-ahead. On the sample day all 165 features
-and 13 trades matched (November 4, 2026, with the engine on the stage graph). Whole, the
-session took 0.93 s; second by second 350 s, about 4 ms per second (54 s before the engine
-computed every stored feature), far inside the 100 ms close delay. Tests also cover hand-checked fills, brute-force rolling
-candles, phase parity with standard hourly candles, scale invariance, and prefix
-invariance.
+`verify` runs the same trading sessions whole and second by second and requires identical
+features and trades; both engines first replay the warm-up sessions whole, as a live session
+prepares before it trades, and frames are compared an hour at a time, so memory holds one
+session. A vectorized step that reads a later row inside its chunk fails this check, so it
+also guards against look-ahead. On the sample day all 235 features and 13 trades matched
+(after PR C2: whole 0.69 s, second by second 322 s). On a GC and an SI week (2026-09-14 to
+09-18, `--sessions 5`, November 5) every feature and trade matched (92 and 110 trades) at
+about 4.1 ms per second, far inside the 100 ms close delay. Tests also cover hand-checked
+fills, brute-force rolling candles, phase parity with standard hourly candles, scale
+invariance, and prefix invariance.
 
 ## ML rows
 

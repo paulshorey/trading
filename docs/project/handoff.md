@@ -1,27 +1,38 @@
 # Handoff
 
-As of November 6, 2026 (after PR C2 and the full-scale checks). Start here, then read [AGENTS.md](../../AGENTS.md). Tasks are
-tracked in [todo.md](todo.md); this page explains the architecture, the decisions behind
-it, where the work stands, and exactly how to continue.
+As of November 15, 2026 (after the move from TBBO to MBP-1). Start here, then read
+[AGENTS.md](../../AGENTS.md). The [roadmap](roadmap.md) is the map of what is computed and in
+what order; tasks are tracked in [todo.md](todo.md); this page explains the architecture, the
+decisions behind it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
 
-1. **The swing structure (PR D) is next**: directional-change pivots at 0.5, 1, and 2 ATRs on
+1. **Rebuild the stored rows from MBP-1.** The rows in `trading` were built from the TBBO
+   files, which are gone, and the source code changed, so `ingest plan GC SI` reports every
+   stage stale. The rebuild needs Paul's go-ahead because it must reset the database first:
+   the disk has too little free space to replace 102 GB of rows in place
+   ([how](#rebuilding-from-mbp-1)). MBP-1 trades give the same rows
+   ([checks](#the-move-to-mbp-1-november-15-2026)), so nothing else waits on this except
+   stored-row research.
+2. **The swing structure (PR D) is next**: directional-change pivots at 0.5, 1, and 2 ATRs on
    both resolutions, sized by the volatility tier (`vol_1s`, `vol_1m`). The design is the
    [plan, section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design) and the
    [pivot/structure contract](pivot-structure-design.md); the procedure that worked for B and C
    is in [PR C](#pr-c-volatility-tier) ("How"). Size it from measured rows: `vol_1s` takes 307
    bytes per row with its index, so three `pivot_1s` variant rows per second would be roughly
-   50–75 GB for GC and SI, not the plan's 20–25 GB; the database was 102 GB with 211 GB free on
-   November 5.
-2. **Paired products (P1)** can be built alongside PR D: stages that read GC + SI and ES + NQ
-   at the same `slot_ordinal`, decided November 6, 2026. The design is
-   [pair-design.md](pair-design.md); the metrics behind it are in the
-   [order-flow research](../research/pivots/2026-11-05-order-flow-predictors.md).
-3. **Backtests equal storage; keep it so.** A backtest warms each contract for the stored lead
-   by default and computes exactly the stored rows from every roll on
-   ([checks](#full-scale-checks-after-pr-c2)). A new stage needs no extra work for this as long as
-   its warm-up fits the lead.
+   50–75 GB for GC and SI. The disk cannot hold that today (47 GB free on November 15), so
+   decide the storage first: fewer stored scales, sparse events only, or more disk.
+3. **Then the reversal model and structure signals** ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)):
+   labels and the benchmark (PR F), a walk-forward model stage
+   ([rules](feature-pipeline.md#model-stages)), and signals that read both (PR E).
+4. **Alongside:** the book stage `book_1s`
+   ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and paired products
+   ([pair-design.md](pair-design.md): GC + SI first; ES + NQ after NQ is downloaded).
+5. **Backtests equal storage; keep it so.** A backtest warms each contract for the stored lead
+   by default and computes exactly the stored rows from every roll on. A new stage needs no
+   extra work for this as long as its warm-up fits the lead.
+
+How to work in this repository:
 
 How to work in this repository:
 
@@ -51,26 +62,30 @@ How to work in this repository:
 ## Goal
 
 A platform to research short-horizon futures strategies and machine-learning models on
-history, then run them live on the same code. A rolling `1h@1m` candle (the last 60
+history, then run them live on the same code. Metrics are computed in layers, each reading
+only the ones below ([roadmap](roadmap.md#the-layers)): trade flow such as CVD, indicators
+and volatility on rolling windows, swing structure, a model's reversal predictions, and
+finally one model trained on all of them, for one product and for pairs that move together
+(GC with SI, ES with NQ). In today's baseline strategy a rolling `1h@1m` candle (the last 60
 one-minute rows, every minute) sets a direction bias that only rules out a direction;
-rolling `1m@1s` features (the last 60 one-second rows, every second) time entries; a
-bracket sized in ATRs exits within minutes. Prototype with GC (gold) and SI (silver), then
-add products. Models train on at least a year of history.
+rolling `1m@1s` features (the last 60 one-second rows, every second) time entries; a bracket
+sized in ATRs exits within minutes. Models train on at least a year of history.
 
 ## Architecture
 
 ```text
-data/databento/tbbo/*.dbn.zst      Permanent tick archive: Databento TBBO, one file per day
+data/databento/mbp-1/*.dbn.zst     Permanent tick archive: Databento MBP-1, one file per day
         │                          and product, gitignored (data/README.md)
-        │  catalog.py (files, checksums), source.py (one contract's trades per session)
-        ▼
+        │  catalog.py (files, checksums), source.py (one contract's trades, and for
+        ▼  sessions that trade its book events, per session)
 lib/strategy-core                  The same code for history and live sessions
   bars.py, metrics.py              Trades → one row per scheduled second, exact statistics
   windows.py, window_metrics.py    Rolling candles: rows o − 59 … o
   kernels.py, indicators.py        Per-phase indicators: candles o, o − 60, o − 120, …
-  features.py                      Normalized features (Unit), engine.py strategies and fills
+  features.py                      Normalized features (Unit)
   stages.py, stage_*.py            Stages: one stored table each, versioned on its own
   pipeline.py, state.py, warmup.py Tier-ordered pipeline, exact checkpoints, derived warm-ups
+  engine.py, execution.py          Strategies, and fills at the book each order meets
         │                                      │
         ▼                                      ▼
 Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
@@ -78,7 +93,8 @@ Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
                                         bar_1s, bar_1m (tier 0)
                                         candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1s,
                                         vol_1m (tier 1)
-                                        next: pivot_* (D), signal_* (E), pivot_label (F)
+                                        next: pivot_* (D), pivot_label (F), model_* and
+                                        signal_* (E), book_1s, pair_1m
                                       market.continuous_*                  (per product)
                                                   │
                                                   ▼
@@ -87,6 +103,15 @@ Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
 
 `apps/backtest-runner` holds the data adapters, calendars, ingestion, CLI (`research`), and
 the local API; `apps/research-web` is the UI (run setup, results, trade inspector).
+
+**Two record types** (`strategy_core/market.py`). `Trades` are the MBP-1 records with
+`action == "T"`: each trade with the best bid and ask just before it, exactly what TBBO
+held. Every stage reads only these today. `BookEvents` are all of a contract's MBP-1
+records in receive order: each change to the best bid and ask, and the trades among them.
+`MarketChunk.book` carries them for sessions that trade; the simulator reads them to fill
+orders. Ingestion does not load them (`DayCache(book=False)`), so its workers stay small;
+a stage that reads the book only needs the cache switched on, since
+`HistoricalSource.stored_chunk` already passes the book when the cache keeps it.
 
 **Stages** ([feature pipeline](feature-pipeline.md)): each stored table is a `Stage`
 (`strategy_core/stages.py`) in its own module (`stage_bar_1s.py`, `stage_bar_1m.py`,
@@ -163,326 +188,164 @@ These are fundamental; changing any of them changes every stored value.
 - **Live**: the model runs on the current front contract; the next one is computed in
   parallel during its warm-up and taken over at the roll.
 
+
 ## Where things stand
 
-| Area     | State                                                                                                                                                                                                                                                                                                                                                                      |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code     | Engine, windows, features, fills, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (PR #63); stages with per-stage versions, derived lead, and carried prices (PR #70); baseline schema and cleanup (PR #71); minute stages and the engine on the stage graph (PR #74, B1); hourly window statistics (PR #75, B2); minute volatility (PR #76, C1); second volatility (PR #77, C2); backtests warmed for the stored lead (full-scale checks) |
-| Data     | One year of TBBO (2025-11-01 to 2026-10-31) for GC, SI, PL, ES, NQ, YM, RTY in `data/databento/tbbo/` (7.3 GB), verified and registered                                                                                                                                                                                                                                    |
-| Database | PostgreSQL 18 database `trading`: `0001_baseline` through `0005_second_volatility` applied; GC and SI: 71,559,900 rows per second table ([baseline](#baseline-rebuild-gc-and-si), [C2](#pr-c2-results-second-volatility)), 1,192,665 per minute table ([B1](#pr-b1-results-minute-stages), [B2](#pr-b2-results-hourly-statistics), [C1](#pr-c1-results-minute-volatility)) |
-| Ingest   | Baseline rebuild completed November 4 (runs 1–2); run 3 added the minute stages in 2 min 29 s, run 4 the hourly statistics in 1 min 55 s, run 5 the minute volatility in 1 min 55 s, run 6 the second volatility in 5 min 47 s; 40-session lead (37 required, by `vol_1m` and `vol_1s`), 257/257 front sessions per product; every stage `current` |
-| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate                                                                                                                                                                                                                                                                                            |
-| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001                                                                                                                                                                                                                                                                           |
+| Area     | State |
+| -------- | ----- |
+| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); **MBP-1 as the only source, book events in the engine, fills at the book** (this PR) |
+| Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC, SI, PL, ES, YM, RTY in `data/databento/mbp-1/` (123 GB), checksums and full decode verified; NQ not downloaded; TBBO files deleted |
+| Database | PostgreSQL 18 database `trading`, 102 GB: `0001_baseline` through `0005_second_volatility` applied; GC and SI rows of all seven stages **built from TBBO on November 4 and now stale** (the files and the source code changed). They are still correct for 2025-11-03 to 2026-10-30, but `ingest plan GC SI` reports all 12 contracts `stale` ("stored by other code or settings; use --rebuild") and will not extend them. The file registry lists the 1,866 MBP-1 files beside the 2,182 deleted TBBO files |
+| Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate |
+| UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
 statistics (OHLCV by aggressor side, CVD, sweeps, sizes, price path, and the book at trades:
 spread, displayed size and orders, imbalance, effective spread); `market.candle_1m_1s`
 holds the rolling `1m@1s` candle and 87 normalized features. `market.bar_1m` holds the same
 statistics per minute, merged exactly from its 60 seconds, plus observed seconds and
-one-second returns; `market.candle_1h_1m` holds the rolling `1h@1m` candle and 77 features, and
+one-second returns; `market.candle_1h_1m` holds the rolling `1h@1m` candle and 77 features,
 `market.stats_1h_1m` 16 statistics of the same window (realized volatility, minute-return
 moments, path, session levels), and `market.vol_1m` 26 volatility features of it (ATR horizons,
 bullish/bearish and adverse-excursion ATR, extremes as levels, time-of-day and daily ATR);
 `market.vol_1s` holds the same 26 for the `1m@1s` window plus realized volatility from its
-one-second returns. Each
-is a stage with its own
-version and checkpoints ([pipeline](feature-pipeline.md)). Historical run #2 rebuilt GC and SI
-with a 40-session lead in 23 min 44 s with 8 workers and used 80.84 GB including indexes
-([measurements](ingestion.md#measured)). The metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
-about 40 of its entries are not stored yet ([list](ingestion.md#metrics)) and can be added
-by rebuilding from the DBN files ([how](ingestion.md#adding-a-metric-or-feature)).
+one-second returns. Each is a stage with its own version and checkpoints
+([pipeline](feature-pipeline.md)). The metrics follow the
+[trade-metrics reference](trade-metrics-reference.md); about 40 of its entries are not stored
+yet ([list](ingestion.md#metrics)) and can be added by rebuilding from the DBN files
+([how](ingestion.md#adding-a-metric-or-feature)).
+
+## The move to MBP-1 (November 15, 2026)
+
+Paul replaced TBBO with MBP-1 for every product: the trades are the same, and the book
+between trades shows what a simulated order would really have paid.
+
+**What changed in the code**
+
+- `catalog.py` reads `mbp-1` jobs as market data (`MARKET`); `data/sample/` and the MGC
+  sample day are gone. `examples/gc-day.json` is the one-day example.
+- `source.py`: `DayCache` decodes a day and keeps its trade records, plus every record when
+  `book=True` (backtests). `session_book` returns a contract's book events for a session,
+  including the closure before it, which builds the opening book.
+- `market.py`: `BookEvents` beside `Trades`. `engine.py`: `MarketChunk.book`; the engine
+  orders book events by second, then receive order, as it does trades, and
+  `split_by_second` cuts them the same way.
+- `execution.py`: a market order fills when it reaches the exchange, at the best ask or bid
+  shown then (`BookView.at`). A stop fills at the book its triggering trade left, never
+  better than the trigger. Targets still need a trade through the limit. An entry that
+  meets no two-sided book is cancelled. Each trade records `decision_spread_ticks` and
+  `entry_slip_ticks` ([timing model](engine.md#timing-model)).
+- Removed: the unused `features.FeaturePipeline` (the B1 leftover) and its reference test.
+
+**Checks**
+
+- **Files:** all 1,878 files match their manifests (size and SHA-256), and all 1,866 data
+  files decode completely: 5.94 billion records, 222.8 million trades, receive order sorted,
+  no trade without a price or size ([data](data.md#what-we-have)).
+- **Same trades as TBBO:** four whole sessions of MBP-1 trades (GCZ6 and SIZ6 2026-09-15,
+  GCG6 2025-12-10, SIK6 2026-03-16) equal the stored second rows in status, OHLC, volume,
+  buy and sell volume, and trade count for all 82,800 seconds each: 0 differences.
+- **Same stored rows:** a pilot ingest from MBP-1 into a throwaway database (GCZ6 and SIZ6,
+  2026-09-08 to 09-18, 18 contract-sessions in 47 s) equals the rows in `trading` byte for
+  byte in every column of `bar_1s` (71 columns) and `bar_1m` (75), all 741,600 seconds and
+  12,360 minutes per contract, and in every column of `candle_1m_1s` (106) from the second
+  session on (the pilot's first session starts cold). The hourly and volatility stages need
+  10 to 37 sessions of history, more than the pilot built.
+- **Engine:** `research verify` on a real GC day (GCZ6 2026-09-15, 2.3 million book events):
+  all 235 features and all 15 trades identical, whole session against second by second
+  (402.7 s, 4.9 ms per second while other jobs ran; 2.3 GB). The engine parity tests pass
+  with synthetic book events that arrive late and out of order.
+- **A real day's costs:** GCZ6 2026-09-15 with `examples/gc-day.json`: 15 trades, entry
+  slippage 1.0 tick on average (90th percentile 2.5) against the mid-price at the decision;
+  200 would-be trades averaged 1.34 ticks. The session had 2,273,683 book events for 93,025
+  trades, none one-sided and 12 crossed.
+- **Tests:** `pnpm lint`, `pnpm test`, and `pnpm build` pass, including new tests for fills
+  at the book, late book records, a one-sided book, and one real downloaded day.
+
+**What it means for results.** Simulated fills no longer wait for the next trade. Every
+entry now pays the spread it met about 150 ms after the signal second (100 ms to decide,
+50 ms for the order to travel), and the run reports that cost in ticks. Runs saved before
+this change priced fills at the next trade's book and are not comparable.
+
+Local evidence uses the prefix `~/mbp1-conversion.`: `verify_mbp1.*` (checksums),
+`decode_all.*` (every file decoded), `compare_stored.*` and `compare_pilot.*` (equality with
+the TBBO-built rows), `verify-gc-day.json`, and `~/ingest-pilot-mbp1.log`.
+
+## Rebuilding from MBP-1
+
+Not done yet; it needs Paul's authorization because step 1 drops the stored rows.
+
+1. Reset the database: drop the schemas `market`, `research`, `ml`, and `meta` (102 GB of
+   derived rows, all rebuildable; the TBBO-built rows of 2025-11-03 to 11-07 have no MBP-1
+   file and will not come back). Replacing rows in place would roughly double the space
+   used until a `VACUUM FULL`, and only 47 GB is free.
+2. `uv run research db migrate`, then `uv run research db register` (1,866 MBP-1 files).
+3. `caffeinate -i uv run research ingest run GC SI --workers 8 2> ~/ingest-gc-si-mbp1.log`:
+   expect about 35–45 minutes and about 105 GB (the November 4 runs took 24 minutes for the
+   second tables plus 12 for the other stages; decoding MBP-1 days adds a little).
+4. Check: a fresh `ingest plan GC SI` reports every contract `current`; coverage and the
+   continuous views (257 front sessions per product, 2025-11-10 to 2026-11-06; the last has
+   data only for its first hour, because the 2026-11-06 file was not available when the jobs
+   were made); the first 37 front sessions are cold
+   (`history_limited`), now starting 2025-11-10; NULL rates at each roll's first front
+   session and in September; and equality with the old rows where both exist, which can be
+   checked only if a copy of a few old partitions is kept before step 1.
+
+## Earlier results (rows built from TBBO, November 3–5)
+
+These sections are summaries; the full records, with every check and evidence file, are in
+this file's history (`git show 1d1b3ac:docs/project/handoff.md`). MBP-1 trades are the same
+records, so the findings carry over; row counts will shift by the one week the downloads
+differ (TBBO began 2025-11-01, MBP-1 2025-11-08).
 
 ## Full-scale checks (after PR C2)
 
-November 5, 2026, on `main` after #77. Evidence (outside git): `~/verify-{GC,SI}-week-after-c2.*`,
-`~/backtest-GC-*`, `~/stored-vs-backtest-*.json`, and `~/post-c2-warmup.*`.
-
-- **Live path over a week.** `research verify --sessions 5` on 2026-09-14 to 09-18: GC (92
-  trades) and SI (110) matched every one of the 235 features and every trade, whole versus
-  second by second, at about 4.1 ms per market second.
-- **Full year.** A GC backtest of 2025-11-06 to 2026-10-30 (266 sessions, 6 contracts) ran in
-  161 s with 2.6 GB; its 43 MB run loads in the UI in under a second.
-- **Warm-up gap (fixed).** Backtests replayed at most 10 warm-up sessions (default 1), so after
-  every roll `day_atr_pct` (35 sessions) and `atr_tod_log` (about 21) were NULL for 51–100% and
-  30–93% of each GC contract's trades. Backtests now warm each contract for the stored lead
-  (`warmup_sessions` unset, at most 100): both are defined at every trade, and GC 2026 takes
-  about 4 minutes instead of 137 s, with the same memory.
-- **Backtests equal storage.** Started on a roll with the stored lead, a backtest reproduces every
-  stored row of all seven stages bit for bit (GCZ6 2026-07-30, SIZ6 2026-08-28, SIK6 2026-02-26,
-  and GCG6 2025-11-26, whose lead reaches back before the data). A test keeps it so.
-- **`verify` memory.** It kept every one-second frame, 26–28 GB for a week; it now compares an
-  hour at a time and replays the warm-up whole (2.4 GB for the same week with the 40-session warm-up, whose
-  trading sessions still matched exactly: 91 GC and 110 SI trades). `rehearse` also replays the
-  warm-up whole instead of in real time.
-- **Engine ATR.** Brackets read `vol_1s.atr_price`, bit-identical to what `pipeline.FastAtr`
-  recorded, so `FastAtr` is gone (no stage identity changed; all 12 contracts stay `current`).
-- **UI.** Multi-day charts label ticks with dates and the equity chart fits every trade of a
-  long run, the inspector groups features by stage with a filter and keeps the trade summary
-  compact, and the form says "Loading products…" until the catalog arrives.
-- **Edge case left for a `source.py` rebuild.** If a download started partway through a session,
-  a backtest whose warm-up reaches before it would read that partial session while storage skips
-  it. No current download does this (all start on Saturday 2025-11-01). Fixing it means
-  separating the roll warm-up count from the warm-up list in `HistoricalSource`, and `source.py`
-  is in every stage's identity ([todo](todo.md#housekeeping)).
+November 5, on `main` after #77: `research verify` on a GC and an SI week matched every one
+of the 235 features and every trade, whole versus second by second, at about 4.1 ms per
+market second; a GC year ran in 161 s with 2.6 GB. Backtests now warm each contract for the
+stored lead, so a backtest started on a roll reproduces every stored row of all seven
+stages bit for bit (a test keeps it so); `verify` compares an hour at a time (2.4 GB for a
+week). One edge case waits for a `source.py` change: if a download started partway through a
+session, a backtest whose warm-up reaches before it would read that partial session while
+storage skips it. No download does this (MBP-1 starts on Saturday 2025-11-08)
+([todo](todo.md#housekeeping)).
 
 ## PR C2 results (second volatility)
 
-Completed November 4, 2026, from PR #77 (head `5eb19c3`, reviewed by Codex with no findings).
-`0005_second_volatility` was applied to `trading`; `ingest plan GC SI` then showed `add` for all
-12 contracts with the reason `stages without stored rows: vol_1s`, every other builder
-unchanged, and the required lead 37 sessions (`vol_1m` and `vol_1s`), inside the 40 lead. Run 6
-(`ingest run GC SI --workers 8`) ended `done` in 5 min 47 s (868 contract-sessions, about 2.5 s
-each per worker), writing only `market.vol_1s`. Builders: GC `7f8cde19881c`, SI `049a3937fafd`.
-A fresh plan reports every contract `current`.
-
-- **Coverage:** 35,774,100 GC and 35,785,800 SI rows, one per stored second; keys and `status`
-  equal `candle_1m_1s` row for row (0 differences); the continuous view holds 21,186,000 seconds
-  per product (257/257 front sessions, each second once).
-- **Reference:** an independent recomputation from the stored rows
-  (`~/ingest-gc-si-c2.reference.py`: binary COPY of `bar_1s` and `candle_1m_1s`, its own numba
-  loops, session by session): per-phase Wilder averages on the candle's windows (carried price from
-  `bar_1s`), the window path merged from `bar_1s`'s per-second drawdown, drawup, and extreme order,
-  realized volatility from the observed second closes, the time-of-day normal from the stored
-  `atr_bps` at each minute's last second, and the daily scale from `bar_1s` and the calendar. All
-  71,559,900 rows match, 57,421,787 of them complete windows: 0 NULL mismatches; averages within
-  3.6e-14 bps (seeding order); ages, order, distances, the window estimators, realized
-  volatility, the time-of-day normal, the daily ATR, and its percentile exactly (3 min 26 s).
-- **Checks:** (bull + bear) / 2 = `atr_bps` within 1e-9 relative; `atr_price` ÷ close × 1e4 equals
-  `atr_bps` bit for bit (57,416,296 complete windows); skew and percentile in range; ages 0–59;
-  high + low distances equal the range; true range at least the range; `rv_returns` = observed
-  seconds − 1 in every complete window, and `rv_bps` NULL exactly when only one second traded; no
-  stored NaN; the daily ATR constant within each session; at all 1,192,665 minute ends the daily
-  ATR, its percentile, and (complete at both resolutions) the session levels equal `vol_1m`'s: 0
-  differences.
-- **Warm and rolls:** as `vol_1m`, 37 typical sessions; 220/257 front sessions per product are
-  warm, the cold ones the first 37 downloaded (2025-11-03 to 12-23, `history_limited`), which
-  include the first roll (2025-11-26: `atr_tod_log` and `day_atr_pct` still NULL). The four later
-  rolls per product and all September sessions have 0.00% NULL `atr50_bps`, `bull_atr_bps`,
-  adverse ATR, `atr_tod_log`, `tr_atr`, `day_atr_bps`, `day_atr_pct`, `day_range_ratio`, and
-  `atr_usd`. Realized volatility is NULL only in complete windows with one traded second
-  (September: 0.22% GC, 5.72% SI; 0.00% with two or more).
-- **Distributions** (front series, every 37th second, median and 5–95%): `rv_atr` 0.68
-  (0.36–1.17 GC; SI 0.67): second-by-second volatility is about two thirds of the range-based
-  ATR; `atr_tod_log` −0.04 (−0.72–0.79 GC), wider than hourly; `bull_bear_skew` +0.006 GC, +0.001
-  SI (−0.26–0.26); long and short excursions 0.66 and 0.67 ATR GC (0.62, 0.63 SI); `tr_atr` 0.90;
-  `spread_atr` 0.15 GC, 0.23 SI: crossing the spread costs 15–23% of a typical minute's true range;
-  ages median 33 s; `1m@1s` ATR(5) 4.5 bps GC, 8.5 SI; ATR $203 GC and $291 SI per contract;
-  `rv_returns` median 19 GC, 8 SI.
-- **Size:** 24.05 GB including indexes; `vol_1s` checkpoints 159 MB over 868 sessions (mostly
-  the time-of-day buffer).
-- **Pilot first:** a throwaway database built GC 2026-07-20..08-05 with `main`, then added this
-  stage (`add`, 0.75 s per session; the same reference: 0 mismatches over 1,564,599 complete
-  windows), and rebuilt it alone when marked stale (rows and checkpoints byte-identical). A second
-  throwaway database (GC 2026-05-01..08-05, built with the branch) filled the daily and
-  time-of-day chains: 0 mismatches over 8,410,369 complete windows. Both dropped.
-- **Engine:** `research verify` on the MGC sample day matches all 235 features and 13 trades;
-  second by second 321.7 s (315.5 s before: `vol_1s` adds about 0.08 ms per second, about 3.9 ms
-  in all against the 100 ms close delay), whole session 0.69 s.
-
-Local evidence uses the prefix `~/ingest-gc-si-c2`: `.identities.py` and `.identities.txt`,
-`.plan.json`, `.log`, `.summary.json`, `.replan.json` and `.replan.txt`, `.validation.sql` and
-`.validation.txt`, `.atr-bits.txt`, `.reference.py`, `.reference.json`, and `.reference.log`,
-`.verify.json`, `.checks.log`; the pilots' are `~/ingest-pilot-c2-*`.
+PR #77, run 6: `market.vol_1s`, 35,774,100 GC and 35,785,800 SI rows in 5 min 47 s, 24 GB.
+An independent recomputation matched all 71,559,900 rows; the stage needs 37 sessions of
+warm-up, so 220 of 257 front sessions per product were warm. `rv_atr` median 0.68;
+`spread_atr` 0.15 GC and 0.23 SI: crossing the spread costs 15–23% of a typical minute's
+true range.
 
 ## PR C1 results (minute volatility)
 
-Completed November 4, 2026, from PR #76 (head `58cddfd`, reviewed by Codex with no findings).
-`0004_minute_volatility` was applied to `trading`; `ingest plan GC SI` then showed `add` for all
-12 contracts with the reason `stages without stored rows: vol_1m`, every other builder
-unchanged, and the required lead 37 sessions (`vol_1m`), inside the 40 lead. Run 5
-(`ingest run GC SI --workers 8`) ended `done` in 1 min 55 s (868 contract-sessions, about
-0.4 s each), writing only `market.vol_1m`. Builders: GC `8412ccd99b66`, SI `916bd6359326`. A
-fresh plan reports every contract `current`.
-
-- **Coverage:** 596,235 GC and 596,430 SI rows, one per stored minute; keys and `status` equal
-  `candle_1h_1m` row for row (0 differences); the continuous view holds 353,100 minutes per
-  product (257/257 front sessions, each minute once).
-- **Reference:** an independent recomputation from the stored rows
-  (`~/ingest-gc-si-c1.reference.py`): plain-Python per-phase Wilder averages on the candle's
-  windows (carried price from `bar_1m`), the window path merged from `bar_1m`'s per-minute
-  drawdown, drawup, and extreme order, the time-of-day normal from the stored `atr_bps`, and the
-  daily scale from `bar_1m` and the calendar. All 1,190,467 complete windows match: 0 NULL
-  mismatches; averages within 2.3e-13 bps (seeding order), the daily ATR, its percentile, the
-  time-of-day normal, ages, order, distances, and the window estimators exactly.
-- **Checks:** (bull + bear) / 2 = `atr_bps` within 1e-9 relative everywhere; `atr_price` equals
-  `atr_bps` × close bit for bit (1,181,110 complete windows); skew and percentile in range;
-  ages 0–3599 and equal to 3599 × (1 − `stats_1h_1m.high_pos`/`low_pos`); high + low distances
-  equal the range; excursions at least the window's drawdown and drawup; true range at least
-  the range; the daily ATR constant within each session: 0 violations.
-- **Warm and rolls:** the stage needs 37 typical sessions (the daily percentile's 35 sessions as
-  whole days); 220/257 front sessions per product are warm, the cold ones the first 37
-  downloaded (2025-11-03 to 12-23, `history_limited`), which include the first roll
-  (2025-11-26: `atr_tod_log` and `day_atr_pct` still NULL). The four later rolls per product and
-  all September sessions have 0.00% NULL `atr50_bps`, `bull_atr_bps`, adverse ATR,
-  `atr_tod_log`, `tr_atr`, `day_atr_bps`, `day_atr_pct`, `day_range_ratio`, and `atr_usd`.
-- **Distributions** (front series, median and 5–95%): `atr_tod_log` −0.05 (−0.57–0.49 GC): the
-  hourly ATR typically sits within a factor of 1.7 of its time-of-day normal; `day_range_ratio`
-  0.58 (0.14–1.41); `bull_bear_skew` +0.04 GC, +0.03 SI (−0.24–0.29): declines from P₀ slightly
-  larger than rallies; long and short excursions 0.67 and 0.68 ATR; `tr_atr` 0.87; `spread_atr`
-  0.016 GC, 0.024 SI; daily ATR 230 bps GC, 484 SI; hourly ATR $1,869 GC and $2,910 SI per
-  contract.
-- **Size:** 0.42 GB including indexes; `vol_1m` checkpoints 156 MB over 868 sessions (the
-  time-of-day buffer, 1,440 × 20 values each).
-- **Pilot first:** a throwaway database built GC 2026-07-20..08-05 with `main`, then added this
-  stage (`add`, 0.4 s per session; the same reference: 0 mismatches over 28,862 windows), and
-  rebuilt it alone when marked stale (rows and checkpoints byte-identical). A second throwaway
-  database (GC 2026-05-01..08-05, built with the branch) filled the daily and time-of-day chains:
-  0 mismatches over 175,203 windows. Both dropped.
-- **Engine:** `research verify` on the MGC sample day matches all 207 features and 13 trades;
-  second by second 315.5 s (317 s before), whole session 0.67 s.
-
-Local evidence uses the prefix `~/ingest-gc-si-c1`: `.plan.json`, `.log`, `.summary.json`,
-`.replan.txt`, `.validation.sql` and `.validation.txt`, `.reference.py` and `.reference.json`,
-`.verify.json`, `.checks.log`; the pilots' are `~/ingest-pilot-c1-*`.
+PR #76, run 5: `market.vol_1m`, 596,235 GC and 596,430 SI rows in 1 min 55 s, 0.42 GB. All
+1,190,467 complete windows matched an independent recomputation. The daily ATR percentile
+sets the 37-session warm-up.
 
 ## PR B2 results (hourly statistics)
 
-Completed November 4, 2026, from PR #75 (head `7d2354d`, reviewed by Codex with no open
-findings). `0003_hour_stats` was applied to `trading`; `ingest plan GC SI` then showed `add`
-for all 12 contracts with the reason `stages without stored rows: stats_1h_1m`, and every
-other builder unchanged. Run 4 (`ingest run GC SI --workers 8`) ended `done` in 1 min 55 s
-(868 contract-sessions, about 0.4 s each), writing only `market.stats_1h_1m`; the other
-stages' records still come from runs 1–3. Builders: GC `ff6a1ea7fbf0`, SI `072c5a033422`.
-A fresh plan reports every contract `current`.
-
-- **Coverage:** 596,235 GC and 596,430 SI rows, one per stored minute; keys and `status`
-  equal `candle_1h_1m` row for row (0 differences); the continuous view holds 353,100 minutes
-  per product (257/257 front sessions, each minute once).
-- **Reference:** an independent recomputation from the stored rows
-  (`~/ingest-gc-si-b2.reference.py`): realized volatility from `bar_1s`'s observed one-second
-  closes, the return statistics, correlation, extreme positions, session VWAP, and previous
-  session's levels from `bar_1m` and the calendar, distances from `candle_1h_1m`'s ATR.
-  All 1,190,467 complete windows match: 0 NULL mismatches, largest difference 2e-9 bps
-  (`rv_bps`, prefix-sum rounding), the levels and positions exactly.
-- **Warm and rolls:** the stage needs 5 sessions (hourly ATR(14)); 252/257 front sessions per
-  product are warm, the cold ones the first five downloaded (2025-11-03 to 11-07,
-  `history_limited`). The first front session of each later roll and all September sessions
-  have 0.00% NULL `rv_atr`, `vr_5`, `drawdown_atr`, `session_vwap_atr`, `prior_close_atr`, and
-  `cvd_close_corr` among complete windows.
-- **Bounds:** positions in 0–1, ratios in range, drawdown and drawup within the window's range
-  (via `atr_bps` and `range_bps`), previous close between its low and high: 0 violations.
-- **Distributions** (front series, complete windows, median and 5–95%): `rv_atr` 0.65
-  (0.41–1.17 GC); `vr_5` 0.89 (0.52–1.46) and `ret_autocorr` −0.05: one-minute returns
-  mean-revert slightly within the hour; `cvd_close_corr` 0.61 (−0.48–0.95): price follows net
-  aggression; `drawdown_atr` and `drawup_atr` 0.67; `up_minute_ratio` 0.50. SI matches GC in
-  ATR units, with about twice the realized volatility in bps (59 vs 28).
-- **Size:** 0.35 GB including indexes.
-- **Pilot first:** a throwaway database built GC 2026-07-20..08-05 with `main`, then added this
-  stage (`add`, 0.5 s per session; the same reference: 0 mismatches over 28,862 windows), and
-  rebuilt it alone when marked stale (byte-identical). Dropped afterwards.
-- **Engine:** `research verify` on the MGC sample day matches all 181 features and 13 trades.
-
-Local evidence uses the prefix `~/ingest-gc-si-b2`: `.plan.json`, `.log`, `.summary.json`,
-`.validation.sql` and `.validation.txt` (SQL checks), `.reference.py` and `.reference.json`;
-the pilot's are `~/ingest-pilot-b2-*`.
+PR #75, run 4: `market.stats_1h_1m`, one row per stored minute in 1 min 55 s, 0.35 GB; all
+complete windows matched a reference. One-minute returns mean-revert slightly within the
+hour (`vr_5` 0.89), and price follows net aggression (`cvd_close_corr` 0.61).
 
 ## PR B1 results (minute stages)
 
-Completed November 4, 2026, from PR #74 (commit `01d6468`). `0002_minute_rows` was applied
-to `trading`, then `ingest plan GC SI` showed `add` for all 12 contracts (stages without
-stored rows: `bar_1m`, `candle_1h_1m`) with the second-stage builders unchanged. Run 3
-(`ingest run GC SI --workers 8`) ended `done` in 2 min 29 s, writing only the minute
-tables; the second tables' stage records still come from runs 1 and 2. Builders: GC `bar_1m`
-`41967a31250d`, `candle_1h_1m` `5cd0de07564d`; SI `bar_1m` `026f53219f72`, `candle_1h_1m`
-`5f2db22f0c45`.
-
-- **Coverage:** 596,235 GC and 596,430 SI minutes in each minute table, exactly the stored
-  seconds ÷ 60; no missing minutes; the continuous minute views hold 353,100 minutes per
-  product (257/257 front sessions, every scheduled minute once). A fresh plan reports every
-  contract `current`.
-- **Equal to the second rows:** every minute equals the `candle_1m_1s` row at ordinal `60m`
-  on OHLC, high/low times, volume, sides, trades, observed seconds, delta extremes, VWAP, and
-  status, and `bar_1s.session_cvd` there: 0 differences (SQL over the whole year). For all
-  868 sessions, every metric field, `observed_seconds`, and `session_cvd` equal
-  `MetricWindow(60)` computed from the stored second rows at each minute end (1,192,665
-  minutes, 0 failures).
-- **Warm and rolls:** `candle_1h_1m` needs 10 sessions (217 hourly periods: ADX). 247/257
-  front sessions per product are warm; the cold ones are the first 10 downloaded sessions
-  (2025-11-03 to 11-14, GCZ5 and SIZ5, `history_limited`). The first session of each of the
-  five later rolls per product (GC: GCG6 through GCZ6 on July 30; SI: SIH6 through SIZ6) is
-  warm with 0.00% NULL `rsi`, `ema50_atr`, `adx`, `aroon_up`, and `macd_signal_atr`, as are
-  all September front sessions.
-- **Size:** `bar_1m` 0.62 GB and `candle_1h_1m` 1.05 GB including indexes.
-- **Pilot first:** a throwaway database built GC 2026-07-20..08-05 with `main`, then added the
-  minute stages with this code (`add`, 0.5 s per session) and rebuilt a stale `bar_1m` alone:
-  0 differences, second rows untouched. Dropped afterwards.
-- **Engine:** `research verify` on the MGC sample day matched all 165 features and 13 trades;
-  second by second took 350 s (about 4 ms per second, 54 s before), whole session 0.93 s.
-
-Local evidence uses the prefix `~/ingest-gc-si-b1`: `.plan.json`, `.log`, `.summary.json`,
-`.validation.txt` (SQL checks), and `.reference.json` (the `MetricWindow(60)` check); the
-pilot's are `~/ingest-pilot-b1-*`.
+PR #74, run 3: `market.bar_1m` and `market.candle_1h_1m` in 2 min 29 s, 1.7 GB; every minute
+equals the `candle_1m_1s` row at ordinal `60m`. `candle_1h_1m` needs 10 sessions (ADX).
 
 ## Baseline rebuild (GC and SI)
 
-Completed November 4, 2026, after merging PR #72 (`f268369`). Paul explicitly authorized
-resetting the experimental database. The four project schemas were dropped, `0001_baseline`
-applied unchanged, and all 2,182 files registered. Before the reset, every file passed its
-size/checksum verification (7.28 GB, no missing files); the migration and registry tests
-passed on throwaway databases.
-
-The initial 8-worker ingest completed 11 contracts, but SIU6 stalled in its first
-`candle_1m_1s` COPY. Its PostgreSQL connection was waiting for client data while the client
-was polling; the cause is not established. Only that connection was terminated, rolling
-back its unfinished session. The first run ended `partial` after 14 min 47 s. Rerunning
-`ingest run GC SI --workers 1` left the 11 completed contracts current and built only SIU6's
-84 sessions; the retry ended `done` after 3 min 29 s, including ANALYZE. No source or stage
-code was changed to recover.
-
-- **Coverage:** 12 contracts, 868 contract-sessions, 71,559,900 rows in each second table;
-  257/257 front sessions published per product; zero missing scheduled rows. A fresh
-  `ingest plan GC SI` reports every contract `current`.
-- **Warm-up and roll:** only the first downloaded front session, 2025-11-03, is not warm
-  for `candle_1m_1s`, in both products. July 30 switches GCQ6 to GCZ6; RSI, ATR, EMA(21),
-  and Aroon are defined throughout the two surrounding sessions.
-- **Feature completeness:** September front-session NULL rates are 0.00% for `rsi`,
-  `ema50_atr`, `aroon_up`, and `flow_price_corr`, in both products.
-- **Exact replay:** GCZ6 2026-09-15 and SIK6 2026-03-16, restored from their previous
-  stage checkpoints and recomputed from DBN, match binary COPY output exactly for all
-  70 base-stage columns and 105 candle-stage columns (82,800 rows per stage/session).
-- **Quality:** stored source conditions match the file registry, including the degraded
-  files on 2025-11-28, 2026-03-16, and 2026-04-10.
-- **Size:** fresh partitions including indexes: `bar_1s` 21.28 GB,
-  `candle_1m_1s` 61.79 GB, 83.07 GB total (decimal).
-  No `VACUUM FULL` was needed.
-
-Local evidence uses the prefix `~/ingest-gc-si-baseline-20261104`: `.log` and
-`.summary.json` for the initial partial run, `-resume.log` and `-resume.summary.json` for
-the completed retry, `.plan.json`, `.validation.json`, and `.parity-GC.json` / `.parity-SI.json`.
-Run #2's older `ingest-gc-si-pra` logs were removed after verification.
+November 4, with Paul's authorization to reset the experimental database: the four project
+schemas were dropped, `0001_baseline` applied, 2,182 files registered, and GC and SI built:
+12 contracts, 868 contract-sessions, 71,559,900 rows per second table, 83 GB, 257/257 front
+sessions per product. One contract (SIU6) stalled in a COPY for an unknown reason and was
+rebuilt alone with `--workers 1`; no code changed.
 
 ## Rebuild with stages (GC and SI)
 
-Historical run #2, replaced by the [baseline rebuild](#baseline-rebuild-gc-and-si),
-which reproduces its coverage and validation results.
-Completed November 4, 2026, from PR #70 (commit `ca6cb53`) after migration `0004` was applied
-to `trading`. Run #2 (`ingest run GC SI --rebuild --workers 8`) exited 0 with `"status":
-"done"` in 1,423.9 s (23 min 44 s; the database records 23 min 42 s). Builders: GC source
-`97980d7123bb`, `bar_1s` `5010f3903b79`, `candle_1m_1s` `383c6f3de161`; SI source
-`117dedfecf0c`, `bar_1s` `6654ce9b0405`, `candle_1m_1s` `e2185053e1a6`.
-
-- **Coverage:** lead 40 sessions (derived; the candle stage alone needs 1); 12 contracts,
-  868 contract-sessions (434 per product), 71,559,900 rows in **each** table; 257/257 front
-  sessions per product published; a fresh plan reports every contract `current`.
-- **Warm:** every front session's candle stage is warm except the first downloaded one,
-  2025-11-03, in each product. GCZ5, GCG6, SIZ5, and SIH6 start at the download start and
-  report `history_limited`.
-- **Carried prices:** September 2026 NULL rates on the continuous series are now 0.00% for
-  `rsi`, `ema50_atr`, `aroon_up`, and `flow_price_corr` in both products (SI before: 5.74%,
-  3.18%, 30.83%, 28.12%; SI windows without trades: 3.18%).
-- **Parity:** recomputing GCZ6 2026-09-15 and SIK6 2026-03-16 (a degraded day) from the
-  stored stage checkpoints reproduces every stored column of both stages.
-- **Roll:** July 30 switches GCQ6 to GCZ6 with `rolled = true`; RSI, ATR, EMA(21), and Aroon
-  are defined in all 82,800 rows of both sessions.
-- **Quality:** the sessions reading the 2025-11-28, 2026-03-16, and 2026-04-10 files keep
-  their `degraded` conditions, with no missing rows.
-- **Size:** after `VACUUM (FULL, ANALYZE)` of each partition (10 min; the rebuild had left
-  46.5 million replaced rows per table), `bar_1s` 20.11 GB and `candle_1m_1s` 60.73 GB,
-  80.84 GB total (decimal). Free disk: 212 GiB.
-
-Run #2 logs were removed after the baseline rebuild passed verification. A rebuild
-replaces rows session by session; compact afterwards with `VACUUM (FULL, ANALYZE)` per
-partition when the replaced rows are not reused soon.
+Run #2 (PR #70), replaced by the baseline rebuild: 23 min 44 s with 8 workers.
 
 ## Running ingestion
 
@@ -530,6 +393,7 @@ fixing the cause and rerunning `ingest run GC SI` resumes where it stopped.
 All stored rows can be rebuilt from the DBN files (`--rebuild`), so a failure never needs
 manual database repair.
 
+
 ## Decisions
 
 The core rules above, plus:
@@ -537,29 +401,30 @@ The core rules above, plus:
 | Decision                                                                                             | Why                                                                                                                             | Details                                                                          |
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Prototype with GC and SI                                                                             | Liquid, and far smaller than NQ or ES (GC 32M and SI 13M trades a year against NQ's 103M)                                       | [Data](data.md#what-we-have)                                                     |
-| TBBO only, the same rules for every product                                                          | Budget and consistency. Trades are exact; the book is seen only at trades, so fills carry 1–2 ticks of uncertainty in GC and SI | [Data limits](engine.md#data-limits-tbbo-only)                                   |
+| MBP-1 only, the same rules for every product (November 15, 2026, replacing TBBO) | The same trades, plus every change to the best bid and ask, so an order fills at the book it would have met and its cost is measured. The price is size: 123 GB a year for six products | [Data limits](engine.md#data-limits-mbp-1) |
 | DBN files are the permanent archive; PostgreSQL holds everything derived                             | Every stored value can be rebuilt or extended; SQL for research; no Parquet layer                                               | [Data](data.md#storage), [storage](../../lib/db-research/README.md)              |
 | Store each second's base row and its `1m@1s` candle with features; NULL when undefined, never zero   | Research and ML read compiled rows; base rows stay mergeable into any window; missing, quiet, and invalid stay distinct         | [Ingestion](ingestion.md)                                                        |
 | Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk space is not a concern                                            | [Measured](ingestion.md#measured)                                                |
-| Event-time assignment and per-phase indicators confirmed against the TBBO handoff (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)                         |
+| Event-time assignment and per-phase indicators confirmed against the trade-metrics reference (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)                         |
 | A builder identity per stage covers its code, settings, packages, columns, and inputs (PR A)         | Rows never mix code versions; a changed stage and those reading it are `stale`, the others stay current, new stages are added   | [Ingestion](ingestion.md#what-the-plan-decides), [pipeline](feature-pipeline.md) |
-| Conservative TBBO fills (pre-trade book, trade-through targets, stops never better than the trigger) | Realistic second-scale costs; every setting is recorded with the run                                                            | [Timing model](engine.md#timing-model)                                           |
+| Fills at the MBP-1 book the order meets (market orders at arrival, stops at the book their trigger left and never better than it, trade-through targets) | Costs are what the book showed, not an estimate; every setting is recorded with the run | [Timing model](engine.md#timing-model) |
 | Databento `definition` records for contract metadata                                                 | Free for this data; expirations, tick sizes, and multipliers                                                                    | [Data](data.md#what-we-have)                                                     |
 | uv with Python 3.13, numba, psycopg 3, numbered SQL migrations; `research-web` is the only UI        | Reproducible environments, fast batch runs, simple schema history; checking backtest logic matters most now                     | [README](../../README.md), [UI](metric-explorer.md)                              |
+
 
 ## Run it
 
 ```sh
 pnpm deps:install && pnpm dev            # UI http://127.0.0.1:4400
-uv run research catalog --verify         # DBN files against their checksums
+uv run research catalog --verify         # DBN files against their checksums (123 GB: minutes)
 uv run research db migrate               # schema migrations
 uv run research ingest plan GC SI        # what would be stored; then: run GC SI, status
 uv run research backtest apps/backtest-runner/examples/gc.json
-uv run research verify apps/backtest-runner/examples/mgc-sample.json
+uv run research verify apps/backtest-runner/examples/gc-day.json
 pnpm lint && pnpm test && pnpm build
 ```
 
-After downloading TBBO files, add the job folder under `data/databento/tbbo/` unchanged,
+After downloading MBP-1 files, add the job folder under `data/databento/mbp-1/` unchanged,
 then `catalog --verify` and `ingest run`: contracts are extended from their checkpoints and
 changed files are rebuilt ([new downloads](ingestion.md#run-it)).
 
@@ -767,31 +632,26 @@ interrupted, so keep scripts and evidence under `~/ingest-<name>.*`; `research v
 about 6 minutes; `~/.agents/skills/git-management/scripts/pr-context.py` reports whether
 Codex's review covers the head.
 
+
 ## Next steps
 
-The order and decisions (November 3, 2026) are in the
-[plan for stages, `1h@1m`, and pivots](plan-1h-and-pivots.md):
+The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
+([plan](plan-1h-and-pivots.md#6-decisions)):
 
-1. **Stages (PR A)**: done (PR #70): per-stage tables, versions, and checkpoints, the derived
-   lead, carried prices, and the path fields; GC and SI rebuilt
-   ([results](#rebuild-with-stages-gc-and-si)).
-2. **Baseline rebuild**: done ([results](#baseline-rebuild-gc-and-si)).
-3. **`1h@1m` rows (PR B)**: done: B1 (PR #74) and B2 (PR #75)
-   ([details](#pr-b-1h1m-rows)).
-4. **Volatility tier (PR C)** ([details](#pr-c-volatility-tier)): done: C1 `vol_1m` (PR #76) and
-   C2 `vol_1s` (PR #77)
-   ([plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).
-5. **Swing structure (PRs D–F), next**: directional-change pivots at 0.5, 1, and 2 ATRs on both
-   resolutions with higher/lower highs and lows (D), structure signals (E), then outcome
-   labels and the benchmark (F).
-6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
+1. **Rebuild from MBP-1** ([how](#rebuilding-from-mbp-1)), once authorized.
+2. **Swing structure (PR D)**: directional-change pivots at 0.5, 1, and 2 ATRs on both
+   resolutions with higher/lower highs and lows, after the storage question in
+   [Start here](#start-here-next-session) is settled.
+3. **Labels and the benchmark (PR F), the reversal model, structure signals (PR E).**
+   Recommended: F before E ([roadmap](roadmap.md#next)); Paul decides.
+4. **Book stage `book_1s`** (tier 0, from book events) and **`pair_1m`** for GC + SI.
+5. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).
-7. **Backtests read stored rows** when the builder matches, so their roll warm-up equals
-   storage, for speed only: warming each contract for the stored lead already gives the stored
-   values and takes about a third of a year's run.
-8. **Contract definitions**: download the free `definition` job into
+6. **Backtests read stored rows** when the builder matches, for speed only.
+7. **Contract definitions**: download the free `definition` job into
    `data/databento/definition/` (needs the account owner) and load expirations.
+8. **NQ**: download its MBP-1 year when disk allows (about 50 GB), then ES + NQ as a pair.
 
 Pivot work: the [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design) sets the
 observations (the trade path, published per second and per minute), thresholds, segments,
@@ -802,10 +662,16 @@ remain unimplemented and unvalidated on GC/SI.
 
 ## Open questions
 
-1. When to add PL, YM, RTY, ES, and NQ? At the current width and the 40-session lead, the
-   second tables need about 50 GB per product-year (102 GB for GC and SI on November 5, 211 GB
-   free); disk is not a constraint (Paul), so space is added as needed.
-2. Which unstored handoff metrics to add first, and which training outcome to use
+1. **Disk.** The archive is 123 GB and the database 102 GB, with 47 GB free on a 926 GB
+   disk. NQ (about 50 GB), `pivot_1s` at three scales (50–75 GB), `book_1s`, and any third
+   product do not fit. Options: an external or larger disk for the DBN archive (it is read
+   sequentially and rarely), storing fewer second-resolution tables, or building products
+   in turn. The November 3 decision "disk is not a constraint" no longer holds.
+2. **Order of E and F**, and whether the reversal model's output should feed the structure
+   signals ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)).
+3. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
+   RTY could pair with ES before NQ arrives.
+4. Which unstored reference metrics to add first, and which training outcome to use
    (simulated bracket trade or fixed-horizon return)?
 
 ## Things to know
@@ -819,18 +685,22 @@ remain unimplemented and unvalidated on GC/SI.
   `stages.py`, `columns.py`, `state.py`, `warmup.py`, or `codec.py`) makes that stage and
   every stage reading it `stale`; the second tables (about 100 GB) then need a rebuild. Run
   `ingest plan GC SI` before merging such edits, and batch them into one planned rebuild.
-- TBBO shows the book only at trades. In quiet SI seconds (80% of them) the book is as old
-  as the last trade; features carry that age (`trade_age_s`; `book_age_s` and `depth_age_s`
-  for the last trade with a usable book and displayed sizes). At random moments in
-  September 2026 the next SI trade came a median 5.9 s later (GC 1.7 s). Fill safeguards
-  are specified in [todo.md](todo.md#later-refinements-after-the-core-is-tested).
+- The stored rows describe the book only as trades saw it. In quiet SI seconds (80% of
+  them) that book is as old as the last trade; features carry that age (`trade_age_s`;
+  `book_age_s` and `depth_age_s` for the last trade with a usable book and displayed
+  sizes). Fills do not have this limit: they read every book event. The `book_1s` stage
+  will give features the same view.
+- Book events are about 20 to 60 times the trades (GC 2.4 million records a day, ES 8.7
+  million). A session's book for one contract takes about 0.2 GB in memory for GC; a
+  backtest loads it only for sessions that trade, never for warm-up sessions.
 - CVD needs an origin: rows store per-second net delta and its extremes, and
   `session_cvd` from the session open (NULL after missing data). Unknown-side volume
   (about 3% in metals, spread legs) stays out of it.
 - Data quality: 2025-11-28 (CME outage) and six other dates are `degraded`; on that day
   most NQ, YM, and RTY records flag a possibly wrong book. Stored rows record each file's
   condition and flagged trades per second.
-- There is no queue model for limit orders, and no live data or broker adapter yet.
+- There is no queue model for limit orders (that needs MBO), and no live data or broker
+  adapter yet.
 
 ## Environment
 

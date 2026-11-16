@@ -68,8 +68,8 @@ export interface Summary {
   profit_factor: number | null;
   max_drawdown_usd: number;
   avg_hold_s: number | null;
-  entry_delay_ms_p50: number | null;
-  entry_delay_ms_p90: number | null;
+  entry_slip_ticks_avg: number | null;
+  entry_slip_ticks_p90: number | null;
   exit_reasons: Record<string, number>;
 }
 export interface Trade {
@@ -93,6 +93,8 @@ export interface Trade {
   mae_ticks: number;
   hold_s: number;
   entry_delay_ms: number;
+  decision_spread_ticks: number | null;
+  entry_slip_ticks: number | null;
   flags: string[];
   features: Record<string, number | null>;
 }
@@ -109,7 +111,7 @@ export interface Candidates {
   win_rate?: number;
   avg_usd?: number;
   avg_r?: number | null;
-  entry_delay_ms_p50?: number;
+  entry_slip_ticks_avg?: number | null;
   exit_reasons?: Record<string, number>;
 }
 export type Quality = Record<string, number | null>;

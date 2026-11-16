@@ -130,7 +130,7 @@ export function RunForm({
           {product
             ? `$${product.tick_value} per ${product.tick_size} tick · ${product.calendar}`
             : loaded
-              ? "No TBBO files found under data/."
+              ? "No MBP-1 files found under data/."
               : "Loading products…"}
         </p>
         <label>

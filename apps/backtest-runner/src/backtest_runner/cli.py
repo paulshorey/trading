@@ -9,7 +9,7 @@ import psycopg
 def main() -> None:
     parser = argparse.ArgumentParser(prog="research", description="Trading research runner")
     sub = parser.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("catalog", help="List products and dates with TBBO files on disk")
+    p = sub.add_parser("catalog", help="List products and dates with MBP-1 files on disk")
     p.add_argument("--verify", action="store_true", help="Check every file's size and SHA-256")
     p = sub.add_parser("backtest", help="Run a spec as fast as possible and save the result")
     p.add_argument("spec", type=Path)

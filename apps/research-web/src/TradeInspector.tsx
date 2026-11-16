@@ -99,7 +99,8 @@ export function TradeInspector({ run, index }: { run: Run; index: number }) {
           <p className="hint">
             Signal second ended {utc(trade.signal_end_ns)} · decision{" "}
             {utc(trade.decision_ns)} · filled {utc(trade.entry_ns)} (
-            {num(trade.entry_delay_ms, 0)} ms later) · exit {utc(trade.exit_ns)}{" "}
+            {num(trade.entry_delay_ms, 0)} ms later, {num(trade.entry_slip_ticks, 1)}{" "}
+            ticks from the mid-price at the decision) · exit {utc(trade.exit_ns)}{" "}
             · UTC
           </p>
         </div>

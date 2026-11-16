@@ -1,5 +1,5 @@
-"""Per-second TBBO metrics beyond OHLCV: aggressor flow detail, trade sizes, the price path,
-sweeps, and the pre-trade book sampled at trades (TBBO handoff, sections 5-6 and
+"""Per-second trade metrics beyond OHLCV: aggressor flow detail, trade sizes, the price path,
+sweeps, and the pre-trade book sampled at trades (trade-metrics reference, sections 5-6 and
 Appendix A; see docs/project/ingestion.md for the implemented list).
 
 Each accepted trade is classified into the handoff's validity subsets:

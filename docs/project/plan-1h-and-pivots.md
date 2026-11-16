@@ -77,7 +77,7 @@ minute is an unknown. The current code treats both as "unknown". The NULLs also
 cluster in quiet hours, so an ML model trained on complete rows would see mostly busy
 markets.
 
-The TBBO handoff ([§4.2](tbbo-engineering-handoff.md)) recommended a carried
+The trade-metrics reference ([§4.2](trade-metrics-reference.md)) recommended a carried
 _analysis close_. A healthy empty window keeps the last trade price as its indicator
 input, so it contributes zero change. It stays flagged, and its age is recorded. Its
 observed OHLC stays NULL, and nothing is ever carried across missing data. The

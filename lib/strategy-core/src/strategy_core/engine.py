@@ -1,7 +1,7 @@
 """One event-time engine for backtests and live sessions.
 
-The engine consumes `MarketChunk`s: a session's trades at once in a backtest, or one
-second's trades as they arrive in a live or rehearsal session. Both paths run the same
+The engine consumes `MarketChunk`s: a session's trades and book events at once in a
+backtest, or one second's as they arrive in a live or rehearsal session. Both paths run the same
 code and must produce identical features, decisions, and fills; tests and the
 `research verify` command check this. A run is one portfolio: one position at a time.
 """
@@ -10,10 +10,19 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from .bars import AggregationReport, aggregate, assignment_times
-from .execution import ExecutionConfig, ExecView, Position, Simulator
+from .bars import AggregationReport, aggregate, assignment_ns
+from .execution import (
+    CANCELLED,
+    WAIT,
+    BookView,
+    ExecutionConfig,
+    ExecView,
+    Position,
+    Quote,
+    Simulator,
+)
 from .features import FeatureConfig, FeatureFrame
-from .market import SECOND, Product, SessionCalendar, Trades
+from .market import SECOND, BookEvents, Product, SessionCalendar, Trades
 from .strategies import Strategy
 
 
@@ -21,7 +30,11 @@ from .strategies import Strategy
 class MarketChunk:
     """One contract's trades assigned to the scheduled slots ending in `(start, end]`, in
     receive order. A session chunk also carries trades assigned to the closure before it;
-    aggregation reports those as outside the schedule and execution ignores them."""
+    aggregation reports those as outside the schedule and execution ignores them.
+
+    `book` holds every MBP-1 record assigned to the same slots (the closure's records set the
+    opening book). Stages read `trades`; simulated fills read `book`, so a tradable chunk
+    needs it and a warm-up chunk does not."""
 
     contract: str
     start: int
@@ -30,6 +43,7 @@ class MarketChunk:
     coverage: np.ndarray  # (n, 2) int64 [start, end) intervals with data
     session: str = ""
     tradable: bool = True  # False for warmup chunks
+    book: BookEvents | None = None
 
 
 @dataclass
@@ -60,7 +74,8 @@ class Engine:
         self.now = 0  # latest time the engine knows the position state for
         self.cooldown_until = 0
         self.ts_floor = 0
-        self.last: tuple | None = None  # (view, index): latest trade after the open entry
+        self.book_floor = 0
+        self.quote: Quote | None = None  # the book after the latest event of earlier chunks
         self.trades: list[dict] = []
         self.cancelled = 0
         self.signals = 0
@@ -90,23 +105,37 @@ class Engine:
             signals[~np.isfinite(frame.context["atr"])] = 0
         self.signals += int(np.count_nonzero(signals))
         view = ExecView.from_aggregation(
-            chunk.trades, agg.order, agg.slot_end, c.close_delay, self.ts_floor
+            chunk.trades,
+            agg.order,
+            agg.slot_end,
+            c.close_delay,
+            self.book_view(chunk, ends),
+            chunk.end,
+            self.ts_floor,
         )
         if view.n:
             self.ts_floor = int(view.ts_max[-1])
         closed = self.execute(view, frame, signals)
-        self.remember_last_trade(view)
+        if view.book.n:
+            self.book_floor, self.quote = int(view.book.ts_max[-1]), view.book.last
         return ChunkResult(frame, signals, view, closed)
 
-    def remember_last_trade(self, view: ExecView) -> None:
-        """While a position is open, keep the latest trade at or after its entry across chunks,
-        so an end-of-data or roll close never prices against an earlier trade (receive order
-        can deliver late, earlier-timestamped trades in a later chunk)."""
-        if self.position is None or not view.n:
-            return
-        after = np.flatnonzero(view.t.ts_event >= self.position.entry_ns)
-        if len(after):
-            self.last = (view, int(after[-1]))
+    def book_view(self, chunk: MarketChunk, ends: np.ndarray) -> BookView:
+        """The chunk's book events by slot, then receive order, as a live session releases
+        them. A chunk without a book (a warm-up session) leaves no book to carry forward."""
+        book = chunk.book
+        if book is None:
+            if chunk.tradable and (self.signals or self.pending or self.position):
+                raise ValueError(f"Tradable chunk {chunk.session!r} has no book events to fill at")
+            self.quote = None
+            return BookView.empty()
+        if not len(book) or not len(ends):
+            return BookView.empty(self.quote)
+        c = self.config
+        assign = assignment_ns(book.ts_event, book.ts_recv, c.feed_latency, c.close_delay)
+        slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
+        order = np.argsort(slot, kind="stable")
+        return BookView(book.take(order), ends[slot[order]], self.quote, self.book_floor)
 
     def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:
         closed: list[dict] = []
@@ -115,15 +144,15 @@ class Engine:
         j = 0
         while True:
             if self.pending is not None:
-                k = self.sim.fill(view, j, self.pending)
-                if k == view.n:
+                status, known = self.sim.fill(view, self.pending)
+                if status == WAIT:
                     break
-                if k < 0:  # cancelled at the forced-exit time
+                if status == CANCELLED:  # at the forced-exit time, or no book to fill at
                     self.cancelled += 1
-                    self.now = self.pending.force_exit_ns
+                    self.now = max(self.now, known)
                     self.pending = None
                     continue
-                self.position, self.pending, j = self.pending, None, k + 1
+                self.position, self.pending = self.pending, None
                 continue
             if self.position is not None:
                 j, trade = self.sim.advance(view, j, self.position)
@@ -145,6 +174,7 @@ class Engine:
                 int(frame.end[i]),
                 float(frame.context["atr"][i]),
                 frame.row(i),
+                view,
             )
             self.now = self.pending.decision_ns
         self.trades.extend(closed)
@@ -157,7 +187,8 @@ class Engine:
         self.contract = contract
         self.contracts.append(contract)
         self.pipeline = self.features()
-        self.ts_floor = 0
+        self.ts_floor = self.book_floor = 0
+        self.quote = None
 
     def features(self):
         """A new contract's feature rows, from the stage graph that also computes stored rows."""
@@ -172,16 +203,12 @@ class Engine:
         )
 
     def abandon(self, reason: str) -> None:
-        """Close an open position at the book of the latest trade after its entry (end of data
-        or roll)."""
+        """Close an open position at the latest book held (end of data or roll)."""
         if self.pending is not None:
             self.cancelled += 1
             self.pending = None
-        if self.position is not None and self.last is not None:
-            view, k = self.last
-            trade = self.sim.close(view, k, self.position, reason, None)
-            trade["flags"] = sorted({*trade["flags"], "abandoned"})
-            self.trades.append(trade)
+        if self.position is not None:
+            self.trades.append(self.sim.abandon(self.position, self.quote, reason))
             self.position = None
 
     def finish(self) -> dict:
@@ -207,7 +234,7 @@ def summarize(trades: list[dict], signals: int, cancelled: int) -> dict:
     pnl = np.array([t["pnl_usd"] for t in trades])
     ticks = np.array([t["pnl_ticks"] for t in trades])
     r = np.array([t["r_multiple"] for t in trades if t["r_multiple"] is not None])
-    delays = [t["entry_delay_ms"] for t in trades]
+    slips = [t["entry_slip_ticks"] for t in trades if t["entry_slip_ticks"] is not None]
     wins, losses = pnl[pnl > 0].sum(), -pnl[pnl < 0].sum()
     curve = np.cumsum(pnl)
     drawdown = float(np.max(np.maximum.accumulate(np.r_[0, curve]) - np.r_[0, curve]))
@@ -228,10 +255,10 @@ def summarize(trades: list[dict], signals: int, cancelled: int) -> dict:
         "profit_factor": float(wins / losses) if losses > 0 else None,
         "max_drawdown_usd": drawdown,
         "avg_hold_s": float(np.mean([t["hold_s"] for t in trades])) if trades else None,
-        # Signal end to entry fill. TBBO shows the book only at trades, so long delays mean the
-        # fill price is the book at the next trade, not at order arrival (see engine.md).
-        "entry_delay_ms_p50": float(np.percentile(delays, 50)) if trades else None,
-        "entry_delay_ms_p90": float(np.percentile(delays, 90)) if trades else None,
+        # Entry price against the mid-price held at the decision, in ticks: half the spread
+        # plus the market's move while the order travelled (see engine.md).
+        "entry_slip_ticks_avg": float(np.mean(slips)) if slips else None,
+        "entry_slip_ticks_p90": float(np.percentile(slips, 90)) if slips else None,
         "exit_reasons": reasons,
     }
 
@@ -240,17 +267,25 @@ def split_by_second(
     chunk: MarketChunk, calendar: SessionCalendar, config: ExecutionConfig
 ) -> list[MarketChunk]:
     """Cut a session chunk into the one-second chunks a live session would process. The slot
-    ending at T closes at T + close_delay and releases the trades assigned to it; a trade
-    received early for a later slot waits for that slot."""
+    ending at T closes at T + close_delay and releases the trades and book events assigned to
+    it; a record received early for a later slot waits for that slot."""
     ends = calendar.slot_ends(chunk.start, chunk.end, SECOND)
     if not len(ends):
         return []
-    assign = assignment_times(chunk.trades, config.feed_latency, config.close_delay)
-    slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
-    order = np.argsort(slot, kind="stable")
-    cuts = np.searchsorted(slot[order], np.arange(len(ends)), side="right")
-    out, start, lo = [], chunk.start, 0
-    for end, hi in zip(ends.tolist(), cuts.tolist(), strict=True):
+
+    def by_slot(records: Trades | BookEvents) -> tuple[np.ndarray, list[int]]:
+        assign = assignment_ns(
+            records.ts_event, records.ts_recv, config.feed_latency, config.close_delay
+        )
+        slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
+        order = np.argsort(slot, kind="stable")
+        return order, np.searchsorted(slot[order], np.arange(len(ends)), side="right").tolist()
+
+    order, cuts = by_slot(chunk.trades)
+    book = chunk.book
+    book_order, book_cuts = by_slot(book) if book is not None else (None, cuts)
+    out, start, lo, book_lo = [], chunk.start, 0, 0
+    for end, hi, book_hi in zip(ends.tolist(), cuts, book_cuts, strict=True):
         out.append(
             MarketChunk(
                 chunk.contract,
@@ -260,7 +295,8 @@ def split_by_second(
                 chunk.coverage,
                 chunk.session,
                 chunk.tradable,
+                book.take(book_order[book_lo:book_hi]) if book is not None else None,
             )
         )
-        start, lo = end, hi
+        start, lo, book_lo = end, hi, book_hi
     return out

@@ -2,9 +2,9 @@
 
 A developer platform for building, testing, and running short-horizon futures
 strategies and the machine-learning models behind them. It prototypes with CME GC
-(gold) and SI (silver); a year of data for seven CME products is on disk.
+(gold) and SI (silver); a year of data for six CME products is on disk.
 
-Strategies read Databento TBBO trades with their pre-trade bid and ask. A rolling
+Strategies read Databento MBP-1: every trade and every change to the best bid and ask. A rolling
 `1h@1m` candle (the last 60 one-minute rows, every minute) sets the direction bias; a
 rolling `1m@1s` candle (the last 60 one-second rows, every second) times entries.
 Windows count rows of scheduled trading time through an index counter on every row,
@@ -23,7 +23,7 @@ trading can start before a strategy is final.
 | `apps/research-web`    | Run setup, results, and the second-by-second trade inspector                |
 | `lib/research-charts`  | Reusable chart components                                                   |
 | `lib/db-research`      | PostgreSQL migrations and storage design (local database `trading`)         |
-| `data/`                | Databento job folders, the one-day sample, and saved runs (all gitignored)  |
+| `data/`                | Databento job folders and saved runs (all gitignored)                       |
 
 `archive/` is reference-only, excluded from active builds and deployments.
 
@@ -40,25 +40,26 @@ uv run research db migrate   # local database `trading`; setup in lib/db-researc
 
 ```sh
 uv run research catalog                                              # data on disk
-uv run research backtest apps/backtest-runner/examples/mgc-sample.json
-uv run research verify apps/backtest-runner/examples/mgc-sample.json # live path = backtest
-uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
+uv run research backtest apps/backtest-runner/examples/gc-day.json
+uv run research verify apps/backtest-runner/examples/gc-day.json # live path = backtest
+uv run research rehearse apps/backtest-runner/examples/gc-day.json --speed 60
 uv run research ingest plan GC SI    # stored one-second rows; one series per product
 pnpm lint && pnpm test && pnpm build
 ```
 
-Market data is not in git: one year of Databento TBBO for GC, SI, PL, ES, NQ, YM, and
-RTY lives in `data/databento/tbbo/`, plus a one-day Micro Gold sample in `data/sample/`.
+Market data is not in git: one year of Databento MBP-1 for GC, SI, PL, ES, YM, and RTY
+lives in `data/databento/mbp-1/` (123 GB; NQ is not downloaded yet).
 See [historical data](docs/project/data.md) for the layout and verification.
 
 ## Documentation
 
 - [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
 - [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
-- [Historical data](docs/project/data.md), [roadmap](docs/project/roadmap.md), the
+- [Historical data](docs/project/data.md), the [roadmap](docs/project/roadmap.md) (the
+  layers of metrics and what comes next), the
   [handoff notes](docs/project/handoff.md) with decisions and next steps, and the
   prioritized [to-do list](docs/project/todo.md).
-- [Ingestion](docs/project/ingestion.md), the [TBBO metrics handoff](docs/project/tbbo-engineering-handoff.md) it implements, and the [storage contract](lib/db-research/README.md).
+- [Ingestion](docs/project/ingestion.md), the [trade-metrics reference](docs/project/trade-metrics-reference.md) it implements, and the [storage contract](lib/db-research/README.md).
 - [Research UI](docs/project/metric-explorer.md).
 
 ## Local services and private phone access

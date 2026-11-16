@@ -22,10 +22,10 @@ from strategy_core.strategies import Strategy, make_strategy
 from .calendars import load_sessions
 from .catalog import ROOT, files_for, job_ranges
 from .ingest import LEAD_FLOOR, ProductData, required_lead, session_seconds
-from .source import HistoricalSource
+from .source import DayCache, HistoricalSource
 
 RUNS = ROOT / "data/runs"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3  # 3: fills at the MBP-1 book, entry slippage
 RUN_ID_LENGTH = 24
 
 
@@ -137,12 +137,14 @@ def prepare(spec: RunSpec) -> Prepared:
     product = PRODUCTS[spec.product]
     files = files_for(product.parent_symbol, product.dataset)
     if not any(f.present for f in files.values()):
-        raise ValueError(f"No {product.parent_symbol} TBBO files found under data/")
+        raise ValueError(f"No {product.parent_symbol} MBP-1 files found under data/")
     if spec.warmup_sessions is None:
         spec = replace(spec, warmup_sessions=stored_lead(product, files))
     calendar, warmup, trading = load_sessions(product, spec.start, spec.end, spec.warmup_sessions)
     execution = ExecutionConfig(**spec.execution)
-    source = HistoricalSource(product, files, warmup, trading, execution, spec.contract)
+    source = HistoricalSource(
+        product, files, warmup, trading, execution, spec.contract, DayCache(book=True)
+    )
     return Prepared(
         spec,
         product,
@@ -242,10 +244,11 @@ def assumptions(p: Prepared) -> list[str]:
         f"Each second is computed {c.close_delay_ms:g} ms after it ends; orders reach the "
         f"exchange {c.order_latency_ms:g} ms later; market data arrives {c.feed_latency_ms:g} ms "
         "after Databento receives it.",
-        "Market orders fill at the first trade at or after arrival, at its pre-trade ask or bid; "
-        f"size beyond the displayed size pays {c.depth_penalty_ticks} tick(s).",
+        "Market orders fill when they arrive, at the best ask or bid the exchange showed then "
+        f"(MBP-1); size beyond the displayed size pays {c.depth_penalty_ticks} tick(s).",
         f"Targets fill only when a trade prints {'beyond' if c.limit_fill == 'through' else 'at'} "
-        "the limit; stops trigger on a trade at or beyond them and fill at the next trade's book.",
+        "the limit (no queue position); stops trigger on a trade at or beyond them and fill at "
+        "the book that trade left, never better than its price.",
         f"One position at a time, {c.contracts} contract(s), ${c.commission_per_contract:g} per "
         f"contract per side; flat {c.flat_before_close_s} s before each scheduled close.",
         "Contracts roll at a session open by previous-session volume unless a contract is set; "

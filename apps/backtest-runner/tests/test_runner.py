@@ -13,7 +13,7 @@ import pytest
 from backtest_runner import catalog, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
-from backtest_runner.source import HistoricalSource, instrument_id, to_trades
+from backtest_runner.source import Day, HistoricalSource, instrument_id, to_book, to_trades
 from strategy_core.bars import MISSING, OBSERVED, aggregate
 from strategy_core.engine import Engine, split_by_second
 from strategy_core.execution import ExecutionConfig
@@ -67,11 +67,16 @@ def mappings(symbols: dict[str, int], day: date) -> dict:
 
 
 class FakeCache:
+    """Decoded days given as (records, mappings); it keeps book events, as a backtest's does."""
+
+    book = True
+
     def __init__(self, days):
         self.days = days
 
     def get(self, file):
-        return self.days[file.date]
+        records, mappings = self.days[file.date]
+        return Day(records[records["action"] == b"T"], records, mappings)
 
 
 def dbn_file(day: date) -> DbnFile:
@@ -98,6 +103,11 @@ def test_side_mapping_contract_ids_per_day_and_spreads_are_not_outrights():
         )
     )
     assert t.side.tolist() == [1, -1, 0]
+    quote = records([(1, DAY0, b"B", 2000.0, 1)])
+    quote["action"] = b"A"  # an order added at the bid
+    book = to_book(np.concatenate([records([(1, DAY0 + 1, b"A", 2000.1, 2)]), quote]))
+    assert book.action.tolist() == [ord("T"), ord("A")] and book.side.tolist() == [-1, 1]
+    assert len(book.trades()) == 1 and book.trades().price.tolist() == [2000_100_000_000]
     m = {
         "GCZ6": [
             {"start_date": D1, "end_date": D2, "symbol": "11"},
@@ -222,12 +232,12 @@ def write_job(
 ) -> None:
     folder = root / job_id
     folder.mkdir(parents=True)
-    name, content = "glbx-mdp3-20260901.tbbo.dbn.zst", job_id.encode()
+    name, content = "glbx-mdp3-20260901.mbp-1.dbn.zst", job_id.encode()
     (folder / name).write_bytes(content)
     digest = "sha256:" + hashlib.sha256(content).hexdigest()
     files = [{"filename": name, "size": len(content), "hash": digest}]
     (folder / "manifest.json").write_text(json.dumps({"job_id": job_id, "files": files}))
-    query = {"dataset": "GLBX.MDP3", "schema": "tbbo", "symbols": ["GC.FUT"]}
+    query = {"dataset": "GLBX.MDP3", "schema": "mbp-1", "symbols": ["GC.FUT"]}
     query |= {"stype_in": "parent", "start": start, "end": end}
     (folder / "metadata.json").write_text(json.dumps({"query": query}))
     (folder / "condition.json").write_text(
@@ -264,7 +274,7 @@ def test_a_usable_copy_of_a_repeated_day_replaces_an_unusable_one(tmp_path):
     files = catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))
     assert files[D1].job_id == "B"
     assert [f.job_id for f in catalog.discover((tmp_path,))] == ["B"]
-    (tmp_path / "B" / "glbx-mdp3-20260901.tbbo.dbn.zst").unlink()  # absent on disk
+    (tmp_path / "B" / "glbx-mdp3-20260901.mbp-1.dbn.zst").unlink()  # absent on disk
     assert catalog.files_for("GC.FUT", "GLBX.MDP3", roots=(tmp_path,))[D1].job_id == "C"
 
 
@@ -420,7 +430,7 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
     folder = tmp_path / "GLBX.MDP3" / "JOB-1"
     folder.mkdir(parents=True)
     content = b"not really dbn"
-    name = "glbx-mdp3-20260901.tbbo.dbn.zst"
+    name = "glbx-mdp3-20260901.mbp-1.dbn.zst"
     (folder / name).write_bytes(content)
     (folder / "manifest.json").write_text(
         json.dumps(
@@ -441,7 +451,7 @@ def test_catalog_reads_job_folders_and_rejects_altered_files(tmp_path, monkeypat
             {
                 "query": {
                     "dataset": "GLBX.MDP3",
-                    "schema": "tbbo",
+                    "schema": "mbp-1",
                     "symbols": ["GC.FUT", "NQ.FUT"],
                     "stype_in": "parent",
                     "start": DAY0 + 6 * HOUR,  # a job may start partway through a day
@@ -506,23 +516,28 @@ def test_run_spec_validation():
         service.validate_run_id("../../etc/passwd")
 
 
-SAMPLE = Path(__file__).resolve().parents[1] / "examples/mgc-sample.json"
+SAMPLE = Path(__file__).resolve().parents[1] / "examples/gc-day.json"
+SAMPLE_DAYS = [
+    catalog.ROOT / f"data/databento/mbp-1/GC--2025-11-08--2026-11-07/glbx-mdp3-{day}.mbp-1.dbn.zst"
+    for day in ("20260914", "20260915")
+]
 
 
 @pytest.mark.skipif(
-    not (catalog.ROOT / "data/sample/mgc-aug31-dbn").is_dir(),
-    reason="bundled sample day not downloaded",
+    not all(path.is_file() for path in SAMPLE_DAYS), reason="GC MBP-1 files not downloaded"
 )
-def test_sample_day_end_to_end_is_deterministic():
+def test_one_downloaded_day_end_to_end_is_deterministic():
     spec = json.loads(SAMPLE.read_text())
     first, again = service.backtest(spec, save=False), service.backtest(spec, save=False)
     assert first["id"] == again["id"] and first["trades"] == again["trades"]
-    q = first["quality"]["2026-08-31 MGCZ6"]
+    q = first["quality"]["2026-09-15 GCZ6"]
     assert first["performance"]["seconds_processed"] == 23 * 3600
-    assert q["missing_slots"] == 2 * 3600  # the session opens 2 h before the file's UTC day
-    assert q["outside_schedule"] == 0 and q["raw_receive_order_violations"] == 0
-    assert 0.09 < q["unknown_side_volume"] / q["volume"] < 0.11
+    assert q["missing_slots"] == 0 and q["raw_receive_order_violations"] == 0
+    assert q["raw_book_events"] > 10 * q["raw_trades"]  # most records are book changes
+    assert q["raw_book_crossed"] < q["raw_book_changes"] / 1000
+    assert 0 < q["unknown_side_volume"] / q["volume"] < 0.1
     assert first["summary"]["trades"] > 0 and first["candidates"]["rows"] > 0
+    assert first["summary"]["entry_slip_ticks_avg"] > 0  # crossing the spread is never free
     names = {f["name"] for f in first["feature_specs"]}
     assert set(first["trades"][0]["features"]) == names
 

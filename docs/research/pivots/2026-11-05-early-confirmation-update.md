@@ -1,5 +1,11 @@
 # Confirming pivots as early as possible: research update and implementation plan
 
+> **Data update, November 15, 2026:** the project now uses Databento MBP-1 for every
+> product, not TBBO. Its trade records are exactly the TBBO records, so everything below
+> that is built on trades still holds; where this note says a metric needs MBP-1 or that
+> the book is seen only at trades, the data now exists (the `book_1s` stage that reads it
+> is planned). The text below is kept as written.
+
 Researched November 5, 2026 with the Parallel search API: four search batches (24 research
 angles) and 33 page extractions, of which 25 returned full text and 8 only an abstract or
 publisher preview ([provenance](2026-11-05-provenance.json); access levels under

@@ -18,7 +18,7 @@ of its trades. Two statistics need more than their per-second values:
 
 It also carries the latest observation as of each row, from any earlier row: the last trade
 time, and the last sampled book (prices, displayed sizes, and imbalance) with the time of
-the trade that showed it. TBBO shows the book only at trades, so its age is part of it. An
+the trade that showed it. These columns sample the book only at trades, so its age is part of it. An
 observation is never carried across missing data, where newer trades may be unknown.
 
 The window keeps the previous `slots - 1` rows and the carried values between calls, so

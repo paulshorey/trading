@@ -1,5 +1,11 @@
 **Early confirmation of temporary price pivots: engineering research for Trading**
 
+> **Data update, November 15, 2026:** the project now uses Databento MBP-1 for every
+> product, not TBBO. Its trade records are exactly the TBBO records, so everything below
+> that is built on trades still holds; where this note says a metric needs MBP-1 or that
+> the book is seen only at trades, the data now exists (the `book_1s` stage that reads it
+> is planned). The text below is kept as written.
+
 Researched November 3, 2026. This is an indicator design and benchmark proposal. No detector has been implemented or evaluated on the project's data, and no detection latency or accuracy is established for GC or SI. The recommendation combines independently inspected primary sources, official documentation, and project code. The [Parallel report](2026-11-03-parallel-report.md) is supporting research; this document records the engineering assessment. Start the next task with the [agent handoff](../../project/pivot-detection-handoff.md).
 
 Follow-up to the PR #66 review: the [pivot/structure contract](../../project/pivot-structure-design.md) now defines confirmed HH/HL/LH/LL, provisional HL/LH, a trade-path detector published per second and per minute, and the initial six-scale storage grid. It refines this research proposal's implementation sequence: validate deterministic correctness and store that grid before benchmarking predictive usefulness. Swing magnitude comes from the threshold; neither the threshold nor sampling resolution guarantees duration. The research below remains a record of evaluated method families, not a benchmark result.

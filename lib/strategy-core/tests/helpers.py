@@ -1,5 +1,5 @@
 import numpy as np
-from strategy_core.market import HOUR, NS, PX, SessionCalendar, Trades
+from strategy_core.market import HOUR, NS, PX, BookEvents, SessionCalendar, Trades
 
 T0 = 1_767_571_200 * NS  # 2026-01-05 00:00 UTC
 TICK = 100_000_000  # 0.1
@@ -33,6 +33,27 @@ def trades(rows: list[tuple]) -> Trades:
         out["bid_count"][i] = rest[5] if len(rest) > 5 else 1
         out["ask_count"][i] = rest[6] if len(rest) > 6 else 1
     return Trades(**out)
+
+
+def quotes(rows: list[tuple]) -> BookEvents:
+    """Book changes: rows of (ts_event, bid, ask[, bid_size, ask_size, recv_delay_ns]); a bid
+    or ask of None is absent (a one-sided book)."""
+    undefined = np.iinfo(np.int64).max
+    n = len(rows)
+    out = {
+        name: np.zeros(n, dtype)
+        for name, dtype in zip(BookEvents.FIELDS, BookEvents.DTYPES, strict=True)
+    }
+    for i, (ts, bid, ask, *rest) in enumerate(rows):
+        out["ts_event"][i] = ts
+        out["ts_recv"][i] = ts + (rest[2] if len(rest) > 2 else 1_000)
+        out["action"][i] = ord("M")
+        out["bid"][i] = undefined if bid is None else round(bid * PX)
+        out["ask"][i] = undefined if ask is None else round(ask * PX)
+        out["bid_size"][i] = rest[0] if rest else 5
+        out["ask_size"][i] = rest[1] if len(rest) > 1 else 5
+        out["bid_count"][i] = out["ask_count"][i] = 1
+    return BookEvents(**out)
 
 
 def coverage(cal: SessionCalendar) -> np.ndarray:

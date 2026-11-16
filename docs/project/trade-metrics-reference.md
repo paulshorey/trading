@@ -1,4 +1,4 @@
-# TBBO Engineering Handoff
+# Trade-metrics reference (the TBBO engineering handoff)
 
 _One second futures records for historical research and live decisions_
 
@@ -8,6 +8,15 @@ Implementation specification and metric inventory. Version 1.0, 1 November 2026.
 > content; metric names are shown as catalog identifiers. The companion
 > `TBBO_Metric_Catalog.json` it cites is not in this repository. What this project
 > implements, and where it deliberately differs, is in [ingestion](ingestion.md).
+>
+> **November 15, 2026: the project's data is now MBP-1, not TBBO.** This specification still
+> applies as written to the stored trade metrics, because the trade records of MBP-1 are
+> exactly the TBBO records (trade, aggressor side, and the best bid and ask just before it).
+> Where the text below says TBBO cannot see something between trades (quote changes,
+> time-weighted spread and depth, cancellations, refills), MBP-1 now provides it; those
+> metrics belong to the planned `book_1s` stage
+> ([second-scale metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), not to
+> the stages specified here. Depth beyond the best bid and ask is still not available.
 
 ## Purpose
 

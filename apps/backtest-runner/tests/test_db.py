@@ -41,7 +41,7 @@ def test_migration_files_must_be_numbered_without_gaps(tmp_path):
 
 def test_register_files_is_idempotent(database):
     f = DbnFile(
-        Path("glbx-mdp3-20260901.tbbo.dbn.zst"),
+        Path("glbx-mdp3-20260901.mbp-1.dbn.zst"),
         date(2026, 9, 1),
         "JOB-1",
         "GLBX.MDP3",

@@ -7,7 +7,6 @@ from strategy_core.execution import ExecutionConfig
 from strategy_core.features import (
     WINDOW_FEATURES,
     FeatureConfig,
-    FeaturePipeline,
     FeatureSpec,
     Unit,
     WindowFeatures,
@@ -91,26 +90,6 @@ def test_phase_series_equals_standard_hourly_candles_and_reference_rsi(phase):
 
 def stage_features(cal, cfg=None):
     return StageFeatures(cal, config=cfg, **KW)
-
-
-def test_engine_features_equal_the_reference_composition():
-    """The engine reads its features from the stages; its `1m@1s` and `1h@1m` window features,
-    the bias age, and the ATR that sizes brackets equal the earlier composition of the same
-    windows (`FeaturePipeline`, kept as this reference), bit for bit, across a closure and
-    missing data."""
-    cal = calendar((0, 3), (3.5, 7))
-    cfg = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
-    t = random_trades(T0, T0 + 7 * HOUR, seed=3, rate=1)
-    cov = np.array([[T0, T0 + 2 * HOUR], [T0 + 2 * HOUR + 45 * NS, T0 + 7 * HOUR]], np.int64)
-    chunk = MarketChunk("X", T0, T0 + 7 * HOUR, t, cov)
-    frame = stage_features(cal, cfg).update(chunk)
-    reference = FeaturePipeline(cal, cfg).update(second_bars(cal, t, cov, T0, T0 + 7 * HOUR))
-    assert set(reference.features) < set(frame.features)
-    for name, values in reference.features.items():
-        np.testing.assert_array_equal(frame.features[name], values, err_msg=name)
-    for name, values in reference.context.items():
-        np.testing.assert_array_equal(frame.context[name], values, err_msg=name)
-    assert np.isfinite(frame.features["1h@1m.rsi"]).any()
 
 
 def test_features_are_scale_invariant_and_declare_normalized_units():

@@ -59,7 +59,7 @@ def mappings(d: date) -> dict:
 
 def dbn(d: date, sha: str = "0" * 64) -> DbnFile:
     return DbnFile(
-        Path(f"/fake/{d:%Y%m%d}.tbbo.dbn.zst"),
+        Path(f"/fake/{d:%Y%m%d}.mbp-1.dbn.zst"),
         d,
         "job",
         "GLBX.MDP3",

@@ -15,17 +15,17 @@ constraint; outputs will be calculated every second. Two or three algorithms are
 welcome if they add distinct information. Python fits the existing engine, but the
 research was not restricted by language.
 
-| Read                                                                                    | Purpose                                                                                                                  |
-| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md)                 | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark        |
-| [Pivot and structure contract](pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                         |
-| [Early-confirmation update](../research/pivots/2026-11-05-early-confirmation-update.md) | November 5 follow-up: random-walk baselines, stopping rule, foundation-model evidence, proposed PRs F0 and G             |
-| [Order-flow predictors](../research/pivots/2026-11-05-order-flow-predictors.md)         | November 5: inventory of flow, absorption, location, and cross-market metrics; data options and costs; first event study |
-| [Second scale and MBP-1](../research/pivots/2026-11-06-second-scale-and-mbp1.md)        | November 6: second and sub-second metrics, latency limits, MBP-1 against TBBO (cost, equality check, effort)             |
-| [Parallel report](../research/pivots/2026-11-03-parallel-report.md)                     | Supporting deep-research output, with references; distinguish provider recommendations from established results          |
-| [Research brief](../research/pivots/2026-11-03-research-question.md)                    | Exact question and constraints sent to the research provider                                                             |
-| [Provenance](../research/pivots/2026-11-03-provenance.json)                             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                               |
-| [Source-access notes](../research/pivots/2026-11-03-source-access.md)                   | Full-text limitations and failed fetches                                                                                 |
+| Read                                                                                    | Purpose                                                                                                                                        |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md)                 | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark                              |
+| [Pivot and structure contract](pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                                               |
+| [Early-confirmation update](../research/pivots/2026-11-05-early-confirmation-update.md) | November 5 follow-up: random-walk baselines, stopping rule, foundation-model evidence, proposed PRs F0 and G                                   |
+| [Order-flow predictors](../research/pivots/2026-11-05-order-flow-predictors.md)         | November 5: inventory of flow, absorption, location, and cross-market metrics; data options and costs; first event study                       |
+| [Second scale and MBP-1](../research/pivots/2026-11-06-second-scale-and-mbp1.md)        | November 6: second and sub-second metrics, latency limits, MBP-1 against TBBO (cost, equality check, effort); MBP-1 was adopted on November 15 |
+| [Parallel report](../research/pivots/2026-11-03-parallel-report.md)                     | Supporting deep-research output, with references; distinguish provider recommendations from established results                                |
+| [Research brief](../research/pivots/2026-11-03-research-question.md)                    | Exact question and constraints sent to the research provider                                                                                   |
+| [Provenance](../research/pivots/2026-11-03-provenance.json)                             | Research date, task IDs, processor, and source URLs; no credentials or downloaded excerpts                                                     |
+| [Source-access notes](../research/pivots/2026-11-03-source-access.md)                   | Full-text limitations and failed fetches                                                                                                       |
 
 **Research conclusion and proposed architecture.**
 
@@ -107,9 +107,11 @@ contract and never interpret a delivery-month switch as a reversal. Missing cove
 is unknown data. Covered no-trade seconds advance the grid but do not provide fresh
 trade/quote prices. Preserve validity, unknown-aggressor coverage, and observation age.
 
-TBBO supplies trades and the immediately preceding L1 BBO at those trades. Trade delta
-and sampled queue imbalance are not complete order-flow imbalance. Cancellations,
-continuous quote changes, replenishment, and deeper book state cannot be reconstructed.
+MBP-1 (the project's data since November 15, 2026) supplies every trade and every change
+to the best bid and ask. The stored rows so far use only the trades and the book just
+before each one, so their trade delta and sampled queue imbalance are not complete
+order-flow imbalance; cancellations, continuous quote changes, and replenishment at the
+best price need the planned `book_1s` stage. Deeper book state cannot be reconstructed.
 Volume-based absorption/exhaustion is a conditioning hypothesis, not proof of reversal.
 
 Start with close-based observations for an unambiguous baseline. `BaseBars.high_at`

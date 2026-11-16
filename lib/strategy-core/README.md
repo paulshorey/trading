@@ -1,6 +1,6 @@
 # Strategy core
 
-Pure Python logic shared by backtests, rehearsals, and future live sessions: TBBO
+Pure Python logic shared by backtests, rehearsals, and future live sessions: MBP-1
 trade arrays, base bars, rolling windows, per-phase indicators, normalized features,
 strategies, simulated execution, the engine, and ML labels. No file, network, or
 database access; adapters live in `apps/backtest-runner`.

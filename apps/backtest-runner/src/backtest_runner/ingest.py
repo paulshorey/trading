@@ -1,4 +1,4 @@
-"""Ingestion: Databento TBBO trades to the stored rows of every stage (`pipeline.STAGES`): the
+"""Ingestion: Databento MBP-1 trades to the stored rows of every stage (`pipeline.STAGES`): the
 one-second and one-minute base rows (`market.bar_1s`, `market.bar_1m`) and their rolling
 `1m@1s` and `1h@1m` candles and features (`market.candle_1m_1s`, `market.candle_1h_1m`). See
 docs/project/ingestion.md.
@@ -202,7 +202,7 @@ class ProductData:
         """Calendar name, all sessions in the downloaded period, and the downloaded ones."""
         ranges = self.merged()
         if not ranges:
-            raise ValueError(f"No {self.product.parent_symbol} TBBO jobs under data/")
+            raise ValueError(f"No {self.product.parent_symbol} MBP-1 jobs under data/")
         first = datetime.fromtimestamp(ranges[0][0] // NS, UTC).date()
         last = datetime.fromtimestamp((ranges[-1][1] - 1) // NS, UTC).date()
         calendar, _, sessions = load_sessions(self.product, first, last, 0)

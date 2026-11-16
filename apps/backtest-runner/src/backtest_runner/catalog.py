@@ -2,9 +2,9 @@
 
 Keep each job folder exactly as delivered (`manifest.json`, `metadata.json`,
 `condition.json`, and the data files) under `data/databento/`, for example
-`data/databento/tbbo/GC--2025-11--2026-10/`; jobs are found at any depth (data/README.md).
-`data/sample/` holds the bundled one-day sample. DBN files are the permanent tick
-archive; backtests rebuild bars from them and `research ingest` stores rows built from them.
+`data/databento/mbp-1/GC--2025-11-08--2026-11-07/`; jobs are found at any depth
+(data/README.md). DBN files are the permanent tick archive; backtests rebuild bars from
+them and `research ingest` stores rows built from them.
 """
 
 import hashlib
@@ -18,7 +18,7 @@ from pathlib import Path
 import databento as db
 
 ROOT = Path(__file__).resolve().parents[4]
-SEARCH = (ROOT / "data/databento", ROOT / "data/sample")
+SEARCH = (ROOT / "data/databento",)
 FILE_DATE = re.compile(r"(\d{8})\.([a-z0-9-]+)\.dbn(\.zst)?$")
 COVERED = ("available", "degraded")
 DAY_NS = 86_400 * 1_000_000_000
@@ -49,7 +49,8 @@ def to_ns(value: int | str) -> int:
     return int(moment.timestamp()) * 1_000_000_000 + int((frac or "").ljust(9, "0") or 0)
 
 
-SCHEMAS = ("tbbo", "definition")  # trades with the pre-trade book; contract metadata
+MARKET = "mbp-1"  # every trade and every change to the best bid and ask
+SCHEMAS = (MARKET, "definition")  # market data; contract metadata
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ class DbnFile:
     sha256: str
     size: int
     condition: str  # Databento: available, degraded, pending, or missing
-    schema: str = "tbbo"
+    schema: str = MARKET
     start_ns: int | None = None  # the job's requested [start, end), UTC ns: a file covers only
     end_ns: int | None = None  # its day inside it (None: the whole day)
 
@@ -89,7 +90,7 @@ class DbnFile:
         return lo, hi
 
 
-def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
+def discover(roots: tuple[Path, ...] = SEARCH, schema: str | None = MARKET) -> list[DbnFile]:
     """Files of `schema` (None for all) from every job folder under `roots`, at any depth.
     Earlier roots win when jobs repeat a date."""
     seen: dict[tuple[str, str, str, date], DbnFile] = {}
@@ -109,7 +110,7 @@ def replaces(kept: DbnFile, other: DbnFile) -> bool:
     return other.covered and not kept.covered
 
 
-def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = "tbbo") -> list[DbnFile]:
+def all_files(roots: tuple[Path, ...] = SEARCH, schema: str | None = MARKET) -> list[DbnFile]:
     """Every file of `schema` (None for all) in every job, earlier roots first."""
     out = []
     for root in roots:
@@ -154,7 +155,7 @@ def job_files(folder: Path) -> list[DbnFile]:
 
 
 def job_ranges(
-    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+    parent: str, dataset: str, schema: str = MARKET, roots: tuple[Path, ...] = SEARCH
 ) -> list[tuple[int, int]]:
     """Requested `[start, end)` UTC nanoseconds of every downloaded job for a parent symbol.
     Data inside a range without a file (a weekend) has no trades; outside, it is unknown."""
@@ -175,7 +176,7 @@ def job_ranges(
 
 
 def files_for(
-    parent: str, dataset: str, schema: str = "tbbo", roots: tuple[Path, ...] = SEARCH
+    parent: str, dataset: str, schema: str = MARKET, roots: tuple[Path, ...] = SEARCH
 ) -> dict[date, DbnFile]:
     """One file per UTC day for a parent symbol: the first root's usable file (`replaces`).
     Backtests and ingestion read one file per day, so two usable files covering different
@@ -230,7 +231,7 @@ def describe() -> list[dict]:
     files = discover()
     for root, product in PRODUCTS.items():
         days = [f for f in files if product.parent_symbol in f.parents]
-        if not days and root == "MGC":
+        if not days:
             continue
         out.append(
             {

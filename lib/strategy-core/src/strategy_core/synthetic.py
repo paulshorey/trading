@@ -1,8 +1,8 @@
-"""Synthetic TBBO trade streams for tests and demos. Never use them as research data."""
+"""Synthetic MBP-1 trade and book streams for tests and demos. Never use them as research data."""
 
 import numpy as np
 
-from .market import NS, PX, Trades
+from .market import ACTION_TRADE, NS, PX, BookEvents, Trades
 
 
 def random_trades(
@@ -47,3 +47,51 @@ def random_trades(
         ask_count=rng.integers(1, 4, n).astype(np.int64),
         flags=np.zeros(n, np.uint8),
     )
+
+
+def random_book(
+    trades: Trades,
+    *,
+    rate: float = 4.0,
+    tick: float = 0.1,
+    seed: int = 0,
+    recv_jitter_ns: int = 400_000,
+) -> BookEvents:
+    """Book events around `trades`: every trade as its own record (with its pre-trade book),
+    and about `rate` quote changes per second between them that restate the book near the
+    latest trade. Receipt times add jitter, so quote changes also arrive out of order."""
+    rng = np.random.default_rng(seed)
+    if not len(trades):
+        return BookEvents.empty()
+    lo, hi = int(trades.ts_event.min()), int(trades.ts_event.max())
+    n = rng.poisson(rate * (hi - lo) / NS)
+    ts_event = np.sort(rng.integers(lo, hi + 1, n)).astype(np.int64)
+    by_event = np.argsort(trades.ts_event, kind="stable")
+    latest = by_event[np.maximum(np.searchsorted(trades.ts_event[by_event], ts_event) - 1, 0)]
+    tick_px = round(tick * PX)
+    bid = trades.bid[latest] + rng.choice([-1, 0, 0, 1], n) * tick_px
+    ask = np.maximum(trades.ask[latest] + rng.choice([-1, 0, 0, 1], n) * tick_px, bid + tick_px)
+    side = rng.choice(np.array([1, -1], np.int8), n)
+    quotes = BookEvents(
+        ts_event=ts_event,
+        ts_recv=ts_event + rng.integers(50_000, recv_jitter_ns, n),
+        action=np.full(n, ord("M"), np.uint8),
+        side=side,
+        price=np.where(side > 0, bid, ask),
+        size=rng.integers(1, 10, n).astype(np.int64),
+        bid=bid,
+        ask=ask,
+        bid_size=rng.integers(1, 10, n).astype(np.int64),
+        ask_size=rng.integers(1, 10, n).astype(np.int64),
+        bid_count=rng.integers(1, 4, n).astype(np.int64),
+        ask_count=rng.integers(1, 4, n).astype(np.int64),
+        flags=np.zeros(n, np.uint8),
+    )
+    both = BookEvents.concat([trade_events(trades), quotes])
+    return both.take(np.argsort(both.ts_recv, kind="stable"))
+
+
+def trade_events(trades: Trades) -> BookEvents:
+    """Trades as MBP-1 trade records."""
+    fields = {name: getattr(trades, name) for name in Trades.FIELDS}
+    return BookEvents(action=np.full(len(trades), ACTION_TRADE, np.uint8), **fields)

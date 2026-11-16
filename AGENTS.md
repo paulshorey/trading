@@ -5,16 +5,20 @@ Developers configure, troubleshoot, and test custom metrics, strategies, and ML
 models trained on those metrics. Historical research comes first; paper and live
 trading will reuse strategy logic with a UI for monitoring and human overrides.
 
-Prototype with CME futures GC (gold) and SI (silver); one year of TBBO for GC, SI, PL,
-ES, NQ, YM, and RTY is in `data/databento/tbbo/`. Compute and store everything per
-contract, so products can be added; each product also reads as one permanent series
+Prototype with CME futures GC (gold) and SI (silver); one year of MBP-1 for GC, SI, PL,
+ES, YM, and RTY is in `data/databento/mbp-1/` (NQ is not downloaded yet). Compute and store
+everything per contract, so products can be added; each product also reads as one permanent series
 (`market.continuous_*`) that takes every session's rows from its front contract. Never
-merge trades or prices of different delivery months. Strategies predict only the next few
+merge trades or prices of different delivery months. Metrics are built in layers, each
+reading only the ones below it (`docs/project/roadmap.md`): trade flow, indicators and
+volatility, swing structure, model predictions, and the final model, for one product and
+for pairs that move together (GC with SI, ES with NQ). Strategies predict only the next few
 minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
-the allowed direction. Market data is Databento TBBO only, under the same rules for
-every product: trades are exact, but the book is seen only at trades (see
-`docs/project/engine.md#data-limits-tbbo-only`). Validate TBBO trades and their
-pre-trade top of book before deriving candles or dependent metrics and models.
+the allowed direction. Market data is Databento MBP-1 only, under the same rules for
+every product: every trade and every change to the best bid and ask, one price level deep
+(see `docs/project/engine.md#data-limits-mbp-1`). Trades build the rows and metrics;
+simulated orders fill at the book the exchange showed when they arrive. Validate trades
+and the book before deriving candles or dependent metrics and models.
 
 ## Workspace
 

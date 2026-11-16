@@ -101,7 +101,7 @@ function App() {
             decision.
           </p>
         </div>
-        <span className="tag">DATABENTO TBBO · SAME ENGINE AS LIVE</span>
+        <span className="tag">DATABENTO MBP-1 · SAME ENGINE AS LIVE</span>
       </div>
       {error && (
         <div className="error" role="alert">
@@ -134,9 +134,9 @@ function App() {
               ["Profit factor", s ? num(s.profit_factor) : "—"],
               ["Max drawdown", s ? money(s.max_drawdown_usd) : "—"],
               [
-                "Fill delay p50 · p90",
+                "Entry slippage avg · p90",
                 s
-                  ? `${num(s.entry_delay_ms_p50, 0)} · ${num(s.entry_delay_ms_p90, 0)} ms`
+                  ? `${num(s.entry_slip_ticks_avg, 2)} · ${num(s.entry_slip_ticks_p90, 2)} ticks`
                   : "—",
               ],
             ].map(([label, value]) => (
@@ -245,7 +245,7 @@ function App() {
                             "Net $",
                             "R",
                             "Held s",
-                            "Fill ms",
+                            "Slip ticks",
                           ].map((h) => (
                             <th key={h}>{h}</th>
                           ))}
@@ -272,7 +272,7 @@ function App() {
                             </td>
                             <td>{num(t.r_multiple)}</td>
                             <td>{num(t.hold_s, 0)}</td>
-                            <td>{num(t.entry_delay_ms, 0)}</td>
+                            <td>{num(t.entry_slip_ticks, 1)}</td>
                           </tr>
                         ))}
                       </tbody>

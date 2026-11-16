@@ -1,5 +1,5 @@
 """Features of a rolling candle beyond the engine's (`features.WINDOW_FEATURES`), for stored
-one-second rows. See docs/project/ingestion.md for the list and the TBBO handoff entries.
+one-second rows. See docs/project/ingestion.md for the list and the trade-metrics reference entries.
 
 Three kinds, all in normalized units (`features.Unit`), NaN when undefined:
 
@@ -392,7 +392,7 @@ class CandleIndicators:
         # Latest observation as of the row's end
         has_trade, has_book = win["has_trade"] > 0, win["has_book"] > 0
         f["trade_age_s"] = np.where(has_trade, (c.end - win["last_trade_at"]) / NS, np.nan)
-        # TBBO shows the book only at trades: a trade with an unusable book does not refresh it
+        # These columns sample the book at trades: a trade with an unusable book does not refresh it
         f["book_age_s"] = np.where(has_book, (c.end - win["book_at"]) / NS, np.nan)
         # displayed sizes have their own validity, so the imbalance carries its own age
         f["depth_age_s"] = np.where(

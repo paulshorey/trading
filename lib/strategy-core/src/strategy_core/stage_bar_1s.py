@@ -1,7 +1,7 @@
 """Stage `bar_1s` (tier 0): each scheduled-open second's own exact statistics.
 
 One row per scheduled-open second, keyed by its index counter `slot_ordinal`: OHLC, volumes by
-aggressor side, the running-delta extremes, session CVD, and the TBBO metrics of `metrics.py`.
+aggressor side, the running-delta extremes, session CVD, and the trade metrics of `metrics.py`.
 Every field merges exactly into minutes and windows. Values are NULL where undefined, never
 zero: a missing second has unknown volume, a second without trades has no price, and a
 statistic without a valid observation has no value.

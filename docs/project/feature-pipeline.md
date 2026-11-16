@@ -39,9 +39,11 @@ below it, and every floor is finished before anything reads from it.
 | Tier | Contents                                                                                                          | Stages (per resolution)                                                  |
 | ---- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                                       |
+| 0    | Exact base rows from book events (planned): queue and order-flow imbalance, spread over time, depletion, refill   | `book_1s`                                                                |
 | 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), window statistics, and the volatility family    | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m`        |
 | 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m` (+ `pivot_event`) |
 | 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                                                 |
+| 4    | Model outputs (proposed): out-of-sample predictions stored as inputs for later stages and the final model         | `model_reversal_1s`, `model_reversal_1m` ([rules](#model-stages))        |
 | —    | Labels: future outcomes for training and evaluation, never inputs                                                 | `pivot_label` (later: trade outcomes)                                    |
 
 Tiers are dependency levels; stages are the unit of code, versioning, and storage. A
@@ -76,6 +78,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | Stage          | Tier | Inputs                                                                                                               |
 | -------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
 | `bar_1s`       | 0    | `market` (trades, coverage), calendar                                                                                |
+| `book_1s`      | 0    | `market` (book events, coverage), calendar; planned                                                                  |
 | `bar_1m`       | 0    | `bar_1s`                                                                                                             |
 | `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
 | `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
@@ -93,6 +96,40 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 The two resolutions are independent branches below tier 3: nothing at second resolution
 feeds a minute stage except through `bar_1m`, so changing a second-resolution
 indicator never rebuilds the minute branch.
+
+## Model stages
+
+Proposed November 15, 2026; not implemented. The goal needs a model's prediction (the
+probability that the move from the latest extreme is a reversal, not a pause) as an input
+to later stages: structure signals read it, and so does the final model. A prediction is a
+valid input only if the model that made it could not have seen the future of the row it
+scores. A model stage therefore follows these rules on top of the read rules above:
+
+1. **Inputs** are `feature` columns of lower tiers at the same row, nothing else. Labels
+   are read only to fit the model, never to score a row.
+2. **Walk-forward fitting.** History is cut into blocks of whole sessions. The model that
+   scores a block is fitted on sessions that ended before the block began, minus a gap
+   (purge) at least as long as the label horizon, so no training label overlaps the block.
+   Rescaling, feature selection, and calibration are fitted on the same training sessions.
+3. **No prediction is better than a leaked one.** Rows before the first fitted model have
+   NULL predictions, and so does any row whose model is missing or whose inputs are NULL.
+4. **A model is a variant.** Each fitted model is a row in a registry with its training
+   sessions, feature names with their stage identities, label ID, hyperparameters, package
+   versions, and artifact checksum; stored predictions carry its ID. Retraining adds
+   models and rows; it never rewrites a prediction in place.
+5. **Readers train on what they will get live.** A later stage or model that reads a
+   prediction trains only on rows scored out of sample (rule 2). In-sample predictions are
+   never stored.
+6. **Live** sessions score with the newest model whose training ended before the session,
+   which is the same rule, so stored and live predictions agree.
+7. **Deterministic scoring.** Scoring is a pure function of the stored inputs and the
+   artifact, the same for a whole session and second by second (`research verify`).
+
+The first model stage is the reversal model on the pivot candidates of
+[plan section 3.5](plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f): logistic regression
+as the baseline and one gradient-boosted model, compared in the benchmark before either is
+stored. Block length, purge, and thresholds are frozen in that PR's spec before any model is
+fitted.
 
 ## Database properties
 

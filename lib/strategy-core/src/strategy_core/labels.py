@@ -11,11 +11,10 @@ from collections.abc import Iterable, Iterator
 
 import numpy as np
 
-from .execution import ExecView, Position, Simulator
+from .execution import FILLED, ExecView, Position, Simulator
 from .features import FeatureFrame
 
 UNFILLED, CENSORED = "unfilled", "censored"
-DELAY_BINS_MS = 60_000  # one-millisecond bins up to a minute; slower fills share the last bin
 
 
 def iter_candidate_outcomes(
@@ -34,14 +33,12 @@ def iter_candidate_outcomes(
         atr = float(frame.context["atr"][i])
         if not np.isfinite(atr):
             continue
-        pos = sim.order(int(signals[i]), contract, int(frame.end[i]), atr, frame.row(i))
-        k = sim.fill(view, 0, pos)
-        if k < 0 or k >= view.n:  # cancelled at the forced-exit time, or no trade in time
+        pos = sim.order(int(signals[i]), contract, int(frame.end[i]), atr, frame.row(i), view)
+        status, _ = sim.fill(view, pos)
+        if status != FILLED:  # cancelled, or the session's data ends before the order arrives
             yield marker(pos, UNFILLED)
             continue
-        j, trade = k + 1, None
-        while trade is None and j < view.n:
-            j, trade = sim.advance(view, j, pos)
+        _, trade = sim.advance(view, 0, pos)
         yield trade if trade is not None else marker(pos, CENSORED)
 
 
@@ -63,13 +60,12 @@ def candidate_outcomes(*args, **kwargs) -> list[dict]:
 
 class CandidateSummary:
     """Running statistics of would-be trades in bounded memory: long runs fold rows in as
-    they are produced, and the delay median comes from a fixed millisecond histogram."""
+    they are produced."""
 
     def __init__(self):
-        self.rows = self.wins = self.r_count = 0
-        self.usd = self.r_sum = 0.0
+        self.rows = self.wins = self.r_count = self.slip_count = 0
+        self.usd = self.r_sum = self.slip_sum = 0.0
         self.not_closed = {UNFILLED: 0, CENSORED: 0}
-        self.delays = np.zeros(DELAY_BINS_MS + 1, np.int64)
         self.reasons: dict[str, int] = {}
 
     def add(self, rows: Iterable[dict]) -> None:
@@ -84,23 +80,21 @@ class CandidateSummary:
             if row["r_multiple"] is not None:
                 self.r_sum += row["r_multiple"]
                 self.r_count += 1
-            self.delays[min(max(int(row["entry_delay_ms"]), 0), DELAY_BINS_MS)] += 1
+            if row["entry_slip_ticks"] is not None:
+                self.slip_sum += row["entry_slip_ticks"]
+                self.slip_count += 1
             self.reasons[reason] = self.reasons.get(reason, 0) + 1
 
     def result(self) -> dict:
         out = {"rows": self.rows, **self.not_closed}
         if not self.rows:
             return out
-        # Average the two middle ranks (equal when the count is odd), as np.median does.
-        cumulative = np.cumsum(self.delays)
-        ranks = [(self.rows + 1) // 2, self.rows // 2 + 1]
-        median_ms = float(np.mean(np.searchsorted(cumulative, ranks)))
         return {
             **out,
             "win_rate": self.wins / self.rows,
             "avg_usd": self.usd / self.rows,
             "avg_r": self.r_sum / self.r_count if self.r_count else None,
-            "entry_delay_ms_p50": median_ms,  # to the millisecond
+            "entry_slip_ticks_avg": self.slip_sum / self.slip_count if self.slip_count else None,
             "exit_reasons": dict(sorted(self.reasons.items())),
         }
 

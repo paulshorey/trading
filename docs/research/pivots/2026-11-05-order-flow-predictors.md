@@ -1,5 +1,11 @@
 # Order flow, absorption, and context: metrics that could predict short-term reversals and continuations
 
+> **Data update, November 15, 2026:** the project now uses Databento MBP-1 for every
+> product, not TBBO. Its trade records are exactly the TBBO records, so everything below
+> that is built on trades still holds; where this note says a metric needs MBP-1 or that
+> the book is seen only at trades, the data now exists (the `book_1s` stage that reads it
+> is planned). The text below is kept as written.
+
 Researched November 5, 2026 (web search plus Databento's cost API for this account). Nothing
 here is implemented or measured on GC or SI; every "may contribute" below is a hypothesis to
 test. The [early-confirmation update](2026-11-05-early-confirmation-update.md) defined how to
@@ -41,7 +47,7 @@ It changes no recorded decision. Four proposals need Paul's decision
    two price changes ahead for stocks ([Kolm et al., 2023](https://onlinelibrary.wiley.com/doi/10.1111/mafi.12413)),
    and an information coefficient of 0.004 on 10-second bars in a 2026 replication
    ([S E, 2026](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=7053198)). Our simulated
-   fills are uncertain by 1–2 ticks in GC and SI ([engine](../../project/engine.md#data-limits-tbbo-only)).
+   fills are uncertain by 1–2 ticks in GC and SI ([engine](../../project/engine.md#data-limits-mbp-1)).
    Flow metrics are therefore model inputs at decision points (a pivot candidate, a level
    test) that predict moves of an ATR or more over minutes. They are not standalone
    tick-scalping signals.
@@ -149,7 +155,7 @@ session of NQ, single author). MBP-1 is unconflated but covers the best level on
 where absorption at an extreme happens. So MBP-1 should be enough for refills and pulling at
 the touch. MBO is needed for single-order icebergs and queue position. BBO-1s is too coarse.
 
-The [November 1 decision](../../project/engine.md#data-limits-tbbo-only) is TBBO only, under
+The [November 1 decision](../../project/engine.md#data-limits-mbp-1) is TBBO only, under
 identical rules for every product. Adding MBP-1 for all seven products keeps the rules
 identical, and live MBP-1 is available on the same feed. It is still a change to a recorded
 decision, so it is Paul's call.
@@ -337,7 +343,7 @@ Paul decided on November 6, 2026:
    definition jobs (`catalog.SCHEMAS`), so MBP-1 folders do not affect `research` until a PR
    adds MBP-1 as a source. The included history window rolls, so its oldest days cost a
    little more each week. The download is approved; reading MBP-1 is not yet. The binding
-   rule in `AGENTS.md` and the [engine](../../project/engine.md#data-limits-tbbo-only) stays
+   rule in `AGENTS.md` and the [engine](../../project/engine.md#data-limits-mbp-1) stays
    "TBBO only" until the PR that adds MBP-1 as a source changes it with Paul's approval
    ([second scale and MBP-1](2026-11-06-second-scale-and-mbp1.md)).
 2. **Paired products: yes**, starting with GC + SI and ES + NQ. The design is

@@ -3,22 +3,22 @@
 Local data, not in git (except this file). Back it up: the DBN files are the permanent
 archive that every stored row is rebuilt from.
 
-| Path                                                                    | Contents                                                                                     |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `databento/tbbo/<ROOT>--2025-11--2026-10/`                              | One Databento batch job per product (GC, SI, PL, ES, NQ, YM, RTY), exactly as delivered      |
-| `databento/tbbo/<job>/glbx-mdp3-YYYYMMDD.tbbo.dbn.zst`                  | One UTC day of TBBO trades with the pre-trade book, all contracts and spreads of the product |
-| `databento/tbbo/<job>/manifest.json`, `metadata.json`, `condition.json` | File checksums, the job's query (dataset, schema, date range), per-day data quality          |
-| `databento/definition/` (not downloaded yet)                            | Contract definitions (expirations, tick sizes)                                               |
-| `sample/`                                                               | A one-day Micro Gold sample used by tests and examples                                       |
-| `runs/`                                                                 | Saved backtest runs (JSON)                                                                   |
+| Path                                                                     | Contents                                                                                                             |
+| ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `databento/mbp-1/<ROOT>--2025-11-08--2026-11-07/`                        | One Databento batch job per product (GC, SI, PL, ES, YM, RTY; NQ not yet), exactly as delivered                      |
+| `databento/mbp-1/<job>/glbx-mdp3-YYYYMMDD.mbp-1.dbn.zst`                 | One UTC day of MBP-1: every trade and every change to the best bid and ask, all contracts and spreads of the product |
+| `databento/mbp-1/<job>/manifest.json`, `metadata.json`, `condition.json` | File checksums, the job's query (dataset, schema, date range), per-day data quality                                  |
+| `databento/definition/` (not downloaded yet)                             | Contract definitions (expirations, tick sizes)                                                                       |
+| `runs/`                                                                  | Saved backtest runs (JSON)                                                                                           |
 
-DBN is Databento's binary encoding, compressed with zstd: 7.3 GB for one year of the seven
+DBN is Databento's binary encoding, compressed with zstd: 123 GB for one year of the six
 products. Code finds jobs by searching `databento/` for `manifest.json` at any depth
-(`apps/backtest-runner/src/backtest_runner/catalog.py`), so add new downloads as new job
-folders beside the existing ones and keep them unchanged. One file is read per UTC day:
-if two jobs cover different parts of the same day, `research` refuses to run, so download
-whole days, or that day again in one job. A job downloaded again over the same days replaces
-an earlier copy that is pending, missing, or absent. Then:
+(`apps/backtest-runner/src/backtest_runner/catalog.py`) and reads only `mbp-1` jobs as
+market data, so add new downloads as new job folders beside the existing ones and keep them
+unchanged. One file is read per UTC day: if two jobs cover different parts of the same day,
+`research` refuses to run, so download whole days, or that day again in one job. A job
+downloaded again over the same days replaces an earlier copy that is pending, missing, or
+absent. Then:
 
 ```sh
 uv run research catalog --verify   # sizes and SHA-256 against each manifest

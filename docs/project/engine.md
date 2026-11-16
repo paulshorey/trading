@@ -11,7 +11,7 @@ and the pace differ.
 | --------------- | ----------------------------------------- | -------------------- | ------------------- |
 | Backtest        | DBN files                                 | One session per call | As fast as possible |
 | Rehearsal       | DBN files, cut by `split_by_second`       | One second per call  | Real time or faster |
-| Paper (planned) | Databento live TBBO, same record format   | One second per call  | Real time           |
+| Paper (planned) | Databento live MBP-1, same record format  | One second per call  | Real time           |
 | Live (planned)  | Live feed plus a broker execution adapter | One second per call  | Real time           |
 
 Paper trading is live data with the simulated execution used in backtests, so it can
@@ -36,20 +36,20 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 
 ## Code map
 
-| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `market.py`                                     | Products (GC, SI, PL, ES, NQ, YM, RTY), TBBO trade arrays, calendar and row index counters (`slot_ordinals`) |
-| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                                                             |
-| `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                              |
-| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                  |
-| `features.py`                                   | Unit contract and window features (`FeaturePipeline`: the pre-stage composition, kept as a test reference)   |
-| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                        |
-| `execution.py`                                  | Simulated fills against TBBO trades                                                                          |
-| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                          |
-| `labels.py`                                     | One would-be trade per signal, for ML                                                                        |
-| `metrics.py`, `window_metrics.py`               | Per-second TBBO metrics and their rolling windows, for stored rows                                           |
-| `indicators.py`, `state.py`, `warmup.py`        | Stored-row features, exact checkpoints, and warm-ups derived from indicator parameters                       |
-| `stages.py`, `stage_*.py`, `pipeline.py`        | Stages (one stored table each, versioned on its own), the pipeline that runs them, and the engine's features |
+| Module (`lib/strategy-core/src/strategy_core/`) | Responsibility                                                                                                         |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `market.py`                                     | Products (GC, SI, PL, ES, NQ, YM, RTY), trade and book-event arrays, calendar and row index counters (`slot_ordinals`) |
+| `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                                                                       |
+| `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                                        |
+| `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                            |
+| `features.py`                                   | Unit contract and the window features the stages compute (`StageFeatures` in `pipeline.py` assembles them)             |
+| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                                  |
+| `execution.py`                                  | Simulated fills against the MBP-1 book and trades                                                                      |
+| `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                                    |
+| `labels.py`                                     | One would-be trade per signal, for ML                                                                                  |
+| `metrics.py`, `window_metrics.py`               | Per-second trade metrics and their rolling windows, for stored rows                                                    |
+| `indicators.py`, `state.py`, `warmup.py`        | Stored-row features, exact checkpoints, and warm-ups derived from indicator parameters                                 |
+| `stages.py`, `stage_*.py`, `pipeline.py`        | Stages (one stored table each, versioned on its own), the pipeline that runs them, and the engine's features           |
 
 `apps/backtest-runner` adds the Databento file catalog, exchange calendars, the
 historical source (contract selection and rolls), run storage, the CLI, and the API.
@@ -58,24 +58,65 @@ historical source (contract selection and rolls), run storage, the CLI, and the 
 
 All times are UTC nanoseconds. Each configurable delay applies in every mode.
 
-1. **Assignment.** A trade belongs to the second containing its event time. A second
-   ending at `T` closes at `T + close_delay`; a trade received later joins the second
-   open when it arrived. Receipt is Databento `ts_recv + feed_latency`.
-2. **Release.** Trades reach the engine one second at a time, in receive order within
-   the second. A trade received early for a later second waits for that second.
+1. **Assignment.** A trade or book event belongs to the second containing its event
+   time. A second ending at `T` closes at `T + close_delay`; a record received later joins
+   the second open when it arrived. Receipt is Databento `ts_recv + feed_latency`.
+2. **Release.** Records reach the engine one second at a time, in receive order within
+   the second. A record received early for a later second waits for that second.
 3. **Decision.** Features of the second ending at `T` are computed at
    `T + close_delay`. The bias uses the latest completed minute, with its age.
-4. **Entry.** The order reaches the exchange `order_latency` later. It fills at the
-   first trade at or after arrival, at that trade's pre-trade ask (buy) or bid (sell).
-   Size beyond the displayed top-of-book size pays `depth_penalty_ticks`.
+4. **Entry.** The order reaches the exchange `order_latency` later and fills then, at the
+   best ask (buy) or bid (sell) the exchange showed at that moment: the book after the last
+   event at or before the arrival. Size beyond the displayed size at that price pays
+   `depth_penalty_ticks`. An order that meets no two-sided book is cancelled.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
-   at or beyond it triggers it, and it fills at the book of the next trade that
-   happened after the trigger, never better than the trigger price. Only trades that
-   happened after the entry fill can trigger an exit, even if receive order delivers an
-   earlier one later. Time and pre-close exits are market orders.
+   at or beyond it triggers it, and it fills at the book that trade left (the book events
+   of the same match), never better than the trigger price. Each trade counts by its own
+   event time: only trades that happened after the entry fill and before a timed exit
+   arrives can trigger an exit, in whatever order they were received. Time and pre-close
+   exits are market orders that fill at the book when they arrive.
 6. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
    and the hold timer start then.
+
+Every book lookup is bounded by the second of its own time: it uses the events released by
+the close of that second and nothing released later. A late record therefore never rewrites
+an earlier fill, and whole-session and second-by-second runs price every order the same.
+
+Six rules cover records that are unusual or out of order (`execution.BookView`):
+
+- **A trade record carries the book before the trade.** The book changes only when a later
+  record says so. On GCZ6 on 2026-09-15, 91,227 of 93,025 trades were followed by a book
+  record at the same event time, which a lookup at the trade's time already reads. Of the
+  other 1,798, the next book record left the traded price in place for 1,544: the trade
+  met hidden or spread-implied liquidity and the book did not change. For 254 (0.3%) the
+  price moved in a record stamped later, usually within a millisecond; a stop triggered by
+  one of those fills at the trigger price, up to one tick better than it should.
+- **Each record is the whole top of book after its event**, so it includes every record
+  received before it. The book is therefore the record received last, and a record never
+  takes effect before the records received ahead of it: with event times 107.8 s then
+  107.7 s, a lookup at 107.75 s reads the book before both. Out-of-order event times are
+  rare (none or one per session in four checked sessions).
+- **A record Databento flags as possibly wrong** (after an unrecoverable gap in its feed)
+  prices nothing: an entry that meets it is cancelled and an exit falls back to the last
+  trade price (flag `no_book`), until a record without the flag arrives. In this year's
+  files the flag appears only on 2025-11-28, in RTY and YM.
+- **A book is not carried across missing data.** Where the files have a gap, a lookup inside
+  it returns no book, and after it none until an event that happened after the gap: the
+  entry is cancelled, or the exit falls back with `no_book`.
+- **The book restated at the start of each file** carries a receive time Databento flags as
+  inaccurate (exactly midnight UTC). Those records are ordered by their position in the
+  file, and their receive time is never compared with another record's. In the GC and SI
+  files they are the only records with that flag.
+- **A stop triggered by a trade released late** (after its own second had closed) fills at
+  the book of the last record released with it that happened at or before the trigger, and
+  at the trigger price (flag `no_book`) when there is none. Earlier seconds are not read:
+  a live session no longer holds them.
+
+Each trade records what its entry cost: `decision_spread_ticks`, the spread the engine held
+when it decided, and `entry_slip_ticks`, the fill price against that book's mid-price (half
+the spread, the market's move during `close_delay + order_latency`, and any depth penalty).
+The run summary reports the average and the 90th percentile.
 
 One position at a time; no entries and a forced exit `flat_before_close_s` before each
 scheduled close. Contracts roll at a session open (previous-session volume, only to a later
@@ -97,27 +138,28 @@ execution needs and must not feed signals or models.
 
 Within a chunk, base bars and rolling candles are vectorized with numpy, and
 per-phase indicators are compiled loops whose state carries between calls. On the
-sample day, a 23-hour session of one-second steps took 0.18 s including DBN decoding
-(about 450,000 market seconds per second), or roughly 5 minutes per contract-year of
-one-second data. The one-second path costs about 4 ms per second with every stored feature
+MGC sample day used until November 2026, a 23-hour session of one-second steps took 0.18 s
+including DBN decoding (about 450,000 market seconds per second), or roughly 5 minutes per
+contract-year of one-second data. The one-second path costs about 4 ms per second with every stored feature
 (November 5, 2026): ample for live, too slow for research, which is why backtests pass whole
 sessions. Ten months of GC (2026) run whole in about 4 minutes, warm-up included.
 
 ## Verification
 
 ```sh
-uv run research verify apps/backtest-runner/examples/mgc-sample.json
-uv run research rehearse apps/backtest-runner/examples/mgc-sample.json --speed 60
+uv run research verify apps/backtest-runner/examples/gc-day.json
+uv run research rehearse apps/backtest-runner/examples/gc-day.json --speed 60
 ```
 
 `verify` runs the same trading sessions whole and second by second and requires identical
 features and trades; both engines first replay the warm-up sessions whole, as a live session
 prepares before it trades, and frames are compared an hour at a time, so memory holds one
 session. A vectorized step that reads a later row inside its chunk fails this check, so it
-also guards against look-ahead. On the sample day all 235 features and 13 trades matched
-(after PR C2: whole 0.69 s, second by second 322 s). On a GC and an SI week (2026-09-14 to
-09-18, `--sessions 5`, November 5) every feature and trade matched (92 and 110 trades) at
-about 4.1 ms per second, far inside the 100 ms close delay. Tests also cover hand-checked
+also guards against look-ahead. On a GC day with MBP-1 (GCZ6 2026-09-15, 2.3 million book
+events; November 15, 2026) all 235 features and 15 trades matched: whole 3.7 s, second by
+second 403 s (4.9 ms per second, far inside the 100 ms close delay), 2.3 GB. Before the move
+to MBP-1, a GC and an SI week matched in every feature and trade (92 and 110 trades,
+November 5). Tests also cover hand-checked
 fills, brute-force rolling candles, phase parity with standard hourly candles, scale
 invariance, and prefix invariance.
 
@@ -141,53 +183,46 @@ runs (`pipeline.Pipeline`) with the backtest's default assignment timing; see
 (`pipeline.StageFeatures`): every `candle_1m_1s` and `vol_1s` feature of the window ending at
 each second as `1m@1s.<name>` (joined row by row), and every
 `candle_1h_1m`, `stats_1h_1m`, and `vol_1m` feature of the latest completed minute as
-`1h@1m.<name>` with its age `1h@1m.age_s` (their names never collide; a test checks it). Their `1m@1s` and `1h@1m` window features equal the earlier engine's
-composition bit for bit (a test keeps `features.FeaturePipeline` as the reference). A backtest may read stored rows instead of
+`1h@1m.<name>` with its age `1h@1m.age_s` (their names never collide; a test checks it). A backtest may read stored rows instead of
 rebuilding them only when their builder version and assignment settings match the run's
-configuration (not implemented yet); fills always come from the DBN trades.
+configuration (not implemented yet); fills always come from the DBN trades and book events.
 
-## Data limits: TBBO only
+## Data limits: MBP-1
 
-Decision (November 1, 2026): every product uses Databento TBBO and nothing more
-detailed, under identical rules. TBBO records each trade with the best bid and ask
-just before it, and nothing between trades.
+Decision (November 15, 2026, replacing TBBO): every product uses Databento MBP-1 under
+identical rules. MBP-1 records every trade and every change to the best bid and ask: price,
+displayed size, and order count on each side, one price level deep. A trade record carries
+the book just before the trade; these records alone are exactly the TBBO schema, and they
+reproduce the second rows stored from TBBO field for field
+([check](data.md#what-we-have)).
 
-**Exact:** every trade's price, size, aggressor side, and time. OHLCV, VWAP, buy and
-sell volume, CVD, trade counts and sizes, and sweeps through the book are exact at
-any resolution and in both rolling windows.
+**Exact:** every trade's price, size, aggressor side, and time, so OHLCV, VWAP, buy and
+sell volume, CVD, trade counts and sizes, and sweeps are exact at any resolution and in
+both rolling windows. The best bid and ask are exact at every moment, so a market order is
+priced at the book it would have met and the spread it paid is measured, not assumed.
 
 **Limited:**
 
-- **Fill prices.** A real market order fills instantly against the book it meets; the
-  simulator sees the book only at the next trade. At random moments in September 2026:
+- **Depth.** Only the best price on each side is visible. An order larger than the
+  displayed size pays `depth_penalty_ticks` for the remainder: a setting, not a
+  measurement. One contract in GC, SI, or ES almost never exceeds the displayed size.
+- **Limit orders.** There is no queue position (that needs MBO). Targets fill only when a
+  trade prints beyond them, which is conservative, and passive or market-making strategies
+  cannot be tested.
+- **Latency.** `feed_latency_ms`, `close_delay_ms`, and `order_latency_ms` are assumptions
+  about this machine and broker. Measure them in paper trading and rerun promising results
+  with larger values.
+- **Market impact.** A simulated order does not change the book that later orders meet.
+  That is negligible for one contract and wrong for size.
+- **Stored book features.** The stored rows still describe the book only as trades saw it
+  (spread, displayed size, order count, and imbalance at trades, each with its age). A
+  stage that reads every book event, `book_1s`, is planned
+  ([second-scale metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)).
+- **Paper trading** on the live MBP-1 feed sees the same book. Only broker fills show true
+  execution.
 
-  | Product | Next trade (median, 90th pct) | Book older than 1 s | Ask moved across the gap: 0 / 1 / 2+ ticks | Spread / 1-minute range |
-  | ------- | ----------------------------- | ------------------- | ------------------------------------------ | ----------------------- |
-  | GC      | 1.7 s, 9.5 s                  | 64%                 | 19 / 31 / 50%                              | 2 / 16 ticks            |
-  | SI      | 5.9 s, 36 s                   | 85%                 | 17 / 29 / 54%                              | 2 / 7 ticks             |
-  | ES      | 0.9 s, 5.9 s                  | 48%                 | 58 / 42 / 1%                               | 1 / 5 ticks             |
-
-  Simulated fills are therefore uncertain by about 1–2 ticks in GC and SI and up to a
-  tick in ES. Edges smaller than that cannot be tested; target moves several times
-  larger, such as minute-scale holds with ATR-sized brackets. Runs report
-  `entry_delay_ms`, the time from the signal to the trade whose book priced the fill.
-  A real order would not wait; read it as how old the simulated price is.
-
-- **Limit orders.** There is no queue position or quote history. Targets fill only when
-  a trade prints beyond them, and passive or market-making strategies cannot be tested.
-- **Book features.** Spread, displayed size, order count, and imbalance exist only at
-  trades and only at the best price. In quiet seconds (80% of SI's seconds) they are as
-  old as the last trade, so store them with their age. There is no depth beyond the
-  best level and no record of cancellations.
-- **Uneven precision.** The rules are the same for every product, but busy contracts
-  are measured more precisely than thin ones; compare products with that in mind.
-- **Paper trading** on the live TBBO feed has the same blind spot. Only broker fills
-  show true execution.
-
-Recommended next, using the same rules for every product: fill each order at the worse
-of the last known and the next observed book; allow entries only shortly after a trade
-(one parameter, in seconds); report each entry's book movement in ticks; and rerun any
-promising result with fills one tick worse before trusting it.
+Rerun any promising result with one tick of extra slippage and a longer order latency
+before trusting it.
 
 ## Known limits
 

@@ -1,4 +1,4 @@
-"""Disjoint base bars on the scheduled-open grid, built from TBBO trades.
+"""Disjoint base bars on the scheduled-open grid, built from MBP-1 trade records.
 
 Every scheduled-open slot gets a row: `OBSERVED` (trades), `NO_TRADES` (covered,
 no trades), or `MISSING` (no data coverage). Scheduled closures get no row.

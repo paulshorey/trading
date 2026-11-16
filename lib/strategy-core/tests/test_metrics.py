@@ -1,4 +1,4 @@
-"""Per-second TBBO metrics and their rolling windows (docs/project/ingestion.md)."""
+"""Per-second trade metrics and their rolling windows (docs/project/ingestion.md)."""
 
 import numpy as np
 import pytest

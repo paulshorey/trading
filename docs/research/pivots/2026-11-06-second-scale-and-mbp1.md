@@ -1,5 +1,13 @@
 # Second and sub-second metrics, and the choice between MBP-1 and TBBO
 
+> **Outcome, November 15, 2026:** Paul chose MBP-1 for every product and removed the TBBO
+> files. Steps 1, 2, and 4 of [Effort](#effort) are implemented (MBP-1 is the only source,
+> book events reach the engine, and fills use the book the order meets); step 3 (`book_1s`)
+> and step 5 (live) are next. Unlike the recommendation below, the TBBO files were not
+> kept: the storage figures here are superseded by [data](../../project/data.md), and a
+> full session of MBP-1 trades was checked against the rows stored from TBBO instead of the
+> one-hour comparison. The text below is kept as written.
+
 Researched November 6, 2026. This note revises one assumption of the
 [order-flow inventory](2026-11-05-order-flow-predictors.md): that strategies target moves of
 an ATR or more over minutes. Paul wants second and sub-second strategies in scope as well.
@@ -12,7 +20,7 @@ here is implemented or measured.
 1. **Use MBP-1.** At second and sub-second scales, TBBO's blind spot (no book between
    trades) is exactly where most of the useful metrics live: about half of the inventory
    below needs MBP-1. TBBO's book is older than one second at 64% of random moments in GC
-   and 85% in SI ([engine](../../project/engine.md#data-limits-tbbo-only)). In one GC hour
+   and 85% in SI ([engine](../../project/engine.md#data-limits-mbp-1)). In one GC hour
    (October 15, 2026, 13:30–14:30 UTC), the front contract had 289,988 top-of-book changes
    and 10,157 trades (10,861 across all GC instruments, including other months and spreads): TBBO shows the book at about one change in 29.
 2. **History costs about the same.** For 2024, quoted for this account on November 6, 2026:

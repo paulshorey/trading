@@ -1,14 +1,16 @@
-"""Historical market chunks from Databento TBBO files.
+"""Historical market chunks from Databento MBP-1 files.
 
-Each chunk is one session of one contract: the trades a live session would have
-assigned to that session's slots. `strategy_core.engine.split_by_second` turns a
-session into the one-second chunks a live session processes.
+Each chunk is one session of one contract: the trades, and for a session that trades the
+book events, a live session would have assigned to that session's slots.
+`strategy_core.engine.split_by_second` turns a session into the one-second chunks a live
+session processes.
 """
 
 from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from typing import NamedTuple
 
 import databento as db
 import numpy as np
@@ -16,34 +18,49 @@ from strategy_core.bars import assignment_ns, assignment_times
 from strategy_core.engine import MarketChunk
 from strategy_core.execution import ExecutionConfig
 from strategy_core.market import (
+    ACTION_TRADE,
     F_BAD_TS_RECV,
     F_MAYBE_BAD_BOOK,
     NS,
     UNDEF_PRICE,
     UNDEF_SIZE,
+    BookEvents,
     Product,
     Trades,
 )
 
 from .calendars import Session
-from .catalog import DbnFile, verify
+from .catalog import MARKET, DbnFile, verify
 
-SIDES = {b"B": 1, b"A": -1}  # Databento: B = buyer aggressor, A = seller aggressor
+SIDES = {b"B": 1, b"A": -1}  # Databento: B = bid or buyer aggressor, A = ask or seller aggressor
 DAY = 86_400 * NS
 
 
+class Day(NamedTuple):
+    trades: np.ndarray  # the day's trade records (`action == "T"`), all instruments
+    records: np.ndarray | None  # every record of the day, when the cache keeps books
+    mappings: dict
+
+
 class DayCache:
-    """Decoded TBBO days (all instruments) with their symbol mappings, least recently used."""
+    """Decoded MBP-1 days (all instruments) with their symbol mappings, least recently used.
+    A day's trade records are a few percent of its file. Every record is kept only when
+    `book` is set (backtests, which fill orders at the book): ingestion reads trades alone,
+    so its workers hold little memory."""
 
-    def __init__(self, size: int = 4):
-        self.size, self.items = size, OrderedDict()
+    def __init__(self, size: int = 4, book: bool = False):
+        self.size, self.book, self.items = size, book, OrderedDict()
 
-    def get(self, file: DbnFile) -> tuple[np.ndarray, dict]:
+    def get(self, file: DbnFile) -> Day:
         key = file.path
         if key not in self.items:
             verify(file)
             store = db.DBNStore.from_file(file.path)
-            self.items[key] = (store.to_ndarray(), store.mappings)
+            if store.metadata.schema != MARKET:
+                raise ValueError(f"{file.path.name} holds {store.metadata.schema}, not {MARKET}")
+            records = store.to_ndarray()
+            trades = records[records["action"] == b"T"]
+            self.items[key] = Day(trades, records if self.book else None, store.mappings)
             while len(self.items) > self.size:
                 self.items.popitem(last=False)
         self.items.move_to_end(key)
@@ -68,6 +85,27 @@ def to_trades(records: np.ndarray) -> Trades:
         price=records["price"].astype(np.int64),
         size=records["size"].astype(np.int64),
         side=side,
+        bid=records["bid_px_00"].astype(np.int64),
+        ask=records["ask_px_00"].astype(np.int64),
+        bid_size=records["bid_sz_00"].astype(np.int64),
+        ask_size=records["ask_sz_00"].astype(np.int64),
+        bid_count=records["bid_ct_00"].astype(np.int64),
+        ask_count=records["ask_ct_00"].astype(np.int64),
+        flags=records["flags"].astype(np.uint8),
+    )
+
+
+def to_book(records: np.ndarray) -> BookEvents:
+    side = np.zeros(len(records), np.int8)
+    for code, value in SIDES.items():
+        side[records["side"] == code] = value
+    return BookEvents(
+        ts_event=records["ts_event"].astype(np.int64),
+        ts_recv=records["ts_recv"].astype(np.int64),
+        action=records["action"].view(np.uint8).copy(),
+        side=side,
+        price=records["price"].astype(np.int64),
+        size=records["size"].astype(np.int64),
         bid=records["bid_px_00"].astype(np.int64),
         ask=records["ask_px_00"].astype(np.int64),
         bid_size=records["bid_sz_00"].astype(np.int64),
@@ -141,7 +179,7 @@ class HistoricalSource:
         for day, file in self.day_files(session):
             if file is None or not file.covered:
                 continue
-            records, mappings = self.cache.get(file)
+            records, _, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
             iid = instrument_id(mappings, symbol, day)
             if iid is None:
@@ -151,8 +189,7 @@ class HistoricalSource:
             if window[0] >= window[1]:
                 continue
             coverage.append(window)
-            sel = (records["instrument_id"] == iid) & (records["action"] == b"T")
-            parts.append(to_trades(records[sel]))
+            parts.append(to_trades(records[records["instrument_id"] == iid]))
         trades = Trades.concat(parts)
         assign = assignment_times(trades, self.config.feed_latency, self.config.close_delay)
         inside = (assign >= session.after) & (assign < session.close)
@@ -166,27 +203,58 @@ class HistoricalSource:
         keep = inside & ~undefined & ~empty & ~unset
         return trades.take(keep), np.array(coverage, np.int64).reshape(-1, 2), unmapped, rejected
 
+    def session_book(self, symbol: str, session: Session) -> BookEvents:
+        """Every MBP-1 record of a contract assigned to the session, in receive order, from the
+        same files and by the same rule as `session_trades`. Records of the closure before
+        the session are included: they build the book the session opens with. Nothing is
+        rejected here; a fill checks the book it reads."""
+        parts = []
+        for day, file in self.day_files(session):
+            if file is None or not file.covered:
+                continue
+            _, records, mappings = self.cache.get(file)
+            iid = instrument_id(mappings, symbol, day)
+            window = file.window
+            if iid is None or window[0] >= window[1]:
+                continue
+            parts.append(to_book(records[records["instrument_id"] == iid]))
+        book = BookEvents.concat(parts)
+        assign = assignment_ns(
+            book.ts_event, book.ts_recv, self.config.feed_latency, self.config.close_delay
+        )
+        return book.take((assign >= session.after) & (assign < session.close))
+
     def stored_chunk(
         self, contract: str, session: Session
     ) -> tuple[MarketChunk, Trades, list[date], dict[str, int]]:
         """The chunk ingestion stores for a contract's session, with its trades, the days whose
         files do not list the contract, and its rejected records. Part of the source identity:
-        what each stage reads comes from here."""
+        what each stage reads comes from here. It carries the book events when the cache keeps
+        them, which a stage that reads the book will need."""
         trades, coverage, unmapped, rejected = self.session_trades(contract, session)
+        book = self.session_book(contract, session) if self.cache.book else None
         label = f"{session.trade_date} {contract}"
-        chunk = MarketChunk(contract, session.open, session.close, trades, coverage, label)
+        chunk = MarketChunk(
+            contract, session.open, session.close, trades, coverage, label, True, book
+        )
         return chunk, trades, unmapped, rejected
 
     def session_chunk(self, contract: str, session: Session, tradable: bool) -> MarketChunk:
+        """A session's chunk. A session that trades carries its book events when the cache
+        keeps them; a warm-up session only builds features, which read trades."""
         trades, coverage, unmapped, rejected = self.session_trades(contract, session)
+        book = self.session_book(contract, session) if tradable and self.cache.book else None
         label = f"{session.trade_date} {contract}" + ("" if tradable else " (warmup)")
         self.quality[label] = {
             **raw_quality(trades),
+            **(book_quality(book) if book is not None else {}),
             "rejected_trades": rejected,
             "contract_unmapped_days": [d.isoformat() for d in unmapped],
             "front_kept_for_incomplete_data": session.trade_date in self.kept_front,
         }
-        return MarketChunk(contract, session.open, session.close, trades, coverage, label, tradable)
+        return MarketChunk(
+            contract, session.open, session.close, trades, coverage, label, tradable, book
+        )
 
     def front_contract(
         self, previous: Session | None, session: Session, current: str | None = None
@@ -242,7 +310,7 @@ class HistoricalSource:
                         return {}, False
                 if not usable:
                     continue
-            records, mappings = self.cache.get(file)
+            records, _, mappings = self.cache.get(file)
             self.used_files[file.path.name] = file
             ids = {
                 symbol: iid
@@ -265,7 +333,6 @@ class HistoricalSource:
             in_session = (
                 (assign >= session.open)
                 & (assign < session.close)
-                & (records["action"] == b"T")
                 & (records["price"] != UNDEF_PRICE)  # the same accepted trades as aggregation
                 & (records["size"] > 0)
                 & (records["size"] != UNDEF_SIZE)
@@ -319,4 +386,17 @@ def raw_quality(t: Trades) -> dict:
         "no_book": int(np.sum(~book_ok)),
         "outside_pre_trade_book": int(np.sum(outside)),
         "median_receive_lag_us": float(np.median(t.ts_recv - t.ts_event) / 1e3) if n else None,
+    }
+
+
+def book_quality(b: BookEvents) -> dict:
+    """Checks on a session's book events. A crossed book (bid above ask) is never filled at."""
+    two_sided = (b.bid != UNDEF_PRICE) & (b.ask != UNDEF_PRICE)
+    quotes = b.action != ACTION_TRADE
+    return {
+        "book_events": len(b),
+        "book_changes": int(np.sum(quotes)),
+        "book_one_sided": int(np.sum(quotes & ~two_sided)),
+        "book_crossed": int(np.sum(quotes & two_sided & (b.bid > b.ask))),
+        "book_maybe_bad_flag": int(np.sum(quotes & ((b.flags & F_MAYBE_BAD_BOOK) > 0))),
     }

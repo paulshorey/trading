@@ -6,7 +6,8 @@ Historical proposal, November 2, 2026. Use the newer
 [next-agent handoff](project/pivot-detection-handoff.md) for current recommendations.
 They correct this proposal's future-label leakage claim, trade-label reuse, timeout
 handling, and profitability selection gate. The original text is retained below as
-research history, not an implementation specification.
+research history, not an implementation specification. It also predates the move from TBBO
+to MBP-1 (November 15, 2026): the book is no longer seen only at trades.
 
 Researched 2026-11-02. Question: which Python algorithm or ML library should predict high/low
 pivot points as early as possible from price/volume series, within this project's

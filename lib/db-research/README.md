@@ -81,7 +81,7 @@ CREATE TABLE market.bar_1s (
     slot_ordinal  bigint   NOT NULL,     -- index counter: +1 per scheduled-open second
     end_ns        bigint   NOT NULL,     -- clock time: charts and joins, never windows
     -- OHLC, high/low times, volume by aggressor side, trade count, price x size sum,
-    -- running-delta extremes, session CVD, and the TBBO metrics (strategy_core.stage_bar_1s)
+    -- running-delta extremes, session CVD, and the trade metrics (strategy_core.stage_bar_1s)
     status        smallint NOT NULL,     -- 0 missing, 1 no trades, 2 observed
     phase         smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
     PRIMARY KEY (contract_id, slot_ordinal, end_ns)

@@ -26,7 +26,7 @@ supplies the direction bias, read as of the latest completed minute.
 
 ## 1. Base bars
 
-Build 1-second base bars from Databento TBBO trades and roll them up into 1-minute
+Build 1-second base bars from Databento MBP-1 trade records and roll them up into 1-minute
 base bars (an exact aggregation).
 
 - Use integer UTC nanoseconds. A bar covers `[start, end)`; a trade exactly at a
@@ -34,7 +34,7 @@ base bars (an exact aggregation).
   to model when data became available.
 - Store open, high, low, and close (first, maximum, minimum, and last trade price),
   the times of the high and low, volume, trade count, the price × size sum for VWAP,
-  and buy, sell, and unknown-side volume from the TBBO `side` field.
+  and buy, sell, and unknown-side volume from the trade record's `side` field.
 - Give every step when the market is scheduled open a slot, with one status:
   `observed` (at least one trade), `no_trades` (feed healthy, no trades), or
   `missing` (feed gap or unknown). Scheduled closures get no slot; see

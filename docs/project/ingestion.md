@@ -1,15 +1,22 @@
 # Ingestion
 
+Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
+reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
+rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the
+TBBO-built ones on every day both have
+([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
+3–5) was measured on the TBBO-built rows and still describes the design and its costs.
+
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema
 ([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
 ([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
 hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), run 5 the
 minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)), and run 6 the second
-volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [TBBO engineering handoff](tbbo-engineering-handoff.md);
+volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [trade-metrics reference](trade-metrics-reference.md);
 [differences](#differences-from-the-handoff) are listed below.
 
-The `research ingest` command reads Databento TBBO files and stores, for every contract
+The `research ingest` command reads the trade records of Databento MBP-1 files and stores, for every contract
 and every scheduled-open second and minute, one row per **stage**, computed by
 `strategy-core`, the code live sessions run ([stages and tiers](feature-pipeline.md)). Each
 stage has its own table, version, and per-session checkpoint:
@@ -59,8 +66,8 @@ from the DBN files; only the stages that are not current are written. Each sessi
 its rows and checkpoints together, so `run` can be interrupted and rerun at any time: it
 continues where it stopped and never adds a session twice.
 
-**After downloading new TBBO files** (a later month, or a re-delivered file), put the job
-folder under `data/databento/tbbo/` as delivered, then:
+**After downloading new MBP-1 files** (a later month, or a re-delivered file), put the job
+folder under `data/databento/mbp-1/` as delivered, then:
 
 ```sh
 uv run research catalog --verify        # checksums of every file

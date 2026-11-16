@@ -9,7 +9,7 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Merge PR #62.** Merged into `main`.
 - [ ] **Download contract definitions.** Free, but submitting the job needs the
       account owner. Settings are in [data](data.md#what-we-have).
-- [x] **Implement one-second rows and metrics.** Per-second TBBO metrics, the stored
+- [x] **Implement one-second rows and metrics.** Per-second trade metrics, the stored
       `1m@1s` candle with 87 features, the second-row migration (now part of `0001_baseline`), and
       `research ingest plan|run|status` ([ingestion](ingestion.md)).
 - [x] **One continuous series per product.** `market.continuous_bar_1s` and
@@ -46,6 +46,15 @@ task live in [handoff: next steps](handoff.md#next-steps).
       cost about 0.08 ms per second (`research verify` 321.7 s for the MGC day). Applied to
       `trading` and built for GC/SI on November 4 in 5 min 47 s; full-year checks passed
       ([results](handoff.md#pr-c2-results-second-volatility)). Merged.
+- [x] **Move from TBBO to MBP-1.** November 15: MBP-1 is the only market data (GC, SI, PL,
+      ES, YM, RTY verified; NQ not downloaded); book events reach the engine and fills use the
+      book each order meets ([what changed](handoff.md#the-move-to-mbp-1-november-15-2026)).
+- [x] **Rebuild GC and SI from MBP-1.** Done November 16 with Paul's authorization: schemas
+      reset, 858 contract-sessions rebuilt in 25 minutes, every contract `current`, trade
+      rows equal to the TBBO-built ones
+      ([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)).
+- [ ] **Free disk space, or decide what not to store.** 106 GB is free; NQ or `pivot_1s`
+      fits, not both, and `book_1s` does not ([open questions](handoff.md#open-questions)).
 - [ ] **Swing structure, signals, labels (PRs D–F), next**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 - [x] **Test backtests on real data at full scale.** November 5: a GC year in 161 s with
@@ -67,10 +76,11 @@ task live in [handoff: next steps](handoff.md#next-steps).
       the code or data fingerprint differs from the run's provenance; today it rebuilds
       with the current code (deferred from the PR #62 review, since the fingerprint changes
       with almost every edit during prototyping).
-- [ ] **Make the data audit a command.** The November 1 checks (record types, receive
-      order, event-time inversions, implied tick sizes, trades outside the calendar,
-      Databento flags, front contract by day) were a one-off script. Add them to
-      `research catalog` (for example `--audit`) for future downloads.
+- [ ] **Make the data audit a command.** The November 1 and November 15 checks (full
+      decode, record types, receive order, event-time inversions, implied tick sizes, trades
+      outside the calendar, crossed books, Databento flags, front contract by day) were
+      one-off scripts. Add them to `research catalog` (for example `--audit`) for future
+      downloads such as NQ.
 
 ## Next: research workflow
 
@@ -89,50 +99,40 @@ task live in [handoff: next steps](handoff.md#next-steps).
 
 ## Later: refinements after the core is tested
 
-- [ ] **TBBO fill safeguards.** TBBO shows the book only at trades, so simulated fills
-      are uncertain by about 1–2 ticks in GC and SI
-      ([measurements](engine.md#data-limits-tbbo-only)). Use the same rules for every
-      product:
-  - **Pessimistic fills.** Price market orders (entries, time and session exits, stop
-    fills) at the worse of the last known book and the next observed book. Estimate
-    the last known book from the previous trade: if that trade took all the displayed
-    size on its side, move that side one tick.
-  - **Activity gate.** One setting in seconds (for example `max_book_age_s`): allow
-    entries only if the latest trade is that recent at the decision. Count gated
-    signals in the run summary.
-  - **Per-entry uncertainty.** Record the book's age at the decision and how far the
-    bid or ask moved across the gap, in ticks, for every trade; summarize per run.
-    Rename or clarify `entry_delay_ms`: it is how old the simulated price is, not a
-    real delay.
-  - **Robustness rerun.** A setting (for example `fill_penalty_ticks`) to rerun with
-    fills one tick worse; report both results and flag those that flip.
-  - **Done when** every rule has unit tests and whole-session versus second-by-second
-    parity still holds.
+- [x] **Fill realism.** Superseded by MBP-1: market orders, time and session exits, and
+      stop fills are priced at the book the order meets, and every trade records the spread
+      at the decision and its entry slippage in ticks.
+- [ ] **Fill robustness.** A setting (for example `fill_penalty_ticks`) to rerun with fills
+      one tick worse and a longer order latency; report both results and flag those that
+      flip. Fill a resting target also when the opposite best quote trades through it, once
+      a queue rule is chosen. Record the slippage of market exits as entries do.
+- [ ] **Book stage `book_1s`.** Tier 0 from every book event: queue imbalance, order-flow
+      imbalance, time-weighted spread, depletion and refill
+      ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)). Switch ingestion's
+      day cache to keep book events for it.
 - [x] **Roll warmup.** Backtests warm each contract for the stored lead by default and compute
       exactly the stored rows from every roll on
       ([checks](handoff.md#full-scale-checks-after-pr-c2)). Reading stored rows would only be
       faster ([next steps](handoff.md#next-steps)).
-- [ ] **More products.** Add PL, YM, RTY, ES, and NQ once GC and SI ingestion is proven;
-      all are on disk with specs.
+- [ ] **More products.** Add PL, YM, RTY, and ES once GC and SI are rebuilt and disk allows;
+      they are on disk with specs. NQ still has to be downloaded.
 - [ ] **Slower bias.** Optionally a `1d@1h` window.
 
 ## Live trading: after research shows an edge
 
-- [ ] **Paper sessions.** A Databento live TBBO source feeding one-second chunks to the
+- [ ] **Paper sessions.** A Databento live MBP-1 source feeding one-second chunks to the
       engine with simulated fills. Record each day and replay it as a backtest to
       confirm identical decisions.
 - [ ] **Checkpoints.** Save and restore indicator, window, order, and position state, so
       a live session can restart without replaying history.
 - [ ] **Broker execution.** Broker adapter, reconciliation, risk limits, pause and
       resume, manual overrides, and a decision log. Run a small live test to compare
-      real fills with the TBBO fill model.
+      real fills with the simulated ones.
 
 ## Housekeeping
 
-- [ ] **At the next `candle_1m_1s` rebuild**, delete the unused `features.FeaturePipeline`
-      ([B1 decisions](handoff.md#pr-b-1h1m-rows)); `features.py` is in that stage's identity,
-      so the edit waits for a rebuild that happens anyway. (`pipeline.FastAtr` is gone: the
-      engine reads `vol_1s.atr_price`.)
+- [x] **Delete the unused `features.FeaturePipeline`.** Done with the MBP-1 change, which
+      rebuilds every stage anyway.
 - [ ] **At the next `source.py` rebuild**, give `HistoricalSource` the roll warm-up count
       apart from its warm-up list, and skip warm-up sessions outside the downloaded data, so a
       download that starts partway through a session cannot make a backtest differ from storage

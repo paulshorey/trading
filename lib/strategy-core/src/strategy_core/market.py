@@ -20,6 +20,8 @@ UNDEF_PRICE = np.iinfo(np.int64).max  # Databento sentinel for an absent price
 UNDEF_SIZE = int(np.iinfo(np.uint32).max)  # Databento sentinel for an absent size or count
 F_MAYBE_BAD_BOOK = 1 << 2  # Databento flag: an unrecoverable gap; the book may be wrong
 F_BAD_TS_RECV = 1 << 3  # Databento flag: ts_recv is inaccurate
+F_SNAPSHOT = 1 << 5  # Databento flag: the book as it stood, replayed at the start of a file
+ACTION_TRADE = ord("T")  # MBP-1 `action`: T trade, A add, C cancel, M modify, R clear book
 MONTH_CODES = "FGHJKMNQUVXZ"
 
 
@@ -60,7 +62,7 @@ class Product:
 
 EQUITY_INDEX = "CME Globex Equity"  # ES, NQ, YM, RTY share the CME equity-index schedule
 
-# Tick sizes were checked against the downloaded TBBO prices; tick values follow the
+# Tick sizes were checked against the downloaded trade prices; tick values follow the
 # contract multipliers (GC 100 oz, SI 5,000 oz, PL 50 oz, ES $50, NQ $20, YM $5, RTY $50).
 PRODUCTS = {
     "GC": Product("GC", "COMEX Gold", "GLBX.MDP3", 100_000_000, 10.0, "CMEGlobex_GC"),
@@ -70,16 +72,48 @@ PRODUCTS = {
     "NQ": Product("NQ", "E-mini Nasdaq-100", "GLBX.MDP3", 250_000_000, 5.0, EQUITY_INDEX),
     "YM": Product("YM", "E-mini Dow ($5)", "GLBX.MDP3", 1_000_000_000, 5.0, EQUITY_INDEX),
     "RTY": Product("RTY", "E-mini Russell 2000", "GLBX.MDP3", 100_000_000, 5.0, EQUITY_INDEX),
-    # Micro Gold: only the bundled one-day sample uses it.
+    # Micro Gold: no data downloaded; kept for small live accounts and the symbol tests.
     "MGC": Product("MGC", "Micro Gold", "GLBX.MDP3", 100_000_000, 1.0, "CMEGlobex_GC"),
 }
 
 
+class Columns:
+    """Equal-length 1-D arrays named by `FIELDS` with the dtypes in `DTYPES`, one element per
+    record in receive order."""
+
+    FIELDS: tuple[str, ...] = ()
+    DTYPES: tuple = ()
+
+    def __post_init__(self):
+        n = len(self.ts_event)
+        kind = type(self).__name__
+        for name, dtype in zip(self.FIELDS, self.DTYPES, strict=True):
+            value = getattr(self, name)
+            if value.dtype != dtype or value.ndim != 1 or len(value) != n:
+                raise ValueError(f"{kind}.{name} must be a 1-D {np.dtype(dtype)} array, length {n}")
+
+    def __len__(self) -> int:
+        return len(self.ts_event)
+
+    def take(self, index):
+        return type(self)(*(getattr(self, name)[index] for name in self.FIELDS))
+
+    @classmethod
+    def empty(cls):
+        return cls(*(np.empty(0, dtype) for dtype in cls.DTYPES))
+
+    @classmethod
+    def concat(cls, parts: list):
+        if not parts:
+            return cls.empty()
+        return cls(*(np.concatenate([getattr(p, name) for p in parts]) for name in cls.FIELDS))
+
+
 @dataclass(frozen=True)
-class Trades:
-    """TBBO trades for one contract in receive order, each with the best bid and ask
-    immediately before it: prices, displayed sizes, and displayed order counts.
-    `side` is +1 buyer aggressor, -1 seller aggressor, 0 unknown."""
+class Trades(Columns):
+    """One contract's trades in receive order: the MBP-1 records with `action == "T"`, each
+    with the best bid and ask immediately before it (prices, displayed sizes, and displayed
+    order counts). `side` is +1 buyer aggressor, -1 seller aggressor, 0 unknown."""
 
     ts_event: np.ndarray
     ts_recv: np.ndarray
@@ -123,29 +157,6 @@ class Trades:
         np.uint8,
     )
 
-    def __post_init__(self):
-        n = len(self.ts_event)
-        for name, dtype in zip(self.FIELDS, self.DTYPES, strict=True):
-            value = getattr(self, name)
-            if value.dtype != dtype or value.ndim != 1 or len(value) != n:
-                raise ValueError(f"Trades.{name} must be a 1-D {np.dtype(dtype)} array, length {n}")
-
-    def __len__(self) -> int:
-        return len(self.ts_event)
-
-    def take(self, index) -> "Trades":
-        return Trades(*(getattr(self, name)[index] for name in self.FIELDS))
-
-    @classmethod
-    def empty(cls) -> "Trades":
-        return cls(*(np.empty(0, dtype) for dtype in cls.DTYPES))
-
-    @classmethod
-    def concat(cls, parts: list["Trades"]) -> "Trades":
-        if not parts:
-            return cls.empty()
-        return cls(*(np.concatenate([getattr(p, name) for p in parts]) for name in cls.FIELDS))
-
     def scaled(self, price_factor: int = 1, size_factor: int = 1) -> "Trades":
         """Copy with every price and size multiplied, for scale-invariance tests."""
         bid = np.where(self.bid == UNDEF_PRICE, UNDEF_PRICE, self.bid * price_factor)
@@ -164,6 +175,68 @@ class Trades:
             self.ask_count,
             self.flags,
         )
+
+
+@dataclass(frozen=True)
+class BookEvents(Columns):
+    """Every MBP-1 record of one contract in receive order: each change to the best bid or
+    ask and each trade. `action` is the record's ASCII code (`ACTION_TRADE` for a trade; adds,
+    cancels, modifies, and book clears otherwise), `side` the side it acted on (+1 bid or
+    buyer aggressor, -1 ask or seller aggressor, 0 none), and `price`/`size` the order or
+    trade it describes. `bid`, `ask`, and their sizes and order counts are the top of book
+    after the event, except on a trade record, which shows the book just before the trade
+    (the next record shows what the trade left). The state after record `k` is therefore the
+    book the market showed from then until record `k + 1`."""
+
+    ts_event: np.ndarray
+    ts_recv: np.ndarray
+    action: np.ndarray
+    side: np.ndarray
+    price: np.ndarray
+    size: np.ndarray
+    bid: np.ndarray
+    ask: np.ndarray
+    bid_size: np.ndarray
+    ask_size: np.ndarray
+    bid_count: np.ndarray
+    ask_count: np.ndarray
+    flags: np.ndarray
+
+    FIELDS = (
+        "ts_event",
+        "ts_recv",
+        "action",
+        "side",
+        "price",
+        "size",
+        "bid",
+        "ask",
+        "bid_size",
+        "ask_size",
+        "bid_count",
+        "ask_count",
+        "flags",
+    )
+    DTYPES = (
+        np.int64,
+        np.int64,
+        np.uint8,
+        np.int8,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.int64,
+        np.uint8,
+    )
+
+    def trades(self) -> Trades:
+        """The trade records: exactly what Databento's TBBO schema holds."""
+        t = self.take(self.action == ACTION_TRADE)
+        return Trades(*(getattr(t, name) for name in Trades.FIELDS))
 
 
 @dataclass(frozen=True)

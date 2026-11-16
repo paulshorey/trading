@@ -14,9 +14,9 @@ from enum import StrEnum
 import numpy as np
 
 from . import kernels
-from .bars import BaseBars, Rollup
-from .market import MINUTE, NS, SECOND, SessionCalendar
-from .windows import BIAS, COMPLETE, FAST, Candles, RollingWindow, WindowSpec
+from .bars import BaseBars
+from .market import SessionCalendar
+from .windows import COMPLETE, Candles, RollingWindow, WindowSpec
 
 
 class Unit(StrEnum):
@@ -160,47 +160,3 @@ class WindowFeatures:
             {f"{self.spec.name}.{k}": v for k, v in values.items()},
             np.where(priced, atr, np.nan),
         )
-
-
-class FeaturePipeline:
-    """Feature rows at every scheduled-open second: 1m@1s features of the candle ending now and
-    1h@1m bias features of the latest completed minute, with that minute's age."""
-
-    def __init__(self, calendar: SessionCalendar, config: FeatureConfig | None = None):
-        self.config = config or FeatureConfig()
-        self.fast = WindowFeatures(FAST, calendar, self.config)
-        self.bias = WindowFeatures(BIAS, calendar, self.config)
-        self.minutes = Rollup(SECOND, MINUTE)
-        self.last_bias: dict[str, np.ndarray] | None = None  # one-row arrays
-        self.last_bias_end = np.empty(0, np.int64)
-
-    def specs(self) -> list[FeatureSpec]:
-        age = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
-        return [*self.fast.specs(), *self.bias.specs(), age]
-
-    def update(self, seconds: BaseBars) -> FeatureFrame:
-        fast_candles, features, fast_atr = self.fast.update(seconds)
-        minutes = self.minutes.update(seconds)
-        _, bias, _ = self.bias.update(minutes)
-        minute_end = np.r_[self.last_bias_end, minutes.end]
-        if self.last_bias is not None:
-            bias = {k: np.r_[self.last_bias[k], v] for k, v in bias.items()}
-        n = len(seconds)
-        # As-of join: the latest minute completed at or before each second. The minute ending
-        # at T completes with the second ending at T, so its age is then zero.
-        i = np.searchsorted(minute_end, seconds.end, side="right") - 1
-        known = i >= 0
-        safe = np.maximum(i, 0)
-        for name, values in bias.items():
-            features[name] = (
-                np.where(known, values[safe], np.nan) if len(values) else np.full(n, np.nan)
-            )
-        features["1h@1m.age_s"] = (
-            np.where(known, (seconds.end - minute_end[safe]) / NS, np.nan)
-            if len(minute_end)
-            else np.full(n, np.nan)
-        )
-        if len(minute_end):
-            self.last_bias = {k: v[-1:] for k, v in bias.items()}
-            self.last_bias_end = minute_end[-1:]
-        return FeatureFrame(seconds.end, features, {"close": fast_candles.close, "atr": fast_atr})

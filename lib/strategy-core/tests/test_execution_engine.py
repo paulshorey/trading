@@ -104,6 +104,62 @@ def test_stop_fills_at_the_book_its_trigger_left():
     assert out["exit_px"] == pytest.approx(1999.6)  # the bid was still 2000.0: capped
 
 
+def test_a_trade_record_leaves_the_book_until_a_change_follows():
+    """A trade record carries the book before the trade. With no change after it (the trade
+    met hidden or implied liquidity), that book stands and the stop sells at it."""
+    sim = Simulator(GC, CFG, BRACKET, CAL)
+    trigger = trades([(T0 + 61 * S, 1999.6, 9, -1, 1_000, 1999.6, 1999.7, 1, 5)])
+    book = BookEvents.concat([quotes([ENTRY]), trade_events(trigger)])
+    view = exec_view(trigger, book)
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    assert sim.fill(view, pos)[0] == FILLED
+    _, out = sim.advance(view, 0, pos)
+    assert out["exit_reason"] == "stop" and out["exit_px"] == pytest.approx(1999.6)
+    assert "no_book" not in out["flags"]
+
+
+def test_a_stop_triggered_by_a_late_trade_fills_at_the_records_released_with_it():
+    """Regression (PR #81 review): a trigger released two seconds late used to fill at the
+    book of the second it was released in, after two seconds of later movement."""
+    trigger = (T0 + 61 * S, 1999.6, 1, -1, 2 * S)  # released with second 63, known at 63.1 s
+    fell = (T0 + 61_500_000_000, 1998.0, 1998.1)  # on time, after the trigger
+    left = (T0 + 61 * S, 1999.5, 1999.7, 5, 5, 2 * S + 1_000)  # the trigger's own book change
+    _, out = simulate([trigger], [ENTRY, fell, left])
+    assert out["exit_reason"] == "stop" and out["exit_px"] == pytest.approx(1999.5)
+    assert (out["exit_ns"], out["exit_known_ns"]) == (str(T0 + 61 * S), str(T0 + 63_100_000_000))
+    # with no record released beside it, the stop fills at the trigger's price and says so
+    _, out = simulate([trigger], [ENTRY, fell])
+    assert out["exit_px"] == pytest.approx(1999.6) and "no_book" in out["flags"]
+
+
+def test_the_book_is_the_record_received_last_and_never_takes_effect_early():
+    """Each record is the whole top of book after its event, so it includes every record
+    received before it (PR #81 review)."""
+    # An event-time inversion in one second: the later-received record is stamped earlier.
+    view = exec_view(
+        trades([]),
+        quotes(
+            [
+                (T0 + 60 * S, 2000.0, 2000.1),
+                (T0 + 60_800_000_000, 2000.2, 2000.3),
+                (T0 + 60_700_000_000, 2000.4, 2000.5, 5, 5, 101_000_000),  # received at 60.801 s
+            ]
+        ),
+    ).book
+    assert view.at(T0 + 60_750_000_000).bid == 2000_000_000_000  # neither had happened
+    assert view.at(T0 + 60_800_000_000).bid == 2000_400_000_000  # both had: the newest book
+    # A late record released a second before one that was received earlier.
+    first = (T0 + 61_050_000_000, 2000.0, 2000.1)  # received at 61.050001 s, second 62
+    newer = (T0 + 60 * S, 2000.2, 2000.3, 5, 5, 1_052_000_000)  # received at 61.052 s, second 61
+    whole = exec_view(trades([]), quotes([first, newer])).book
+    assert whole.known(T0 + 61 * S).bid == 2000_200_000_000
+    assert whole.known(T0 + 62 * S).bid == whole.last.bid == 2000_200_000_000
+    # the same two seconds as separate chunks
+    one = exec_view(trades([]), quotes([newer])).book
+    two = BookView(quotes([first]), np.array([T0 + 62 * S]), one.last, 0, one.recv_max)
+    assert two.last.bid == 2000_200_000_000 and two.recv_max == one.recv_max
+
+
 def test_short_time_exit_and_depth_penalty():
     config = ExecutionConfig(**{**CFG.__dict__, "contracts": 3})
     book = [

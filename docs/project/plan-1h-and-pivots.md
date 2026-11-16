@@ -332,8 +332,8 @@ a new version declares a different scale set.
   edit, including one that only adds minute storage, marks every second row stale.
 - New values go into two wide tables, so each addition means a migration and a
   rebuild of everything.
-- The engine (`FeaturePipeline`) and storage (`SecondRowBuilder`) assemble the same
-  pieces separately. The engine's `1h@1m` has only 8 features.
+- The engine (`FeaturePipeline`, since deleted) and storage (`SecondRowBuilder`) assemble
+  the same pieces separately. The engine's `1h@1m` has only 8 features.
 
 **Proposal:** treat the pipeline like assembly-line stations, ordered in tiers; the
 [feature pipeline](feature-pipeline.md) defines the tiers, read rules, full stage graph,

@@ -74,8 +74,8 @@ class Engine:
         self.now = 0  # latest time the engine knows the position state for
         self.cooldown_until = 0
         self.ts_floor = 0
-        self.book_floor = 0
-        self.quote: Quote | None = None  # the book after the latest event of earlier chunks
+        self.book_floor = self.book_recv = 0  # latest event and receive time of earlier chunks
+        self.quote: Quote | None = None  # the book they left
         self.trades: list[dict] = []
         self.cancelled = 0
         self.signals = 0
@@ -117,7 +117,9 @@ class Engine:
             self.ts_floor = int(view.ts_max[-1])
         closed = self.execute(view, frame, signals)
         if view.book.n:
-            self.book_floor, self.quote = int(view.book.ts_max[-1]), view.book.last
+            book = view.book
+            self.book_floor, self.book_recv = int(book.ts_max[-1]), book.recv_max
+            self.quote = book.last
         return ChunkResult(frame, signals, view, closed)
 
     def book_view(self, chunk: MarketChunk, ends: np.ndarray) -> BookView:
@@ -135,7 +137,9 @@ class Engine:
         assign = assignment_ns(book.ts_event, book.ts_recv, c.feed_latency, c.close_delay)
         slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
         order = np.argsort(slot, kind="stable")
-        return BookView(book.take(order), ends[slot[order]], self.quote, self.book_floor)
+        return BookView(
+            book.take(order), ends[slot[order]], self.quote, self.book_floor, self.book_recv
+        )
 
     def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:
         closed: list[dict] = []
@@ -187,7 +191,7 @@ class Engine:
         self.contract = contract
         self.contracts.append(contract)
         self.pipeline = self.features()
-        self.ts_floor = self.book_floor = 0
+        self.ts_floor = self.book_floor = self.book_recv = 0
         self.quote = None
 
     def features(self):

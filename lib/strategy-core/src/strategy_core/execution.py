@@ -11,8 +11,12 @@ Timing model (see docs/project/engine.md):
 - The target is a resting limit: it fills only when a trade prints beyond it
   (`limit_fill="through"`) or at it (`"touch"`); there is no queue position. The stop is a
   resting stop-market: a trade at or beyond it triggers it, and it fills at the book that
-  trade left, never better than the triggering trade's price. Only trades that happened after
-  the entry fill can trigger an exit.
+  trade left (the last record of the trigger's own event time), never better than the
+  triggering trade's price. Only trades that happened after the entry fill can trigger an exit.
+- A trade record carries the book as it was before the trade; the book changes only when a
+  later record says so. Most trades are followed by that record at the same event time, so a
+  lookup at the trade's time already reads it. Where none follows, the book did not visibly
+  change (the trade met hidden or spread-implied liquidity), and the earlier book stands.
 - Time and session exits are market orders sent at the deadline.
 - Reactions (cooldown, the hold timer) start when the engine learns of a fill: when the
   fill's second closes, never the earlier exchange time.
@@ -122,7 +126,16 @@ class Quote:
 
 class BookView:
     """One chunk of a contract's book events in the order the engine processes them (by slot,
-    then receive order), with the book carried in from earlier chunks (`before`)."""
+    then receive order), with the book carried in from earlier chunks (`before`).
+
+    Every record is the whole top of book after its event, so it already includes every record
+    received before it. Two rules follow, and both matter only when records are out of order
+    (an event-time inversion, or a late record released before one received earlier):
+
+    - The book after a prefix of records is the one received last (`state`), not the one
+      processed last. `recv_floor` is the latest receive time of earlier chunks.
+    - A record takes effect no earlier than the records before it: lookups by time use the
+      running maximum of event times (`ts_max`), never a record's own earlier stamp."""
 
     def __init__(
         self,
@@ -130,28 +143,35 @@ class BookView:
         slot_end: np.ndarray,
         before: Quote | None = None,
         ts_floor: int = 0,
+        recv_floor: int = 0,
     ):
         self.b, self.slot_end, self.before = book, slot_end, before
         self.n = len(book)
-        self.ts_max = (
-            np.maximum.accumulate(np.maximum(book.ts_event, ts_floor))
-            if self.n
-            else np.empty(0, np.int64)
-        )
+        self.recv_max = recv_floor
+        if self.n:
+            self.ts_max = np.maximum.accumulate(np.maximum(book.ts_event, ts_floor))
+            recv = np.maximum.accumulate(np.maximum(book.ts_recv, recv_floor))
+            newest = book.ts_recv >= np.r_[recv_floor, recv[:-1]]
+            self.state = np.maximum.accumulate(np.where(newest, np.arange(self.n), -1))
+            self.recv_max = int(recv[-1])
+        else:
+            self.ts_max = self.state = np.empty(0, np.int64)
 
     @classmethod
     def empty(cls, before: Quote | None = None) -> "BookView":
         return cls(BookEvents.empty(), np.empty(0, np.int64), before)
 
     def quote(self, k: int) -> Quote | None:
-        if k < 0:
+        """The book after the first `k + 1` records: the one received last among them."""
+        s = int(self.state[k]) if k >= 0 else -1
+        if s < 0:
             return self.before
         b = self.b
         return Quote(
-            int(b.bid[k]),
-            int(b.ask[k]),
-            int(b.bid_size[k]),
-            int(b.ask_size[k]),
+            int(b.bid[s]),
+            int(b.ask[s]),
+            int(b.bid_size[s]),
+            int(b.ask_size[s]),
             int(self.ts_max[k]),
         )
 
@@ -162,6 +182,16 @@ class BookView:
         by_time = int(np.searchsorted(self.ts_max, time, side="right"))
         by_slot = int(np.searchsorted(self.slot_end, slot_end(time), side="right"))
         return self.quote(min(by_time, by_slot) - 1)
+
+    def late(self, time: int, end: int) -> Quote | None:
+        """The book after an event at `time` that was released late, in the slot ending at
+        `end`: the last record released in that slot that happened at or before `time` (the
+        records that arrived with it), or None. Earlier slots are not read: a session running
+        second by second no longer holds them."""
+        lo = int(np.searchsorted(self.slot_end, end, side="left"))
+        hi = int(np.searchsorted(self.slot_end, end, side="right"))
+        hit = np.flatnonzero(self.b.ts_event[lo:hi] <= time)
+        return self.quote(lo + int(hit[-1])) if len(hit) else None
 
     def known(self, end: int) -> Quote | None:
         """The latest book the engine holds when the slot ending at `end` closes."""
@@ -351,12 +381,13 @@ class Simulator:
             at, known = int(t.ts_event[j + k]), int(view.known[j + k])
             if kt < ks:
                 return j + k + 1, self.record(pos, at, known, pos.target_px, "target", flags)
-            # The stop-market order meets the book its trigger left: the events of the same
-            # match, or for a trade released late, the book when its second opened.
-            trigger = int(prices[k])
-            px = self.price(
-                view.book.at(max(at, known - delay - SECOND)), -pos.direction, pos.contracts, flags
-            )
+            # The stop-market order meets the book its trigger left: the last record of the
+            # trigger's event time. A trigger released after its own second had closed reads
+            # the records released with it.
+            trigger, released = int(prices[k]), known - delay
+            book = view.book
+            left = book.at(at) if released == slot_end(at) else book.late(at, released)
+            px = self.price(left, -pos.direction, pos.contracts, flags)
             if px is None:
                 flags.append("no_book")
                 px = trigger

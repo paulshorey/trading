@@ -42,7 +42,7 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 | `bars.py`                                       | Trades to 1-second base bars, seconds to minutes                                                                       |
 | `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                                        |
 | `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                            |
-| `features.py`                                   | Unit contract and window features (`FeaturePipeline`: the pre-stage composition, kept as a test reference)             |
+| `features.py`                                   | Unit contract and the window features the stages compute (`StageFeatures` in `pipeline.py` assembles them)             |
 | `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                                  |
 | `execution.py`                                  | Simulated fills against the MBP-1 book and trades                                                                      |
 | `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                                    |
@@ -81,6 +81,25 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
 Every book lookup is bounded by the second of its own time: it uses the events released by
 the close of that second and nothing released later. A late record therefore never rewrites
 an earlier fill, and whole-session and second-by-second runs price every order the same.
+
+Three rules cover records that are not in the usual order (`execution.BookView`):
+
+- **A trade record carries the book before the trade.** The book changes only when a later
+  record says so. On GCZ6 on 2026-09-15, 91,227 of 93,025 trades were followed by a book
+  record at the same event time, which a lookup at the trade's time already reads. Of the
+  other 1,798, the next book record left the traded price in place for 1,544: the trade
+  met hidden or spread-implied liquidity and the book did not change. For 254 (0.3%) the
+  price moved in a record stamped later, usually within a millisecond; a stop triggered by
+  one of those fills at the trigger price, up to one tick better than it should.
+- **Each record is the whole top of book after its event**, so it includes every record
+  received before it. The book is therefore the record received last, and a record never
+  takes effect before the records received ahead of it: with event times 107.8 s then
+  107.7 s, a lookup at 107.75 s reads the book before both. Out-of-order event times are
+  rare (none or one per session in four checked sessions).
+- **A stop triggered by a trade released late** (after its own second had closed) fills at
+  the book of the last record released with it that happened at or before the trigger, and
+  at the trigger price (flag `no_book`) when there is none. Earlier seconds are not read:
+  a live session no longer holds them.
 
 Each trade records what its entry cost: `decision_spread_ticks`, the spread the engine held
 when it decided, and `entry_slip_ticks`, the fill price against that book's mid-price (half
@@ -152,8 +171,7 @@ runs (`pipeline.Pipeline`) with the backtest's default assignment timing; see
 (`pipeline.StageFeatures`): every `candle_1m_1s` and `vol_1s` feature of the window ending at
 each second as `1m@1s.<name>` (joined row by row), and every
 `candle_1h_1m`, `stats_1h_1m`, and `vol_1m` feature of the latest completed minute as
-`1h@1m.<name>` with its age `1h@1m.age_s` (their names never collide; a test checks it). Their `1m@1s` and `1h@1m` window features equal the earlier engine's
-composition bit for bit (a test keeps `features.FeaturePipeline` as the reference). A backtest may read stored rows instead of
+`1h@1m.<name>` with its age `1h@1m.age_s` (their names never collide; a test checks it). A backtest may read stored rows instead of
 rebuilding them only when their builder version and assignment settings match the run's
 configuration (not implemented yet); fills always come from the DBN trades and book events.
 

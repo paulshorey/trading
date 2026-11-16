@@ -458,7 +458,7 @@ Decisions made in B1 (derived, reported in the PR):
 - **The stored second rows stayed current**: no module in the identity of `bar_1s` or
   `candle_1m_1s` changed. Two leftovers wait for the next rebuild of `candle_1m_1s`, when
   `features.py` and `stage_candle_1m_1s.py` may change anyway: delete the unused
-  `features.FeaturePipeline` (now only a test reference), and publish the `1m@1s` ATR in
+  `features.FeaturePipeline` (done with the MBP-1 change), and publish the `1m@1s` ATR in
   price units from the stage (`products["atr"]`) so `pipeline.FastAtr`, which records it
   by wrapping the stage's window update, can go.
 - **A missing minute** (any missing second) stores only its keys and status and contributes

@@ -80,8 +80,8 @@ whether it improves on the rule.
 
 ## Next
 
-1. **Rebuild the stored rows from MBP-1** for GC and SI (the existing rows were built from
-   the deleted TBBO files; MBP-1 trades reproduce them exactly).
+1. Rebuild the stored rows from MBP-1 for GC and SI: done November 16
+   ([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)).
 2. **Swings (PR D)**, then structure signals (PR E) and outcome labels with the benchmark
    (PR F), in the order Paul decided on November 3. Recommended change, for Paul to
    confirm: build the labels (F) before the signals (E), because the reversal model

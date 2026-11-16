@@ -1,9 +1,11 @@
 # Ingestion
 
-Status (November 15, 2026): the stored rows described here were built from TBBO files on
-November 4. The data is now MBP-1, whose trade records are the same, so the design and the
-measurements below still apply; the rows themselves are stale until GC and SI are rebuilt
-([steps](handoff.md#rebuilding-from-mbp-1)).
+Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
+reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
+rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the
+TBBO-built ones on every day both have
+([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
+3–5) was measured on the TBBO-built rows and still describes the design and its costs.
 
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema

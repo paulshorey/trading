@@ -49,11 +49,12 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Move from TBBO to MBP-1.** November 15: MBP-1 is the only market data (GC, SI, PL,
       ES, YM, RTY verified; NQ not downloaded); book events reach the engine and fills use the
       book each order meets ([what changed](handoff.md#the-move-to-mbp-1-november-15-2026)).
-- [ ] **Rebuild GC and SI from MBP-1.** The stored rows were built from the deleted TBBO
-      files and are stale. Needs Paul's go-ahead to reset the database, because the disk
-      cannot hold both copies ([steps](handoff.md#rebuilding-from-mbp-1)).
-- [ ] **Free disk space, or decide what not to store.** 47 GB is free; NQ, `pivot_1s`, and
-      `book_1s` do not fit ([open questions](handoff.md#open-questions)).
+- [x] **Rebuild GC and SI from MBP-1.** Done November 16 with Paul's authorization: schemas
+      reset, 858 contract-sessions rebuilt in 25 minutes, every contract `current`, trade
+      rows equal to the TBBO-built ones
+      ([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)).
+- [ ] **Free disk space, or decide what not to store.** 106 GB is free; NQ or `pivot_1s`
+      fits, not both, and `book_1s` does not ([open questions](handoff.md#open-questions)).
 - [ ] **Swing structure, signals, labels (PRs D–F), next**
       ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
 - [x] **Test backtests on real data at full scale.** November 5: a GC year in 161 s with

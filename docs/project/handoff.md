@@ -1,27 +1,23 @@
 # Handoff
 
-As of November 15, 2026 (after the move from TBBO to MBP-1). Start here, then read
+As of November 16, 2026 (after the move from TBBO to MBP-1 and the rebuild of GC and SI). Start here, then read
 [AGENTS.md](../../AGENTS.md). The [roadmap](roadmap.md) is the map of what is computed and in
 what order; tasks are tracked in [todo.md](todo.md); this page explains the architecture, the
 decisions behind it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
 
-1. **Rebuild the stored rows from MBP-1.** The rows in `trading` were built from the TBBO
-   files, which are gone, and the source code changed, so `ingest plan GC SI` reports every
-   stage stale. The rebuild needs Paul's go-ahead because it must reset the database first:
-   the disk has too little free space to replace 102 GB of rows in place
-   ([how](#rebuilding-from-mbp-1)). MBP-1 trades give the same rows
-   ([checks](#the-move-to-mbp-1-november-15-2026)), so nothing else waits on this except
-   stored-row research.
+1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, all seven stages,
+   every contract `current` ([results](#rebuilt-from-mbp-1-november-16-2026)). Nothing waits
+   on data.
 2. **The swing structure (PR D) is next**: directional-change pivots at 0.5, 1, and 2 ATRs on
    both resolutions, sized by the volatility tier (`vol_1s`, `vol_1m`). The design is the
    [plan, section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design) and the
    [pivot/structure contract](pivot-structure-design.md); the procedure that worked for B and C
    is in [PR C](#pr-c-volatility-tier) ("How"). Size it from measured rows: `vol_1s` takes 307
    bytes per row with its index, so three `pivot_1s` variant rows per second would be roughly
-   50–75 GB for GC and SI. The disk cannot hold that today (47 GB free on November 15), so
-   decide the storage first: fewer stored scales, sparse events only, or more disk.
+   50–75 GB for GC and SI. 106 GB was free after the rebuild on November 16, so it fits, but
+   not together with NQ: decide the storage first ([open questions](#open-questions)).
 3. **Then the reversal model and structure signals** ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)):
    labels and the benchmark (PR F), a walk-forward model stage
    ([rules](feature-pipeline.md#model-stages)), and signals that read both (PR E).
@@ -195,7 +191,7 @@ These are fundamental; changing any of them changes every stored value.
 | -------- | ----- |
 | Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); **MBP-1 as the only source, book events in the engine, fills at the book** (this PR) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC, SI, PL, ES, YM, RTY in `data/databento/mbp-1/` (123 GB), checksums and full decode verified; NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 102 GB: `0001_baseline` through `0005_second_volatility` applied; GC and SI rows of all seven stages **built from TBBO on November 4 and now stale** (the files and the source code changed). They are still correct for 2025-11-03 to 2026-10-30, but `ingest plan GC SI` reports all 12 contracts `stale` ("stored by other code or settings; use --rebuild") and will not extend them. The file registry lists the 1,866 MBP-1 files beside the 2,182 deleted TBBO files |
+| Database | PostgreSQL 18 database `trading`, 101 GB: `0001_baseline` through `0005_second_volatility` applied; GC and SI rows of all seven stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -271,32 +267,49 @@ Local evidence uses the prefix `~/mbp1-conversion.`: `verify_mbp1.*` (checksums)
 `decode_all.*` (every file decoded), `compare_stored.*` and `compare_pilot.*` (equality with
 the TBBO-built rows), `verify-gc-day.json`, and `~/ingest-pilot-mbp1.log`.
 
-## Rebuilding from MBP-1
+## Rebuilt from MBP-1 (November 16, 2026)
 
-Not done yet; it needs Paul's authorization because step 1 drops the stored rows.
+Paul authorized the reset. The four project schemas (`market`, `research`, `ml`, `meta`) were
+dropped, because replacing 102 GB of rows in place would not fit; then `research db migrate`,
+`research db register` (1,866 files), and `research ingest run GC SI --workers 8`.
 
-1. Reset the database: drop the schemas `market`, `research`, `ml`, and `meta` (102 GB of
-   derived rows, all rebuildable; the TBBO-built rows of 2025-11-03 to 11-07 have no MBP-1
-   file and will not come back). Replacing rows in place would roughly double the space
-   used until a `VACUUM FULL`, and only 47 GB is free.
-2. `uv run research db migrate`, then `uv run research db register` (1,866 MBP-1 files).
-3. `caffeinate -i uv run research ingest run GC SI --workers 8 2> ~/ingest-gc-si-mbp1.log`:
-   expect about 35–45 minutes and about 105 GB (the November 4 runs took 24 minutes for the
-   second tables plus 12 for the other stages; decoding MBP-1 days adds a little).
-4. Check: a fresh `ingest plan GC SI` reports every contract `current`; coverage and the
-   continuous views (257 front sessions per product, 2025-11-10 to 2026-11-06; the last has
-   data only for its first hour, because the 2026-11-06 file was not available when the jobs
-   were made); the first 37 front sessions are cold
-   (`history_limited`), now starting 2025-11-10; NULL rates at each roll's first front
-   session and in September; and equality with the old rows where both exist, which can be
-   checked only if a copy of a few old partitions is kept before step 1.
+- **Run 1:** 12 contracts, 858 contract-sessions, 70,731,900 rows in each second table and
+  1,178,865 in each minute table, in 24 min 48 s; no errors. The database is 101 GB
+  (`candle_1m_1s` 57 GB, `vol_1s` 22 GB, `bar_1s` 20 GB with their indexes).
+- **Plan:** a fresh `ingest plan GC SI` reports all 12 contracts `current`, nothing to do.
+- **Coverage:** 257 front sessions per product, 2025-11-10 to 2026-11-06, 21,186,000
+  continuous second rows each. The last session has 3,600 seconds with data and 79,200
+  `missing`: the 2026-11-06 file did not exist when the jobs were made.
+- **Rolls:** the same contracts on the same dates as the TBBO-built schedule on all 504
+  sessions both have (GC Z5, G6, J6, M6, Q6, Z6; SI Z5, H6, K6, N6, U6, Z6).
+- **Warm-up:** the first 37 front sessions are cold for `vol_1s` and `vol_1m` (warm from
+  2026-01-02, 220 of 257), 10 for `candle_1h_1m`, 5 for `stats_1h_1m`, 1 for `candle_1m_1s`.
+- **Equal to the TBBO-built rows.** Before the reset, every stored row was fingerprinted per
+  contract and UTC day (row count and a hash of all columns), and again after the rebuild.
+  `bar_1s` and `bar_1m`: all 1,033 contract-days both have are identical (69,903,900 second
+  rows). The five indicator stages are identical for the eight contracts whose stored
+  history starts on the same day in both (GC J6, M6, Q6, Z6 and SI K6, N6, U6, Z6). They
+  differ only for the first two contracts of each product (GC Z5, G6 and SI Z5, H6), whose
+  history now starts a week later (2025-11-10 instead of 11-03): 2 days in `candle_1m_1s`,
+  about a month in `stats_1h_1m` and `vol_1s`, two months in `candle_1h_1m`, and to the
+  contract's end in `vol_1m`, whose long averages never become bit-equal. The size of those
+  differences was not measured (only fingerprints were kept). In total 209,796,495 of
+  216,911,160 rebuilt rows match exactly; the TBBO week 2025-11-03 to 11-07 is gone and
+  2026-11-02 to 11-06 is new.
+
+Evidence: `~/ingest-gc-si-mbp1.log` and `.json`, `~/mbp1-conversion.hash-tbbo.*`,
+`hash-mbp1.*`, `hash_compare.txt`, `front-tbbo.csv`, `front-mbp1.csv`, `plan-after.json`.
+
+To repeat it (after a change to `market.py` or the source files): `research ingest run GC SI
+--rebuild --workers 8` replaces rows in place and needs about as much free space as the
+tables it rewrites; with less, reset the schemas as above (ask Paul first).
 
 ## Earlier results (rows built from TBBO, November 3–5)
 
 These sections are summaries; the full records, with every check and evidence file, are in
 this file's history (`git show 1d1b3ac:docs/project/handoff.md`). MBP-1 trades are the same
-records, so the findings carry over; row counts will shift by the one week the downloads
-differ (TBBO began 2025-11-01, MBP-1 2025-11-08).
+records, so the findings carry over; row counts shifted by the week the downloads differ
+(TBBO began 2025-11-01, MBP-1 2025-11-08; [comparison](#rebuilt-from-mbp-1-november-16-2026)).
 
 ## Full-scale checks (after PR C2)
 
@@ -638,7 +651,7 @@ Codex's review covers the head.
 The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 ([plan](plan-1h-and-pivots.md#6-decisions)):
 
-1. **Rebuild from MBP-1** ([how](#rebuilding-from-mbp-1)), once authorized.
+1. Rebuild from MBP-1: done November 16 ([results](#rebuilt-from-mbp-1-november-16-2026)).
 2. **Swing structure (PR D)**: directional-change pivots at 0.5, 1, and 2 ATRs on both
    resolutions with higher/lower highs and lows, after the storage question in
    [Start here](#start-here-next-session) is settled.
@@ -662,11 +675,13 @@ remain unimplemented and unvalidated on GC/SI.
 
 ## Open questions
 
-1. **Disk.** The archive is 123 GB and the database 102 GB, with 47 GB free on a 926 GB
-   disk. NQ (about 50 GB), `pivot_1s` at three scales (50–75 GB), `book_1s`, and any third
-   product do not fit. Options: an external or larger disk for the DBN archive (it is read
-   sequentially and rarely), storing fewer second-resolution tables, or building products
-   in turn. The November 3 decision "disk is not a constraint" no longer holds.
+1. **Disk.** The archive is 123 GB and the database 101 GB, with 106 GB free on a 926 GB
+   disk after the rebuild (47 GB before it: the old database held about 60 GB more on disk
+   than its reported size). NQ (about 50 GB of files, more as rows) or `pivot_1s` at three
+   scales (50–75 GB) fits, not both, and `book_1s` or a third product does not. Options: an
+   external or larger disk for the DBN archive (it is read sequentially and rarely), storing
+   fewer second-resolution tables, or building products in turn. The November 3 decision
+   "disk is not a constraint" no longer holds.
 2. **Order of E and F**, and whether the reversal model's output should feed the structure
    signals ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)).
 3. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or

@@ -20,7 +20,16 @@ from strategy_core.labels import (
     iter_candidate_outcomes,
     summarize_candidates,
 )
-from strategy_core.market import HOUR, NS, PRODUCTS, UNDEF_SIZE, BookEvents, Trades
+from strategy_core.market import (
+    F_MAYBE_BAD_BOOK,
+    HOUR,
+    NS,
+    PRODUCTS,
+    UNDEF_PRICE,
+    UNDEF_SIZE,
+    BookEvents,
+    Trades,
+)
 from strategy_core.strategies import BiasPullback, Bracket, make_strategy
 from strategy_core.synthetic import random_book, random_trades, trade_events
 
@@ -360,19 +369,33 @@ def test_streamed_candidate_summary_equals_the_full_list():
     assert streamed.result()["rows"] == len(rows)
 
 
-def test_fills_never_match_a_trade_that_happened_before_arrival():
-    """Regression (PR #62 review): with an event-time inversion, the running maximum of event
-    time must not make an earlier trade look like the first trade at or after arrival."""
+def test_exits_judge_each_trade_by_its_own_event_time():
+    """Regression (PR #81 review): a trade stamped after the timed exit, received before a
+    stop trigger stamped before it, must not hide the trigger."""
     rows = [
-        (T0 + 20 * S, 2000.0, 1, 1),  # consumed earlier
-        (T0 + 5 * S, 2000.1, 1, 1),  # received later but happened before the arrival
-        (T0 + 25 * S, 2000.2, 1, 1),
+        (T0 + 121_500_000_000, 2000.0, 1, 1),  # after the timed exit arrives at 121.15 s
+        (T0 + 121 * S, 1999.6, 1, -1, 600_000_000),  # before it, received 100 ms later
     ]
-    t = trades(rows)
-    view = ExecView(t, t.ts_recv, BookView.empty(), T0 + HOUR)
-    assert view.first_at_or_after(1, T0 + 15 * S) == 2
-    assert view.first_at_or_after(0, T0 + 15 * S) == 0
-    assert view.first_at_or_after(0, T0 + 30 * S) == 3
+    _, out = simulate(rows, [ENTRY])
+    assert out["exit_reason"] == "stop" and out["exit_ns"] == str(T0 + 121 * S)
+    assert out["exit_px"] == pytest.approx(1999.6) and out["mae_ticks"] == pytest.approx(-5)
+    # without the trigger the timer ends the trade, and the later trade is not an excursion
+    _, out = simulate([(T0 + 121_500_000_000, 1999.0, 1, 1)], [ENTRY])
+    assert out["exit_reason"] == "time" and out["mae_ticks"] == pytest.approx(0)
+
+
+def test_a_book_flagged_as_possibly_wrong_prices_nothing():
+    """Regression (PR #81 review): Databento flags records after an unrecoverable gap. An entry
+    that meets one is cancelled; the next record without the flag restores the book."""
+    sim = Simulator(GC, CFG, BRACKET, CAL)
+    book = quotes([ENTRY, (T0 + 61_100_000_000, 2000.2, 2000.3)])
+    book.flags[0] = F_MAYBE_BAD_BOOK
+    view = exec_view(trades([]), book)
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    assert sim.fill(view, pos) == (CANCELLED, T0 + 61_100_000_000)
+    assert pos.decision_bid == UNDEF_PRICE and not view.book.at(ARRIVAL).usable
+    again = sim.order(1, "GCZ6", T0 + 61 * S, 0.5, {}, view)
+    assert sim.fill(view, again)[0] == FILLED and again.entry_px == 2000_300_000_000
 
 
 def test_trades_before_the_entry_never_trigger_exits():

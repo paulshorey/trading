@@ -32,6 +32,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from .market import (
+    F_MAYBE_BAD_BOOK,
     NS,
     SECOND,
     UNDEF_PRICE,
@@ -118,10 +119,16 @@ class Quote:
     bid_size: int
     ask_size: int
     ts_event: int
+    unreliable: bool = False  # Databento flagged the record: the book may be wrong
 
     @property
     def two_sided(self) -> bool:
         return UNDEF_PRICE not in (self.bid, self.ask) and self.bid <= self.ask
+
+    @property
+    def usable(self) -> bool:
+        """Whether an order can be priced at it: both sides, not crossed, and not flagged."""
+        return self.two_sided and not self.unreliable
 
 
 class BookView:
@@ -173,6 +180,7 @@ class BookView:
             int(b.bid_size[s]),
             int(b.ask_size[s]),
             int(self.ts_max[k]),
+            bool(b.flags[s] & F_MAYBE_BAD_BOOK),
         )
 
     def at(self, time: int) -> Quote | None:
@@ -233,18 +241,6 @@ class ExecView:
     ) -> "ExecView":
         return cls(trades.take(order), slot_end + close_delay, book, end, ts_floor)
 
-    def first_at_or_after(self, j: int, time: int) -> int:
-        """Index of the first trade from `j` whose own event time is at or after `time`, else n.
-
-        The running maximum gives a lower bound quickly (no earlier trade can qualify); the
-        scan then checks actual event times, so an event-time inversion can never match a
-        trade that happened before `time`."""
-        k = j + int(np.searchsorted(self.ts_max[j:], time, side="left"))
-        while k < self.n and self.t.ts_event[k] < time:
-            later = np.flatnonzero(self.t.ts_event[k:] >= time)
-            k = k + int(later[0]) if len(later) else self.n
-        return k
-
 
 @dataclass
 class Position:
@@ -304,14 +300,15 @@ class Simulator:
             features,
         )
         seen = view.book.known(signal_end)
-        if seen is not None and seen.two_sided:
+        if seen is not None and seen.usable:
             pos.decision_bid, pos.decision_ask = seen.bid, seen.ask
         return pos
 
     def price(self, quote: Quote | None, side: int, contracts: int, flags: list[str]) -> int | None:
         """Price a marketable order of `side` (+1 buy, -1 sell) against `quote`, or None when
-        the book shows no usable price on the side it needs."""
-        if quote is None or not quote.two_sided:
+        the book shows no usable price: one side absent, crossed, or flagged as possibly wrong
+        (it stays unusable until a record without the flag arrives)."""
+        if quote is None or not quote.usable:
             return None
         price = quote.ask if side > 0 else quote.bid
         shown = quote.ask_size if side > 0 else quote.bid_size
@@ -355,15 +352,12 @@ class Simulator:
         due = pos.exit_arrival_ns
         # No trade before the entry can trigger an exit; skip them without reading them.
         j = max(j, int(np.searchsorted(view.ts_max, pos.entry_ns, side="left")))
-        # Trades that happened before the timed exit, released by the close of its slot.
-        lim = min(
-            view.first_at_or_after(j, due),
-            j + int(np.searchsorted(view.known[j:], slot_end(due) + delay, side="right")),
-        )
-        prices = t.price[j:lim]
-        # Only trades that happened after the entry count: an event-time inversion can deliver
-        # an earlier trade later in receive order.
-        live = t.ts_event[j:lim] >= pos.entry_ns
+        # Trades released by the close of the timed exit's slot. Each counts by its own event
+        # time, after the entry and before the timed exit arrives, in whatever order they came:
+        # an event-time inversion can deliver an earlier trade later in receive order.
+        lim = j + int(np.searchsorted(view.known[j:], slot_end(due) + delay, side="right"))
+        prices, when = t.price[j:lim], t.ts_event[j:lim]
+        live = (when >= pos.entry_ns) & (when < due)
         long = pos.direction > 0
         through = self.config.limit_fill == "through"
         if long:

@@ -72,9 +72,10 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
    at or beyond it triggers it, and it fills at the book that trade left (the book events
-   of the same match), never better than the trigger price. Only trades that happened
-   after the entry fill can trigger an exit, even if receive order delivers an earlier one
-   later. Time and pre-close exits are market orders that fill at the book when they arrive.
+   of the same match), never better than the trigger price. Each trade counts by its own
+   event time: only trades that happened after the entry fill and before a timed exit
+   arrives can trigger an exit, in whatever order they were received. Time and pre-close
+   exits are market orders that fill at the book when they arrive.
 6. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
    and the hold timer start then.
 
@@ -82,7 +83,7 @@ Every book lookup is bounded by the second of its own time: it uses the events r
 the close of that second and nothing released later. A late record therefore never rewrites
 an earlier fill, and whole-session and second-by-second runs price every order the same.
 
-Three rules cover records that are not in the usual order (`execution.BookView`):
+Four rules cover records that are unusual or out of order (`execution.BookView`):
 
 - **A trade record carries the book before the trade.** The book changes only when a later
   record says so. On GCZ6 on 2026-09-15, 91,227 of 93,025 trades were followed by a book
@@ -96,6 +97,10 @@ Three rules cover records that are not in the usual order (`execution.BookView`)
   takes effect before the records received ahead of it: with event times 107.8 s then
   107.7 s, a lookup at 107.75 s reads the book before both. Out-of-order event times are
   rare (none or one per session in four checked sessions).
+- **A record Databento flags as possibly wrong** (after an unrecoverable gap in its feed)
+  prices nothing: an entry that meets it is cancelled and an exit falls back to the last
+  trade price (flag `no_book`), until a record without the flag arrives. In this year's
+  files the flag appears only on 2025-11-28, in RTY and YM.
 - **A stop triggered by a trade released late** (after its own second had closed) fills at
   the book of the last record released with it that happened at or before the trigger, and
   at the trigger price (flag `no_book`) when there is none. Earlier seconds are not read:

@@ -7,9 +7,10 @@ decisions behind it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
 
-1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, all seven stages,
-   every contract `current` ([results](#rebuilt-from-mbp-1-november-16-2026)). Nothing waits
-   on data.
+1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, the seven stages of
+   layers 0 and 1 and the six swing scales of layer 2, every contract `current`
+   ([rebuild](#rebuilt-from-mbp-1-november-16-2026), [swings](#pr-d-results-swings)). Nothing
+   waits on data. The disk is nearly full: 41 GB free ([open questions](#open-questions)).
 2. **Swings of the price path are built (PR D)**: confirmed highs and lows at 0.5, 1, and 2
    ATRs on both resolutions, the open leg and its progress, trend, breaches and reclaims
    ([results](#pr-d-results-swings); [what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
@@ -191,9 +192,9 @@ These are fundamental; changing any of them changes every stored value.
 
 | Area     | State |
 | -------- | ----- |
-| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); **MBP-1 as the only source, book events in the engine, fills at the book** (this PR) |
+| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC, SI, PL, ES, YM, RTY in `data/databento/mbp-1/` (123 GB), checksums and full decode verified; NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 101 GB: `0001_baseline` through `0005_second_volatility` applied; GC and SI rows of all seven stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
+| Database | PostgreSQL 18 database `trading`, 168 GB: `0001_baseline` through `0006_swings` applied; GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (212,195,700 `pivot_1s` rows, 3,536,595 `pivot_1m` rows, 2,403,082 events); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -333,6 +334,50 @@ throwaway database by this branch, every stage, in 51 s:
 - **Coverage.** Idle only while the ATR warms up (14 minutes fast, 14 hours slow at a
   contract's start). Rows in a leg: 99.9% fast, 95.8% slow over these 15 sessions.
 
+**Full build (November 16, run 2).** Migration `0006_swings` applied to `trading` after the
+review of the code; `research ingest run GC SI --workers 8` added the six scales to all 12
+contracts (`add`: nothing else was rewritten) in 17 min 55 s, no errors.
+
+- **Rows.** 35,360,100 GC and 35,371,800 SI rows per fast scale (the candle table's keys
+  exactly), 589,335 and 589,530 per slow scale, and 2,403,082 events. `pivot_1s` takes 64 GB,
+  `pivot_1m` 1.1 GB, the events 0.7 GB; the database is 168 GB.
+- **Plan.** A fresh `ingest plan GC SI` reports all 12 contracts `current`.
+- **Independent replay, whole year.** All 1,320,027 confirmed highs and lows of the six
+  scales (GC 748,249, SI 571,778; 858 contract-sessions) equal the plain-Python replay of the
+  DBN trades with thresholds from the stored rows: 0 differences.
+- **Structure.** Pivots alternate within every segment; every breach and reclaim refers to a
+  stored pivot of its scale; no event is available before its trade; progress stays within
+  0 to 1, ages are never negative, slow ages are whole minutes; a row has values exactly
+  when `state` is 2.
+- **Continuous series.** 257 front sessions per product and scale: 21,186,000 second rows
+  and 353,100 minute rows each, one per slot. 255 of 257 front sessions are warm at every
+  scale; the two that are not are the first stored session (2025-11-10, a cold start) and
+  the last (2026-11-06, mostly missing data). Slow scales are in a leg on 99.4% of front
+  minutes, and at every roll's first front session from its first row.
+- **Swings per product** (front and lead sessions, a year): at 0.5, 1, and 2 ATR on `1m@1s`,
+  GC confirmed 248,374, 87,034, and 28,341 highs and SI 171,695, 76,619, and 28,050; on
+  `1h@1m`, GC 7,754, 2,077, and 545 and SI 7,027, 1,968, and 530. About half the confirmed
+  levels are breached later; GC reclaims three quarters of those within the window, SI 60%.
+  September front sessions: thresholds of 2.4, 4.8, and 9.8 bps for GC and 4.3, 7.5, and
+  14.7 bps for SI on the fast scales (SI's spread floor often binds at 0.5 ATR), 21 to 144 bps on
+  the slow ones; the three trend states each hold about a third of the rows.
+- **Finding: values in ATRs are unbounded when the ATR has decayed to nothing.** The
+  threshold has a spread floor, so swings stay sensible, but `*_atr` values divide by the
+  `1m@1s` ATR alone. After hours without a price change that ATR is almost zero: on front
+  sessions this touches 6 GC rows and 1 SI row per fast scale on 2025-11-28 (the CME outage),
+  and at most 11 rows of 21 million exceed 50 ATRs in a year; the 99.99th percentile of
+  `leg_atr` is 20 (GC) and 38 (SI). In thinly traded lead sessions it is common: 1.0% of all
+  stored GC fast rows and 3.7% of SI's exceed 50, nearly all of them there. The slow scales are
+  unaffected (at most 18 on front
+  sessions). Layer-1 `*_atr` features share the property. Training must clip or exclude such
+  rows; whether to floor the normalizer instead is an [open question](#open-questions).
+- **Engine.** `research verify` on GCZ6 2026-09-15: all 415 features and 15 trades identical,
+  whole session against second by second (5.6 ms per market second, 4.9 ms before).
+
+Evidence: `~/ingest-gc-si-swings.log` and `.json`, `plan-before.json`, `plan-after.json`,
+`reference.py` and `reference.out`, `validation.sql` and `validation.out`,
+`verify-gc-day.json`, and the pilot's `pilot.*` files.
+
 ## Full-scale checks (after PR C2)
 
 November 5, on `main` after #77: `research verify` on a GC and an SI week matched every one
@@ -390,7 +435,8 @@ and a 5-session lead; run #2 (November 4) rebuilt them with stages; the
 [run 3](#pr-b1-results-minute-stages) added the minute stages, and
 [run 4](#pr-b2-results-hourly-statistics) the hourly statistics,
 [run 5](#pr-c1-results-minute-volatility) the minute volatility, and
-[run 6](#pr-c2-results-second-volatility) the second volatility.
+[run 6](#pr-c2-results-second-volatility) the second volatility. After the reset of November
+16, run 1 rebuilt them from MBP-1 and [run 2](#pr-d-results-swings) added the swing scales.
 
 To check current coverage or extend after new downloads:
 
@@ -729,18 +775,23 @@ benchmark's question (PR F), still open.
 
 ## Open questions
 
-1. **Disk.** The archive is 123 GB and the database 101 GB, with 106 GB free on a 926 GB
-   disk after the rebuild (47 GB before it: the old database held about 60 GB more on disk
-   than its reported size). NQ (about 50 GB of files, more as rows) or `pivot_1s` at three
-   scales (50–75 GB) fits, not both, and `book_1s` or a third product does not. Options: an
-   external or larger disk for the DBN archive (it is read sequentially and rarely), storing
-   fewer second-resolution tables, or building products in turn. The November 3 decision
+1. **Disk.** The archive is 123 GB and the database 168 GB, with 41 GB free on a 926 GB
+   disk after the swing build (16 GB of it is PostgreSQL's write-ahead log, which shrinks
+   back over time). Nothing large fits any more: not NQ (about 50 GB of files, more as rows),
+   not `pivot_rsi_1s` (about 40 GB), not `book_1s`, not a third product, and not an in-place
+   rebuild of `pivot_1s` or `candle_1m_1s` (each rewrites its own size). Options: an external
+   or larger disk for the DBN archive (it is read sequentially and rarely), storing fewer
+   second-resolution tables or scales, or building products in turn. The November 3 decision
    "disk is not a constraint" no longer holds.
-2. **Order of E and F**, and whether the reversal model's output should feed the structure
+2. **The ATR normalizer in thin markets** ([finding](#pr-d-results-swings)): keep `*_atr`
+   values as plain ATR multiples and clip or exclude at training, or floor the normalizer
+   (for example at the spread, as the threshold already is). The second changes stored
+   values of the swing stages, and the same question applies to layer 1.
+3. **Order of E and F**, and whether the reversal model's output should feed the structure
    signals ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)).
-3. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
+4. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
    RTY could pair with ES before NQ arrives.
-4. Which unstored reference metrics to add first, and which training outcome to use
+5. Which unstored reference metrics to add first, and which training outcome to use
    (simulated bracket trade or fixed-horizon return)?
 
 ## Things to know

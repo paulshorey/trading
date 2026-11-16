@@ -58,9 +58,12 @@ task live in [handoff: next steps](handoff.md#next-steps).
       the detector replays the trades and is verified against an independent replay
       ([what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings),
       [results](handoff.md#pr-d-results-swings)).
-- [ ] **Free disk space, or decide what not to store.** `pivot_1s` takes about 67 GB for GC and
-      SI; NQ, `pivot_rsi_1s`, or `book_1s` no longer fit beside it
-      ([open questions](handoff.md#open-questions)).
+- [ ] **Free disk space, or decide what not to store.** `pivot_1s` takes 64 GB for GC and SI,
+      and 41 GB is free: NQ, `pivot_rsi_1s`, `book_1s`, or an in-place rebuild of a second
+      table no longer fit ([open questions](handoff.md#open-questions)).
+- [ ] **Decide the ATR normalizer for thin markets.** `*_atr` values grow without bound when
+      the ATR has decayed to almost nothing (rare on front sessions, common in lead sessions):
+      clip at training, or floor the normalizer ([finding](handoff.md#pr-d-results-swings)).
 - [ ] **RSI swings (`pivot_rsi_1s`, `pivot_rsi_1m`).** The same detector on the RSI series
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)): measure the
       row-to-row RSI noise, choose thresholds above it, and store them when disk allows.

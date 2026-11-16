@@ -1,5 +1,10 @@
 # Ingestion
 
+Status (November 16, 2026, PR D): the six swing scales were added to the stored GC and SI
+contracts in 17 min 55 s (`add`; 212,195,700 `pivot_1s` rows at 316 bytes each with the
+index, 64 GB; the database is 168 GB), and every confirmed pivot equals an independent
+replay of the trades ([results](handoff.md#pr-d-results-swings)).
+
 Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
 reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
 rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the

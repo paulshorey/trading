@@ -7,22 +7,46 @@ arrays into PostgreSQL's binary COPY format.
 
 from datetime import UTC, date, datetime
 
+import numpy as np
 import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
-from strategy_core.columns import Column, Table
+from strategy_core.columns import BIGINT, SMALLINT, Column, Table
 from strategy_core.market import NS
-from strategy_core.pipeline import STAGES
+from strategy_core.pipeline import BY_NAME, STAGES
 
 from .codec import HEADER, TRAILER, encode
 
-TABLES: dict[str, tuple[Column, ...]] = {s.NAME: s.COLUMNS for s in STAGES}  # one per stage
+STAGE_TABLE = {s.NAME: getattr(s, "TABLE", s.NAME) for s in STAGES}  # variants share a table
+TABLES: dict[str, tuple[Column, ...]] = {STAGE_TABLE[s.NAME]: s.COLUMNS for s in STAGES}
+# Sparse tables of events that stages emit next to their rows (`products["events"]`)
+EVENT_TABLES: dict[str, tuple[Column, ...]] = {
+    s.EVENTS: s.EVENT_COLUMNS for s in STAGES if hasattr(s, "EVENTS")
+}
+STAGE_EVENTS = {s.NAME: s.EVENTS for s in STAGES if hasattr(s, "EVENTS")}
 # Seconds per row of each table: its `slot_ordinal` counts rows of this many seconds
-SLOT_SECONDS = {s.NAME: {"1s": 1, "1m": 60}[s.RESOLUTION] for s in STAGES}
+SLOT_SECONDS = {STAGE_TABLE[s.NAME]: {"1s": 1, "1m": 60}[s.RESOLUTION] for s in STAGES}
+VARIANT = Column("variant_id", SMALLINT, "The variant (a swing scale): market.variant.id")
+BUILDER = Column("builder_id", BIGINT, "The builder that wrote the row: market.builder.id")
 
 
-def copy_table(conn: psycopg.Connection, name: str, table: Table, contract_id: int) -> None:
-    columns = TABLES[name]
+def copy_table(
+    conn: psycopg.Connection,
+    name: str,
+    table: Table,
+    contract_id: int,
+    *,
+    variant_id: int | None = None,
+    builder_id: int | None = None,
+) -> None:
+    """Copy a stage's rows into its table, or its events into their table. A variant's rows
+    carry its `variant_id`; events also carry the builder that wrote them."""
+    columns = TABLES[name] if name in TABLES else EVENT_TABLES[name]
+    for column, value in ((VARIANT, variant_id), (BUILDER, builder_id)):
+        if value is not None:
+            columns = (column, *columns)
+            constant = np.full(len(table), value, np.int64)
+            table = Table(table.values | {column.name: constant}, table.nulls)
     target = sql.SQL("COPY {} ({}) FROM STDIN (FORMAT BINARY)").format(
         sql.Identifier("market", name),
         sql.SQL(", ").join(sql.Identifier(x) for x in ["contract_id", *(c.name for c in columns)]),
@@ -44,18 +68,49 @@ def row_bounds(name: str, first: int, last: int) -> tuple[int, int]:
 
 
 def delete_rows(
-    conn: psycopg.Connection, contract_id: int, first: int, last: int, names=tuple(TABLES)
+    conn: psycopg.Connection,
+    contract_id: int,
+    first: int,
+    last: int,
+    names=tuple(STAGE_TABLE),
+    variants: dict[str, int] | None = None,
 ) -> None:
-    """Delete a contract's rows inside seconds `first ... last` (second ordinals) from the named
-    tables, each at its own resolution (`row_bounds`)."""
-    for name in names:
+    """Delete a contract's rows inside seconds `first ... last` (second ordinals) of the named
+    stages, each at its table's resolution (`row_bounds`). A variant's stage (`variants`: its
+    id) deletes only its own rows and events, never another variant's."""
+    for stage in names:
+        name = STAGE_TABLE[stage]
         lo, hi = row_bounds(name, first, last)
-        conn.execute(
-            sql.SQL(
-                "DELETE FROM {} WHERE contract_id = %s AND slot_ordinal BETWEEN %s AND %s"
-            ).format(sql.Identifier("market", name)),
-            (contract_id, lo, hi),
-        )
+        variant = (variants or {}).get(stage, 0)
+        if hasattr(BY_NAME[stage], "VARIANT") and not variant:
+            raise ValueError(f"{stage} needs its variant id")
+        scope = sql.SQL(" AND variant_id = {}").format(sql.Literal(variant)) if variant else None
+        for target in (name, STAGE_EVENTS.get(stage)):
+            if target is None:
+                continue
+            conn.execute(
+                sql.SQL(
+                    "DELETE FROM {} WHERE contract_id = %s AND slot_ordinal BETWEEN %s AND %s{}"
+                ).format(sql.Identifier("market", target), scope or sql.SQL("")),
+                (contract_id, lo, hi),
+            )
+
+
+def register_variants(conn: psycopg.Connection, settings: dict[str, dict]) -> dict[str, int]:
+    """Every stage's variant id (0 without variants), registering new variants and their
+    parameters (`settings`: each stage's) in `market.variant`."""
+    out = {}
+    for s in STAGES:
+        if not hasattr(s, "VARIANT"):
+            out[s.NAME] = 0
+            continue
+        row = conn.execute(
+            """INSERT INTO market.variant (stage, name, params) VALUES (%s, %s, %s)
+               ON CONFLICT (stage, name) DO UPDATE SET params = EXCLUDED.params RETURNING id""",
+            (STAGE_TABLE[s.NAME], s.VARIANT, Jsonb(settings[s.NAME])),
+        ).fetchone()
+        out[s.NAME] = int(row[0])
+    return out
 
 
 def month_start(ns: int) -> date:
@@ -97,8 +152,9 @@ def apply_registry(conn: psycopg.Connection) -> None:
     """The column registry of every stage into `market.column_registry` (role, unit, type,
     description), and the descriptions into PostgreSQL column comments. Registered columns that
     no stage defines any more are marked `deprecated`, never deleted."""
+    registered = TABLES | EVENT_TABLES
     with conn.transaction():
-        for name, columns in TABLES.items():
+        for name, columns in registered.items():
             for c in columns:
                 text = c.description + (f" [{c.unit}]" if c.unit else "")
                 conn.execute(
@@ -114,7 +170,7 @@ def apply_registry(conn: psycopg.Connection) -> None:
                            description = EXCLUDED.description, status = 'active'""",
                     (name, c.name, c.role, c.unit or None, c.sql, c.description),
                 )
-        known = Jsonb({name: [c.name for c in cols] for name, cols in TABLES.items()})
+        known = Jsonb({name: [c.name for c in cols] for name, cols in registered.items()})
         conn.execute(
             """UPDATE market.column_registry SET status = 'deprecated'
                WHERE status = 'active'
@@ -124,11 +180,12 @@ def apply_registry(conn: psycopg.Connection) -> None:
 
 
 def table_columns(conn: psycopg.Connection, name: str) -> dict[str, str]:
-    """Stored columns (except the key and the generated phase) with their types."""
+    """Stored columns with their types, except those no stage registry holds: the contract,
+    the generated phase, and what ingestion adds (a variant's id, an event's builder)."""
     rows = conn.execute(
         """SELECT column_name, data_type FROM information_schema.columns
            WHERE table_schema = 'market' AND table_name = %s
-             AND column_name NOT IN ('contract_id', 'phase')""",
+             AND column_name NOT IN ('contract_id', 'phase', 'variant_id', 'builder_id')""",
         (name,),
     ).fetchall()
     return dict(rows)

@@ -41,7 +41,7 @@ below it, and every floor is finished before anything reads from it.
 | 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                                       |
 | 0    | Exact base rows from book events (planned): queue and order-flow imbalance, spread over time, depletion, refill   | `book_1s`                                                                |
 | 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), window statistics, and the volatility family    | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m`        |
-| 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m` (+ `pivot_event`) |
+| 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m` (+ `pivot_event`); planned: `pivot_rsi_1s`, `_1m` |
 | 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                                                 |
 | 4    | Model outputs (proposed): out-of-sample predictions stored as inputs for later stages and the final model         | `model_reversal_1s`, `model_reversal_1m` ([rules](#model-stages))        |
 | —    | Labels: future outcomes for training and evaluation, never inputs                                                 | `pivot_label` (later: trade outcomes)                                    |
@@ -85,17 +85,25 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `stats_1h_1m`  | 1    | `bar_1m`, `candle_1h_1m` (its status, ATR, and path fields: a declared edge within tier 1)                           |
 | `vol_1s`       | 1    | `bar_1s`, `candle_1m_1s` (its windows, path fields, ATR, and spread: a declared edge within tier 1)                  |
 | `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m` (its windows, path fields, ATR, and spread: a declared edge within tier 1)                  |
-| `pivot_1s`     | 2    | `market` (trade path), `candle_1m_1s`, `vol_1s`                                                                      |
-| `pivot_1m`     | 2    | `market` (trade path), `candle_1h_1m`, `vol_1m`                                                                      |
-| `pivot_rsi_1s` | 2    | `candle_1m_1s` (its RSI series)                                                                                      |
-| `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series)                                                                                      |
+| `pivot_1s`     | 2    | `market` (trade path), `bar_1s` (coverage), `candle_1m_1s` (ATR, spread), `vol_1s` (ATR in price units)              |
+| `pivot_1m`     | 2    | `market` (trade path), `bar_1s` (coverage), `bar_1m` (spread), `candle_1h_1m` (ATR), `vol_1m` (ATR in price units)   |
+| `pivot_rsi_1s` | 2    | `candle_1m_1s` (its RSI series); planned                                                                             |
+| `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series); planned                                                                             |
 | `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
 | `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
 | `pivot_label`  | —    | `market`, `pivot_1s`, `pivot_1m`                                                                                     |
 
 The two resolutions are independent branches below tier 3: nothing at second resolution
-feeds a minute stage except through `bar_1m`, so changing a second-resolution
+feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slow swing
+scales, which replay the trades second by second), so changing a second-resolution
 indicator never rebuilds the minute branch.
+
+**Variants are stages** (implemented in PR D). Each swing scale is a stage class of its own
+(`pivot_1s:fast_atr_1`, …) that writes to its resolution's shared table under its
+`variant_id` (`market.variant`). It therefore has its own builder identity, checkpoint, and
+session records, with no special case in the planner: a new scale is a new stage (`add`), and
+a changed one is rebuilt alone. A stage may also emit events next to its rows
+(`products["events"]`), which ingestion replaces together with them.
 
 ## Model stages
 
@@ -178,7 +186,7 @@ previous close; `α = 1 / n`). Same-phase hourly indicators update once per open
 The same math at daily scale (one update per session) would need about 107 sessions for a
 Wilder ATR(14), so daily-scale averages use fixed windows.
 
-**Mechanism** (implemented in PR A for the current stages; pivot rules apply from PR D):
+**Mechanism** (implemented in PR A; the pivot rule of item 5 in PR D):
 
 1. Every indicator reports its warm-up from its own parameters, in its own updates
    (`warmup.py`): the window length, or the tolerance formula above. Composites add along
@@ -201,8 +209,10 @@ Wilder ATR(14), so daily-scale averages use fixed windows.
    can depend on arbitrarily old swings, so no finite lead makes it history-complete. Their
    structure starts a fresh epoch at the start of the contract's span, exactly as after
    missing data, and `warm` means that epoch has confirmed at least one high and one low at
-   that scale. A pivot `warm = false` at a front session is a reported state
-   (`pivot_not_warm` in the session report), never a build failure.
+   that scale. A pivot `warm = false` at a front session is a reported state, never a build
+   failure. As implemented, a swing stage reports `warm` itself (`market.stage_slice.warm`):
+   every row of the session had a confirmed high and low of its segment, so a session with
+   missing data is not warm either. Its `warmup()` covers only the threshold's ATR(14).
 6. A test builds the stage from two session-aligned starting points and requires every
    feature to agree within the tolerance once the later start has run the declared warm-up,
    and to still differ at half of it, so a missing or inflated warm-up fails. Pivot stages

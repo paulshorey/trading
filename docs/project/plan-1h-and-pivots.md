@@ -4,8 +4,10 @@ Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decis
 Status November 4: PR A is done (#70), the schema folded into a baseline (#71), and
 GC/SI rebuilt on it ([results](handoff.md#baseline-rebuild-gc-and-si)). PR B1 (#74) added
 the minute stages and moved the engine onto the stages
-([results](handoff.md#pr-b1-results-minute-stages)); B2, the hourly-only metrics of
-section 5.4, is next ([handoff](handoff.md#pr-b-1h1m-rows)). It answers four questions: are the stored `1m@1s` rows
+([results](handoff.md#pr-b1-results-minute-stages)); B2 and the volatility tier (C1, C2)
+followed. Status November 16: PR D stores the swings of the price path
+([what was built](#36-implemented-in-pr-d-price-swings)); RSI swings, signals (E), and labels
+(F) remain. It answers four questions: are the stored `1m@1s` rows
 right, how to make the system extensible, when to build `1h@1m`, and how to add high/low
 pivot detection at both resolutions. The [feature pipeline](feature-pipeline.md) sets the
 calculation tiers and database rules, and [section 7](#7-volatility-tier-atr-family) the
@@ -36,7 +38,7 @@ volatility (ATR) tier, including bullish and bearish ATR.
 | A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, column and variant registries, summation order, empty-window policy, drawdown/drawup and high/low-order fields, derived lead (40 to start) | every stage     |
 | B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage, B1), and the hourly-only metrics as stage `stats_1h_1m` (B2)                                                                                        | new tables only |
 | C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                                                          | new tables only |
-| D   | 2    | Swing detector and structure of price and RSI: `pivot_1s`, `pivot_1m`, `pivot_rsi_1s`, `pivot_rsi_1m`, `pivot_event`                                                                             | new tables only |
+| D   | 2    | Swing detector and structure of price: `pivot_1s`, `pivot_1m`, `pivot_event` (done); of RSI: `pivot_rsi_1s`, `pivot_rsi_1m` (next, same detector)                                               | new tables only |
 | E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                                                     | new tables only |
 | F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                                                | new tables only |
 
@@ -323,6 +325,54 @@ Its result decides which scales to keep or add. Identity is per variant
 that scale and what depends on it; removing one deletes its rows, events, and labels;
 changing the detector's code rebuilds every scale. Cross-scale summaries change only when
 a new version declares a different scale set.
+
+### 3.6 Implemented in PR D (price swings)
+
+Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented for price as
+`strategy_core/swings.py` (the detector), `stage_pivot_1s.py`, and `stage_pivot_1m.py`
+(migration `0006_swings`; [results](handoff.md#pr-d-results-swings)). Derived details:
+
+- **Each scale is a stage of its own** (a variant): `pivot_1s:fast_atr_0p5`, `fast_atr_1`,
+  `fast_atr_2` write to `market.pivot_1s`, and `pivot_1m:slow_atr_0p5`, `slow_atr_1`,
+  `slow_atr_2` to `market.pivot_1m`, each under its `variant_id`
+  ([variants are stages](feature-pipeline.md#stages)).
+- **Threshold inputs.** Fast: the previous second's `candle_1m_1s.atr_bps` and
+  `book_spread_bps`. Slow: `candle_1h_1m.atr_bps` of the latest minute completed before the
+  trade's own minute, and the last sampled spread carried along the minute rows
+  (`bar_1m.last_bid`, `last_ask`; never across a missing minute), so the minute branch still
+  reads nothing from the second-resolution candle. A threshold or ATR that is undefined or
+  not above zero ends the segment.
+- **ATRs.** Reversals and `theta` are in log basis points. Every `*_atr` value is a price
+  difference divided by the ATR in price units (`vol_1s.atr_price`, `vol_1m.atr_price`) of
+  the same input row, frozen with the extreme it describes.
+- **`progress`** is the largest reversal since the running extreme ÷ θ (0 to 1);
+  `ext_dist_atr` is where the last trade is now. The 30 stored features per scale are those
+  of 3.4 plus `reversal_delta_ratio` (flow since the running extreme) and `cand_change_atr`
+  (the running extreme against the latest confirmed pivot of its kind: the provisional
+  version of `low_change_atr` and `high_change_atr`). Whole-number values are stored as
+  `smallint` or `integer`, which is exact and keeps rows at about 316 bytes with the index.
+- **Levels are context.** The dense rows keep only the running extreme (`ext_px`); confirmed
+  levels are in `market.pivot_event`. The latest confirmed high or low of a row is the last
+  such event of its scale and segment at or before it; the rows do not repeat event keys.
+- **Event identity** is (`builder_id`, `contract_id`, `variant_id`, `slot_ordinal`, `seq`):
+  the builder that wrote it, the row of the observation that produced it, and its order in
+  that row. A breach or reclaim names its pivot by (`ref_ordinal`, `ref_seq`).
+- **Reclaims.** A level is breached once and reclaimed at most once: by the first trade
+  strictly back inside within `W` published rows of the breach (60 seconds fast, 15 minutes
+  slow), unless a new pivot of its kind confirmed first.
+- **Missing data on a slow scale** ends the segment at the missing second and keeps the
+  scale idle for the rest of that minute; the hourly window then keeps it idle until the
+  missing minute has left it.
+- **A nonpositive price** ends the segment (`state` 0); there is no separate flag.
+- **`warm`** is reported by the stage ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)).
+- **A retired scale** (removed from `SCALES`) keeps its rows, events, and records until they
+  are deleted on purpose; the planner ignores them.
+- **The engine** reads every scale: `1m@1s.<scale>.<feature>` row by row, and
+  `1h@1m.<scale>.<feature>` as of the latest completed minute (415 features in all).
+- **Not built yet:** RSI swings. The detector already handles a series measured by plain
+  differences (the contract's RSI example is a test), but `pivot_rsi_1s` needs about 40 GB
+  more than the disk has, and its thresholds wait for the measurement of row-to-row RSI noise
+  the contract asks for.
 
 ## 4. Extensibility: stages
 

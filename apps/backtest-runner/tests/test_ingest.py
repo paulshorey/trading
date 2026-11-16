@@ -18,12 +18,17 @@ from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
 from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
+from strategy_core.stage_pivot_1m import SCALES as SLOW_SCALES
+from strategy_core.stage_pivot_1m import PivotMinuteStage
+from strategy_core.stage_pivot_1s import COLUMNS as PIVOT_COLUMNS
+from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
 from strategy_core.stage_stats_1h_1m import COLUMNS as STATS_COLUMNS
 from strategy_core.stage_stats_1h_1m import HourStatsStage
 from strategy_core.stage_vol_1m import COLUMNS as VOL_COLUMNS
 from strategy_core.stage_vol_1m import VolMinuteStage
 from strategy_core.stage_vol_1s import COLUMNS as VOL_SECOND_COLUMNS
 from strategy_core.stage_vol_1s import VolSecondStage
+from strategy_core.swings import EVENT_COLUMNS
 from strategy_core.synthetic import random_trades
 from test_runner import RECORD, FakeCache
 
@@ -84,12 +89,13 @@ DAYS = {
 def world(monkeypatch):
     monkeypatch.setattr(DbnFile, "present", property(lambda self: True))
     # The world has five sessions, fewer than the hourly and volatility stages' warm-ups (about
-    # 10, 5, 37, and 37 sessions: test_stages checks them), so planning tests use one-hour
-    # stand-ins.
+    # 10, 5, 37, and 37 sessions: test_stages checks them; 5 for the slow swing scales' hourly
+    # ATR), so planning tests use one-hour stand-ins.
     monkeypatch.setattr(HourCandleStage, "warmup", lambda self: 3600)
     monkeypatch.setattr(HourStatsStage, "warmup", lambda self: 3600)
     monkeypatch.setattr(VolMinuteStage, "warmup", lambda self: 3600)
     monkeypatch.setattr(VolSecondStage, "warmup", lambda self: 3600)
+    monkeypatch.setattr(PivotMinuteStage, "warmup", lambda self: 3600)
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -134,9 +140,16 @@ def test_registry_matches_the_migrated_tables(database):
         }
         want = {
             (stage, c.name): (c.role, c.unit or None, c.sql, "active")
-            for stage, columns in store.TABLES.items()
+            for stage, columns in (store.TABLES | store.EVENT_TABLES).items()
             for c in columns
         }
+        # swing scales share a table per resolution and one event table; ingestion adds the keys
+        assert store.EVENT_TABLES == {"pivot_event": EVENT_COLUMNS}
+        assert store.table_columns(conn, "pivot_event") == {c.name: c.sql for c in EVENT_COLUMNS}
+        assert {"pivot_1s", "pivot_1m"} <= set(store.TABLES)
+        assert registry[("pivot_1s", "progress")][:2] == ("feature", "ratio")
+        assert registry[("pivot_1s", "ext_px")][0] == "context"  # a raw level is never a feature
+        assert registry[("pivot_event", "level")][0] == "context"
         assert {k: v for k, v in registry.items() if v[3] == "active"} == want
         assert registry[("bar_1s", "retired")][3] == "deprecated"  # never deleted
         assert registry[("candle_1m_1s", "rsi")][:2] == ("feature", "index_0_100")
@@ -257,7 +270,7 @@ def test_ingest_plans_builds_extends_and_repairs(database, world):
         # Regression (PR #63 review): a front without stored rows is not published; the
         # session keeps its readable entry
         [now] = ingest.plan(["GC"], data=first, **options)
-        current = (now["builders"], now["expected"])
+        current = (now["builders"], now["expected"], now["variants"])
         schedule = {date(2026, 9, 1): ("GCG7", "previous_session")}
         assert ingest.publish_rolls(conn, GC, schedule, *current) == 0
         assert_continuous(conn, ["GCZ6", "GCZ6", "GCG7"])
@@ -412,6 +425,8 @@ def test_minute_bounds_follow_the_session_seconds():
     assert store.row_bounds("stats_1h_1m", 61, 180) == (2, 3)
     assert store.row_bounds("vol_1m", 61, 180) == (2, 3)
     assert store.row_bounds("vol_1s", 61, 180) == (61, 180)
+    assert store.row_bounds("pivot_1m", 61, 180) == (2, 3)
+    assert store.row_bounds("pivot_1s", 61, 180) == (61, 180)
     assert store.SLOT_SECONDS == {
         "bar_1s": 1,
         "bar_1m": 60,
@@ -420,6 +435,8 @@ def test_minute_bounds_follow_the_session_seconds():
         "stats_1h_1m": 60,
         "vol_1m": 60,
         "vol_1s": 1,
+        "pivot_1m": 60,  # one table for the slow swing scales, one for the fast
+        "pivot_1s": 1,
     }
 
 
@@ -454,6 +471,12 @@ def stored_of(rows, stages=None) -> ingest.Stored:
 
 
 NAMES = [cls.NAME for cls in ingest.STAGES]
+SWINGS = [s.NAME for s in (*SLOW_SCALES, *FAST_SCALES)]  # each scale is a stage (PR D)
+
+
+def without(*stored: str) -> str:
+    """The plan's reason when only `stored` stages have rows."""
+    return "stages without stored rows: " + ", ".join(sorted(set(NAMES) - set(stored)))
 
 
 def builders(b: int, **stage) -> dict[str, int]:
@@ -510,31 +533,36 @@ def test_diff_rules():
     seconds = {n: {d: 1 for d, _, _ in rows} for n in ("bar_1s", "candle_1m_1s")}
     added = stored_of(rows, seconds)
     _, i, _, action, why = ingest.diff(s[:3], s, added, builders(1), files, False)
-    assert (i, action, why) == (
-        0,
-        "add",
-        "stages without stored rows: bar_1m, candle_1h_1m, stats_1h_1m, vol_1m, vol_1s",
-    )
+    assert (i, action, why) == (0, "add", without("bar_1s", "candle_1m_1s"))
+    assert "bar_1m, candle_1h_1m, pivot_1m:slow_atr_0p5" in why
     # ... the hourly statistics next to the stages before them (PR B2)
-    later = ("stats_1h_1m", "vol_1m", "vol_1s")
+    later = ("stats_1h_1m", "vol_1m", "vol_1s", *SWINGS)
     before_b2 = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in later}
     _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, before_b2), builders(1),
                                        files, False)  # fmt: skip
-    assert (i, action, why) == (0, "add", f"stages without stored rows: {', '.join(later)}")
+    assert (i, action, why) == (0, "add", without(*before_b2))
     # ... the minute volatility next to the stages before it (PR C1)
     stored_five = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in later[1:]}
     _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_five), builders(1),
                                        files, False)  # fmt: skip
-    assert (i, action, why) == (0, "add", "stages without stored rows: vol_1m, vol_1s")
-    # ... and the second volatility next to every other stored stage (PR C2)
-    stored_six = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n != "vol_1s"}
+    assert (i, action, why) == (0, "add", without(*stored_five))
+    # ... the second volatility next to the stages before it (PR C2)
+    stored_six = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in later[2:]}
     _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_six), builders(1),
                                        files, False)  # fmt: skip
-    assert (i, action, why) == (0, "add", "stages without stored rows: vol_1s")
+    assert (i, action, why) == (0, "add", without(*stored_six))
+    # ... and the six swing scales next to every other stored stage (PR D)
+    stored_seven = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n not in SWINGS}
+    _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, stored_seven), builders(1),
+                                       files, False)  # fmt: skip
+    assert (i, action, why) == (0, "add", "stages without stored rows: " + ", ".join(SWINGS))
+    # a new scale next to the stored ones is added the same way, alone
+    five = {n: {d: 1 for d, _, _ in rows} for n in NAMES if n != SWINGS[-1]}
+    _, i, _, action, why = ingest.diff(s[:3], s, stored_of(rows, five), builders(1), files, False)
+    assert (i, action, why) == (0, "add", f"stages without stored rows: {SWINGS[-1]}")
     # ... and an interrupted add resumes after the sessions it already stored
     first = {s[0].trade_date: 1}
-    minute = {"bar_1m": first, "candle_1h_1m": first, "stats_1h_1m": first, "vol_1m": first,
-              "vol_1s": first}  # fmt: skip
+    minute = {n: first for n in NAMES if n not in seconds}
     part = stored_of(rows, seconds | minute)
     _, i, _, action, _ = ingest.diff(s, s, part, builders(1), files, False)
     assert (i, action) == (1, "add")
@@ -626,9 +654,12 @@ def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world
         cid = conn.execute("SELECT id FROM market.contract WHERE raw_symbol = 'GCG7'").fetchone()
         for stage, table in computed.tables.items():
             ends = table.values["end_ns"]
+            scale = plan["variants"][stage]  # a swing scale's rows carry its id; others have none
             stored = conn.execute(
-                f"SELECT {', '.join(table.values)} FROM market.{stage} "
-                "WHERE contract_id = %s AND end_ns BETWEEN %s AND %s ORDER BY end_ns",
+                f"SELECT {', '.join(table.values)} FROM market.{store.STAGE_TABLE[stage]} "
+                "WHERE contract_id = %s AND end_ns BETWEEN %s AND %s"
+                + (f" AND variant_id = {scale}" if scale else "")
+                + " ORDER BY end_ns",
                 (cid[0], int(ends[0]), int(ends[-1])),
             ).fetchall()
             assert len(stored) == len(ends), stage
@@ -767,11 +798,11 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
         conn.commit()
     real, calls = store.copy_table, []
 
-    def failing(conn, name, table, cid):  # one call per stage table and session
+    def failing(conn, name, table, cid, **keys):  # one call per stage table and session
         calls.append(cid)
-        if len(calls) == 3:  # the second session's first table
+        if len(calls) == 3:  # the first session's third table
             raise RuntimeError("disk full")
-        return real(conn, name, table, cid)
+        return real(conn, name, table, cid, **keys)
 
     monkeypatch.setattr(store, "copy_table", failing)
     result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
@@ -799,9 +830,9 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
 
     def slices(conn):
         return {
-            (stage, cid, day): (builder, warm, at)
-            for stage, cid, day, builder, warm, at in conn.execute(
-                "SELECT stage, contract_id, trade_date, builder_id, warm, ingested_at "
+            (stage, cid, day, variant): (builder, warm, at)
+            for stage, cid, day, variant, builder, warm, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, variant_id, builder_id, warm, ingested_at "
                 "FROM market.stage_slice"
             )
         }
@@ -830,7 +861,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     with db.connect(database) as conn:
         after = slices(conn)
         for key, (builder, _, at) in after.items():
-            if key[0] not in ("candle_1m_1s", "vol_1s"):
+            if key[0] not in ("candle_1m_1s", "vol_1s", "pivot_1s"):  # the fast scales read both
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
                 assert at > before[key][2] and builder == before[key][0], key  # rewritten
@@ -865,6 +896,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "stats_1h_1m": 1,
         "vol_1m": 1,
         "vol_1s": 1,
+        **{s.NAME: 1 for s in (*SLOW_SCALES, *FAST_SCALES)},  # their thresholds' ATR(14)
     }
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
@@ -877,8 +909,8 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
 def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
     """Minute tables count minutes: a stale `bar_1m` is replaced session by session at its own
     resolution (no duplicate keys, no leftovers), together with `candle_1h_1m`, `stats_1h_1m`,
-    and `vol_1m`, which read it, while the second tables stay untouched. The stored minutes equal
-    an in-memory build."""
+    `vol_1m`, and the slow swing scales, which read it, while the second tables stay untouched.
+    The stored minutes equal an in-memory build."""
     cache, data = world
     options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
     with db.connect(database) as conn:
@@ -888,9 +920,9 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
 
     def slices(conn):
         return {
-            (stage, cid, day): (builder, at)
-            for stage, cid, day, builder, at in conn.execute(
-                "SELECT stage, contract_id, trade_date, builder_id, ingested_at "
+            (stage, cid, day, variant): (builder, at)
+            for stage, cid, day, variant, builder, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, variant_id, builder_id, ingested_at "
                 "FROM market.stage_slice"
             )
         }
@@ -914,12 +946,14 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
+        "pivot_1m",
+        "pivot_event",  # the slow scales' events are replaced with their rows
     }
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s"):
+            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s", "pivot_1s"):
                 assert (builder, at) == before[key], key  # untouched
             else:
                 assert at > before[key][1] and builder == before[key][0], key  # rewritten
@@ -959,7 +993,8 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
 )
 def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, per, every):
     """A new stage next to stored ones. With every other stage current, the plan adds only that
-    stage (no --rebuild), the run writes only its table, every other stage's records stay
+    stage (no --rebuild), the run writes only its table and those of the stages that read it (the
+    swing scales read the volatility of their resolution), every other stage's records stay
     untouched, and the stored rows equal an in-memory build, NULLs included (`per` rows per
     contract session; every `every`-th slot is compared)."""
     cache, data = world
@@ -971,9 +1006,9 @@ def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, pe
 
     def slices(conn):
         return {
-            (stage, cid, day): (builder, at)
-            for stage, cid, day, builder, at in conn.execute(
-                "SELECT stage, contract_id, trade_date, builder_id, ingested_at "
+            (stage, cid, day, variant): (builder, at)
+            for stage, cid, day, variant, builder, at in conn.execute(
+                "SELECT stage, contract_id, trade_date, variant_id, builder_id, ingested_at "
                 "FROM market.stage_slice"
             )
         }
@@ -990,11 +1025,15 @@ def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, pe
     }
     result = ingest.run(["GC"], workers=1, data=first, **options)
     assert result["status"] == "done", result
-    assert {t for r in result["results"] for t in r["tables"]} == {stage}
+    readers = {"vol_1m": {"pivot_1m", "pivot_event"}, "vol_1s": {"pivot_1s", "pivot_event"}}
+    written = {stage} | readers.get(stage, set())
+    assert {t for r in result["results"] for t in r["tables"]} == written
     with db.connect(database) as conn:
         after = slices(conn)
-        assert {k: v for k, v in after.items() if k[0] != stage} == before  # untouched
-        assert {k[1:] for k in after if k[0] == stage} == {k[1:] for k in before}
+        assert {k: v for k, v in after.items() if k[0] not in written} == {
+            k: v for k, v in before.items() if k[0] not in written
+        }  # untouched
+        assert {k[1:3] for k in after if k[0] == stage} == {k[1:3] for k in before}
         assert conn.execute(f"SELECT count(*) FROM market.{stage}").fetchone()[0] == 4 * per
         series = conn.execute(
             f"SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_{stage} "
@@ -1021,3 +1060,181 @@ def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, pe
         np.testing.assert_array_equal(is_null, null[k], err_msg=k)
         stored = got[k][~is_null].astype(want[k].dtype)
         np.testing.assert_array_equal(stored, want[k][~is_null], err_msg=k)
+
+
+def assert_stored(got: list[tuple], columns: list[str], tables: list[Table], keep=None) -> None:
+    """Stored rows (tuples in `columns` order) equal the in-memory tables, NULLs included."""
+    for j, k in enumerate(columns):
+        want = np.concatenate([t.values[k] for t in tables])
+        null = np.concatenate([t.nulls.get(k, np.zeros(len(t), bool)) for t in tables])
+        if keep is not None:
+            want, null = want[keep], null[keep]
+        assert len(got) == len(want), k
+        is_null = np.array([r[j] is None for r in got], bool)
+        np.testing.assert_array_equal(is_null, null, err_msg=k)
+        stored = np.array([r[j] for r in got], dtype=object)[~is_null].astype(want.dtype)
+        np.testing.assert_array_equal(stored, want[~null], err_msg=k)
+
+
+def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
+    """PR D. Each swing scale is a variant: a stage with its own builder, checkpoint, and session
+    records, writing rows keyed by `variant_id` into its resolution's table and its events into
+    `market.pivot_event`. Stored rows and events equal an in-memory build; a stale scale is
+    rebuilt alone, leaving the other scales' rows, events, and records untouched; scales without
+    rows are added without --rebuild."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    result = ingest.run(["GC"], workers=1, data=first, **options)
+    assert result["status"] == "done", result
+    assert {"pivot_1s", "pivot_1m", "pivot_event"} <= {
+        t for r in result["results"] for t in r["tables"]
+    }
+    [plan] = ingest.plan(["GC"], data=first, **options)
+    scales = (*SLOW_SCALES, *FAST_SCALES)
+    variants = {s.NAME: plan["variants"][s.NAME] for s in scales}
+    assert len(set(variants.values())) == 6 and all(variants.values())
+    assert all(plan["variants"][n] == 0 for n in plan["variants"] if n not in variants)
+    dates = [date(2026, 9, 2), date(2026, 9, 3)]
+    expected = in_memory(cache, first, "GCG7", dates)
+    columns = [c.name for c in PIVOT_COLUMNS]
+    event_columns = [c.name for c in EVENT_COLUMNS]
+
+    def slices(conn):
+        return {
+            (stage, variant, cid, day): (builder, at)
+            for stage, variant, cid, day, builder, at in conn.execute(
+                "SELECT stage, variant_id, contract_id, trade_date, builder_id, ingested_at "
+                "FROM market.stage_slice"
+            )
+        }
+
+    def fingerprints(conn):
+        """Per table and scale: rows and a checksum of every stored value."""
+        return {
+            (table, variant): (n, digest)
+            for table in ("pivot_1s", "pivot_1m", "pivot_event")
+            for variant, n, digest in conn.execute(
+                f"SELECT variant_id, count(*), md5(string_agg(t::text, '' ORDER BY contract_id, "
+                f"slot_ordinal{', seq' if table == 'pivot_event' else ''})) "
+                f"FROM market.{table} t GROUP BY 1"
+            )
+        }
+
+    with db.connect(database) as conn:
+        registry = {
+            f"{stage}:{name}": (vid, params)
+            for stage, name, vid, params in conn.execute(
+                "SELECT stage, name, id, params FROM market.variant"
+            )
+        }
+        assert {n: v for n, (v, _) in registry.items()} == variants
+        assert registry["pivot_1s:fast_atr_0p5"][1]["multiplier"] == 0.5
+        assert (
+            registry["pivot_1m:slow_atr_2"][1] | {"spread_floor": 2.0, "stream": "slow"}
+            == (registry["pivot_1m:slow_atr_2"][1])
+        )
+        ids = dict(conn.execute("SELECT raw_symbol, id FROM market.contract").fetchall())
+        before, prints = slices(conn), fingerprints(conn)
+        warm = {}
+        for s in scales:
+            table, variant = store.STAGE_TABLE[s.NAME], variants[s.NAME]
+            per = 82_800 if table == "pivot_1s" else 1380
+            assert prints[table, variant][0] == 4 * per, s.NAME  # two contracts, two sessions
+            series = conn.execute(
+                f"SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_{table} "
+                "WHERE product = 'GC' AND variant_id = %s",
+                (variant,),
+            ).fetchone()
+            assert series == (3 * per, 3 * per), s.NAME
+            # stored rows equal the in-memory build (every 53rd second of the fast scales)
+            every = 53 if table == "pivot_1s" else 1
+            got = conn.execute(
+                f"SELECT {', '.join(columns)} FROM market.{table} WHERE contract_id = %s "
+                "AND variant_id = %s AND slot_ordinal %% %s = 0 ORDER BY slot_ordinal",
+                (ids["GCG7"], variant, every),
+            ).fetchall()
+            tables = [p.tables[s.NAME] for p in expected]
+            ordinal = np.concatenate([t.values["slot_ordinal"] for t in tables])
+            assert_stored(got, columns, tables, ordinal % every == 0)
+            # ... and so do its events, each carrying the scale's builder
+            events = [p.products["events"][s.NAME] for p in expected]
+            got = conn.execute(
+                f"SELECT {', '.join(event_columns)} FROM market.pivot_event "
+                "WHERE contract_id = %s AND variant_id = %s ORDER BY slot_ordinal, seq",
+                (ids["GCG7"], variant),
+            ).fetchall()
+            assert_stored(got, event_columns, events)
+            builders = conn.execute(
+                "SELECT DISTINCT builder_id FROM market.pivot_event WHERE variant_id = %s",
+                (variant,),
+            ).fetchall()
+            assert builders in ([(plan["builders"][s.NAME],)], []), s.NAME
+            # warm is the stage's own report: every row had a confirmed high and low
+            flags = conn.execute(
+                "SELECT warm FROM market.stage_slice WHERE stage = %s AND variant_id = %s "
+                "AND contract_id = %s ORDER BY trade_date",
+                (table, variant, ids["GCG7"]),
+            ).fetchall()
+            want = [bool(not (t.nulls["high_age_s"] | t.nulls["low_age_s"]).any()) for t in tables]
+            assert [f[0] for f in flags] == want, s.NAME
+            warm[s.NAME] = want
+        assert warm["pivot_1s:fast_atr_0p5"] == [False, True]  # a first session starts cold
+        assert prints["pivot_event", variants["pivot_1s:fast_atr_0p5"]][0] > 2000
+        assert prints["pivot_event", variants["pivot_1m:slow_atr_0p5"]][0] > 10
+        reads = conn.execute(
+            "SELECT scale, count(*) FROM market.continuous_pivot_event WHERE product = 'GC' "
+            "GROUP BY 1"
+        ).fetchall()
+        assert {name for name, _ in reads} >= {s.VARIANT for s in FAST_SCALES}
+        # one scale built by other code: stale, and --rebuild rewrites that scale alone
+        stale = "pivot_1s:fast_atr_1"
+        other = conn.execute(
+            "INSERT INTO market.builder (sha256, product, code_sha256, settings, stage) "
+            "VALUES (repeat('9', 64), 'GC', 'x', '{}', %s) RETURNING id",
+            (stale,),
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE market.stage_slice SET builder_id = %s WHERE stage = 'pivot_1s' "
+            "AND variant_id = %s",
+            (other, variants[stale]),
+        )
+        conn.commit()
+    [now] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in now["contracts"]} == {"stale"}
+    result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
+    assert result["status"] == "done", result
+    assert {t for r in result["results"] for t in r["tables"]} == {"pivot_1s", "pivot_event"}
+    with db.connect(database) as conn:
+        after = slices(conn)
+        assert after.keys() == before.keys()
+        for key, (builder, at) in after.items():
+            if key[:2] == ("pivot_1s", variants[stale]):
+                assert at > before[key][1] and builder == before[key][0], key  # rewritten
+            else:
+                assert (builder, at) == before[key], key  # untouched
+        assert fingerprints(conn) == prints  # the same code writes the same rows and events
+        # scales without rows (as before they existed) are added, with their events
+        for table in ("pivot_1s", "pivot_1m"):
+            conn.execute("DELETE FROM market.stage_slice WHERE stage = %s", (table,))
+            conn.execute(f"DELETE FROM market.{table}")
+        conn.execute("DELETE FROM market.pivot_event")
+        conn.commit()
+    [now] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {(c["action"], c["reason"]) for c in now["contracts"]} == {
+        ("add", "stages without stored rows: " + ", ".join(sorted(variants)))
+    }
+    result = ingest.run(["GC"], workers=1, data=first, **options)
+    assert {t for r in result["results"] for t in r["tables"]} == {
+        "pivot_1s", "pivot_1m", "pivot_event",
+    }  # fmt: skip
+    with db.connect(database) as conn:
+        assert fingerprints(conn) == prints
+        added = slices(conn)
+        assert {k: v for k, v in added.items() if not k[0].startswith("pivot")} == {
+            k: v for k, v in after.items() if not k[0].startswith("pivot")
+        }
+    [now] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in now["contracts"]} == {"current"}

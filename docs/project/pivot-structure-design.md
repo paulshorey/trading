@@ -1,7 +1,9 @@
 # Pivot and market-structure contract
 
-Proposed November 3, 2026, following the review of PR #66. This defines the next
-implementation; it is not implemented or benchmarked. Read the
+Proposed November 3, 2026, following the review of PR #66. Implemented for the price source in
+PR D on November 16, 2026 (`strategy_core/swings.py`;
+[what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)); the RSI source,
+tier 3, and the benchmark are not built. Read the
 [agent handoff](pivot-detection-handoff.md) and [research](../research/pivots/2026-11-03-reviewed-findings.md).
 The [stage/minute/pivot plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)
 governs the observations (the trade path), thresholds and their inputs, segments, price

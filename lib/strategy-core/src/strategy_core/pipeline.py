@@ -29,6 +29,8 @@ from .stage_bar_1m import MinuteBarStage
 from .stage_bar_1s import BarStage
 from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
+from .stage_pivot_1m import SCALES as SLOW_SCALES
+from .stage_pivot_1s import SCALES as FAST_SCALES
 from .stage_stats_1h_1m import HourStatsStage
 from .stage_vol_1m import VolMinuteStage
 from .stage_vol_1s import VolSecondStage
@@ -44,6 +46,8 @@ STAGES: tuple[type[Stage], ...] = (
     HourStatsStage,
     VolMinuteStage,
     VolSecondStage,
+    *SLOW_SCALES,
+    *FAST_SCALES,
 )
 BY_NAME = {s.NAME: s for s in STAGES}
 
@@ -104,16 +108,22 @@ class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
     the window ending then (`candle_1m_1s` and `vol_1s`, one row each per second, joined row by
     row) and the `1h@1m` features of the latest completed minute (`candle_1h_1m`, `stats_1h_1m`,
-    and `vol_1m`, one row each per minute), with that minute's age, `1h@1m.age_s`. `context` holds
-    the price-unit values execution needs (the latest close and the `1m@1s` ATR from `vol_1s`),
-    never inputs to signals or models."""
+    and `vol_1m`, one row each per minute), with that minute's age, `1h@1m.age_s`. Swing scales
+    join the same way under their own names: the fast ones row by row as
+    `1m@1s.<scale>.<feature>`, the slow ones as of the latest completed minute as
+    `1h@1m.<scale>.<feature>`. `context` holds the price-unit values execution needs (the latest
+    close and the `1m@1s` ATR from `vol_1s`), never inputs to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
-    SECONDLY = (FAST, "vol_1s")  # rows per second, joined row by row
-    HOURLY = (BIAS, "stats_1h_1m", "vol_1m")  # rows per completed minute, joined as of each second
+    # rows per second, joined row by row
+    SECONDLY = (FAST, "vol_1s", *(s.NAME for s in FAST_SCALES))
+    # rows per completed minute, joined as of each second
+    HOURLY = (BIAS, "stats_1h_1m", "vol_1m", *(s.NAME for s in SLOW_SCALES))
     PREFIX: ClassVar[dict[str, str]] = {
-        **{name: "1m@1s" for name in SECONDLY},
-        **{name: "1h@1m" for name in HOURLY},
+        **{name: "1m@1s" for name in (FAST, "vol_1s")},
+        **{name: "1h@1m" for name in (BIAS, "stats_1h_1m", "vol_1m")},
+        **{s.NAME: f"1m@1s.{s.VARIANT}" for s in FAST_SCALES},
+        **{s.NAME: f"1h@1m.{s.VARIANT}" for s in SLOW_SCALES},
     }
     AGE = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
 
@@ -171,7 +181,8 @@ class StageFeatures:
             table = rows.tables[stage]
             if not np.array_equal(table.values["end_ns"], ends):
                 raise AssertionError(f"{stage} rows must align with {self.FAST}")
-            features |= {f"1m@1s.{n}": v for n, v in self.read(table, stage).items()}
+            prefix = self.PREFIX[stage]
+            features |= {f"{prefix}.{n}": v for n, v in self.read(table, stage).items()}
         bias_end = rows.tables[self.BIAS].values["end_ns"]
         minute_end = np.r_[self.last_bias_end, bias_end]
         values: dict[str, np.ndarray] = {}
@@ -179,8 +190,9 @@ class StageFeatures:
             table = rows.tables[stage]
             if not np.array_equal(table.values["end_ns"], bias_end):
                 raise AssertionError(f"{stage} rows must align with {self.BIAS}")
+            prefix = self.PREFIX[stage]
             for n, v in self.read(table, stage).items():
-                values[n] = np.r_[self.last_bias.get(n, []), v]
+                values[f"{prefix}.{n}"] = np.r_[self.last_bias.get(f"{prefix}.{n}", []), v]
         # As-of join: the latest minute completed at or before each second. The minute ending at
         # T completes with the second ending at T, so its age is then zero.
         i = np.searchsorted(minute_end, ends, side="right") - 1
@@ -188,7 +200,7 @@ class StageFeatures:
         safe = np.maximum(i, 0)
         nan = np.full(len(ends), np.nan)
         for n, v in values.items():
-            features[f"1h@1m.{n}"] = np.where(known, v[safe], np.nan) if len(v) else nan.copy()
+            features[n] = np.where(known, v[safe], np.nan) if len(v) else nan.copy()
         features[self.AGE.name] = (
             np.where(known, (ends - minute_end[safe]) / NS, np.nan) if len(minute_end) else nan
         )

@@ -32,6 +32,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 
 from .market import (
+    F_BAD_TS_RECV,
     F_MAYBE_BAD_BOOK,
     NS,
     SECOND,
@@ -131,6 +132,17 @@ class Quote:
         return self.two_sided and not self.unreliable
 
 
+def merged(coverage: np.ndarray) -> np.ndarray:
+    """Covered `[start, end)` intervals sorted, with touching or overlapping ones joined."""
+    out: list[list[int]] = []
+    for start, end in sorted(map(tuple, np.asarray(coverage, np.int64).reshape(-1, 2).tolist())):
+        if out and start <= out[-1][1]:
+            out[-1][1] = max(out[-1][1], end)
+        else:
+            out.append([start, end])
+    return np.array(out, np.int64).reshape(-1, 2)
+
+
 class BookView:
     """One chunk of a contract's book events in the order the engine processes them (by slot,
     then receive order), with the book carried in from earlier chunks (`before`).
@@ -140,9 +152,15 @@ class BookView:
     (an event-time inversion, or a late record released before one received earlier):
 
     - The book after a prefix of records is the one received last (`state`), not the one
-      processed last. `recv_floor` is the latest receive time of earlier chunks.
+      processed last. `recv_floor` is the latest receive time of earlier chunks. A record
+      whose receive time Databento flags as inaccurate (the book restated at the start of a
+      file) is ordered by its position instead, and its receive time is never compared.
     - A record takes effect no earlier than the records before it: lookups by time use the
-      running maximum of event times (`ts_max`), never a record's own earlier stamp."""
+      running maximum of event times (`ts_max`), never a record's own earlier stamp.
+
+    A book is an observation only while the data is covered: with `coverage` (the chunk's
+    covered intervals), a lookup returns None at an uncovered time, and after a gap until an
+    event that happened after it."""
 
     def __init__(
         self,
@@ -151,22 +169,36 @@ class BookView:
         before: Quote | None = None,
         ts_floor: int = 0,
         recv_floor: int = 0,
+        coverage: np.ndarray | None = None,
     ):
         self.b, self.slot_end, self.before = book, slot_end, before
         self.n = len(book)
         self.recv_max = recv_floor
+        self.cover = None if coverage is None else merged(coverage)
         if self.n:
             self.ts_max = np.maximum.accumulate(np.maximum(book.ts_event, ts_floor))
-            recv = np.maximum.accumulate(np.maximum(book.ts_recv, recv_floor))
-            newest = book.ts_recv >= np.r_[recv_floor, recv[:-1]]
+            loose = (book.flags & F_BAD_TS_RECV) > 0
+            recv = np.maximum.accumulate(np.maximum(np.where(loose, 0, book.ts_recv), recv_floor))
+            newest = loose | (book.ts_recv >= np.r_[recv_floor, recv[:-1]])
             self.state = np.maximum.accumulate(np.where(newest, np.arange(self.n), -1))
             self.recv_max = int(recv[-1])
         else:
             self.ts_max = self.state = np.empty(0, np.int64)
 
     @classmethod
-    def empty(cls, before: Quote | None = None) -> "BookView":
-        return cls(BookEvents.empty(), np.empty(0, np.int64), before)
+    def empty(cls, before: Quote | None = None, coverage: np.ndarray | None = None) -> "BookView":
+        return cls(BookEvents.empty(), np.empty(0, np.int64), before, coverage=coverage)
+
+    def held(self, quote: Quote | None, time: int) -> Quote | None:
+        """`quote` if the data is covered at `time` and the quote is from an event inside the
+        same covered stretch; else None. A book carried across missing data is not an
+        observation."""
+        if quote is None or self.cover is None:
+            return quote
+        i = int(np.searchsorted(self.cover[:, 0], time, side="right")) - 1
+        if i < 0 or time >= self.cover[i, 1] or quote.ts_event < self.cover[i, 0]:
+            return None
+        return quote
 
     def quote(self, k: int) -> Quote | None:
         """The book after the first `k + 1` records: the one received last among them."""
@@ -189,7 +221,7 @@ class BookView:
         Call it from the chunk that contains that slot (earlier chunks are in `before`)."""
         by_time = int(np.searchsorted(self.ts_max, time, side="right"))
         by_slot = int(np.searchsorted(self.slot_end, slot_end(time), side="right"))
-        return self.quote(min(by_time, by_slot) - 1)
+        return self.held(self.quote(min(by_time, by_slot) - 1), time)
 
     def late(self, time: int, end: int) -> Quote | None:
         """The book after an event at `time` that was released late, in the slot ending at
@@ -199,11 +231,12 @@ class BookView:
         lo = int(np.searchsorted(self.slot_end, end, side="left"))
         hi = int(np.searchsorted(self.slot_end, end, side="right"))
         hit = np.flatnonzero(self.b.ts_event[lo:hi] <= time)
-        return self.quote(lo + int(hit[-1])) if len(hit) else None
+        return self.held(self.quote(lo + int(hit[-1])), time) if len(hit) else None
 
     def known(self, end: int) -> Quote | None:
         """The latest book the engine holds when the slot ending at `end` closes."""
-        return self.quote(int(np.searchsorted(self.slot_end, end, side="right")) - 1)
+        k = int(np.searchsorted(self.slot_end, end, side="right")) - 1
+        return self.held(self.quote(k), end - 1)
 
     @property
     def last(self) -> Quote | None:

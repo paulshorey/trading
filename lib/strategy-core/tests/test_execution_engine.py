@@ -21,6 +21,7 @@ from strategy_core.labels import (
     summarize_candidates,
 )
 from strategy_core.market import (
+    F_BAD_TS_RECV,
     F_MAYBE_BAD_BOOK,
     HOUR,
     NS,
@@ -396,6 +397,58 @@ def test_a_book_flagged_as_possibly_wrong_prices_nothing():
     assert pos.decision_bid == UNDEF_PRICE and not view.book.at(ARRIVAL).usable
     again = sim.order(1, "GCZ6", T0 + 61 * S, 0.5, {}, view)
     assert sim.fill(view, again)[0] == FILLED and again.entry_px == 2000_300_000_000
+
+
+def test_a_book_is_not_carried_across_missing_data():
+    """Regression (PR #81 review): with a gap in coverage, a fill inside it or just after it
+    must not use the book from before it."""
+    book = quotes([ENTRY, (T0 + 122 * S, 2000.4, 2000.5)])
+    cover = np.array([[T0 + 120 * S, T0 + HOUR], [T0, T0 + 61 * S]])  # 61 s to 120 s missing
+    view = BookView(book, (book.ts_event // S + 1) * S, coverage=cover)
+    assert view.at(ARRIVAL).ask == 2000_100_000_000 and view.known(T0 + 61 * S) is not None
+    assert view.at(T0 + 90 * S) is None and view.known(T0 + 90 * S) is None  # inside the gap
+    assert view.at(T0 + 121 * S) is None  # covered again, but nothing has happened since
+    assert view.at(T0 + 123 * S).bid == 2000_400_000_000
+    # touching intervals are one stretch: the book carries across a file boundary
+    joined = BookView(
+        book,
+        (book.ts_event // S + 1) * S,
+        coverage=np.array([[T0, T0 + 90 * S], [T0 + 90 * S, T0 + HOUR]]),
+    )
+    assert joined.at(T0 + 121 * S).ask == 2000_100_000_000
+    # the engine passes each chunk's coverage: a carried book alone prices nothing after a gap
+    sim = Simulator(GC, CFG, BRACKET, CAL)
+    alone = BookView.empty(view.quote(0), cover)
+    pos = sim.order(
+        1,
+        "GCZ6",
+        T0 + 121 * S,
+        0.5,
+        {},
+        ExecView(Trades.empty(), np.empty(0, np.int64), alone, T0 + 123 * S),
+    )
+    assert pos.decision_bid == UNDEF_PRICE
+    assert (
+        sim.fill(ExecView(Trades.empty(), np.empty(0, np.int64), alone, T0 + 123 * S), pos)[0]
+        == CANCELLED
+    )
+
+
+def test_a_record_with_an_unreliable_receive_time_is_ordered_by_position():
+    """Regression (PR #81 review): Databento flags the receive time of the book it restates at
+    the start of a file. Such a record is the newest book where it stands, and its receive
+    time never makes a later record look older."""
+    book = quotes(
+        [
+            (T0 + 60 * S, 2000.0, 2000.1),
+            (T0 + 60_500_000_000, 2000.2, 2000.3, 5, 5, 3600 * S),  # flagged: received "1 h later"
+            (T0 + 60_600_000_000, 2000.4, 2000.5),
+        ]
+    )
+    book.flags[1] = F_BAD_TS_RECV
+    view = BookView(book, np.full(3, T0 + 61 * S))
+    assert view.quote(1).bid == 2000_200_000_000 and view.quote(1).usable
+    assert view.last.bid == 2000_400_000_000 and view.recv_max == int(book.ts_recv[2])
 
 
 def test_trades_before_the_entry_never_trigger_exits():

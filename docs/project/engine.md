@@ -83,7 +83,7 @@ Every book lookup is bounded by the second of its own time: it uses the events r
 the close of that second and nothing released later. A late record therefore never rewrites
 an earlier fill, and whole-session and second-by-second runs price every order the same.
 
-Four rules cover records that are unusual or out of order (`execution.BookView`):
+Six rules cover records that are unusual or out of order (`execution.BookView`):
 
 - **A trade record carries the book before the trade.** The book changes only when a later
   record says so. On GCZ6 on 2026-09-15, 91,227 of 93,025 trades were followed by a book
@@ -101,6 +101,13 @@ Four rules cover records that are unusual or out of order (`execution.BookView`)
   prices nothing: an entry that meets it is cancelled and an exit falls back to the last
   trade price (flag `no_book`), until a record without the flag arrives. In this year's
   files the flag appears only on 2025-11-28, in RTY and YM.
+- **A book is not carried across missing data.** Where the files have a gap, a lookup inside
+  it returns no book, and after it none until an event that happened after the gap: the
+  entry is cancelled, or the exit falls back with `no_book`.
+- **The book restated at the start of each file** carries a receive time Databento flags as
+  inaccurate (exactly midnight UTC). Those records are ordered by their position in the
+  file, and their receive time is never compared with another record's. In the GC and SI
+  files they are the only records with that flag.
 - **A stop triggered by a trade released late** (after its own second had closed) fills at
   the book of the last record released with it that happened at or before the trigger, and
   at the trigger price (flag `no_book`) when there is none. Earlier seconds are not read:

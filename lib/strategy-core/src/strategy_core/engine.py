@@ -132,13 +132,18 @@ class Engine:
             self.quote = None
             return BookView.empty()
         if not len(book) or not len(ends):
-            return BookView.empty(self.quote)
+            return BookView.empty(self.quote, chunk.coverage)
         c = self.config
         assign = assignment_ns(book.ts_event, book.ts_recv, c.feed_latency, c.close_delay)
         slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
         order = np.argsort(slot, kind="stable")
         return BookView(
-            book.take(order), ends[slot[order]], self.quote, self.book_floor, self.book_recv
+            book.take(order),
+            ends[slot[order]],
+            self.quote,
+            self.book_floor,
+            self.book_recv,
+            chunk.coverage,
         )
 
     def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:

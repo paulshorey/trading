@@ -365,8 +365,13 @@ Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented
   missing minute has left it.
 - **A nonpositive price** ends the segment (`state` 0); there is no separate flag.
 - **`warm`** is reported by the stage ([warm-up](feature-pipeline.md#warm-up-is-derived-never-typed)).
-- **A retired scale** (removed from `SCALES`) keeps its rows, events, and records until they
-  are deleted on purpose; the planner ignores them.
+- **A scale's name never changes meaning.** Its parameters are fixed in `market.variant` when
+  it is first registered; a stage whose settings differ is refused, so a changed scale gets a
+  new name and is added next to the old one. Code changes are tracked by the builder, as for
+  every stage.
+- **A retired scale** (removed from `SCALES`) is marked in `market.variant.retired_at`, not
+  deleted: its rows, events, and records stay until they are removed on purpose, the planner
+  ignores them, and the continuous views leave them out. Registering it again clears the mark.
 - **The engine** reads every scale: `1m@1s.<scale>.<feature>` row by row, and
   `1h@1m.<scale>.<feature>` as of the latest completed minute (415 features in all).
 - **Not built yet:** RSI swings. The detector already handles a series measured by plain

@@ -97,19 +97,46 @@ def delete_rows(
 
 
 def register_variants(conn: psycopg.Connection, settings: dict[str, dict]) -> dict[str, int]:
-    """Every stage's variant id (0 without variants), registering new variants and their
-    parameters (`settings`: each stage's) in `market.variant`."""
+    """Every stage's variant id (0 without variants), registering new variants with their
+    parameters (`settings`: each stage's) in `market.variant`.
+
+    A variant's name never changes meaning: its parameters are fixed when it is registered, so
+    stored rows are never read under other parameters than they were built with. A stage whose
+    settings differ from its registered variant is refused; give the changed variant a new name
+    (it is then added next to the old one). Variants that no stage defines are marked retired:
+    their rows are kept, the planner ignores them, and the continuous views leave them out."""
     out = {}
-    for s in STAGES:
-        if not hasattr(s, "VARIANT"):
-            out[s.NAME] = 0
-            continue
-        row = conn.execute(
-            """INSERT INTO market.variant (stage, name, params) VALUES (%s, %s, %s)
-               ON CONFLICT (stage, name) DO UPDATE SET params = EXCLUDED.params RETURNING id""",
-            (STAGE_TABLE[s.NAME], s.VARIANT, Jsonb(settings[s.NAME])),
-        ).fetchone()
-        out[s.NAME] = int(row[0])
+    with conn.transaction():
+        for s in STAGES:
+            if not hasattr(s, "VARIANT"):
+                out[s.NAME] = 0
+                continue
+            key = (STAGE_TABLE[s.NAME], s.VARIANT)
+            conn.execute(
+                """INSERT INTO market.variant (stage, name, params) VALUES (%s, %s, %s)
+                   ON CONFLICT (stage, name) DO NOTHING""",
+                (*key, Jsonb(settings[s.NAME])),
+            )
+            vid, params = conn.execute(
+                "SELECT id, params FROM market.variant WHERE stage = %s AND name = %s", key
+            ).fetchone()
+            if params != settings[s.NAME]:
+                changed = sorted(
+                    k for k in params.keys() | settings[s.NAME].keys()
+                    if params.get(k) != settings[s.NAME].get(k)
+                )  # fmt: skip
+                raise ValueError(
+                    f"{s.NAME} is registered with other parameters ({', '.join(changed)}); a "
+                    "variant's name never changes meaning: give the changed variant a new name"
+                )
+            out[s.NAME] = int(vid)
+        active = [v for v in out.values() if v]
+        conn.execute(
+            """UPDATE market.variant
+               SET retired_at = CASE WHEN id = ANY(%s) THEN NULL ELSE now() END
+               WHERE (id = ANY(%s)) <> (retired_at IS NULL)""",
+            (active, active),
+        )
     return out
 
 

@@ -419,7 +419,8 @@ class Detector:
             rows["emit"], self.g, self.gf, self.ki, self.kf, self.ci, self.cf, self.acc, out,
             ev_i, ev_f,
         )  # fmt: skip
-        return out, ev_i[:ne], ev_f[:ne]
+        # copies: the buffers are sized for the worst case (three events per observation)
+        return out, ev_i[:ne].copy(), ev_f[:ne].copy()
 
 
 def released(chunk, context, products: dict) -> dict:
@@ -751,9 +752,9 @@ EVENT_COLUMNS: tuple[Column, ...] = (
     Column("segment", INTEGER, "Segment counter of the stage"),
     Column("leg_rows", INTEGER, "Pivot: rows of the leg it ended, both extremes included"),
     Column("age_s", INTEGER, "Reclaim: scheduled-open seconds (rows) since the breach"),
-    Column("seq", SMALLINT, "Order of the scale's events within the row, from 0"),
+    Column("seq", INTEGER, "Order of the scale's events within the row, from 0"),
+    Column("ref_seq", INTEGER, "Breach or reclaim: seq of the pivot event it refers to"),
     Column("kind", SMALLINT, EVENT_KINDS),
-    Column("ref_seq", SMALLINT, "Breach or reclaim: seq of the pivot event it refers to"),
     Column("class", SMALLINT, "Pivot: 1 higher, -1 lower, 0 equal; NULL for the first of its kind"),
     Column("run", SMALLINT, "Pivot: consecutive higher (+n) or lower (-n) pivots of its kind"),
     Column("trend", SMALLINT, "Trend after the event (a breach or reclaim does not change it)"),

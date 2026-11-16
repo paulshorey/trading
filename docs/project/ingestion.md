@@ -48,7 +48,9 @@ key adds `variant_id` (`market.variant` names each scale and holds its parameter
 filter on it. Each scale is a stage of its own (`pivot_1s:fast_atr_1`, …) with its own builder,
 checkpoint, and `market.stage_slice` records (`stage` = the table, `variant_id` = the scale),
 so adding a scale adds rows and rebuilding one touches no other. A scale's events are replaced
-with its rows, session by session, and carry the builder that wrote them
+with its rows, session by session, and carry the builder that wrote them. A scale's parameters
+are fixed under its name (a changed scale needs a new name), and a scale no stage defines any
+more is marked retired and left out of the continuous views, never deleted by the planner
 ([what is stored](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
 
 Rows are stored per contract. Each product also reads as **one permanent series**,

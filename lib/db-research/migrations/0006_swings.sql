@@ -6,6 +6,13 @@
 -- (market.stage_slice.variant_id), writing rows keyed by variant_id into a shared table. Adding
 -- a scale adds rows, never columns.
 
+-- A variant's name never changes meaning: its parameters are fixed when it is registered, and a
+-- changed scale gets a new name. A variant that no stage defines any more is retired, not
+-- deleted: its rows stay until removed on purpose, and the continuous views leave them out.
+ALTER TABLE market.variant ADD COLUMN retired_at timestamptz;
+COMMENT ON COLUMN market.variant.retired_at IS
+    'Set while no stage defines the variant; its rows are kept but left out of the continuous views';
+
 -- Fast scales (thresholds in 1m@1s ATRs): one row per scheduled-open second, contract, and scale,
 -- published after the second's trades. The open leg (direction, running extreme, progress toward
 -- confirmation, size, flow), the latest confirmed high and low (distance, ages, change against
@@ -51,6 +58,7 @@ CREATE TABLE market.pivot_1s (
     prov_lh smallint,
     low_class smallint,
     prov_hl smallint,
+    phase smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
     PRIMARY KEY (contract_id, variant_id, slot_ordinal, end_ns)
 ) PARTITION BY RANGE (end_ns);
 CREATE INDEX pivot_1s_end ON market.pivot_1s USING brin (end_ns);
@@ -96,6 +104,7 @@ CREATE TABLE market.pivot_1m (
     prov_lh smallint,
     low_class smallint,
     prov_hl smallint,
+    phase smallint GENERATED ALWAYS AS ((slot_ordinal % 60)::smallint) VIRTUAL,
     PRIMARY KEY (contract_id, variant_id, slot_ordinal, end_ns)
 ) PARTITION BY RANGE (end_ns);
 CREATE INDEX pivot_1m_end ON market.pivot_1m USING brin (end_ns);
@@ -132,16 +141,17 @@ CREATE TABLE market.pivot_event (
     segment integer NOT NULL,
     leg_rows integer,
     age_s integer,
+    seq integer NOT NULL,
+    ref_seq integer,
     variant_id smallint NOT NULL,
-    seq smallint NOT NULL,
     kind smallint NOT NULL CHECK (kind BETWEEN 1 AND 6),
-    ref_seq smallint,
     class smallint,
     run smallint,
     trend smallint,
     PRIMARY KEY (contract_id, variant_id, slot_ordinal, seq)
 );
-CREATE INDEX pivot_event_end ON market.pivot_event (variant_id, end_ns);
+-- the continuous view reads a contract's events of a session: by contract and row end
+CREATE INDEX pivot_event_end ON market.pivot_event (contract_id, end_ns);
 COMMENT ON TABLE market.pivot_event IS
     'Confirmed highs and lows, breaches, and reclaims of every swing scale';
 COMMENT ON COLUMN market.pivot_event.variant_id IS 'The scale: market.variant.id';
@@ -149,14 +159,15 @@ COMMENT ON COLUMN market.pivot_event.builder_id IS
     'The scale''s builder that wrote the event (market.builder.id): part of its identity';
 
 -- The continuous series of each product, as for the other tables: every session's rows from its
--- front contract, for every scale (filter on variant_id).
+-- front contract, for every scale that is not retired (filter on variant_id).
 CREATE VIEW market.continuous_pivot_1s AS
 SELECT f.product, f.trade_date, f.contract, f.roll_basis, f.rolled, p.*
 FROM market.front_session f
 JOIN market.pivot_1s p
   ON p.contract_id = f.contract_id
  AND p.slot_ordinal BETWEEN f.first_ordinal AND f.last_ordinal
- AND p.end_ns > f.open_ns AND p.end_ns <= f.close_ns;
+ AND p.end_ns > f.open_ns AND p.end_ns <= f.close_ns
+JOIN market.variant v ON v.id = p.variant_id AND v.retired_at IS NULL;
 COMMENT ON VIEW market.continuous_pivot_1s IS
     'Fast swing scales of each product session from its front contract';
 
@@ -166,7 +177,8 @@ FROM market.front_session f
 JOIN market.pivot_1m p
   ON p.contract_id = f.contract_id
  AND p.slot_ordinal BETWEEN (f.first_ordinal + 59) / 60 AND f.last_ordinal / 60
- AND p.end_ns > f.open_ns AND p.end_ns <= f.close_ns;
+ AND p.end_ns > f.open_ns AND p.end_ns <= f.close_ns
+JOIN market.variant v ON v.id = p.variant_id AND v.retired_at IS NULL;
 COMMENT ON VIEW market.continuous_pivot_1m IS
     'Slow swing scales of each product session from its front contract';
 
@@ -176,6 +188,6 @@ FROM market.front_session f
 JOIN market.pivot_event e
   ON e.contract_id = f.contract_id
  AND e.end_ns > f.open_ns AND e.end_ns <= f.close_ns
-JOIN market.variant v ON v.id = e.variant_id;
+JOIN market.variant v ON v.id = e.variant_id AND v.retired_at IS NULL;
 COMMENT ON VIEW market.continuous_pivot_event IS
     'Swing events of each product session from its front contract, with the scale''s name';

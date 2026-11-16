@@ -1238,3 +1238,45 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
         }
     [now] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
     assert {c["action"] for c in now["contracts"]} == {"current"}
+
+    # A scale that no stage defines any more (here: one copied under another name) is retired,
+    # not deleted: the planner ignores its records, its rows stay, and the continuous views
+    # leave them out (PR #82 review).
+    kept = variants["pivot_1s:fast_atr_2"]
+    with db.connect(database) as conn:
+        old = conn.execute(
+            "INSERT INTO market.variant (stage, name, params) "
+            "VALUES ('pivot_1s', 'fast_old', '{}') RETURNING id"
+        ).fetchone()[0]
+        names = ", ".join(c.name for c in PIVOT_COLUMNS)
+        conn.execute(
+            f"INSERT INTO market.pivot_1s (contract_id, variant_id, {names}) "
+            f"SELECT contract_id, %s, {names} FROM market.pivot_1s WHERE variant_id = %s",
+            (old, kept),
+        )
+        conn.execute(
+            "INSERT INTO market.stage_slice (stage, variant_id, contract_id, trade_date, "
+            "builder_id, run_id, state, warm, build_seconds) SELECT stage, %s, contract_id, "
+            "trade_date, builder_id, run_id, state, warm, build_seconds FROM market.stage_slice "
+            "WHERE stage = 'pivot_1s' AND variant_id = %s",
+            (old, kept),
+        )
+        conn.commit()
+    [now] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in now["contracts"]} == {"current"}
+    with db.connect(database) as conn:
+        retired = dict(conn.execute("SELECT name, retired_at IS NOT NULL FROM market.variant"))
+        assert retired == {"fast_old": True} | {s.VARIANT: False for s in scales}
+        count = "SELECT count(*) FROM market.{} WHERE variant_id = %s"
+        assert conn.execute(count.format("pivot_1s"), (old,)).fetchone()[0] == 4 * 82_800
+        assert conn.execute(count.format("continuous_pivot_1s"), (old,)).fetchone()[0] == 0
+        assert conn.execute(count.format("continuous_pivot_1s"), (kept,)).fetchone()[0] > 0
+        # A registered name never changes meaning: other parameters under it are refused, so
+        # stored rows are never read under parameters they were not built with (PR #82 review)
+        conn.execute(
+            "UPDATE market.variant SET params = params || '{\"multiplier\": 0.75}' "
+            "WHERE name = 'fast_atr_1'"
+        )
+        conn.commit()
+    with pytest.raises(ValueError, match=r"pivot_1s:fast_atr_1 .*\(multiplier\).* new name"):
+        ingest.plan(["GC"], data=first, **options)

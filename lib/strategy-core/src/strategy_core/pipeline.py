@@ -31,6 +31,7 @@ from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
 from .stage_pivot_1m import SCALES as SLOW_SCALES
 from .stage_pivot_1s import SCALES as FAST_SCALES
+from .stage_pivot_label import FAST_LABELS, SLOW_LABELS
 from .stage_stats_1h_1m import HourStatsStage
 from .stage_vol_1m import VolMinuteStage
 from .stage_vol_1s import VolSecondStage
@@ -48,15 +49,23 @@ STAGES: tuple[type[Stage], ...] = (
     VolSecondStage,
     *SLOW_SCALES,
     *FAST_SCALES,
+    *SLOW_LABELS,  # labels look into the future: stored, but never read by a stage or the engine
+    *FAST_LABELS,
 )
 BY_NAME = {s.NAME: s for s in STAGES}
+# What a backtest or live session computes: every stage but the labels.
+FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
-    """Every stage reads only the source or stages before it, of no higher tier."""
+    """Every stage reads only the source or stages before it, of no higher tier, and never a
+    label stage."""
     seen: dict[str, int] = {}
+    labels = {s.NAME for s in stages if getattr(s, "LABEL", False)}
     for s in stages:
         for name in s.INPUTS:
+            if name in labels:
+                raise ValueError(f"{s.NAME} reads {name}, a label: labels are never inputs")
             if name != "market" and (name not in seen or seen[name] > s.TIER):
                 raise ValueError(f"{s.NAME} reads {name}, which is not an earlier stage")
         if s.NAME in seen:
@@ -136,7 +145,11 @@ class StageFeatures:
         config: FeatureConfig | None = None,
     ):
         self.pipeline = Pipeline(
-            calendar, feed_latency=feed_latency, close_delay=close_delay, config=config
+            calendar,
+            feed_latency=feed_latency,
+            close_delay=close_delay,
+            config=config,
+            stages=FEATURE_STAGES,
         )
         self.last_bias: dict[str, np.ndarray] = {}  # the latest minute's values, one row each
         self.last_bias_end = np.zeros(0, np.int64)

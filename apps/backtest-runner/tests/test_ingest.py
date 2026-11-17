@@ -22,6 +22,8 @@ from strategy_core.stage_pivot_1m import SCALES as SLOW_SCALES
 from strategy_core.stage_pivot_1m import PivotMinuteStage
 from strategy_core.stage_pivot_1s import COLUMNS as PIVOT_COLUMNS
 from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
+from strategy_core.stage_pivot_label import COLUMNS as LABEL_COLUMNS
+from strategy_core.stage_pivot_label import FAST_LABELS, SLOW_LABELS
 from strategy_core.stage_stats_1h_1m import COLUMNS as STATS_COLUMNS
 from strategy_core.stage_stats_1h_1m import HourStatsStage
 from strategy_core.stage_vol_1m import COLUMNS as VOL_COLUMNS
@@ -427,6 +429,7 @@ def test_minute_bounds_follow_the_session_seconds():
     assert store.row_bounds("vol_1s", 61, 180) == (61, 180)
     assert store.row_bounds("pivot_1m", 61, 180) == (2, 3)
     assert store.row_bounds("pivot_1s", 61, 180) == (61, 180)
+    assert store.row_bounds("pivot_label_1m", 61, 180) == (2, 3)
     assert store.SLOT_SECONDS == {
         "bar_1s": 1,
         "bar_1m": 60,
@@ -437,6 +440,8 @@ def test_minute_bounds_follow_the_session_seconds():
         "vol_1s": 1,
         "pivot_1m": 60,  # one table for the slow swing scales, one for the fast
         "pivot_1s": 1,
+        "pivot_label_1m": 60,  # labels are keyed by their decision row, of the scale's stream
+        "pivot_label_1s": 1,
     }
 
 
@@ -861,7 +866,8 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     with db.connect(database) as conn:
         after = slices(conn)
         for key, (builder, _, at) in after.items():
-            if key[0] not in ("candle_1m_1s", "vol_1s", "pivot_1s"):  # the fast scales read both
+            # the fast scales read both, and their labels read them
+            if key[0] not in ("candle_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s"):
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
                 assert at > before[key][2] and builder == before[key][0], key  # rewritten
@@ -897,6 +903,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "vol_1m": 1,
         "vol_1s": 1,
         **{s.NAME: 1 for s in (*SLOW_SCALES, *FAST_SCALES)},  # their thresholds' ATR(14)
+        **{s.NAME: 1 for s in (*SLOW_LABELS, *FAST_LABELS)},  # a label needs only its scale's
     }
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
@@ -948,12 +955,13 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         "vol_1m",
         "pivot_1m",
         "pivot_event",  # the slow scales' events are replaced with their rows
+        "pivot_label_1m",  # ... and their labels follow them
     }
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s", "pivot_1s"):
+            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s"):
                 assert (builder, at) == before[key], key  # untouched
             else:
                 assert at > before[key][1] and builder == before[key][0], key  # rewritten
@@ -1025,7 +1033,10 @@ def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, pe
     }
     result = ingest.run(["GC"], workers=1, data=first, **options)
     assert result["status"] == "done", result
-    readers = {"vol_1m": {"pivot_1m", "pivot_event"}, "vol_1s": {"pivot_1s", "pivot_event"}}
+    readers = {
+        "vol_1m": {"pivot_1m", "pivot_event", "pivot_label_1m"},
+        "vol_1s": {"pivot_1s", "pivot_event", "pivot_label_1s"},
+    }
     written = {stage} | readers.get(stage, set())
     assert {t for r in result["results"] for t in r["tables"]} == written
     with db.connect(database) as conn:
@@ -1096,7 +1107,9 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     scales = (*SLOW_SCALES, *FAST_SCALES)
     variants = {s.NAME: plan["variants"][s.NAME] for s in scales}
     assert len(set(variants.values())) == 6 and all(variants.values())
-    assert all(plan["variants"][n] == 0 for n in plan["variants"] if n not in variants)
+    labels = {s.NAME: plan["variants"][s.NAME] for s in (*SLOW_LABELS, *FAST_LABELS)}
+    assert len(set(labels.values())) == 12 and all(labels.values())  # label IDs are variants too
+    assert all(plan["variants"][n] == 0 for n in plan["variants"] if n not in variants | labels)
     dates = [date(2026, 9, 2), date(2026, 9, 3)]
     expected = in_memory(cache, first, "GCG7", dates)
     columns = [c.name for c in PIVOT_COLUMNS]
@@ -1130,7 +1143,7 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
                 "SELECT stage, name, id, params FROM market.variant"
             )
         }
-        assert {n: v for n, (v, _) in registry.items()} == variants
+        assert {n: v for n, (v, _) in registry.items()} == variants | labels
         assert registry["pivot_1s:fast_atr_0p5"][1]["multiplier"] == 0.5
         assert (
             registry["pivot_1m:slow_atr_2"][1] | {"spread_floor": 2.0, "stream": "slow"}
@@ -1206,12 +1219,17 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     assert {c["action"] for c in now["contracts"]} == {"stale"}
     result = ingest.run(["GC"], workers=1, data=first, rebuild=True, **options)
     assert result["status"] == "done", result
-    assert {t for r in result["results"] for t in r["tables"]} == {"pivot_1s", "pivot_event"}
+    assert {t for r in result["results"] for t in r["tables"]} == {
+        "pivot_1s", "pivot_event", "pivot_label_1s",
+    }  # fmt: skip
+    rewritten = {("pivot_1s", variants[stale])} | {
+        ("pivot_label_1s", labels[s.NAME]) for s in FAST_LABELS if stale == s.SCALE.NAME
+    }  # the scale and the two label variants that read it
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            if key[:2] == ("pivot_1s", variants[stale]):
+            if key[:2] in rewritten:
                 assert at > before[key][1] and builder == before[key][0], key  # rewritten
             else:
                 assert (builder, at) == before[key], key  # untouched
@@ -1228,7 +1246,7 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     }
     result = ingest.run(["GC"], workers=1, data=first, **options)
     assert {t for r in result["results"] for t in r["tables"]} == {
-        "pivot_1s", "pivot_1m", "pivot_event",
+        "pivot_1s", "pivot_1m", "pivot_event", "pivot_label_1s", "pivot_label_1m",
     }  # fmt: skip
     with db.connect(database) as conn:
         assert fingerprints(conn) == prints
@@ -1280,3 +1298,73 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
         conn.commit()
     with pytest.raises(ValueError, match=r"pivot_1s:fast_atr_1 .*\(multiplier\).* new name"):
         ingest.plan(["GC"], data=first, **options)
+
+
+def test_labels_are_stored_per_variant_within_their_session_and_never_as_features(database, world):
+    """PR F. Each label variant (a swing scale at one stage q) is a stage writing sparse rows,
+    one per candidate, into its resolution's label table. Stored labels equal an in-memory
+    build, every label is settled inside its own session, the variant's parameters are the label
+    ID, and no label column is registered as a feature."""
+    cache, data = world
+    options = {"url": database, "cache": cache, "log": lambda line: None, "lead": 1}
+    with db.connect(database) as conn:
+        db.migrate(conn)
+    first = data(date(2026, 9, 4))
+    result = ingest.run(["GC"], workers=1, data=first, **options)
+    assert result["status"] == "done", result
+    assert {"pivot_label_1s", "pivot_label_1m"} <= {
+        t for r in result["results"] for t in r["tables"]
+    }
+    [plan] = ingest.plan(["GC"], data=first, **options)
+    expected = in_memory(cache, first, "GCG7", [date(2026, 9, 2), date(2026, 9, 3)])
+    names = [c.name for c in LABEL_COLUMNS]
+    with db.connect(database) as conn:
+        cid = conn.execute("SELECT id FROM market.contract WHERE raw_symbol = 'GCG7'").fetchone()[0]
+        for stage in (*SLOW_LABELS, *FAST_LABELS):
+            tables = [p.tables[stage.NAME] for p in expected]
+            want = sorted(
+                tuple(
+                    None if t.nulls.get(n, np.zeros(len(t), bool))[i] else t.values[n][i].item()
+                    for n in names
+                )
+                for t in tables
+                for i in range(len(t))
+            )
+            got = conn.execute(
+                f"SELECT {', '.join(names)} FROM market.{stage.TABLE} WHERE contract_id = %s "
+                "AND variant_id = %s ORDER BY slot_ordinal, seq",
+                (cid, plan["variants"][stage.NAME]),
+            ).fetchall()
+            assert got == want, stage.NAME
+            assert len(got) > (500 if stage.RESOLUTION == "1s" else 0), stage.NAME
+            params = conn.execute(
+                "SELECT params FROM market.variant WHERE stage = %s AND name = %s",
+                (stage.TABLE, stage.VARIANT),
+            ).fetchone()[0]
+            assert params["scale"] == stage.SCALE.NAME and params["stage_q"] == stage.Q
+            assert (params["reversal"], params["invalidation"]) == (1.0, 0.25)
+        for table, per in (("pivot_label_1s", 1), ("pivot_label_1m", 60)):
+            outside = conn.execute(
+                f"""SELECT count(*) FROM market.{table} l JOIN market.ingest_slice s
+                      ON s.contract_id = l.contract_id
+                     AND l.end_ns > s.open_ns AND l.end_ns <= s.close_ns
+                    WHERE l.outcome_ordinal * {per} > s.last_ordinal
+                       OR coalesce(l.survival_ordinal, 0) * {per} > s.last_ordinal
+                       OR l.slot_ordinal * {per} < s.first_ordinal"""
+            ).fetchone()[0]
+            assert outside == 0, table  # so a session's labels are replaced with its rows
+            front, stored = conn.execute(
+                f"SELECT (SELECT count(*) FROM market.continuous_{table} WHERE product = 'GC'), "
+                f"(SELECT count(*) FROM market.{table})"
+            ).fetchone()
+            assert 0 < front < stored  # only front sessions; lead sessions stay out
+        roles = conn.execute(
+            "SELECT DISTINCT role FROM market.column_registry WHERE stage LIKE 'pivot_label%'"
+        ).fetchall()
+        assert {r[0] for r in roles} == {"key", "context"}  # never a model input
+        outcomes = conn.execute(
+            "SELECT array_agg(DISTINCT outcome ORDER BY outcome) FROM market.pivot_label_1s"
+        ).fetchone()[0]
+        assert outcomes[:5] == [0, 1, 2, 3, 4]
+    [plan] = ingest.summarize(ingest.plan(["GC"], data=first, **options))["products"]
+    assert {c["action"] for c in plan["contracts"]} == {"current"}

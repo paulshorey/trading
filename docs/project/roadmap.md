@@ -91,10 +91,12 @@ whether it improves on the rule.
    points sooner than fixed extrema, slope sign, or CUSUM at a like false-alarm rate. Logistic
    regression and a boosted model on the stored features rank early candidates no better than
    the position of price alone (AUC about 0.60 for both), so no model is stored yet.
-4. **New inputs, then the reversal model.** Recommended, for Paul to confirm: structure
-   signals (PR E) and cross-scale and paired-product context next, each tested with
-   `research benchmark models` against the same labels; the walk-forward model stage follows
-   when a model clearly beats the random-walk number.
+4. **Context inputs for the reversal model: tested November 17, no gain**
+   ([results](handoff.md#context-input-results-november-17-2026)). Other swing scales, the
+   hourly window, and the partner product do not help either model, so no signal stage and
+   no model stage is stored. Recommended next, for Paul to decide: book inputs read at the
+   candidates only, tested the same way; the walk-forward model stage follows when a model
+   clearly beats the random-walk number.
 5. **Book stage `book_1s`** and **pair stage `pair_1m`**, alongside the above.
 6. **Final model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a

@@ -155,3 +155,48 @@ Made during review, before the benchmark read any outcome of the full data:
 - An alarm that found a reference swing always counts as an alarm.
 - The random-walk probability is used as the formula gives it; the log loss clips at its
   own bounds.
+
+## Context inputs (added November 17, 2026, before any run)
+
+**Why.** The first benchmark found that the decision row's own features rank early
+candidates no better than the position of price alone
+([results](handoff.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
+stored, this experiment asks whether information the candidate's own row does not hold
+helps: the other swing scales, the hourly window, and the paired product. It reads stored
+rows only and stores nothing (`research benchmark context GC SI`).
+
+**Rows.** The six fast label variants; candidates that were provisional higher lows or
+lower highs; the same target, exclusions, models, folds, and holdout as part B. Slow labels
+are left out: they have too few candidates to fit.
+
+**Input sets,** each containing the one before it:
+
+| Set      | Adds                                                                                                                     |
+| -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `base`   | Part B's inputs: `candle_1m_1s`, `vol_1s`, and the label's own scale in `pivot_1s`                                       |
+| `scales` | The other two fast scales' `pivot_1s` rows at the same second, and the three slow scales' `pivot_1m` rows                |
+| `hour`   | `candle_1h_1m`, `stats_1h_1m`, and `vol_1m`                                                                              |
+| `pair`   | The partner product's front contract at the same second: `candle_1m_1s`, `vol_1s`, and the same scale's `pivot_1s` row   |
+
+- **Minute rows are read as of availability:** the latest completed minute of the same
+  contract, row `⌊o / 60⌋` for second `o`. It may belong to the previous session.
+- **Partner rows** (GC with SI) are matched by `slot_ordinal` and must carry the same
+  `end_ns`; the calendars are identical ([pair design](pair-design.md)). Only `feature`
+  columns are read, so no price of one product meets a price of the other.
+- **One population for every set:** sessions warm for every stage of the largest set, in
+  both products; part B's NULL and extreme-ATR rules applied to the largest set's columns.
+  Every set is then fitted and scored on exactly those rows, so `base` here has somewhat
+  fewer rows than in part B.
+
+**Reported** per label and set: log loss, Brier score, ROC AUC, and average precision of
+both models; the log-loss gain of each set over `base` for the same model, with the 95%
+interval from resampling whole test sessions.
+
+**What counts as helping** (decided now): on the two primary labels, `fast_atr_1_q25` and
+`fast_atr_1_q50`, the boosted model's log-loss gain over `base` has an interval above zero
+**and** its ROC AUC rises by at least 0.02. The other four labels are supporting evidence.
+A set that helps is a reason to store its signals as a stage and to build the model stage;
+a set that does not is reported as it is, and its inputs are not tuned afterwards.
+
+**Result (November 17, after the runs):** the rule is not met for any set
+([results](handoff.md#context-input-results-november-17-2026)).

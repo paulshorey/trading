@@ -19,9 +19,12 @@ decisions behind it, where the work stands, and exactly how to continue.
 3. **Outcome labels and the benchmark are built (PR F)**: twelve label variants stored for GC
    and SI, and `research benchmark` ([results](#pr-f-results-labels-and-benchmark),
    [frozen spec](pivot-label-spec.md)). The swings beat the baseline detectors; the reversal
-   models add almost nothing to where price already stands. **Next: structure signals (PR E)
-   and other new inputs, tested against the same labels, before a model is stored**
-   ([next steps](#next-steps)). The holdout, September 1, 2026 on, is unread: keep it so.
+   models add almost nothing to where price already stands. Inputs from the other scales, the
+   hourly window, and the partner product, already stored, do not help either
+   ([context results](#context-input-results-november-17-2026)), so no model and no signal
+   stage is stored. **Next, for Paul to decide: test book inputs on the candidates only,
+   without a new table** ([next steps](#next-steps)). The holdout, September 1, 2026 on, is
+   unread: keep it so.
 4. **Alongside:** the book stage `book_1s`
    ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and paired products
    ([pair-design.md](pair-design.md): GC + SI first; ES + NQ after NQ is downloaded).
@@ -413,6 +416,52 @@ rows with an `*_atr` input above 50 in absolute value (0–13), rows with anothe
 (1–5,462), and three or four features NULL by design (`break_up_age_s`, `break_down_age_s`,
 `sweep_delta_ratio`, `reversal_delta_ratio`). The extreme-ATR problem is rare on front
 sessions, as expected. The holdout (September 1 on) has not been read.
+
+## Context input results (November 17, 2026)
+
+`research benchmark context GC SI` asks whether inputs from outside a candidate's own row
+help the reversal models. The sets, the population, and the success rule were written into
+the [spec](pivot-label-spec.md#context-inputs-added-november-17-2026-before-any-run) before
+any run. Evidence: `~/context-gc-si.a.json` and `~/context-gc-si.b.json` (and `.log`).
+
+**In plain words.** A candidate is a high that price has started to fall from. Part B gave
+the models only that second's own candle, volatility, and swing state. Here they also see
+the larger and smaller swings, the last hour, and what the other metal is doing. If the
+wider picture mattered, the models should rank candidates better. They do not.
+
+Each set contains the one before it, and every set is fitted and scored on the same rows
+(provisional candidates of the six fast labels, walk-forward folds May to August 2026):
+
+| Label              | Scored rows | Boosted AUC: `base` | `scales` | `hour` | `pair` | Log-loss gain of `pair` over `base` (95%) |
+| ------------------ | ----------: | ------------------: | -------: | -----: | -----: | ----------------------------------------- |
+| `fast_atr_0p5_q25` |     219,394 |               0.617 |    0.617 |  0.617 |  0.618 | +0.0000 (−0.0003 to +0.0003)              |
+| `fast_atr_0p5_q50` |     145,348 |               0.604 |    0.603 |  0.604 |  0.605 | +0.0004 (−0.0001 to +0.0009)              |
+| `fast_atr_1_q25`   |     107,345 |               0.587 |    0.585 |  0.585 |  0.587 | −0.0001 (−0.0008 to +0.0007)              |
+| `fast_atr_1_q50`   |      68,201 |               0.581 |    0.578 |  0.576 |  0.578 | −0.0008 (−0.0019 to +0.0004)              |
+| `fast_atr_2_q25`   |      39,752 |               0.584 |    0.581 |  0.578 |  0.580 | −0.0016 (−0.0038 to +0.0005)              |
+| `fast_atr_2_q50`   |      24,037 |               0.569 |    0.564 |  0.562 |  0.565 | −0.0021 (−0.0054 to +0.0011)              |
+
+1. **The rule is not met.** On the two primary labels (`fast_atr_1_*`) no set gives the
+   boosted model a log-loss gain with an interval above zero, and AUC falls by up to 0.005
+   where the rule asked for a rise of 0.02. `scales` and `hour` are zero or negative on every
+   label.
+2. **Logistic regression gets worse with every added set,** on every label (gain of `pair`
+   −0.0014 to −0.018, every interval below zero): the added inputs are noise to it.
+3. **One small positive:** the partner product's inputs help the boosted model for SI on the
+   two 0.5 ATR labels (+0.0006 and +0.0010, intervals just above zero, AUC up 0.002 to
+   0.003). GC does not gain from SI. Too small to act on, and not on a primary label.
+4. The random-walk number still matches or beats the boosted model on every label (AUC 0.58
+   to 0.62).
+
+Rows excluded and features dropped for NULLs are counted per label in the JSON (25 to 83
+features dropped). The inputs
+are not tuned after the result, as the spec says. The holdout has not been read.
+
+**What this means.** Everything stored today describes trades and the path of price. Seen
+from one second, from the hour, across swing sizes, or across the pair, it does not tell
+which early reversals complete. Structure signals computed from the same swings (PR E's
+sweeps, breaks, and reclaims are already among the `base` inputs) are unlikely to change
+that, so a `signal_*` stage is not built. The untested information is the order book.
 
 ## PR D results (swings)
 
@@ -887,14 +936,16 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 2. Swing structure of price (PR D): done November 16 ([results](#pr-d-results-swings)).
 3. Labels and the benchmark (PR F): done November 17
    ([results](#pr-f-results-labels-and-benchmark)).
-4. **New inputs for the reversal question, then the model.** Recommended, for Paul to
-   confirm: build the structure signals (PR E) next, starting with what needs no new large
-   table (the slow scales' structure as of availability on fast candidates, the other
-   product's state for GC with SI), and rerun `research benchmark models` on the same labels.
-   Store a walk-forward model stage only when a model ranks candidates clearly better than
-   the random-walk number (AUC about 0.60 today). A model stage built now would store a
-   recalibrated copy of `progress`. The book stage and RSI swings are the other candidate
-   inputs; both need disk.
+4. **Context inputs from stored rows: tested November 17, no gain**
+   ([results](#context-input-results-november-17-2026)). No signal stage and no model stage
+   is stored.
+   **Recommended next, for Paul to decide: book inputs on the candidates only.** Read the
+   best bid and ask around each provisional candidate from the DBN files (spread, size
+   imbalance, quote changes over the last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)),
+   freeze the list in the spec first, and add them as a fifth set to
+   `research benchmark context`. This needs no new table, so the disk does not block it. If
+   they help, `book_1s` earns its disk; if not, the reversal question as posed has no edge
+   in MBP-1 and the effort moves to a different target (see open question 3).
 5. **Book stage `book_1s`** (tier 0, from book events) and **`pair_1m`** for GC + SI.
 6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
@@ -912,7 +963,8 @@ the [next-agent handoff](pivot-detection-handoff.md) and its saved research. The
 implemented and verified as a calculation, and the benchmark shows it finds turning points
 sooner than the baselines at a like false-alarm rate
 ([results](#pr-f-results-labels-and-benchmark)). Telling early which candidates complete is
-still open: the stored features do not do it.
+still open: the stored features do not do it, alone or with context from other scales, the
+hour, or the partner product ([results](#context-input-results-november-17-2026)).
 
 ## Open questions
 
@@ -927,8 +979,11 @@ still open: the stored features do not do it.
    values as plain ATR multiples and clip or exclude at training, or floor the normalizer
    (for example at the spread, as the threshold already is). The second changes stored
    values of the swing stages, and the same question applies to layer 1.
-3. **What comes after F** ([recommendation](#next-steps)): structure signals and other new
-   inputs first, with the model stage waiting for a result, or the model stage now.
+3. **What comes after the context result** ([recommendation](#next-steps)): test book
+   inputs on the candidates, or change the question. The labels ask "will this early
+   reversal complete?", and trade-derived inputs answer no better than the position of
+   price. Other targets on the same rows: the size of the move after a confirmed swing, or
+   a bracket trade's outcome at fixed risk.
 4. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
    RTY could pair with ES before NQ arrives.
 5. Which unstored reference metrics to add first, and which training outcome to use

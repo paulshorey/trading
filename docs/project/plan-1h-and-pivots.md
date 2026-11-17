@@ -326,6 +326,10 @@ that scale and what depends on it; removing one deletes its rows, events, and la
 changing the detector's code rebuilds every scale. Cross-scale summaries change only when
 a new version declares a different scale set.
 
+**Implemented November 17, 2026:** the open parameters are frozen in
+[pivot-label-spec.md](pivot-label-spec.md); results are in the
+[handoff](handoff.md#pr-f-results-labels-and-benchmark).
+
 ### 3.6 Implemented in PR D (price swings)
 
 Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented for price as

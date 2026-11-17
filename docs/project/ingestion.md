@@ -232,6 +232,13 @@ keeps it so. Reading stored rows instead would only be faster ([next](#next)).
 
 ## Measured
 
+The label run (November 17, 2026, PR F) added the twelve label variants to the stored GC and SI
+contracts (`add`, 8 workers): 858 contract-sessions in 3.5 minutes, computing every stage and
+writing only the label tables, 5,029,757 rows in `pivot_label_1s` and 197,721 in
+`pivot_label_1m`, 1.3 GB including indexes. A label table has one row per candidate, not per
+slot: about 2,100 rows per contract-session for the smallest fast scale at the 25% stage and
+5 for the largest slow scale at 50% ([checks](handoff.md#pr-f-results-labels-and-benchmark)).
+
 Run 6 (November 4, 2026, PR C2) added `vol_1s` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 5 min 47 s, computing every stage and writing only the new
 table, 71,559,900 rows in 24.05 GB including indexes, plus 159 MB of checkpoints. Every row equals
@@ -529,8 +536,9 @@ stored stages.
 
 ## Next
 
-1. **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same detector, once disk allows, then
-   labels and structure signals ([roadmap](roadmap.md#next)).
+1. **Structure signals** and other new inputs for the reversal question
+   ([roadmap](roadmap.md#next)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
+   detector once disk allows.
 2. Let backtests read stored rows when the builder matches the run: the values are already
    equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

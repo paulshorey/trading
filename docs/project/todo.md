@@ -59,7 +59,7 @@ task live in [handoff: next steps](handoff.md#next-steps).
       ([what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings),
       [results](handoff.md#pr-d-results-swings)).
 - [ ] **Free disk space, or decide what not to store.** `pivot_1s` takes 64 GB for GC and SI,
-      and 41 GB is free: NQ, `pivot_rsi_1s`, `book_1s`, or an in-place rebuild of a second
+      and 63 GB is free: NQ, `pivot_rsi_1s`, `book_1s`, or an in-place rebuild of a second
       table no longer fit ([open questions](handoff.md#open-questions)).
 - [ ] **Decide the ATR normalizer for thin markets.** `*_atr` values grow without bound when
       the ATR has decayed to almost nothing (rare on front sessions, common in lead sessions):
@@ -67,8 +67,18 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **RSI swings (`pivot_rsi_1s`, `pivot_rsi_1m`).** The same detector on the RSI series
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)): measure the
       row-to-row RSI noise, choose thresholds above it, and store them when disk allows.
-- [ ] **Signals and labels (PRs E and F), next**
-      ([contract](pivot-structure-design.md), [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
+- [x] **Outcome labels and the benchmark (PR F).** Twelve label variants stored for GC and SI
+      (`market.pivot_label_1s`, `pivot_label_1m`, migration `0007`), parameters frozen first
+      ([spec](pivot-label-spec.md)); `research benchmark detectors` and `models`
+      ([results](handoff.md#pr-f-results-labels-and-benchmark)).
+- [ ] **Structure signals and other new inputs (PR E), next.** The stored features rank early
+      reversal candidates no better than the position of price alone; add inputs and rerun
+      `research benchmark models` on the same labels before storing a model stage
+      ([recommendation](handoff.md#next-steps), [contract](pivot-structure-design.md)).
+- [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk
+      baseline, a tuned CUSUM (the frozen one finds 3–7%), and pooled or longer history for
+      the slow scales, which have too few candidates to fit.
+- [ ] **Final holdout.** September 1, 2026 on is unread; evaluate one chosen model on it once.
 - [x] **Test backtests on real data at full scale.** November 5: a GC year in 161 s with
       2.6 GB, `research verify` on a GC and an SI week (identical), a 43 MB run in the UI, and
       backtests equal to the stored rows at rolls. Fixed what it found: backtests now warm

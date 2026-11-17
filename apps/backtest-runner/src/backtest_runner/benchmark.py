@@ -312,6 +312,7 @@ class Tally:
             inside = (claim >= 0) & (claim < len(eligible))
             scored = np.zeros(len(claim), bool)
             scored[inside] = eligible[claim[inside]]  # it claims a row that could hold a swing
+            scored |= used  # an alarm that found a swing always counts
             self.swings += len(ref)
             self.found += int((delay >= 0).sum())
             self.alarms += int(scored.sum())
@@ -568,7 +569,7 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
            WHERE f.product = %s AND f.trade_date = ANY(%s) AND l.variant_id = %s
              AND l.outcome = 0"""
     ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
-    needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id)]
+    needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id), (label.TABLE, label_id)]
     parts, sessions, dates, resolved = [], {}, set(), 0
     for k, product in enumerate(products):
         found = front_sessions(conn, product, start, end, needed)

@@ -296,10 +296,11 @@ class Tally:
         self.delay: list[np.ndarray] = []
         self.error: list[np.ndarray] = []
 
-    def add(self, kinds, rows, eligible, alarms, window, tolerance):
+    def add(self, kinds, rows, eligible, alarms, window, tolerance, only=None):
+        """Score one session; `only` restricts the tally to one kind (highs or lows)."""
         a_kind, a_known, a_claim = alarms
         self.rows += int(eligible.sum())
-        for kind in (HIGH, LOW):
+        for kind in (only,) if only else (HIGH, LOW):
             ref = rows[kinds == kind]
             pick = a_kind == kind
             known, claim = a_known[pick], a_claim[pick]
@@ -315,6 +316,21 @@ class Tally:
             self.false += int((scored & ~used).sum())
             self.delay.append(delay[delay >= 0])
             self.error.append(error[error >= 0])
+
+    @classmethod
+    def pool(cls, parts, rows: int) -> "Tally":
+        """The sum of tallies; `rows` is the eligible rows of the pooled sample, since the
+        parts may count the same rows (one tally per kind)."""
+        total = cls()
+        for t in parts:
+            total.swings += t.swings
+            total.found += t.found
+            total.alarms += t.alarms
+            total.false += t.false
+            total.delay += t.delay
+            total.error += t.error
+        total.rows = rows
+        return total
 
     def report(self, seconds: int) -> dict:
         hours = self.rows * seconds / 3600
@@ -375,6 +391,22 @@ def intervals(end_s: np.ndarray, seconds: int) -> list[tuple[int, int]]:
     return list(zip(np.r_[0, cuts].tolist(), np.r_[cuts, len(end_s)].tolist(), strict=True))
 
 
+def pooled_report(tally: dict, task: str, name: str, products: list[str], per: int) -> dict:
+    """Per product and kind, the kinds pooled per product, and everything pooled."""
+    out: dict = {}
+    for p in products:
+        high, low = tally[task, name, p, HIGH], tally[task, name, p, LOW]
+        out[p] = {
+            "high": high.report(per),
+            "low": low.report(per),
+            "both": Tally.pool([high, low], high.rows).report(per),
+        }
+    every = [tally[task, name, p, k] for p in products for k in (HIGH, LOW)]
+    rows = sum(tally[task, name, p, HIGH].rows for p in products)
+    out["all_products"] = Tally.pool(every, rows).report(per)
+    return out
+
+
 def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END, url=None) -> dict:
     check_period(start, end)
     out: dict = {"period": [start.isoformat(), end.isoformat()], "tasks": {}, "sessions": {}}
@@ -392,10 +424,11 @@ def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END,
                 "cusum",
             ]
             tally = {
-                (task, name, p): Tally()
+                (task, name, p, k): Tally()
                 for task in spec["tasks"]
                 for name in names
                 for p in products
+                for k in (HIGH, LOW)
             }
             for product in products:
                 used = skipped = 0
@@ -466,13 +499,14 @@ def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END,
                                 high, low, observed, missing, atr, window, multiple
                             )
                             for name in names:
-                                tally[task, name, product].add(
-                                    kinds, at, eligible, alarms[name], window, tol
-                                )
+                                for k in (HIGH, LOW):
+                                    tally[task, name, product, k].add(
+                                        kinds, at, eligible, alarms[name], window, tol, only=k
+                                    )
                 out["sessions"][f"{stream} {product}"] = {"used": used, "not_warm": skipped}
             for task in spec["tasks"]:
                 out["tasks"][task] = {
-                    name: {p: tally[task, name, p].report(per) for p in products} for name in names
+                    name: pooled_report(tally, task, name, products, per) for name in names
                 }
     return out
 
@@ -514,7 +548,8 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
             AND l.end_ns > f.open_ns AND l.end_ns <= f.close_ns
            {}
            WHERE f.product = %s AND f.trade_date = ANY(%s) AND l.variant_id = %s
-             AND l.outcome <> 0 AND {}.variant_id = %s"""
+             AND l.outcome <> 0 AND {}.variant_id = %s
+           ORDER BY f.trade_date, l.contract_id, l.slot_ordinal, l.seq, l.end_ns"""
     ).format(
         sql.SQL(", ").join(select),
         sql.Identifier("market", label.TABLE),
@@ -612,7 +647,7 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     report["null_input"] = int((keep & ~complete).sum())
     keep &= complete
     y = (outcome == 1).astype(np.float64)
-    null = np.clip((disp + INVALIDATION) / (REVERSAL + INVALIDATION), 0.01, 0.99)
+    null = (disp + INVALIDATION) / (REVERSAL + INVALIDATION)  # as frozen; the loss clips itself
     pred = {m: np.full(len(data), np.nan) for m in ("prior", "logistic", "boosted")}
     rng = np.random.default_rng(SEED)
     skipped = []

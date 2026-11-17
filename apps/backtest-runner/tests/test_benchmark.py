@@ -78,6 +78,13 @@ def test_matching_is_one_to_one_by_time_and_claimed_row():
     assert (report["swings"], report["coverage"], report["precision"]) == (3, 0.3333, 0.2)
     assert report["false_alarms_per_hour"] == round(4 / (500 / 3600), 3)  # per eligible hour
     assert (report["delay_rows_median"], report["location_error_rows_p90"]) == (5.0, 13.5)
+    # per kind, then pooled: the kinds' tallies add up to the whole, over the same eligible rows
+    parts = {k: benchmark.Tally() for k in (HIGH, LOW)}
+    for k, t in parts.items():
+        t.add(np.full(3, HIGH), reference, eligible, alarms, 50, 5, only=k)
+    assert parts[LOW].swings == 0 and parts[HIGH].swings == 3
+    pooled = benchmark.Tally.pool(parts.values(), parts[HIGH].rows).report(1)
+    assert pooled == report
 
 
 def frame(rows=24_000, signal=1.5, seed=0):

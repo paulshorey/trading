@@ -78,6 +78,8 @@ def check_period(start: date, end: date) -> None:
         raise ValueError(
             f"Trade dates from {HOLDOUT} on are the holdout; the benchmark stops before"
         )
+    if start < DEV_START:
+        raise ValueError(f"The development period starts {DEV_START}; start is before it")
     if start > end:
         raise ValueError("end is before start")
 
@@ -557,12 +559,23 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
         sql.Identifier(alias[-1]),
         per=sql.Literal(per),
     )
+    count = sql.SQL(
+        """SELECT count(*) FROM market.front_session f
+           JOIN {} l ON l.contract_id = f.contract_id
+            AND l.slot_ordinal BETWEEN (f.first_ordinal + {per} - 1) / {per}
+                                   AND f.last_ordinal / {per}
+            AND l.end_ns > f.open_ns AND l.end_ns <= f.close_ns
+           WHERE f.product = %s AND f.trade_date = ANY(%s) AND l.variant_id = %s
+             AND l.outcome = 0"""
+    ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
     needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id)]
-    parts, sessions = [], {}
+    parts, sessions, dates, resolved = [], {}, set(), 0
     for k, product in enumerate(products):
         found = front_sessions(conn, product, start, end, needed)
         warm = [s[0] for s in found if s[6]]
         sessions[product] = {"used": len(warm), "not_warm": len(found) - len(warm)}
+        dates.update((d - date(2000, 1, 1)).days for d in warm)
+        resolved += int(conn.execute(count, (product, warm, label_id)).fetchone()[0])
         with conn.cursor(name=f"candidates_{k}") as cur:
             cur.itersize = 20_000
             cur.execute(query, (product, warm, label_id, scale_id))
@@ -572,7 +585,13 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
         conn.rollback()
     width = 6 + len(names)
     data = np.concatenate(parts) if parts else np.zeros((0, width), np.float32)
-    return {"data": data, "names": names, "sessions": sessions}
+    return {
+        "data": data,
+        "names": names,
+        "sessions": sessions,
+        "days": sorted(dates),  # every warm session, with or without a candidate
+        "resolved_before_decision": resolved,
+    }
 
 
 def log_loss(y, p):
@@ -613,6 +632,8 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     outcome, prov, disp = data[:, 3].astype(int), data[:, 4], data[:, 5].astype(np.float64)
     x = data[:, 6:]
     report: dict = {"candidates": len(data)}
+    if "resolved_before_decision" in frame:  # outcome 0: observations, never targets
+        report["resolved_before_decision"] = frame["resolved_before_decision"]
     keep = np.ones(len(data), bool)
     if provisional:
         keep &= prov == 1
@@ -630,7 +651,9 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     for month in TEST_MONTHS:
         lo = (date(2026, month, 1) - base).days
         hi = (date(2026 + month // 12, month % 12 + 1, 1) - base).days
-        before = np.unique(day[keep & (day < lo)])
+        # the sessions before the block, as stored (not only those with a retained candidate)
+        before = np.unique(np.asarray(frame.get("days", day[keep]), dtype=int))
+        before = before[before < lo]
         if len(before) < 2:
             continue
         train = keep & (day < before[-1])  # the last session before the block is left out
@@ -685,11 +708,7 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     if not scored.any():
         return report | {"error": "no fold had enough training rows of both classes"}
     pred["random_walk"] = null
-    groups = {"all": scored} | {
-        p: scored & (product == k)
-        for k, p in enumerate(frame["sessions"])
-        if len(frame["sessions"]) > 1
-    }
+    groups = {"all": scored} | {p: scored & (product == k) for k, p in enumerate(frame["sessions"])}
     report["results"] = {}
     for name, rows in groups.items():
         if not rows.any():

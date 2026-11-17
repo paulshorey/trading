@@ -646,6 +646,9 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     complete = ~np.isnan(x[:, used]).any(axis=1)
     report["null_input"] = int((keep & ~complete).sum())
     keep &= complete
+    finite = np.isfinite(disp)  # the random-walk baseline needs the stored displacement
+    report["null_displacement"] = int((keep & ~finite).sum())
+    keep &= finite
     y = (outcome == 1).astype(np.float64)
     null = (disp + INVALIDATION) / (REVERSAL + INVALIDATION)  # as frozen; the loss clips itself
     pred = {m: np.full(len(data), np.nan) for m in ("prior", "logistic", "boosted")}

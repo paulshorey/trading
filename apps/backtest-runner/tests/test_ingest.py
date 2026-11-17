@@ -1284,7 +1284,8 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     assert {c["action"] for c in now["contracts"]} == {"current"}
     with db.connect(database) as conn:
         retired = dict(conn.execute("SELECT name, retired_at IS NOT NULL FROM market.variant"))
-        assert retired == {"fast_old": True} | {s.VARIANT: False for s in scales}
+        active = (*scales, *SLOW_LABELS, *FAST_LABELS)
+        assert retired == {"fast_old": True} | {s.VARIANT: False for s in active}
         count = "SELECT count(*) FROM market.{} WHERE variant_id = %s"
         assert conn.execute(count.format("pivot_1s"), (old,)).fetchone()[0] == 4 * 82_800
         assert conn.execute(count.format("continuous_pivot_1s"), (old,)).fetchone()[0] == 0

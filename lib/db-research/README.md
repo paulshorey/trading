@@ -14,7 +14,9 @@ numbered files: `0002_minute_rows` adds the minute stages' tables `market.bar_1m
 `market.stats_1h_1m`, the hourly window statistics, and its view (PR B2); `0004_minute_volatility`
 adds `market.vol_1m`, the volatility family of the hourly window, and its view (PR C1);
 `0005_second_volatility` adds `market.vol_1s`, the same family of the `1m@1s` window, and its view
-(PR C2). Runs and ML rows come next.
+(PR C2); `0006_swings` adds the swing tables `market.pivot_1s` and `market.pivot_1m` (one row
+per slot and scale, keyed by `variant_id`), the event table `market.pivot_event`, and their
+views (PR D). Runs and ML rows come next.
 
 ## Local setup
 

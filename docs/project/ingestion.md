@@ -1,5 +1,10 @@
 # Ingestion
 
+Status (November 16, 2026, PR D): the six swing scales were added to the stored GC and SI
+contracts in 17 min 55 s (`add`; 212,195,700 `pivot_1s` rows at 316 bytes each with the
+index, 64 GB; the database is 168 GB), and every confirmed pivot equals an independent
+replay of the trades ([results](handoff.md#pr-d-results-swings)).
+
 Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
 reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
 rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the
@@ -30,6 +35,9 @@ stage has its own table, version, and per-session checkpoint:
 | `market.stats_1h_1m` (tier 1)  | minute `m`                      | 16 statistics of the same window: realized volatility, minute-return moments, path, session levels, price-flow correlation |
 | `market.vol_1s` (tier 1)       | second `o`                      | 28 volatility features of the `1m@1s` window: as `vol_1m`, plus realized volatility from its one-second returns            |
 | `market.vol_1m` (tier 1)       | minute `m`                      | 26 volatility features of the same window: ATR horizons, bullish/bearish and adverse ATR, extremes, time-of-day, daily ATR |
+| `market.pivot_1s` (tier 2)     | second `o` and fast scale       | 30 swing features per scale (0.5, 1, 2 × the `1m@1s` ATR): the open leg, the latest confirmed high and low, trend          |
+| `market.pivot_1m` (tier 2)     | minute `m` and slow scale       | The same 30 features per scale (0.5, 1, 2 × the `1h@1m` ATR), published at each minute's end                               |
+| `market.pivot_event`           | swing event                     | Confirmed highs and lows, breaches, and reclaims of every scale, with the row of the trade that produced them              |
 
 Each is keyed by `(contract_id, slot_ordinal, end_ns)`: `slot_ordinal` is the row's
 [index counter](../sliding-windows/README.md#rows-and-index-counters) at its own resolution,
@@ -40,10 +48,21 @@ resolution on `(contract_id, slot_ordinal)`, and a minute to its last second on
 `second.slot_ordinal = 60 * minute.slot_ordinal`. Column descriptions and units are stored
 as PostgreSQL comments (`\d+ market.candle_1h_1m`).
 
+**Swing scales are variants.** The two pivot tables hold one row per slot *and scale*: their
+key adds `variant_id` (`market.variant` names each scale and holds its parameters), so always
+filter on it. Each scale is a stage of its own (`pivot_1s:fast_atr_1`, …) with its own builder,
+checkpoint, and `market.stage_slice` records (`stage` = the table, `variant_id` = the scale),
+so adding a scale adds rows and rebuilding one touches no other. A scale's events are replaced
+with its rows, session by session, and carry the builder that wrote them. A scale's parameters
+are fixed under its name (a changed scale needs a new name), and a scale no stage defines any
+more is marked retired and left out of the continuous views, never deleted by the planner
+([what is stored](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
+
 Rows are stored per contract. Each product also reads as **one permanent series**,
 `product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,
 `continuous_candle_1m_1s`, `continuous_candle_1h_1m`, `continuous_stats_1h_1m`,
-`continuous_vol_1s`, and `continuous_vol_1m`: every session's rows from that
+`continuous_vol_1s`, `continuous_vol_1m`, `continuous_pivot_1s`, `continuous_pivot_1m`, and
+`continuous_pivot_event` (with each scale's name): every session's rows from that
 session's front contract ([continuous series](#continuous-series-per-product)).
 
 ## Run it
@@ -133,7 +152,8 @@ values; the end-to-end tests prove that stored rows equal the pipeline's output.
 **Records.** `market.ingest_slice` keeps one row per stored contract session: its source
 builder, its source files with checksums and covered windows, its quality report (including
 `history_limited`), and the row bounds the continuous series reads. `market.stage_slice`
-keeps one row per stage and session: the stage builder, its checkpoint, and `warm`. Cached
+keeps one row per stage (and variant) and session: the stage builder, its checkpoint, and
+`warm`. Cached
 session volumes carry their own digest (`scan_sha256`: `SCAN_FILES`, which include
 `ingest.py`, the timing settings, and the Databento and exchange-calendar package
 versions) and their session hours; they are read again from the DBN files when either
@@ -152,7 +172,8 @@ the plan prepend sessions, which shows as `needs_rebuild`.
 ## Continuous series per product
 
 `market.continuous_bar_1s`, `continuous_bar_1m`, `continuous_candle_1m_1s`,
-`continuous_candle_1h_1m`, `continuous_stats_1h_1m`, `continuous_vol_1s`, and `continuous_vol_1m` give each product
+`continuous_candle_1h_1m`, `continuous_stats_1h_1m`, `continuous_vol_1s`, `continuous_vol_1m`,
+`continuous_pivot_1s`, `continuous_pivot_1m`, and `continuous_pivot_event` give each product
 one series across
 contract rolls, with the columns of the stored tables plus `product`,
 `trade_date`, `contract` (the source contract), `roll_basis`, and `rolled`. They are views
@@ -356,6 +377,12 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   and the count `rv_returns` as context). Its time-of-day samples are the `1m@1s` ATR at each
   minute's last second (ordinal `60m`), keyed by the minute's offset from the session's open; its
   daily scale equals `vol_1m`'s at every minute end. Ages count rows, 0–59.
+- **Swings** (`pivot_1s`, `pivot_1m`; `swings.py`) replay the released trades, not rows: a
+  running extreme is confirmed by a reversal of `max(k × ATR, 2 × spread)` frozen when it was
+  set, from the row *before* the extreme's own. A row is published after its trades, so it
+  never holds a trade from after itself; an event carries the row of the trade that produced
+  it. `state` 0 (all values NULL) means missing data or an undefined threshold: a new segment
+  starts afterwards, compared with nothing before it. Ages count rows × the row's seconds.
 
 ## Metrics
 
@@ -490,12 +517,20 @@ derived lead, and an end-to-end run with two contracts and a roll:
 build, rerun without changes, extend from a checkpoint (stored rows equal an in-memory
 build), repair after a file changes, rebuild, and stale detection; the continuous series
 has one row per second, each session from its front contract, across the roll. Rolls only
-move forward (`test_runner.py`, `test_ingest.py`).
+move forward (`test_runner.py`, `test_ingest.py`). `test_swings.py`: the contract's required
+examples on hand-built series (first reversal, higher lows and lower highs, runs, frozen
+thresholds, missing data, breaches and reclaims with sweep depth, leg sums, an index series),
+row-by-row resumption, and the stored stages: every confirmed pivot of the fast and slow scales
+against a plain-Python directional-change reference from the trades and the stored rows,
+identical rows and events in any chunking and from checkpoints, scale invariance, an early close
+and reopen (ages in rows, a reopening move confirms), and the engine's view. `test_ingest.py`
+also stores the scales with their events, rebuilds one scale alone, and adds them next to the
+stored stages.
 
 ## Next
 
-1. **Swing structure (PR D)**: directional-change pivots sized by the stored volatility tier
-   (`vol_1s`, `vol_1m`) ([plan section 3](plan-1h-and-pivots.md#3-pivot-and-structure-design)).
+1. **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same detector, once disk allows, then
+   labels and structure signals ([roadmap](roadmap.md#next)).
 2. Let backtests read stored rows when the builder matches the run: the values are already
    equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

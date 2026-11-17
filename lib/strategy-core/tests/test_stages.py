@@ -58,20 +58,31 @@ def test_the_graph_reads_only_earlier_stages():
         "stats_1h_1m",
         "vol_1m",
         "vol_1s",
+        "pivot_1m:slow_atr_0p5",  # each swing scale is a stage of its own (a variant)
+        "pivot_1m:slow_atr_1",
+        "pivot_1m:slow_atr_2",
+        "pivot_1s:fast_atr_0p5",
+        "pivot_1s:fast_atr_1",
+        "pivot_1s:fast_atr_2",
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
+    slow = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")  # trades, and their seconds
     assert {s.NAME: s.INPUTS for s in STAGES if s.RESOLUTION == "1m"} == {
         "bar_1m": ("bar_1s",),
         "candle_1h_1m": ("bar_1m",),
         "stats_1h_1m": ("bar_1m", "candle_1h_1m"),  # a declared edge within tier 1
         "vol_1m": ("bar_1m", "candle_1h_1m"),
+        **{f"pivot_1m:slow_atr_{k}": slow for k in ("0p5", "1", "2")},
     }
     # ... and no second stage reads a minute stage
+    fast = ("market", "bar_1s", "candle_1m_1s", "vol_1s")
     assert {s.NAME: s.INPUTS for s in STAGES if s.RESOLUTION == "1s"} == {
         "bar_1s": ("market",),
         "candle_1m_1s": ("bar_1s",),
         "vol_1s": ("bar_1s", "candle_1m_1s"),  # a declared edge within tier 1
+        **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2")},
     }
+    assert {s.TIER for s in STAGES if ":" in s.NAME} == {2}  # swings read tiers 0 and 1 only
     with pytest.raises(ValueError, match="not an earlier stage"):
         check_graph((CandleStage, BarStage))
     with pytest.raises(ValueError, match="not an earlier stage"):  # an edge needs its order

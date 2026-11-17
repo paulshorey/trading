@@ -30,7 +30,7 @@ computed by the same code that live sessions run.
 | 0. Trades         | Exact per-second and per-minute statistics, updated with each trade                                                        | OHLCV by aggressor side, CVD and its extremes, sweeps, the price path, the book as trades saw it | `bar_1s`, `bar_1m`                                                | Done                                                |
 | 0b. Book          | The same grid from every change to the best bid and ask                                                                    | Queue imbalance, order-flow imbalance, spread over time, depletion and refill                    | `book_1s`                                                         | Planned; the data is on disk and reaches the engine |
 | 1. Indicators     | Rolling candles and what is computed from price and volume                                                                 | ATR family, RSI, EMA, MACD, ADX, realized volatility, session levels                             | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m` | Done                                                |
-| 2. Swings         | Turning points of the price path, sized by layer-1 volatility                                                              | Confirmed highs and lows at 0.5, 1, and 2 ATR; the open leg and its progress                     | `pivot_1s`, `pivot_1m`, `pivot_rsi_*`                             | Next (PR D)                                         |
+| 2. Swings         | Turning points of the price path, sized by layer-1 volatility                                                              | Confirmed highs and lows at 0.5, 1, and 2 ATR; the open leg and its progress; breaches           | `pivot_1s`, `pivot_1m` (+ `pivot_event`); `pivot_rsi_*` planned   | Done for price (PR D); RSI swings next              |
 | 3. Reversal model | A model's probability that the current move has reversed rather than paused, and the moment a reversal counts as confirmed | P(reversal) for each candidate extreme; early confirmation when it passes a threshold            | `pivot_label` (outcomes), then `model_reversal_*`                 | Designed in part; see below                         |
 | 4. Structure      | Patterns across the latest reversals and the current one                                                                   | Higher lows, lower highs, breaks of structure, pullback quality, divergences                     | `signal_1s`, `signal_1m`                                          | Designed ([contract](pivot-structure-design.md))    |
 | 5. Final model    | One model on every stored feature of layers 0–4, for one product and its partner                                           | Trade or no trade, direction, expected outcome after costs                                       | training pipeline, `ml.*` tables                                  | After layers 2–4                                    |
@@ -73,6 +73,7 @@ whether it improves on the rule.
 - DBN catalog with checksums, per-date contract resolution, volume-based front-month
   rolls, and per-session data-quality reports.
 - Layers 0 and 1 as stages with their own versions, checkpoints, and derived warm-ups.
+- Layer 2 for price: six swing scales, each a stage of its own, with their events.
 - One engine for whole-session backtests and second-by-second rehearsals, verified
   identical; fills at the MBP-1 book the order meets, ATR brackets, one portfolio.
 - Per-signal would-be-trade outcomes (ML rows) and a UI to inspect runs and trades.
@@ -82,7 +83,10 @@ whether it improves on the rule.
 
 1. Rebuild the stored rows from MBP-1 for GC and SI: done November 16
    ([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)).
-2. **Swings (PR D)**, then structure signals (PR E) and outcome labels with the benchmark
+2. Swings of the price path (PR D): done November 16
+   ([results](handoff.md#pr-d-results-swings)). Swings of RSI (`pivot_rsi_*`) reuse the same
+   detector and wait for disk space ([handoff](handoff.md#open-questions)).
+   Then structure signals (PR E) and outcome labels with the benchmark
    (PR F), in the order Paul decided on November 3. Recommended change, for Paul to
    confirm: build the labels (F) before the signals (E), because the reversal model
    needs labels and layer 4 should be able to read its output.

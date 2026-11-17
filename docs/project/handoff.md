@@ -858,8 +858,9 @@ What a later layer should know:
 - **Labels are never inputs.** Label stages have `LABEL = True`; `pipeline.check_graph`
   refuses a stage that reads one, and the engine's features come from `FEATURE_STAGES`, which
   leaves them out. No label column has a unit, so none can be registered as a feature.
-- **A label row is stored at the row where it settled**, always inside the decision row's
-  session, with `available_ns`. A session can therefore be replaced alone, and one purged
+- **A label row is keyed to its decision row** (`slot_ordinal` and `end_ns` are the
+  candidate's), and always lies inside that row's session. `available_ns` is the later time
+  both outcomes were known: join features at the decision row, never at `available_ns`. A session can therefore be replaced alone, and one purged
   session covers every overlap in a split.
 - **Outcome 0, "resolved before decision"**, is a confirmed pivot that never had a candidate
   at a row close. It is an observation, not a target; with it, every confirmed pivot is

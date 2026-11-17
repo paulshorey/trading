@@ -669,15 +669,15 @@ def evaluate(frame: dict, provisional: bool) -> dict:
         blocks.append((month, train, test))
     if not blocks:
         return report | {"error": "no test block has training sessions before it"}
-    with np.errstate(invalid="ignore"):
-        share = np.isnan(x[blocks[0][1]]).mean(axis=0)
+    finite = np.isfinite(disp)  # the random-walk baseline needs the stored displacement
+    with np.errstate(invalid="ignore"):  # rows never scored (no displacement) do not pick features
+        share = np.isnan(x[blocks[0][1] & finite]).mean(axis=0)
     used = np.flatnonzero(share <= NULL_SHARE)
     report["dropped_features"] = [names[j] for j in np.flatnonzero(share > NULL_SHARE)]
     report["features"] = len(used)
     complete = ~np.isnan(x[:, used]).any(axis=1)
     report["null_input"] = int((keep & ~complete).sum())
     keep &= complete
-    finite = np.isfinite(disp)  # the random-walk baseline needs the stored displacement
     report["null_displacement"] = int((keep & ~finite).sum())
     keep &= finite
     y = (outcome == 1).astype(np.float64)
@@ -695,6 +695,10 @@ def evaluate(frame: dict, provisional: bool) -> dict:
                 continue
             if len(tr) > TRAIN_CAP:
                 tr = np.sort(rng.choice(tr, TRAIN_CAP, replace=False))
+                ones = int(y[tr].sum())  # the sample must still hold both classes
+                if min(ones, len(tr) - ones) < MIN_TRAIN:
+                    skipped.append({"month": month, "kind": k, "train": len(tr), "test": len(te)})
+                    continue
             xt, xs = x[tr][:, used].astype(np.float64), x[te][:, used].astype(np.float64)
             pred["prior"][te] = y[tr].mean()
             scaler = StandardScaler().fit(xt)

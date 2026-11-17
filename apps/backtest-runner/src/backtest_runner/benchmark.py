@@ -412,6 +412,7 @@ def pooled_report(tally: dict, task: str, name: str, products: list[str], per: i
 
 def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END, url=None) -> dict:
     check_period(start, end)
+    products = list(dict.fromkeys(products))  # a repeated product is still one product
     out: dict = {"period": [start.isoformat(), end.isoformat()], "tasks": {}, "sessions": {}}
     with db.connect(url) as conn:
         ids = variant_ids(conn)
@@ -570,12 +571,12 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
              AND l.outcome = 0"""
     ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
     needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id), (label.TABLE, label_id)]
-    parts, sessions, dates, resolved = [], {}, set(), 0
+    parts, sessions, dates, resolved = [], {}, [], 0
     for k, product in enumerate(products):
         found = front_sessions(conn, product, start, end, needed)
         warm = [s[0] for s in found if s[6]]
         sessions[product] = {"used": len(warm), "not_warm": len(found) - len(warm)}
-        dates.update((d - date(2000, 1, 1)).days for d in warm)
+        dates.append(sorted((d - date(2000, 1, 1)).days for d in warm))
         resolved += int(conn.execute(count, (product, warm, label_id)).fetchone()[0])
         with conn.cursor(name=f"candidates_{k}") as cur:
             cur.itersize = 20_000
@@ -590,7 +591,7 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
         "data": data,
         "names": names,
         "sessions": sessions,
-        "days": sorted(dates),  # every warm session, with or without a candidate
+        "days": dates,  # per product: every warm session, with or without a candidate
         "resolved_before_decision": resolved,
     }
 
@@ -652,12 +653,18 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     for month in TEST_MONTHS:
         lo = (date(2026, month, 1) - base).days
         hi = (date(2026 + month // 12, month % 12 + 1, 1) - base).days
-        # the sessions before the block, as stored (not only those with a retained candidate)
-        before = np.unique(np.asarray(frame.get("days", day[keep]), dtype=int))
-        before = before[before < lo]
-        if len(before) < 2:
+        # each product's sessions before the block, as stored (not only those with a candidate)
+        cut, longest = np.full(len(day), -1), 0
+        for k in range(len(frame["sessions"])):
+            have = frame["days"][k] if "days" in frame else day[keep & (product == k)]
+            before = np.unique(np.asarray(have, dtype=int))
+            before = before[before < lo]
+            longest = max(longest, len(before))
+            if len(before):
+                cut[product == k] = before[-1]
+        if longest < 2:
             continue
-        train = keep & (day < before[-1])  # the last session before the block is left out
+        train = keep & (day < cut)  # each product's last session before the block is left out
         test = keep & (day >= lo) & (day < hi)
         blocks.append((month, train, test))
     if not blocks:
@@ -751,6 +758,7 @@ def models(
     log=lambda line: None,
 ) -> dict:
     check_period(start, end)
+    products = list(dict.fromkeys(products))  # a repeated product is still one product
     out: dict = {
         "period": [start.isoformat(), end.isoformat()],
         "test_months": [f"2026-{m:02d}" for m in TEST_MONTHS],

@@ -670,6 +670,8 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     if not blocks:
         return report | {"error": "no test block has training sessions before it"}
     finite = np.isfinite(disp)  # the random-walk baseline needs the stored displacement
+    if not (blocks[0][1] & finite).any():
+        return report | {"error": "the first block's training rows have no stored displacement"}
     with np.errstate(invalid="ignore"):  # rows never scored (no displacement) do not pick features
         share = np.isnan(x[blocks[0][1] & finite]).mean(axis=0)
     used = np.flatnonzero(share <= NULL_SHARE)

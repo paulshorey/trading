@@ -75,6 +75,24 @@ def _emit(n, pi, pf, oi, of, no):
 
 
 @njit(cache=True)
+def _void_row(n, pi, pub, end):
+    """A row without data coverage makes the whole row unknown, before anything in it: settle
+    what is open, and take back what trades of the row's earlier seconds already settled."""
+    for c in range(n):
+        out, surv = pi[c, L_OUT], pi[c, L_SURV]
+        if out == OPEN or (pi[c, L_OUT_ORD] == pub and out in (REVERSAL, INVALIDATION)):
+            pi[c, L_OUT] = UNKNOWN
+            pi[c, L_OUT_ORD] = pub
+            pi[c, L_OUT_AT] = NONE
+            pi[c, L_OUT_END] = end
+        if surv == OPEN or (pi[c, L_SURV_ORD] == pub and surv == BROKEN):
+            pi[c, L_SURV] = UNKNOWN
+            pi[c, L_SURV_ORD] = pub
+            pi[c, L_SURV_AT] = NONE
+            pi[c, L_SURV_END] = end
+
+
+@njit(cache=True)
 def run(q, r_bar, c_bar, horizon, deadline, o_val, o_row, o_at, r_missing, r_pub, r_end, r_emit,
         r_last, p_state, p_seg, p_dir, p_px, p_ext_ord, p_progress, p_theta, p_prov, e_row,
         e_kind, e_seg, e_ext_ord, e_level, e_theta, g, gf, pi, pf, oi, of):  # fmt: skip
@@ -95,7 +113,7 @@ def run(q, r_bar, c_bar, horizon, deadline, o_val, o_row, o_at, r_missing, r_pub
             g[G_SEQ_ORD] = pub
             g[G_SEQ] = 0
         if r_missing[j]:
-            _settle_all(n, pi, pub, end, UNKNOWN)
+            _void_row(n, pi, pub, end)
         while i < n_obs and o_row[i] <= j:
             p, at = o_val[i], o_at[i]
             i += 1
@@ -201,7 +219,10 @@ def run(q, r_bar, c_bar, horizon, deadline, o_val, o_row, o_at, r_missing, r_pub
                 pf[n, X_E] = p_px[k]
                 pf[n, X_THETA] = p_theta[k]
                 pf[n, X_PROGRESS] = p_progress[k]
-                pf[n, X_DISP] = sign * 1e4 * np.log(p_px[k] / gf[F_LAST]) / p_theta[k] + 0.0
+                if gf[F_LAST] > 0.0 and p_theta[k] > 0.0:
+                    pf[n, X_DISP] = sign * 1e4 * np.log(p_px[k] / gf[F_LAST]) / p_theta[k] + 0.0
+                else:  # undefined: no trade seen yet, or no valid theta
+                    pf[n, X_DISP] = np.nan
                 g[G_SEQ] += 1
                 n += 1
                 if r_last[j]:  # nothing of its session is left to observe

@@ -698,6 +698,9 @@ def models(
         "test_months": [f"2026-{m:02d}" for m in TEST_MONTHS],
         "labels": {},
     }
+    known = {v.VARIANT for s in STREAMS.values() for v in s["labels"]}
+    if unknown := sorted(set(labels or ()) - known):
+        raise ValueError(f"Unknown label variants {unknown}; known: {sorted(known)}")
     with db.connect(url) as conn:
         ids = variant_ids(conn)
         for stream, spec in STREAMS.items():

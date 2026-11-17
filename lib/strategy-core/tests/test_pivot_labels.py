@@ -572,3 +572,19 @@ def test_labels_are_never_inputs():
     }
     assert SLOW_LABELS[0](features.pipeline.context).settings()["horizon_rows"] == 240
     assert stage.warmup() == FAST[0](features.pipeline.context).warmup()
+
+
+def test_a_missing_second_voids_the_whole_row_even_after_earlier_trades_settled():
+    """A slow row's missing second makes the row unknown before its earlier seconds' trades."""
+    pl = pivot_labels
+    pi = np.full((3, pl.NLI), pl.NONE, np.int64)
+    pi[:, pl.L_OUT] = [pl.REVERSAL, pl.REVERSAL, pl.OPEN]
+    pi[:, pl.L_OUT_ORD] = [7, 6, pl.NONE]  # the first settled in this row (7), the second earlier
+    pi[:, pl.L_OUT_AT] = [123, 456, pl.NONE]
+    pi[:, pl.L_SURV] = [pl.BROKEN, pl.SURVIVED, pl.OPEN]
+    pi[:, pl.L_SURV_ORD] = [7, 6, pl.NONE]
+    pi[:, pl.L_SURV_AT] = [123, pl.NONE, pl.NONE]
+    pl._void_row.py_func(3, pi, 7, 420)
+    assert list(pi[:, pl.L_OUT]) == [pl.UNKNOWN, pl.REVERSAL, pl.UNKNOWN]
+    assert list(pi[:, pl.L_SURV]) == [pl.UNKNOWN, pl.SURVIVED, pl.UNKNOWN]
+    assert pi[0, pl.L_OUT_AT] == pl.NONE and pi[1, pl.L_OUT_AT] == 456

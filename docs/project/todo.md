@@ -71,10 +71,14 @@ task live in [handoff: next steps](handoff.md#next-steps).
       (`market.pivot_label_1s`, `pivot_label_1m`, migration `0007`), parameters frozen first
       ([spec](pivot-label-spec.md)); `research benchmark detectors` and `models`
       ([results](handoff.md#pr-f-results-labels-and-benchmark)).
-- [ ] **Structure signals and other new inputs (PR E), next.** The stored features rank early
-      reversal candidates no better than the position of price alone; add inputs and rerun
-      `research benchmark models` on the same labels before storing a model stage
-      ([recommendation](handoff.md#next-steps), [contract](pivot-structure-design.md)).
+- [x] **Context inputs for the reversal models (PR E, as an experiment).**
+      `research benchmark context`: other swing scales, the hourly window, and the partner
+      product, on the same rows as the base inputs. No set helps
+      ([results](handoff.md#context-input-results-november-17-2026)); no signal stage and no
+      model stage is stored.
+- [ ] **Book inputs on the candidates, next (for Paul to decide).** Best bid and ask around
+      each candidate, read from the DBN files, as a fifth input set; no new table
+      ([recommendation](handoff.md#next-steps)).
 - [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk
       baseline, a tuned CUSUM (the frozen one finds 3–7%), and pooled or longer history for
       the slow scales, which have too few candidates to fit.

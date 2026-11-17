@@ -197,3 +197,6 @@ interval from resampling whole test sessions.
 **and** its ROC AUC rises by at least 0.02. The other four labels are supporting evidence.
 A set that helps is a reason to store its signals as a stage and to build the model stage;
 a set that does not is reported as it is, and its inputs are not tuned afterwards.
+
+**Result (November 17, after the runs):** the rule is not met for any set
+([results](handoff.md#context-input-results-november-17-2026)).

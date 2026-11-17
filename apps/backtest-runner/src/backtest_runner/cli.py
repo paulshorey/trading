@@ -53,7 +53,7 @@ def main() -> None:
         "logistic regression against boosted trees on the labeled candidates. Reads front "
         "sessions of the development period; stores nothing.",
     )
-    p.add_argument("action", choices=("detectors", "models"))
+    p.add_argument("action", choices=("detectors", "models", "context"))
     p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
     p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
     p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
@@ -122,7 +122,11 @@ def main() -> None:
                 result = benchmark.detectors(args.products, **period)
             else:
                 result = benchmark.models(
-                    args.products, labels=args.labels, log=benchmark.stderr, **period
+                    args.products,
+                    labels=args.labels,
+                    log=benchmark.stderr,
+                    context=args.action == "context",
+                    **period,
                 )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)

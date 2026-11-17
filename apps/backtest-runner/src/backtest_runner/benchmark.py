@@ -2,6 +2,7 @@
 
     uv run research benchmark detectors GC SI   # A: detectors against hindsight reference swings
     uv run research benchmark models GC SI      # B: logistic regression against boosted trees
+    uv run research benchmark context GC SI     # B again, with inputs from outside the row
 
 Both read stored rows of front-contract sessions in the development period and store nothing.
 Trade dates from `HOLDOUT` on are refused: the newest data stays untouched until a later,
@@ -67,6 +68,10 @@ ATR_LIMIT = 50.0  # rows with a larger `*_atr` input are excluded and counted
 NULL_SHARE = 0.01  # features NULL more often than this on the first training rows are dropped
 TRAIN_CAP, SEED, RESAMPLES = 400_000, 0, 1000
 MIN_TRAIN = 500  # rows of each class a model needs
+PAIRS = {"GC": "SI", "SI": "GC"}  # the partner whose rows the `pair` input set reads
+CONTEXT_SETS = ("base", "scales", "hour", "pair")  # each contains the one before it
+CONTEXT_HOUR = ("candle_1h_1m", "stats_1h_1m", "vol_1m")
+MINUTE_REACH_NS = 5 * 86_400 * 1_000_000_000  # the latest completed minute is never older
 
 
 def stderr(line: str) -> None:
@@ -518,10 +523,40 @@ def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END,
 # B. Models -----------------------------------------------------------------------------------
 
 
-def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
+def context_sources(scale, ids) -> list[tuple]:
+    """The inputs from outside a fast candidate's own row: (input set, name prefix, stage,
+    table, variant id or None, how its row is found)."""
+    fast, slow = store.STAGE_TABLE[scale.NAME], store.STAGE_TABLE[SLOW_SCALES[0].NAME]
+    out = [
+        ("scales", "", s.NAME, fast, ids[fast, s.VARIANT], "second")
+        for s in FAST_SCALES
+        if s is not scale
+    ]
+    out += [("scales", "", s.NAME, slow, ids[slow, s.VARIANT], "minute") for s in SLOW_SCALES]
+    out += [("hour", "", t, t, None, "minute") for t in CONTEXT_HOUR]
+    out += [("pair", "partner:", t, t, None, "partner") for t in STREAMS["fast"]["features"]]
+    out.append(("pair", "partner:", scale.NAME, fast, ids[fast, scale.VARIANT], "partner"))
+    return out
+
+
+CONTEXT_JOIN = {
+    # the same second of the same contract
+    "second": "{a}.contract_id = l.contract_id AND {a}.slot_ordinal = l.slot_ordinal "
+    "AND {a}.end_ns = l.end_ns",
+    # the latest completed minute of the same contract: minute m ends with second 60m
+    "minute": "{a}.contract_id = l.contract_id AND {a}.slot_ordinal = l.slot_ordinal / 60 "
+    "AND {a}.end_ns <= l.end_ns AND {a}.end_ns > l.end_ns - {reach}",
+    # the same second of the partner's front contract; the calendars are identical
+    "partner": "{a}.contract_id = pf.contract_id AND {a}.slot_ordinal = l.slot_ordinal "
+    "AND {a}.end_ns = l.end_ns",
+}
+
+
+def load_candidates(conn, products, label, stream, start, end, ids, context=False) -> dict:
     """One label variant's candidates on warm front sessions with the features of their
     decision row. Columns: product index, days since 2000-01-01, kind, outcome, prov,
-    displacement, then the features (NaN for NULL)."""
+    displacement, then the features (NaN for NULL). With `context`, also the inputs from
+    outside the row (`context_sources`), and `sets`: each input set's feature columns."""
     spec = STREAMS[stream]
     scale = label.SCALE
     pivot = store.STAGE_TABLE[scale.NAME]
@@ -529,6 +564,10 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
     stages = [*spec["features"], scale.NAME]
     alias = [f"t{i}" for i in range(len(tables))]
     names = [f"{s}.{n}" for s in stages for n in StageFeatures.names(s)]
+    extra = context_sources(scale, ids) if context else []
+    if context and (stream != "fast" or any(PAIRS.get(p) not in products for p in products)):
+        raise ValueError("context inputs need a fast label and both products of a pair")
+    sets = {"base": list(range(len(names)))}
     select = [
         sql.SQL("{}.{}").format(sql.Identifier(a), sql.Identifier(n))
         for a, s in zip(alias, stages, strict=True)
@@ -541,6 +580,31 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
         ).format(sql.Identifier("market", t), a=sql.Identifier(a))
         for a, t in zip(alias, tables, strict=True)
     ]
+    for i, (group, prefix, stage, table, variant, how) in enumerate(extra):
+        a = sql.Identifier(f"c{i}")
+        on = sql.SQL(CONTEXT_JOIN[how]).format(a=a, reach=sql.Literal(MINUTE_REACH_NS))
+        if variant is not None:
+            on = sql.SQL("{} AND {}.variant_id = {}").format(on, a, sql.Literal(variant))
+        source = sql.Identifier("market", table)
+        joins.append(sql.SQL("LEFT JOIN {} {} ON {}").format(source, a, on))
+        columns = StageFeatures.names(stage)
+        select += [sql.SQL("{}.{}").format(a, sql.Identifier(n)) for n in columns]
+        sets.setdefault(group, list(sets[CONTEXT_SETS[CONTEXT_SETS.index(group) - 1]]))
+        sets[group] += range(len(names), len(names) + len(columns))
+        names += [f"{prefix}{stage}.{n}" for n in columns]
+    if context:  # the partner's front contract of the same trade date
+        joins.insert(
+            len(tables),
+            sql.SQL(
+                "LEFT JOIN market.front_session pf ON pf.trade_date = f.trade_date "
+                "AND pf.product = CASE f.product {} END"
+            ).format(
+                sql.SQL(" ").join(
+                    sql.SQL("WHEN {} THEN {}").format(sql.Literal(a), sql.Literal(b))
+                    for a, b in PAIRS.items()
+                )
+            ),
+        )
     scale_id, label_id = ids[pivot, scale.VARIANT], ids[label.TABLE, label.VARIANT]
     per = spec["seconds"]
     query = sql.SQL(
@@ -571,10 +635,16 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
              AND l.outcome = 0"""
     ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
     needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id), (label.TABLE, label_id)]
+    own = [(t, v or 0) for _, _, _, t, v, how in extra if how != "partner"]
+    partner = [(t, v or 0) for _, _, _, t, v, how in extra if how == "partner"]
     parts, sessions, dates, resolved = [], {}, [], 0
     for k, product in enumerate(products):
-        found = front_sessions(conn, product, start, end, needed)
+        found = front_sessions(conn, product, start, end, [*needed, *own])
         warm = [s[0] for s in found if s[6]]
+        if context:  # the partner's stages must be warm in the same session
+            other = front_sessions(conn, PAIRS[product], start, end, partner)
+            ready = {s[0] for s in other if s[6]}
+            warm = [d for d in warm if d in ready]
         sessions[product] = {"used": len(warm), "not_warm": len(found) - len(warm)}
         dates.append(sorted((d - date(2000, 1, 1)).days for d in warm))
         resolved += int(conn.execute(count, (product, warm, label_id)).fetchone()[0])
@@ -593,7 +663,7 @@ def load_candidates(conn, products, label, stream, start, end, ids) -> dict:
         "sessions": sessions,
         "days": dates,  # per product: every warm session, with or without a candidate
         "resolved_before_decision": resolved,
-    }
+    } | ({"sets": sets} if context else {})
 
 
 def log_loss(y, p):
@@ -684,38 +754,49 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     keep &= finite
     y = (outcome == 1).astype(np.float64)
     null = (disp + INVALIDATION) / (REVERSAL + INVALIDATION)  # as frozen; the loss clips itself
-    pred = {m: np.full(len(data), np.nan) for m in ("prior", "logistic", "boosted")}
-    rng = np.random.default_rng(SEED)
-    skipped = []
-    for month, train, test in blocks:
-        for k in (HIGH, LOW):
-            tr = np.flatnonzero(train & keep & (kind == k))
-            te = np.flatnonzero(test & keep & (kind == k))
-            ones = int(y[tr].sum())
-            if min(ones, len(tr) - ones) < MIN_TRAIN or not len(te):
-                skipped.append({"month": month, "kind": k, "train": len(tr), "test": len(te)})
-                continue
-            if len(tr) > TRAIN_CAP:
-                tr = np.sort(rng.choice(tr, TRAIN_CAP, replace=False))
-                ones = int(y[tr].sum())  # the sample must still hold both classes
-                if min(ones, len(tr) - ones) < MIN_TRAIN:
+
+    def fit(columns):
+        """Both models on these feature columns: the same rows and training sample each call."""
+        pred = {m: np.full(len(data), np.nan) for m in ("prior", "logistic", "boosted")}
+        rng = np.random.default_rng(SEED)
+        skipped = []
+        for month, train, test in blocks:
+            for k in (HIGH, LOW):
+                tr = np.flatnonzero(train & keep & (kind == k))
+                te = np.flatnonzero(test & keep & (kind == k))
+                ones = int(y[tr].sum())
+                if min(ones, len(tr) - ones) < MIN_TRAIN or not len(te):
                     skipped.append({"month": month, "kind": k, "train": len(tr), "test": len(te)})
                     continue
-            xt, xs = x[tr][:, used].astype(np.float64), x[te][:, used].astype(np.float64)
-            pred["prior"][te] = y[tr].mean()
-            scaler = StandardScaler().fit(xt)
-            logistic = LogisticRegression(C=1.0, max_iter=500).fit(scaler.transform(xt), y[tr])
-            pred["logistic"][te] = logistic.predict_proba(scaler.transform(xs))[:, 1]
-            boosted = HistGradientBoostingClassifier(
-                max_iter=300,
-                learning_rate=0.05,
-                max_leaf_nodes=31,
-                min_samples_leaf=200,
-                l2_regularization=1.0,
-                early_stopping=False,
-                random_state=SEED,
-            ).fit(xt, y[tr])
-            pred["boosted"][te] = boosted.predict_proba(xs)[:, 1]
+                if len(tr) > TRAIN_CAP:
+                    tr = np.sort(rng.choice(tr, TRAIN_CAP, replace=False))
+                    ones = int(y[tr].sum())  # the sample must still hold both classes
+                    if min(ones, len(tr) - ones) < MIN_TRAIN:
+                        skipped.append(
+                            {"month": month, "kind": k, "train": len(tr), "test": len(te)}
+                        )
+                        continue
+                xt = x[tr][:, columns].astype(np.float64)
+                xs = x[te][:, columns].astype(np.float64)
+                pred["prior"][te] = y[tr].mean()
+                scaler = StandardScaler().fit(xt)
+                logistic = LogisticRegression(C=1.0, max_iter=500).fit(scaler.transform(xt), y[tr])
+                pred["logistic"][te] = logistic.predict_proba(scaler.transform(xs))[:, 1]
+                boosted = HistGradientBoostingClassifier(
+                    max_iter=300,
+                    learning_rate=0.05,
+                    max_leaf_nodes=31,
+                    min_samples_leaf=200,
+                    l2_regularization=1.0,
+                    early_stopping=False,
+                    random_state=SEED,
+                ).fit(xt, y[tr])
+                pred["boosted"][te] = boosted.predict_proba(xs)[:, 1]
+        return pred, skipped
+
+    if "sets" in frame:
+        return report | compare_sets(frame, fit, used, y, null, product, day)
+    pred, skipped = fit(used)
     report["skipped_folds"] = skipped
     scored = np.isfinite(pred["boosted"])
     report["rows_scored"] = int(scored.sum())
@@ -755,6 +836,47 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     return report
 
 
+def compare_sets(frame, fit, used, y, null, product, day) -> dict:
+    """The context experiment: both models fitted on each input set, on the same rows, and each
+    set's log-loss gain over `base` for the same model."""
+    chosen = set(used.tolist())
+    pred, out = {}, {"input_sets": {}, "results": {}}
+    for name in CONTEXT_SETS:
+        columns = np.array([j for j in frame["sets"][name] if j in chosen], dtype=int)
+        pred[name], skipped = fit(columns)
+        out["input_sets"][name] = {"features": len(columns)}
+        out["skipped_folds"] = skipped  # the same for every set: they share rows and samples
+    scored = np.isfinite(pred["base"]["boosted"])
+    out["rows_scored"] = int(scored.sum())
+    if not scored.any():
+        return out | {"error": "no fold had enough training rows of both classes"}
+    groups = {"all": scored} | {p: scored & (product == k) for k, p in enumerate(frame["sessions"])}
+    for group, rows in groups.items():
+        if not rows.any():
+            continue
+        yy, session = y[rows], product[rows] * 100_000 + day[rows]
+        entry = {
+            "rows": int(rows.sum()),
+            "sessions": len(np.unique(session)),
+            "reversal_rate": round(float(yy.mean()), 4),
+            "random_walk": scores(yy, null[rows]),
+            "prior": scores(yy, pred["base"]["prior"][rows]),
+        }
+        for name in CONTEXT_SETS:
+            entry[name] = {m: scores(yy, pred[name][m][rows]) for m in ("logistic", "boosted")}
+            if name == "base":
+                continue
+            entry[name]["log_loss_gain_over_base"] = {}  # positive: the set is better
+            for m in ("logistic", "boosted"):
+                delta = log_loss(yy, pred["base"][m][rows]) - log_loss(yy, pred[name][m][rows])
+                entry[name]["log_loss_gain_over_base"][m] = {
+                    "mean": round(float(delta.mean()), 5),
+                    "interval_95": interval(delta, session, np.random.default_rng(SEED)),
+                }
+        out["results"][group] = entry
+    return out
+
+
 def models(
     products: list[str],
     start: date = DEV_START,
@@ -762,7 +884,9 @@ def models(
     labels: list[str] | None = None,
     url=None,
     log=lambda line: None,
+    context: bool = False,
 ) -> dict:
+    """Part B; with `context`, the context experiment on the fast labels instead."""
     check_period(start, end)
     products = list(dict.fromkeys(products))  # a repeated product is still one product
     out: dict = {
@@ -776,16 +900,17 @@ def models(
     with db.connect(url) as conn:
         ids = variant_ids(conn)
         for stream, spec in STREAMS.items():
+            if context and stream != "fast":
+                continue
             for label in spec["labels"]:
                 if labels and label.VARIANT not in labels:
                     continue
-                frame = load_candidates(conn, products, label, stream, start, end, ids)
+                frame = load_candidates(conn, products, label, stream, start, end, ids, context)
                 log(f"{label.VARIANT}: {len(frame['data']):,} candidates")
                 out["labels"][label.VARIANT] = {
                     "sessions": frame["sessions"],
                     "provisional": evaluate(frame, True),
-                    "all_candidates": evaluate(frame, False),
-                }
+                } | ({} if context else {"all_candidates": evaluate(frame, False)})
                 log(f"{label.VARIANT}: done")
     return out
 

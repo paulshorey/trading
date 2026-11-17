@@ -137,6 +137,29 @@ def test_walk_forward_comparison_counts_what_it_leaves_out_and_finds_a_real_sign
     assert report["rows_scored"] < len(tested["data"]) - kept.sum()
 
 
+def test_input_sets_are_compared_on_the_same_rows_and_an_informative_set_shows_a_gain():
+    tested = frame()
+    # the informative column reaches the models only with the last set
+    tested["sets"] = {
+        "base": [1, 2, 3],
+        "scales": [1, 2, 3],
+        "hour": [1, 2, 3],
+        "pair": [0, 1, 2, 3],
+    }
+    report = benchmark.evaluate(tested, False)
+    plain = benchmark.evaluate(frame(), False)
+    assert report["rows_scored"] == plain["rows_scored"]  # the population of the largest set
+    assert [report["input_sets"][n]["features"] for n in benchmark.CONTEXT_SETS] == [2, 2, 2, 3]
+    result = report["results"]["all"]
+    assert result["pair"]["boosted"] == plain["results"]["all"]["boosted"]
+    for model in ("logistic", "boosted"):
+        same = result["hour"]["log_loss_gain_over_base"][model]
+        assert same["mean"] == 0 and same["interval_95"] == [0, 0]
+        gain = result["pair"]["log_loss_gain_over_base"][model]
+        assert gain["mean"] > 0.1 and gain["interval_95"][0] > 0.05
+        assert result["base"][model]["roc_auc"] < 0.55 < 0.75 < result["pair"][model]["roc_auc"]
+
+
 def test_the_holdout_is_refused():
     with pytest.raises(ValueError, match="holdout"):
         benchmark.detectors(["GC"], date(2026, 8, 1), date(2026, 9, 1))

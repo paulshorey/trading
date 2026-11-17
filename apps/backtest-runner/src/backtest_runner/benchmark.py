@@ -897,6 +897,12 @@ def models(
     known = {v.VARIANT for s in STREAMS.values() for v in s["labels"]}
     if unknown := sorted(set(labels or ()) - known):
         raise ValueError(f"Unknown label variants {unknown}; known: {sorted(known)}")
+    if context and labels:
+        fast = {v.VARIANT for v in STREAMS["fast"]["labels"]}
+        if slow := sorted(set(labels) - fast):
+            raise ValueError(
+                f"Label variants {slow} are not fast labels; context needs {sorted(fast)}"
+            )
     with db.connect(url) as conn:
         ids = variant_ids(conn)
         for stream, spec in STREAMS.items():

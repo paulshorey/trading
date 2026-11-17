@@ -167,3 +167,9 @@ def test_the_holdout_is_refused():
         benchmark.models(["GC"], date(2026, 8, 1), date(2026, 11, 6))
     benchmark.check_period(benchmark.DEV_START, benchmark.DEV_END)
     assert benchmark.DEV_END < benchmark.HOLDOUT
+
+
+def test_context_mode_refuses_slow_labels():
+    slow = next(v.VARIANT for v in benchmark.STREAMS["slow"]["labels"])
+    with pytest.raises(ValueError, match="not fast labels"):
+        benchmark.models(["GC"], labels=[slow], context=True)

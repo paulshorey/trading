@@ -10,17 +10,18 @@ decisions behind it, where the work stands, and exactly how to continue.
 1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, the seven stages of
    layers 0 and 1 and the six swing scales of layer 2, every contract `current`
    ([rebuild](#rebuilt-from-mbp-1-november-16-2026), [swings](#pr-d-results-swings)). Nothing
-   waits on data. The disk is nearly full: 41 GB free ([open questions](#open-questions)).
+   waits on data. The disk is nearly full: 63 GB free ([open questions](#open-questions)).
 2. **Swings of the price path are built (PR D)**: confirmed highs and lows at 0.5, 1, and 2
    ATRs on both resolutions, the open leg and its progress, trend, breaches and reclaims
    ([results](#pr-d-results-swings); [what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
    RSI swings (`pivot_rsi_*`) run on the same detector but do not fit the disk yet
    ([open questions](#open-questions)).
-3. **Next: the reversal model and structure signals** ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)):
-   labels and the benchmark (PR F), a walk-forward model stage
-   ([rules](feature-pipeline.md#model-stages)), and signals that read both (PR E). A label
-   stage reads the swing stages in memory (`products["tables"]`, `products["events"]`) and the
-   trades (`swings.released`), as the swing stages read the volatility tier.
+3. **Outcome labels and the benchmark are built (PR F)**: twelve label variants stored for GC
+   and SI, and `research benchmark` ([results](#pr-f-results-labels-and-benchmark),
+   [frozen spec](pivot-label-spec.md)). The swings beat the baseline detectors; the reversal
+   models add almost nothing to where price already stands. **Next: structure signals (PR E)
+   and other new inputs, tested against the same labels, before a model is stored**
+   ([next steps](#next-steps)). The holdout, September 1, 2026 on, is unread: keep it so.
 4. **Alongside:** the book stage `book_1s`
    ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and paired products
    ([pair-design.md](pair-design.md): GC + SI first; ES + NQ after NQ is downloaded).
@@ -192,9 +193,9 @@ These are fundamental; changing any of them changes every stored value.
 
 | Area     | State |
 | -------- | ----- |
-| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82) |
+| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); **outcome labels as twelve stages, and the benchmark command** (#83) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC, SI, PL, ES, YM, RTY in `data/databento/mbp-1/` (123 GB), checksums and full decode verified; NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 168 GB: `0001_baseline` through `0006_swings` applied; GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (212,195,700 `pivot_1s` rows, 3,536,595 `pivot_1m` rows, 2,403,082 events); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
+| Database | PostgreSQL 18 database `trading`, 169 GB: `0001_baseline` through `0007_pivot_labels` applied; GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (212,195,700 `pivot_1s` rows, 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | `bias_pullback` is an infrastructure baseline that loses money, not a candidate |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -313,6 +314,105 @@ These sections are summaries; the full records, with every check and evidence fi
 this file's history (`git show 1d1b3ac:docs/project/handoff.md`). MBP-1 trades are the same
 records, so the findings carry over; row counts shifted by the week the downloads differ
 (TBBO began 2025-11-01, MBP-1 2025-11-08; [comparison](#rebuilt-from-mbp-1-november-16-2026)).
+
+## PR F results (labels and benchmark)
+
+Built and measured November 16–17. The parameters were frozen in
+[pivot-label-spec.md](pivot-label-spec.md) before any label was computed. Evidence:
+`~/ingest-gc-si-labels.*`.
+
+**In plain words.** The swing detector confirms a high only after price has fallen the full
+threshold from it. A label takes the same high earlier, when price has fallen a quarter or a
+half of the way, and records what happened next: the reversal completed, or price went back
+through the high. The benchmark then asks two questions: is the detector a good way to find
+turning points, and can a model tell early which candidates will complete?
+
+**Labels stored.** Twelve label variants (six scales × two stages, 25% and 50% of the
+threshold) for GC and SI: 5,029,757 rows in `market.pivot_label_1s` and 197,721 in
+`market.pivot_label_1m`, 1.3 GB with indexes, built in 3.5 minutes (`add`, 8 workers, 858
+contract-sessions). Checks on the stored rows, all sessions
+(`psql -d trading -f ~/ingest-gc-si-labels.validation.sql`):
+
+- Every confirmed high or low of the detector (1,323,967 across the scales) is either a row
+  resolved before decision or the extreme of an earlier candidate: 0 missing, 0 counted twice.
+- Every reversal whose extreme was not broken first is the detector's own confirmation, trade
+  for trade: 2,201,401 checked, 0 unmatched.
+- Every label settles inside its own session; no key is duplicated; no bound is violated.
+- Share of candidates that reverse: 40–49% at the 25% stage and 60–63% at the 50% stage
+  for the 0.5 and 1 ATR scales; lower at 2 ATR (26–34% and 45–51%), where many time out.
+
+**A. Detectors against hindsight turning points**
+(`uv run research benchmark detectors GC SI`; development period 2026-01-02 to 08-31, 171
+sessions per product, GC and SI pooled). A reference turning point is the highest (lowest) row
+within 300 seconds, or 240 minutes, either side, with a move of at least 1 or 2 ATRs into and
+out of it. Delay is in rows after the turning point; false alarms are per open hour.
+
+| Task (reference move) | Detector | Coverage | Median delay | 90% delay | False alarms/h | Precision |
+| --- | --- | --- | --- | --- | --- | --- |
+| Seconds, 1 ATR | **Swings 1 ATR** | 97% | 48 s | 136 s | 16.1 | 0.33 |
+| | Swings 0.5 ATR | 97% | 16 s | 65 s | 56.4 | 0.12 |
+| | Swings 2 ATR | 58% | 126 s | 246 s | 2.6 | 0.64 |
+| | Extrema, 120 rows each side | 100% | 120 s | 120 s | 12.8 | 0.38 |
+| | Slope sign, 300 rows | 96% | 166 s | 239 s | 5.0 | 0.60 |
+| | Slope sign, 60 rows | 94% | 37 s | 51 s | 53.1 | 0.12 |
+| | CUSUM | 3% | 5 s | 14 s | 6.1 | 0.04 |
+| Seconds, 2 ATR | **Swings 2 ATR** | 95% | 124 s | 245 s | 3.2 | 0.56 |
+| | Slope sign, 300 rows | 97% | 162 s | 227 s | 8.5 | 0.33 |
+| | Extrema, 120 rows each side | 100% | 120 s | 120 s | 16.5 | 0.21 |
+| Minutes, 1 ATR | **Swings 1 ATR** | 100% | 38 min | 122 min | 0.29 | 0.37 |
+| | Extrema, 60 rows each side | 100% | 60 min | 60 min | 0.50 | 0.25 |
+| | Slope sign, 120 rows | 97% | 66 min | 96 min | 0.36 | 0.31 |
+| Minutes, 2 ATR | **Swings 2 ATR** | 99% | 96 min | 211 min | 0.05 | 0.48 |
+| | Slope sign, 120 rows | 96% | 67 min | 94 min | 0.48 | 0.09 |
+
+Reading: the stored swings are the best of the four on the trade between delay and false
+alarms whenever the scale matches the move being looked for. At a like number of false alarms
+they are known in under half the time of fixed extrema (48 s against 120 s), and at 2 ATR they
+raise a third of the slope detector's false alarms with a shorter median delay. Fixed extrema
+never miss but always wait their full window. The location error is 0 rows at the median and
+the 90th percentile for swings, extrema, and slope: when they fire, they name the right row.
+CUSUM as frozen finds 3–7% (its claimed row is a median 45–84 rows from the turning point); it
+was not tuned. The full table per product and kind is in the command's JSON.
+
+**B. Can a model tell early which candidates complete?**
+(`uv run research benchmark models GC SI`; four test months, May to August 2026, each scored
+by models trained only on earlier sessions; 138–147 stored features of the decision row.)
+Candidates that were provisional higher lows or lower highs; "random walk" is the chance of
+reaching the reversal barrier first from where price stands, with nothing fitted.
+
+| Label | Rows scored | Reversal rate | AUC: random walk | AUC: logistic | AUC: boosted | Log-loss gain, boosted over random walk (95%) | Boosted over logistic (95%) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `fast_atr_0p5_q25` | 227,097 | 0.505 | 0.618 | 0.618 | 0.618 | +0.016 (0.014, 0.018) | +0.0005 (0.0000, 0.0009) |
+| `fast_atr_0p5_q50` | 150,047 | 0.632 | 0.604 | 0.604 | 0.605 | +0.038 (0.034, 0.041) | +0.0012 (0.0005, 0.0021) |
+| `fast_atr_1_q25` | 108,697 | 0.471 | 0.597 | 0.594 | 0.588 | +0.002 (0.001, 0.003) | −0.0020 (−0.0027, −0.0014) |
+| `fast_atr_1_q50` | 68,982 | 0.630 | 0.590 | 0.588 | 0.582 | +0.010 (0.008, 0.013) | −0.0023 (−0.0033, −0.0012) |
+| `fast_atr_2_q25` | 40,708 | 0.334 | 0.586 | 0.595 | 0.583 | +0.025 (0.022, 0.029) | −0.0073 (−0.0089, −0.0059) |
+| `fast_atr_2_q50` | 24,296 | 0.519 | 0.582 | 0.583 | 0.566 | +0.028 (0.024, 0.033) | −0.0124 (−0.0149, −0.0097) |
+| `slow_atr_0p5_q25` | 10,526 | 0.434 | 0.606 | 0.578 | 0.559 | −0.049 (−0.056, −0.041) | −0.030 (−0.037, −0.023) |
+| `slow_atr_0p5_q50` | 5,969 | 0.603 | 0.627 | 0.591 | 0.572 | −0.045 (−0.053, −0.036) | −0.019 (−0.028, −0.010) |
+| `slow_atr_1_q25` | 3,202 | 0.396 | 0.567 | 0.530 | 0.534 | −0.052 (−0.068, −0.038) | +0.016 (−0.009, 0.045) |
+| `slow_atr_1_q50` | 821 (4 of 8 folds) | 0.560 | 0.597 | 0.498 | 0.497 | −0.065 (−0.090, −0.042) | +0.026 (−0.005, 0.057) |
+| `slow_atr_2_q25`, `_q50` | none | | | | | fewer than 500 training rows of a class in every fold | |
+
+Reading, which is the finding of this PR:
+
+1. **The models do not rank candidates better than the position of price alone.** AUC
+   (0.5 is a coin, 1 is perfect) is about 0.60 for the random-walk number, which uses only how
+   far price has already reversed, and about 0.60 for both models with every stored feature.
+   The models' log-loss gain on the fast scales is real but small, and it is mostly calibration: the
+   random-walk formula's probabilities are off in level, which a model corrects. On
+   `fast_atr_1` the gain over simply predicting the average rate is 0.009–0.017.
+2. **The boosted model is not better than logistic regression.** Equal within 0.002 on the
+   two largest samples and worse elsewhere, as the samples shrink.
+3. **The slow scales have too few candidates** (800 to 10,000 scored): both models are worse
+   than the random-walk number there, and the 2 ATR slow scale could not be fitted at all.
+4. All candidates, not only provisional ones, give the same picture (in the JSON).
+
+Excluded and counted, per label (in the JSON): session ends (118–310), unknown outcomes (0),
+rows with an `*_atr` input above 50 in absolute value (0–13), rows with another NULL input
+(1–5,462), and three or four features NULL by design (`break_up_age_s`, `break_down_age_s`,
+`sweep_delta_ratio`, `reversal_delta_ratio`). The extreme-ATR problem is rare on front
+sessions, as expected. The holdout (September 1 on) has not been read.
 
 ## PR D results (swings)
 
@@ -745,6 +845,38 @@ the minute completed before the trade's minute); `*_atr` values divide by the AT
 units frozen with their extreme; whole-number columns are `smallint` or `integer`; RSI swings
 are left for their own PR because `pivot_rsi_1s` does not fit the disk.
 
+## PR F: labels and the benchmark
+
+**Done (this PR).** `strategy_core/pivot_labels.py` holds the label kernel and
+`stage_pivot_label.py` wraps it as twelve stages, one per scale and stage
+(`pivot_label_1s:fast_atr_1_q25`, …), written to `market.pivot_label_1s` and
+`market.pivot_label_1m` (migration `0007_pivot_labels`).
+`backtest_runner/benchmark.py` is the benchmark; nothing it computes is stored.
+
+What a later layer should know:
+
+- **Labels are never inputs.** Label stages have `LABEL = True`; `pipeline.check_graph`
+  refuses a stage that reads one, and the engine's features come from `FEATURE_STAGES`, which
+  leaves them out. No label column has a unit, so none can be registered as a feature.
+- **A label row is stored at the row where it settled**, always inside the decision row's
+  session, with `available_ns`. A session can therefore be replaced alone, and one purged
+  session covers every overlap in a split.
+- **Outcome 0, "resolved before decision"**, is a confirmed pivot that never had a candidate
+  at a row close. It is an observation, not a target; with it, every confirmed pivot is
+  accounted for.
+- **A new label definition is a new variant** (a new name, `add` in the plan), never an edit.
+  Changing `pivot_labels.py` or `stage_pivot_label.py` rebuilds only the label tables (1.3 GB,
+  minutes). They still list `swings.py` and the shared modules, so the rule for those is
+  unchanged.
+- **The benchmark refuses dates outside January 2 to August 31, 2026.** The holdout is for the
+  final evaluation of a chosen model, once.
+
+Decisions made in F (derived, reported in the PR): two tables by row resolution rather than
+one; labels as stages on tier 9 so the planner, checkpoints, and rebuilds needed nothing new;
+the horizon is 300 rows fast and 240 rows slow, with the survival deadline equal to it;
+scikit-learn joins the dependencies (`HistGradientBoostingClassifier` is the boosted model);
+the random-walk baseline ignores the horizon; a model needs 500 training rows of each class.
+
 ## Next steps
 
 The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
@@ -752,32 +884,39 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 
 1. Rebuild from MBP-1: done November 16 ([results](#rebuilt-from-mbp-1-november-16-2026)).
 2. Swing structure of price (PR D): done November 16 ([results](#pr-d-results-swings)).
-3. **Labels and the benchmark (PR F), the reversal model, structure signals (PR E).**
-   Recommended: F before E ([roadmap](roadmap.md#next)); Paul decides. RSI swings
-   (`pivot_rsi_*`) can be built whenever disk allows; signals that compare price and RSI
-   structure need them.
-4. **Book stage `book_1s`** (tier 0, from book events) and **`pair_1m`** for GC + SI.
-5. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
+3. Labels and the benchmark (PR F): done November 17
+   ([results](#pr-f-results-labels-and-benchmark)).
+4. **New inputs for the reversal question, then the model.** Recommended, for Paul to
+   confirm: build the structure signals (PR E) next, starting with what needs no new large
+   table (the slow scales' structure as of availability on fast candidates, the other
+   product's state for GC with SI), and rerun `research benchmark models` on the same labels.
+   Store a walk-forward model stage only when a model ranks candidates clearly better than
+   the random-walk number (AUC about 0.60 today). A model stage built now would store a
+   recalibrated copy of `progress`. The book stage and RSI swings are the other candidate
+   inputs; both need disk.
+5. **Book stage `book_1s`** (tier 0, from book events) and **`pair_1m`** for GC + SI.
+6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).
-6. **Backtests read stored rows** when the builder matches, for speed only.
-7. **Contract definitions**: download the free `definition` job into
+7. **Backtests read stored rows** when the builder matches, for speed only.
+8. **Contract definitions**: download the free `definition` job into
    `data/databento/definition/` (needs the account owner) and load expirations.
-8. **NQ**: download its MBP-1 year when disk allows (about 50 GB), then ES + NQ as a pair.
+9. **NQ**: download its MBP-1 year when disk allows (about 50 GB), then ES + NQ as a pair.
 
 Pivot work: the [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design) sets the
 observations (the trade path, published per second and per minute), thresholds, segments,
 storage, and labels; the [pivot/structure contract](pivot-structure-design.md) defines
 higher/lower highs and lows, trend, provisional relations, and breaches. Research history:
 the [next-agent handoff](pivot-detection-handoff.md) and its saved research. The detector is
-implemented and verified as a calculation; whether its swings predict anything is the
-benchmark's question (PR F), still open.
+implemented and verified as a calculation, and the benchmark shows it finds turning points
+sooner than the baselines at a like false-alarm rate
+([results](#pr-f-results-labels-and-benchmark)). Telling early which candidates complete is
+still open: the stored features do not do it.
 
 ## Open questions
 
-1. **Disk.** The archive is 123 GB and the database 168 GB, with 41 GB free on a 926 GB
-   disk after the swing build (16 GB of it is PostgreSQL's write-ahead log, which shrinks
-   back over time). Nothing large fits any more: not NQ (about 50 GB of files, more as rows),
+1. **Disk.** The archive is 123 GB and the database 169 GB, with 63 GB free on a 926 GB
+   disk on November 17 (the write-ahead log of the swing build has shrunk back). Nothing large fits any more: not NQ (about 50 GB of files, more as rows),
    not `pivot_rsi_1s` (about 40 GB), not `book_1s`, not a third product, and not an in-place
    rebuild of `pivot_1s` or `candle_1m_1s` (each rewrites its own size). Options: an external
    or larger disk for the DBN archive (it is read sequentially and rarely), storing fewer
@@ -787,8 +926,8 @@ benchmark's question (PR F), still open.
    values as plain ATR multiples and clip or exclude at training, or floor the normalizer
    (for example at the spread, as the threshold already is). The second changes stored
    values of the swing stages, and the same question applies to layer 1.
-3. **Order of E and F**, and whether the reversal model's output should feed the structure
-   signals ([roadmap](roadmap.md#layers-3-and-4-predictions-that-later-layers-read)).
+3. **What comes after F** ([recommendation](#next-steps)): structure signals and other new
+   inputs first, with the model stage waiting for a result, or the model stage now.
 4. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
    RTY could pair with ES before NQ arrives.
 5. Which unstored reference metrics to add first, and which training outcome to use

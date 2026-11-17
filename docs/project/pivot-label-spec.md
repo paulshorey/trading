@@ -140,3 +140,18 @@ nothing); precision.
   log-loss gain over the random-walk baseline, and of the boosted model over logistic
   regression, with 95% intervals from resampling whole test sessions (1,000 resamples,
   seed 0).
+
+## Clarifications (November 17, 2026)
+
+Made during review, before the benchmark read any outcome of the full data:
+
+- A model is fitted for a fold and kind only with at least 500 training rows of each class;
+  other folds are skipped and listed.
+- The session left out before a test block is each product's own last stored session before
+  it, whether or not it holds a candidate.
+- A candidate without a stored displacement (no trade seen yet) is excluded and counted.
+- A row with a second lacking data coverage makes every outcome of that row unknown, also
+  one a trade earlier in the same row would have settled.
+- An alarm that found a reference swing always counts as an alarm.
+- The random-walk probability is used as the formula gives it; the log loss clips at its
+  own bounds.

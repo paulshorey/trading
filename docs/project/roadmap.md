@@ -86,17 +86,20 @@ whether it improves on the rule.
 2. Swings of the price path (PR D): done November 16
    ([results](handoff.md#pr-d-results-swings)). Swings of RSI (`pivot_rsi_*`) reuse the same
    detector and wait for disk space ([handoff](handoff.md#open-questions)).
-   Then structure signals (PR E) and outcome labels with the benchmark
-   (PR F), in the order Paul decided on November 3. Recommended change, for Paul to
-   confirm: build the labels (F) before the signals (E), because the reversal model
-   needs labels and layer 4 should be able to read its output.
-3. **Reversal model**: logistic regression and one gradient-boosted model on the stored
-   candidates, walk-forward, stored as a model stage.
-4. **Book stage `book_1s`** and **pair stage `pair_1m`**, alongside the above.
-5. **Final model**: purged walk-forward training on pooled examples from front-contract
+3. Outcome labels and the benchmark (PR F): done November 17
+   ([results](handoff.md#pr-f-results-labels-and-benchmark)). The stored swings find turning
+   points sooner than fixed extrema, slope sign, or CUSUM at a like false-alarm rate. Logistic
+   regression and a boosted model on the stored features rank early candidates no better than
+   the position of price alone (AUC about 0.60 for both), so no model is stored yet.
+4. **New inputs, then the reversal model.** Recommended, for Paul to confirm: structure
+   signals (PR E) and cross-scale and paired-product context next, each tested with
+   `research benchmark models` against the same labels; the walk-forward model stage follows
+   when a model clearly beats the random-walk number.
+5. **Book stage `book_1s`** and **pair stage `pair_1m`**, alongside the above.
+6. **Final model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a
    final holdout of the newest data, evaluated once.
-6. **Paper trading**: a Databento live MBP-1 source feeding one-second chunks into the
+7. **Paper trading**: a Databento live MBP-1 source feeding one-second chunks into the
    same engine; record each day and replay it as a backtest to confirm identical decisions.
-7. **Live trading**: a broker execution adapter with order reconciliation, risk limits,
+8. **Live trading**: a broker execution adapter with order reconciliation, risk limits,
    pause and resume, manual overrides, and a log of automated and human decisions.

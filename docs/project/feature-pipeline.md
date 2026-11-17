@@ -91,7 +91,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series); planned                                                                             |
 | `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
 | `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
-| `pivot_label`  | —    | `market`, `pivot_1s`, `pivot_1m`                                                                                     |
+| `pivot_label_1s`, `pivot_label_1m` | — | `market`, `bar_1s`, and one swing scale each: twelve label stages ([spec](pivot-label-spec.md)) |
 
 The two resolutions are independent branches below tier 3: nothing at second resolution
 feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slow swing

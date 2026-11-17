@@ -16,7 +16,9 @@ adds `market.vol_1m`, the volatility family of the hourly window, and its view (
 `0005_second_volatility` adds `market.vol_1s`, the same family of the `1m@1s` window, and its view
 (PR C2); `0006_swings` adds the swing tables `market.pivot_1s` and `market.pivot_1m` (one row
 per slot and scale, keyed by `variant_id`), the event table `market.pivot_event`, and their
-views (PR D). Runs and ML rows come next.
+views (PR D); `0007_pivot_labels` adds the outcome-label tables `market.pivot_label_1s` and
+`market.pivot_label_1m` (one row per candidate and label variant) and their views (PR F).
+Runs and ML rows come next.
 
 ## Local setup
 

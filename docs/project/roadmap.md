@@ -94,7 +94,8 @@ Freeze the bracket, costs, sizing and eligibility rule before reading outcomes.
 1. Replay a would-be entry for every candidate, including ones a policy skips. Use the
    engine's arrival-time book, bracket exits and commission. For a filled trade with an
    observed exit, the training outcome is net P&L divided by the decision-time initial risk
-   per contract (R); an unfilled entry has zero outcome. Exclude and count incomplete
+   per contract (R). Record an unfilled entry with an `unfilled` state and no trade P&L;
+   its value for the take-or-skip training target is zero. Exclude and count incomplete
    follow-up, and count fallback-priced exits separately. Keep hypothetical trades out of
    the portfolio ledger.
 2. Fit expected net R on earlier folds, purging training outcomes whose decision-to-resolution

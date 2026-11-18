@@ -93,12 +93,15 @@ Freeze the bracket, costs, sizing and eligibility rule before reading outcomes.
 
 1. Replay a would-be entry for every candidate, including ones a policy skips. Use the
    engine's arrival-time book, bracket exits and commission. For a filled trade with an
-   observed exit, the training outcome is net P&L for one contract. Count unfilled entries,
-   incomplete follow-up and fallback-priced exits separately. Keep hypothetical trades out
-   of the portfolio ledger.
-2. Fit the expected net value on earlier folds. Choose any take threshold using training
-   history only. Compare staying flat, taking every eligible candidate, a displacement-only
-   rule, and the learned policy on the same candidate stream. Test the hourly filter on
+   observed exit, the training outcome is net P&L divided by the decision-time initial risk
+   per contract (R); an unfilled entry has zero outcome. Exclude and count incomplete
+   follow-up, and count fallback-priced exits separately. Keep hypothetical trades out of
+   the portfolio ledger.
+2. Fit expected net R on earlier folds, purging training outcomes whose decision-to-resolution
+   interval overlaps the scoring block. Apply the same purge to threshold selection, using
+   training history only. Convert expected R to dollars with the candidate's initial risk
+   for display and the take decision. Compare staying flat, taking every eligible candidate,
+   a displacement-only rule, and the learned policy on the same candidate stream. Test the hourly filter on
    and off and add an out-of-fold reversal probability only as a separate comparison.
 3. Replay each policy with the same capital, position limits and cooldown. Report net
    portfolio dollars, drawdown, fills and opportunities skipped while occupied, by month

@@ -74,6 +74,10 @@ whether it improves on the rule.
 
 ## Next research decision
 
+**Decision, November 18, 2026.** The first model will take or skip a provisional higher-low
+long or lower-high short based on expected net trade value. A reversal probability can be
+tested later as an input. The model and its candidate inspector are planned.
+
 A provisional higher low is observable when the current low sits above the previous
 confirmed low and price has begun to recover. Three different questions can follow.
 
@@ -83,13 +87,24 @@ confirmed low and price has begun to recover. Three different questions can foll
 | Will this low become the next confirmed higher low? | Match the next confirmed low to the candidate and its frozen comparator on the same contract and scale. Count a replaced extreme separately. Mirror for lower highs. This needs a distinct target. |
 | Should the system enter here? | A policy that takes or skips the candidate improves after-cost results in one portfolio. The existing simulator supports the bracket replay. Wiring pivot candidates into this comparison is proposed. |
 
-For the trading decision, start with one fast swing scale on GC and SI. Freeze the entry,
-bracket, costs and eligibility rule. Compare taking every eligible candidate against a
-simple displacement rule. Then test the hourly filter alone, and finally the addition of
-a walk-forward reversal probability. Keep the same candidate stream across comparisons.
-Report entries, missed fills, exits priced with a fallback, net dollars, drawdown and
-results by month and product. Replay with longer order latency and an additional tick of
-adverse execution. Log every variant, including unsuccessful ones, before examining the
+Start with one fast swing scale on GC and SI. Freeze the candidate at its first eligible
+decision close, including its extreme identity, side and latest completed hourly row.
+Freeze the bracket, costs, sizing and eligibility rule before reading outcomes.
+
+1. Replay a would-be entry for every candidate, including ones a policy skips. Use the
+   engine's arrival-time book, bracket exits and commission. For a filled trade with an
+   observed exit, the training outcome is net P&L for one contract. Count unfilled entries,
+   incomplete follow-up and fallback-priced exits separately. Keep hypothetical trades out
+   of the portfolio ledger.
+2. Fit the expected net value on earlier folds. Choose any take threshold using training
+   history only. Compare staying flat, taking every eligible candidate, a displacement-only
+   rule, and the learned policy on the same candidate stream. Test the hourly filter on
+   and off and add an out-of-fold reversal probability only as a separate comparison.
+3. Replay each policy with the same capital, position limits and cooldown. Report net
+   portfolio dollars, drawdown, fills and opportunities skipped while occupied, by month
+   and product. Stress order latency and one tick of additional adverse execution.
+
+Log every variant, including unsuccessful ones, before examining the
 reserved period. Repeated selection on the same history can make an ordinary strategy
 appear profitable. [Bailey et al., *The Probability of Backtest Overfitting*](https://escholarship.org/uc/item/4w1110bb)
 
@@ -133,9 +148,8 @@ trade is an empirical question. [Gould and Bonart](https://arxiv.org/abs/1512.03
 4. **Context inputs for the reversal model: tested November 17, no gain**
    ([results](handoff.md#context-input-results-november-17-2026)). Other swing scales, the
    hourly window, and the partner product do not help either model, so no signal stage and
-   no model stage is stored. Choose between a candidate-only book test for the barrier
-   forecast and a take-or-skip portfolio test for the trading decision. The
-   [research decision](#next-research-decision) specifies the controls for each.
+   no model stage is stored. Next is the [after-cost portfolio experiment](#next-research-decision).
+   The candidate-only book test remains a secondary reversal-forecast experiment.
 5. **Book and pair stages.** Budget permanent storage after a candidate-level experiment
    demonstrates incremental value for the selected target.
 6. **Final model**: purged walk-forward training on pooled examples from front-contract

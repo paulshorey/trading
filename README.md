@@ -14,8 +14,8 @@ ratios, oscillators, or time. The same engine runs whole-session backtests and
 second-by-second historical rehearsals. A live feed and broker adapter are planned.
 
 The current ML benchmark asks whether an early swing candidate reaches its reversal
-threshold. The proposed trading experiment compares decisions to take or skip provisional
-higher lows and lower highs after execution costs. The [research roadmap](docs/project/roadmap.md#next-research-decision)
+threshold. The first trading model will decide whether to take a provisional higher-low long or
+lower-high short based on expected value after execution costs. The [research roadmap](docs/project/roadmap.md#next-research-decision)
 explains how to test the value of the sliding windows and each model layer.
 
 ## Workspace

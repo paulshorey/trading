@@ -25,6 +25,19 @@ API (loopback only): `GET /api/catalog`, `GET /api/runs`, `GET /api/runs/:id`,
 `GET /api/runs/:id/trades/:n/bars`, and `POST /api/runs` with a run spec.
 Nanosecond timestamps cross JSON as decimal strings.
 
+## Candidate inspector
+
+Planned for the [first trade-selection model](roadmap.md#next-research-decision). Include
+skipped candidates as well as entries. At the decision marker show the contract, side,
+provisional swing and its last confirmed comparator, fast and slow feature timestamps,
+model version, expected net dollars per contract, and take/skip reason. Distinguish a
+model skip from a position limit or cooldown that prevented an entry.
+
+Reveal the later arrival, fill, bracket exit, commission and net result in a separate
+outcome view. Identify a skipped candidate's simulated result as hypothetical. Display an
+unfilled order, missing follow-up or a fallback-priced exit explicitly. The existing
+trade inspector covers executed trades.
+
 ## Next
 
 1. **Session explorer.** Plot any feature over a session beside one-second or

@@ -76,9 +76,10 @@ task live in [handoff: next steps](handoff.md#next-steps).
       product, on the same rows as the base inputs. No set helps
       ([results](handoff.md#context-input-results-november-17-2026)); no signal stage and no
       model stage is stored.
-- [ ] **Select the next target.** The [research decision](roadmap.md#next-research-decision)
-      sets out the structure forecast, the reversal benchmark and the executable take-or-skip comparison.
-- [ ] **Book inputs for the reversal target.** Best bid and ask around
+- [x] **Select the first model target.** Take or skip a provisional higher-low long or lower-high short after costs.
+- [ ] **Build the trade-selection benchmark.** Freeze the causal candidates and bracket, label
+      would-be trades, and compare the rules and model in [one portfolio](roadmap.md#next-research-decision).
+- [ ] **Secondary experiment, book inputs for the reversal target.** Best bid and ask around
       each candidate, read from the DBN files, as a fifth input set; no new table
       ([recommendation](handoff.md#next-steps)).
 - [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk

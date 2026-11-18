@@ -23,8 +23,8 @@ decisions behind it, where the work stands, and exactly how to continue.
    hourly window, and the partner product, already stored, do not help either
    ([context results](#context-input-results-november-17-2026)), so no model and no signal
    stage is stored. A [one-input model](#displacement-baseline-november-18-2026) outperformed
-   both full models on the two primary targets. Choose the next experiment by the decision it supports
-   ([research decision](roadmap.md#next-research-decision)). The pivot benchmark reserves
+   both full models on the two primary targets. Paul selected the [after-cost take-or-skip
+   model](roadmap.md#next-research-decision) as the next experiment. The pivot benchmark reserves
    September 1 onward. Earlier [engine checks](#the-move-to-mbp-1-november-15-2026) used September data.
 4. The [book inputs](../research/pivots/2026-11-06-second-scale-and-mbp1.md) can be tested
    on candidates before allocating a full second-resolution table. GC and SI are the first
@@ -958,13 +958,10 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 4. **Context inputs from stored rows: tested November 17, no gain**
    ([results](#context-input-results-november-17-2026)). No signal stage and no model stage
    is stored.
-   **For reversal forecasting, test book inputs on the candidates only.** Read the
-   best bid and ask around each provisional candidate from the DBN files (spread, size
-   imbalance, quote changes over the last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)),
-   freeze the list in the spec first, and add them as a fifth set to
-   `research benchmark context`. This needs no new table, so the disk does not block it. If
-   they help, consider permanent storage. Report the result for the tested inputs, horizon and population.
-   For a take-or-skip decision, prioritize the [after-cost experiment](roadmap.md#next-research-decision).
+   **Next, take or skip a provisional higher-low long or lower-high short after costs.**
+   Build the causal candidate stream and bracket outcomes first, then compare policies in
+   one portfolio. The [experiment](roadmap.md#next-research-decision) and
+   [planned inspector](metric-explorer.md#candidate-inspector) describe the decision and its evidence.
 5. **Permanent book and pair stages** depend on the chosen experiment and available space.
 6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
@@ -998,15 +995,9 @@ hour, or the partner product ([results](#context-input-results-november-17-2026)
    values as plain ATR multiples and clip or exclude at training, or floor the normalizer
    (for example at the spread, as the threshold already is). The second changes stored
    values of the swing stages, and the same question applies to layer 1.
-3. **What comes after the context result** ([recommendation](#next-steps)): test book
-   inputs on the candidates, or change the question. The labels ask "will this early
-   reversal complete?", and trade-derived inputs answer no better than the position of
-   price. Other targets on the same rows: the size of the move after a confirmed swing, or
-   a bracket trade's outcome at fixed risk.
-4. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
+3. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
    RTY could pair with ES before NQ arrives.
-5. Which unstored reference metrics to add first, and which training outcome to use
-   (simulated bracket trade or fixed-horizon return)?
+4. Which unstored reference metrics merit a candidate-level comparison after the first trade policy?
 
 ## Things to know
 

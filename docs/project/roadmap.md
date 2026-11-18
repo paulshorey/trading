@@ -1,8 +1,8 @@
 # Platform roadmap
 
 Goal: reproducible short-horizon futures strategies, from historical research through
-live trading, on one engine. The end product of the research side is **one machine-learning
-model trained on many precomputed metrics**, for products that move together.
+live trading, on one engine. The research question is whether a model can use the price path
+at multiple resolutions to select short-horizon trades with positive expectancy after costs.
 
 This page is the map: what is computed, in what order, and how far it has come. Details
 are in the [feature pipeline](feature-pipeline.md) (rules every stored value follows), the
@@ -20,18 +20,24 @@ and the [handoff](handoff.md) (current state and how to continue).
    only the layers below it, and a layer is finished for a moment in time before anything
    above reads it. A value never uses information from after its own row.
 
+Indicators that advance by one candle period read the previous window of the same phase.
+The swing detector uses the sequence of released trades so it can tell which barrier was
+hit first inside a candle. Fast and slow swing scales use their respective completed
+ATR and publish state at second and minute closes. A second-level decision can read the
+latest completed minute, including its age.
+
 ## The layers
 
-Every layer is stored per contract, one row per scheduled second or minute, in PostgreSQL,
-computed by the same code that live sessions run.
+Base rows and indicator stages use a scheduled grid per contract. Swing events and labels
+are sparse. Prediction stages are proposed and will need a versioned model per forecast.
 
 | Layer             | What it holds                                                                                                              | Examples                                                                                         | Stages                                                            | State                                               |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------- |
 | 0. Trades         | Exact per-second and per-minute statistics, updated with each trade                                                        | OHLCV by aggressor side, CVD and its extremes, sweeps, the price path, the book as trades saw it | `bar_1s`, `bar_1m`                                                | Done                                                |
 | 0b. Book          | The same grid from every change to the best bid and ask                                                                    | Queue imbalance, order-flow imbalance, spread over time, depletion and refill                    | `book_1s`                                                         | Planned; the data is on disk and reaches the engine |
 | 1. Indicators     | Rolling candles and what is computed from price and volume                                                                 | ATR family, RSI, EMA, MACD, ADX, realized volatility, session levels                             | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m` | Done                                                |
-| 2. Swings         | Turning points of the price path, sized by layer-1 volatility                                                              | Confirmed highs and lows at 0.5, 1, and 2 ATR; the open leg and its progress; breaches           | `pivot_1s`, `pivot_1m` (+ `pivot_event`); `pivot_rsi_*` planned   | Done for price (PR D); RSI swings next              |
-| 3. Reversal model | A model's probability that the current move has reversed rather than paused, and the moment a reversal counts as confirmed | P(reversal) for each candidate extreme; early confirmation when it passes a threshold            | `pivot_label` (outcomes), then `model_reversal_*`                 | Designed in part; see below                         |
+| 2. Swings         | Turning points of the price path, sized by layer-1 volatility                                                              | Confirmed highs and lows at 0.5, 1, and 2 ATR; the open leg and its progress; breaches           | `pivot_1s`, `pivot_1m` (+ `pivot_event`); `pivot_rsi_*` planned   | Price implemented; RSI awaits disk and a research case              |
+| 3. Reversal model | Probability of reaching the frozen reversal barrier within the candidate horizon | P(reversal) at the candidate decision row            | `pivot_label` (outcomes), then `model_reversal_*`                 | Labels and benchmark implemented; model deferred                         |
 | 4. Structure      | Patterns across the latest reversals and the current one                                                                   | Higher lows, lower highs, breaks of structure, pullback quality, divergences                     | `signal_1s`, `signal_1m`                                          | Designed ([contract](pivot-structure-design.md))    |
 | 5. Final model    | One model on every stored feature of layers 0–4, for one product and its partner                                           | Trade or no trade, direction, expected outcome after costs                                       | training pipeline, `ml.*` tables                                  | After layers 2–4                                    |
 
@@ -43,10 +49,10 @@ state ([pair design](pair-design.md)). The final model reads both.
 ### Layers 3 and 4: predictions that later layers read
 
 Layer 2 confirms a swing only after price has reversed by the full threshold, which is
-late. Layer 3 exists to say earlier, with a probability, whether the move from the latest
-extreme is a reversal or a pause before continuation. Layer 4 then reads the latest
-confirmed reversals together with that probability to name the pattern: higher lows,
-lower highs, or neither.
+late. Layer 3 would estimate the chance of reaching the reversal barrier from the
+current candidate before invalidation or timeout. The remaining probability covers both
+outcomes. The confirmed swing retains its actual confirmation time. A later structure
+model could use this forecast alongside the previous confirmed highs and lows.
 
 A model's output is only a valid input for a later layer if the model could not have seen
 the future of the row it scores. The rule (proposed November 15, 2026; details in the
@@ -60,11 +66,44 @@ the future of the row it scores. The rule (proposed November 15, 2026; details i
 - Layer 4 and the final model train only on rows that have these out-of-sample
   predictions, so they learn from predictions of the quality they will get live.
 
-Until the reversal model exists, layer 4 is built on the deterministic layer-2 swings and
+The proposed layer 4 can build on the deterministic layer-2 swings and
 their provisional (not yet confirmed) relations, as the
 [contract](pivot-structure-design.md#provisional-higher-lows-and-lower-highs-are-causal-candidate-features)
 specifies. The model's probability then joins as one more input, and the benchmark decides
 whether it improves on the rule.
+
+## Next research decision
+
+A provisional higher low is observable when the current low sits above the previous
+confirmed low and price has begun to recover. Three different questions can follow.
+
+| Decision | What would count as success |
+| --- | --- |
+| Will the candidate reach the reversal barrier in time? | A calibrated probability improves on a model fitted to decision-time displacement alone on the same candidates. This is what the current benchmark can test. |
+| Will this low become the next confirmed higher low? | Match the next confirmed low to the candidate and its frozen comparator on the same contract and scale. Count a replaced extreme separately. Mirror for lower highs. This needs a distinct target. |
+| Should the system enter here? | A policy that takes or skips the candidate improves after-cost results in one portfolio. The existing simulator supports the bracket replay. Wiring pivot candidates into this comparison is proposed. |
+
+For the trading decision, start with one fast swing scale on GC and SI. Freeze the entry,
+bracket, costs and eligibility rule. Compare taking every eligible candidate against a
+simple displacement rule. Then test the hourly filter alone, and finally the addition of
+a walk-forward reversal probability. Keep the same candidate stream across comparisons.
+Report entries, missed fills, exits priced with a fallback, net dollars, drawdown and
+results by month and product. Replay with longer order latency and an additional tick of
+adverse execution. Log every variant, including unsuccessful ones, before examining the
+reserved period. Repeated selection on the same history can make an ordinary strategy
+appear profitable. [Bailey et al., *The Probability of Backtest Overfitting*](https://escholarship.org/uc/item/4w1110bb)
+
+One control tests the value of the sliding clock itself. Run the same policy on completed
+minute boundaries and again on every eligible second, with one portfolio and the same
+risk limits. Report how many extra entries the faster clock enabled and what they earned
+after costs. Adjacent one-minute windows share 59 seconds. Counting the extra rows alone
+cannot establish that earlier action helped.
+
+For the barrier forecast, the next proposed input is the book at each candidate. Freeze
+a short list of normalized inputs and their lookbacks before extracting them. Gould and
+Bonart found queue imbalance predicted the next mid-price move for ten Nasdaq stocks.
+Whether that information lasts through retail order arrival and a minutes-long futures
+trade is an empirical question. [Gould and Bonart](https://arxiv.org/abs/1512.03492)
 
 ## Done
 
@@ -94,10 +133,11 @@ whether it improves on the rule.
 4. **Context inputs for the reversal model: tested November 17, no gain**
    ([results](handoff.md#context-input-results-november-17-2026)). Other swing scales, the
    hourly window, and the partner product do not help either model, so no signal stage and
-   no model stage is stored. Recommended next, for Paul to decide: book inputs read at the
-   candidates only, tested the same way; the walk-forward model stage follows when a model
-   clearly beats the random-walk number.
-5. **Book stage `book_1s`** and **pair stage `pair_1m`**, alongside the above.
+   no model stage is stored. Choose between a candidate-only book test for the barrier
+   forecast and a take-or-skip portfolio test for the trading decision. The
+   [research decision](#next-research-decision) specifies the controls for each.
+5. **Book and pair stages.** Budget permanent storage after a candidate-level experiment
+   demonstrates incremental value for the selected target.
 6. **Final model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a
    final holdout of the newest data, evaluated once.

@@ -119,7 +119,9 @@ def test_walk_forward_comparison_counts_what_it_leaves_out_and_finds_a_real_sign
     assert not report["skipped_folds"]
     result = report["results"]["all"]
     assert set(report["results"]) == {"all", "GC", "SI"}
-    assert result["rows"] == result["sessions"] or result["sessions"] <= 246  # two products' days
+    assert result["trade_dates"] * 2 == result["sessions"]
+    assert report["results"]["GC"]["sessions"] == report["results"]["GC"]["trade_dates"]
+    assert result["log_loss_gain"]["logistic_over_displacement"]["mean"] > 0.1
     for model in ("logistic", "boosted"):
         assert result[model]["roc_auc"] > 0.75 and result[model]["log_loss"] < 0.6
     assert 0.49 < result["prior"]["roc_auc"] < 0.51 or result["prior"]["roc_auc"] == 0.5
@@ -137,8 +139,18 @@ def test_walk_forward_comparison_counts_what_it_leaves_out_and_finds_a_real_sign
     assert report["rows_scored"] < len(tested["data"]) - kept.sum()
 
 
-def test_input_sets_are_compared_on_the_same_rows_and_an_informative_set_shows_a_gain():
+def test_input_sets_are_compared_on_the_same_rows_and_an_informative_set_shows_a_gain(monkeypatch):
     tested = frame()
+    # Both report paths must resample calendar dates shared by GC and SI. Product-session
+    # IDs split the pair and would pass the individual-product assertions below unnoticed.
+    test_dates = np.unique(tested["data"][:, 1])
+    interval = benchmark.interval
+
+    def paired_interval(delta, groups, rng):
+        assert np.isin(groups, test_dates).all()
+        return interval(delta, groups, rng)
+
+    monkeypatch.setattr(benchmark, "interval", paired_interval)
     # the informative column reaches the models only with the last set
     tested["sets"] = {
         "base": [1, 2, 3],
@@ -173,3 +185,13 @@ def test_context_mode_refuses_slow_labels():
     slow = next(v.VARIANT for v in benchmark.STREAMS["slow"]["labels"])
     with pytest.raises(ValueError, match="not fast labels"):
         benchmark.models(["GC"], labels=[slow], context=True)
+
+
+def test_reliability_reports_the_observed_rate_in_each_occupied_probability_band():
+    p = np.array([0.0, 0.09, 0.10, 0.99, 1.0])
+    y = np.array([0, 1, 0, 1, 1])
+    assert benchmark.scores(y, p)["reliability"] == [
+        {"lower": 0.0, "rows": 2, "mean_probability": 0.045, "reversal_rate": 0.5},
+        {"lower": 0.1, "rows": 1, "mean_probability": 0.1, "reversal_rate": 0.0},
+        {"lower": 0.9, "rows": 2, "mean_probability": 0.995, "reversal_rate": 1.0},
+    ]

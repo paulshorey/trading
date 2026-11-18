@@ -1,6 +1,6 @@
 # Handoff
 
-As of November 16, 2026 (after the move from TBBO to MBP-1, the rebuild of GC and SI, and the swing stages of PR D). Start here, then read
+Updated November 18, 2026 after the GC/SI context experiment and benchmark review. Start here, then read
 [AGENTS.md](../../AGENTS.md). The [roadmap](roadmap.md) is the map of what is computed and in
 what order; tasks are tracked in [todo.md](todo.md); this page explains the architecture, the
 decisions behind it, where the work stands, and exactly how to continue.
@@ -22,17 +22,16 @@ decisions behind it, where the work stands, and exactly how to continue.
    models add almost nothing to where price already stands. Inputs from the other scales, the
    hourly window, and the partner product, already stored, do not help either
    ([context results](#context-input-results-november-17-2026)), so no model and no signal
-   stage is stored. **Next, for Paul to decide: test book inputs on the candidates only,
-   without a new table** ([next steps](#next-steps)). The holdout, September 1, 2026 on, is
-   unread: keep it so.
-4. **Alongside:** the book stage `book_1s`
-   ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and paired products
-   ([pair-design.md](pair-design.md): GC + SI first; ES + NQ after NQ is downloaded).
+   stage is stored. A [one-input model](#displacement-baseline-november-18-2026) outperformed
+   both full models on the two primary targets. Choose the next experiment by the decision it supports
+   ([research decision](roadmap.md#next-research-decision)). The pivot benchmark reserves
+   September 1 onward. Earlier [engine checks](#the-move-to-mbp-1-november-15-2026) used September data.
+4. The [book inputs](../research/pivots/2026-11-06-second-scale-and-mbp1.md) can be tested
+   on candidates before allocating a full second-resolution table. GC and SI are the first
+   [pair](pair-design.md).
 5. **Backtests equal storage; keep it so.** A backtest warms each contract for the stored lead
    by default and computes exactly the stored rows from every roll on. A new stage needs no
    extra work for this as long as its warm-up fits the lead.
-
-How to work in this repository:
 
 How to work in this repository:
 
@@ -44,16 +43,9 @@ How to work in this repository:
   (lead counts, thresholds needed for correctness) are decided and reported, not asked.
 - **Paul's view of price data:** windows, not candles. The high and low path matters; open,
   close, and wick shapes are not signals ([principle](feature-pipeline.md#principle-windows-not-candles)).
-- **Git:** the main checkout is shared and branches can switch under you; work in a
-  worktree (`git worktree add ../trading-wt-<name> -b <branch> origin/main`), check the branch
-  before committing, and push with an explicit refspec. DBN files are not in a worktree: link
-  them with `ln -s ~/git/trading/data/databento data/databento`, and make sure
-  `/data/databento` is listed in `$(git rev-parse --git-common-dir)/info/exclude` (a symlink
-  is not matched by `.gitignore`'s directory rule).
-- **Pull requests** are opened ready for review, never as drafts; Codex reviews every push
-  automatically (never mention its handle in a comment). Within 30 minutes, read every
-  finding (`gh api ... --paginate`), fix valid ones, reply on each thread, and resolve it.
-  Paul merges, or authorizes a merge.
+- **Git and review.** Follow the workspace instructions and the shared Git management skill.
+  In a linked worktree, real-data checks need access to the primary checkout's ignored
+  `data/databento/` archive.
 - **Database:** agents apply migrations and run ingest on `trading` without asking, test
   schema changes on throwaway `trading_test_*` databases first, and ask before dropping or
   truncating anything. A branch that applies a migration to `trading` must be merged
@@ -95,7 +87,8 @@ Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
                                         candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1s,
                                         vol_1m (tier 1)
                                         pivot_1s, pivot_1m, pivot_event (tier 2)
-                                        next: pivot_rsi_*, pivot_label (F), model_* and
+                                        pivot_label_1s, pivot_label_1m (outcomes)
+                                        planned: pivot_rsi_*, model_* and
                                         signal_* (E), book_1s, pair_1m
                                       market.continuous_*                  (per product)
                                                   │
@@ -415,7 +408,7 @@ Excluded and counted, per label (in the JSON): session ends (118–310), unknown
 rows with an `*_atr` input above 50 in absolute value (0–13), rows with another NULL input
 (1–5,462), and three or four features NULL by design (`break_up_age_s`, `break_down_age_s`,
 `sweep_delta_ratio`, `reversal_delta_ratio`). The extreme-ATR problem is rare on front
-sessions, as expected. The holdout (September 1 on) has not been read.
+sessions, as expected. This pivot-model comparison ends August 31.
 
 ## Context input results (November 17, 2026)
 
@@ -455,13 +448,39 @@ Each set contains the one before it, and every set is fitted and scored on the s
 
 Rows excluded and features dropped for NULLs are counted per label in the JSON (25 to 83
 features dropped). The inputs
-are not tuned after the result, as the spec says. The holdout has not been read.
+are not tuned after the result, as the spec says. This context comparison ends August 31.
 
 **What this means.** Everything stored today describes trades and the path of price. Seen
 from one second, from the hour, across swing sizes, or across the pair, it does not tell
 which early reversals complete. Structure signals computed from the same swings (PR E's
 sweeps, breaks, and reclaims are already among the `base` inputs) are unlikely to change
 that, so a `signal_*` stage is not built. The untested information is the order book.
+
+## Displacement baseline (November 18, 2026)
+
+`uv run research benchmark models GC SI --labels fast_atr_1_q25 fast_atr_1_q50`
+reproduced the earlier row counts and full-model log losses. On provisional higher
+lows and lower highs, fitting logistic regression to the distance price had already
+reversed from the candidate extreme produced the following walk-forward log losses.
+Lower is better. GC and SI share 87 scored trade dates across May–August.
+
+| Candidate threshold | Scored rows | Displacement only | Logistic, 141 features | Boosted, 141 features |
+| --- | ---: | ---: | ---: | ---: |
+| 25% of the reversal threshold | 108,697 | 0.67475 | 0.67602 | 0.67804 |
+| 50% of the reversal threshold | 68,982 | 0.64570 | 0.64755 | 0.64983 |
+
+The ordering also holds within each product. At the 25% stage, the 95% trade-date
+bootstrap interval for the boosted model's excess loss over displacement was
+0.00266–0.00395. At 50% it was 0.00318–0.00500. At the 25% stage, 63,213 one-input
+forecasts fell in the 40–50% band. Their mean forecast was 44.02% and 44.10% actually
+reached the reversal barrier. This measures calibration for that event and population.
+
+Use displacement as the comparator for the next forecast. A future test of incremental
+book or indicator value should include that same displacement in both arms. For
+profitability, use the separate [portfolio test](roadmap.md#next-research-decision).
+The [audit specification](pivot-label-spec.md#probability-audit-november-18-2026)
+records the development-data exposure and resampling rule. Local JSON reports are in
+`data/runs/research/2026-11-18-displacement/`.
 
 ## PR D results (swings)
 
@@ -939,14 +958,14 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 4. **Context inputs from stored rows: tested November 17, no gain**
    ([results](#context-input-results-november-17-2026)). No signal stage and no model stage
    is stored.
-   **Recommended next, for Paul to decide: book inputs on the candidates only.** Read the
+   **For reversal forecasting, test book inputs on the candidates only.** Read the
    best bid and ask around each provisional candidate from the DBN files (spread, size
    imbalance, quote changes over the last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)),
    freeze the list in the spec first, and add them as a fifth set to
    `research benchmark context`. This needs no new table, so the disk does not block it. If
-   they help, `book_1s` earns its disk; if not, the reversal question as posed has no edge
-   in MBP-1 and the effort moves to a different target (see open question 3).
-5. **Book stage `book_1s`** (tier 0, from book events) and **`pair_1m`** for GC + SI.
+   they help, consider permanent storage. Report the result for the tested inputs, horizon and population.
+   For a take-or-skip decision, prioritize the [after-cost experiment](roadmap.md#next-research-decision).
+5. **Permanent book and pair stages** depend on the chosen experiment and available space.
 6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).

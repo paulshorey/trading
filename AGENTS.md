@@ -84,6 +84,16 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 
 ## Research principles
 
+- Start an ML experiment by specifying the decision row, prediction horizon, eligibility,
+  target, simple baseline and success criterion. Record results for every predeclared variant.
+  Use the development dates in [the pivot spec](docs/project/pivot-label-spec.md) for examples
+  and pivot research. September 1, 2026 onward is reserved for final pivot-model evaluation.
+- A provisional HL/LH is visible at the decision row. Barrier resolution, subsequent
+  confirmed structure and after-cost trade outcomes are different labels. Keep timeouts,
+  unknown observations and session ends identifiable. Any learned probability passed into
+  a later model must come from an earlier purged training fold and carry its model version.
+- Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
+  one portfolio, explicit costs and latency. See [the research plan](docs/project/roadmap.md#next-research-decision).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
 - Report data gaps and unavailable inputs; do not invent observations or order flow.
 - Compute features and decisions using only information available at that time.

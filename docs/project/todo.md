@@ -76,13 +76,16 @@ task live in [handoff: next steps](handoff.md#next-steps).
       product, on the same rows as the base inputs. No set helps
       ([results](handoff.md#context-input-results-november-17-2026)); no signal stage and no
       model stage is stored.
-- [ ] **Book inputs on the candidates, next (for Paul to decide).** Best bid and ask around
+- [ ] **Select the next target.** The [research decision](roadmap.md#next-research-decision)
+      sets out the structure forecast, the reversal benchmark and the executable take-or-skip comparison.
+- [ ] **Book inputs for the reversal target.** Best bid and ask around
       each candidate, read from the DBN files, as a fifth input set; no new table
       ([recommendation](handoff.md#next-steps)).
 - [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk
       baseline, a tuned CUSUM (the frozen one finds 3–7%), and pooled or longer history for
       the slow scales, which have too few candidates to fit.
-- [ ] **Final holdout.** September 1, 2026 on is unread; evaluate one chosen model on it once.
+- [ ] **Final holdout.** Reserve September 1, 2026 onward for one frozen pivot-model evaluation. Record prior
+      engineering exposure when reporting results.
 - [x] **Test backtests on real data at full scale.** November 5: a GC year in 161 s with
       2.6 GB, `research verify` on a GC and an SI week (identical), a 43 MB run in the UI, and
       backtests equal to the stored rows at rolls. Fixed what it found: backtests now warm

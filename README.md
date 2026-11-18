@@ -4,15 +4,19 @@ A developer platform for building, testing, and running short-horizon futures
 strategies and the machine-learning models behind them. It prototypes with CME GC
 (gold) and SI (silver); a year of data for six CME products is on disk.
 
-Strategies read Databento MBP-1: every trade and every change to the best bid and ask. A rolling
+The engine reads Databento MBP-1 trades and best-quote changes. In the baseline strategy, a rolling
 `1h@1m` candle (the last 60 one-minute rows, every minute) sets the direction bias; a
 rolling `1m@1s` candle (the last 60 one-second rows, every second) times entries.
 Windows count rows of scheduled trading time through an index counter on every row,
 never clock time, so closures never break them. A bracket sized in ATRs
 exits within minutes. Every feature is normalized: basis points, ATR multiples,
-ratios, oscillators, or time; never raw prices. The same engine runs backtests (as fast
-as possible) and second-by-second live-style sessions with identical results, so paper
-trading can start before a strategy is final.
+ratios, oscillators, or time. The same engine runs whole-session backtests and
+second-by-second historical rehearsals. A live feed and broker adapter are planned.
+
+The current ML benchmark asks whether an early swing candidate reaches its reversal
+threshold. The proposed trading experiment compares decisions to take or skip provisional
+higher lows and lower highs after execution costs. The [research roadmap](docs/project/roadmap.md#next-research-decision)
+explains how to test the value of the sliding windows and each model layer.
 
 ## Workspace
 
@@ -44,6 +48,7 @@ uv run research backtest apps/backtest-runner/examples/gc-day.json
 uv run research verify apps/backtest-runner/examples/gc-day.json # live path = backtest
 uv run research rehearse apps/backtest-runner/examples/gc-day.json --speed 60
 uv run research ingest plan GC SI    # stored one-second rows; one series per product
+uv run research benchmark models GC SI --labels fast_atr_1_q25 fast_atr_1_q50
 pnpm lint && pnpm test && pnpm build
 ```
 

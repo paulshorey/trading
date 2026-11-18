@@ -2,10 +2,10 @@ import React from "react";
 import type { CatalogProduct, RunSpec } from "@/types";
 
 export const SAMPLE_SPEC: RunSpec = {
-  product: "MGC",
+  product: "GC",
   start: "2026-08-31",
   end: "2026-08-31",
-  contract: "MGCZ6",
+  contract: "GCZ6",
   warmup_sessions: 0,
   strategy: "bias_pullback",
   strategy_params: {
@@ -20,7 +20,7 @@ export const SAMPLE_SPEC: RunSpec = {
   },
   execution: {
     contracts: 1,
-    commission_per_contract: 1.0,
+    commission_per_contract: 2.5,
     feed_latency_ms: 5,
     close_delay_ms: 100,
     order_latency_ms: 50,
@@ -91,20 +91,8 @@ export function RunForm({
         : next.warmup_sessions,
   });
   function selectProduct(root: string) {
-    const p = catalog.find((c) => c.root === root);
-    const last = p?.dates.filter((d) => d.present).at(-1)?.date ?? spec.end;
-    setSpec(
-      withContract(
-        {
-          ...spec,
-          product: root,
-          start: last,
-          end: last,
-          warmup_sessions: null,
-        },
-        null,
-      ),
-    );
+    // Keep the research interval when comparing products.
+    setSpec({ ...spec, product: root, contract: null, warmup_sessions: null });
   }
   return (
     <form onSubmit={onSubmit}>

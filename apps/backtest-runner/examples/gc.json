@@ -1,7 +1,7 @@
 {
   "product": "GC",
-  "start": "2026-09-01",
-  "end": "2026-09-30",
+  "start": "2026-08-03",
+  "end": "2026-08-31",
   "warmup_sessions": 2,
   "strategy": "bias_pullback",
   "strategy_params": {

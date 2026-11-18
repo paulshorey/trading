@@ -200,3 +200,26 @@ a set that does not is reported as it is, and its inputs are not tuned afterward
 
 **Result (November 17, after the runs):** the rule is not met for any set
 ([results](handoff.md#context-input-results-november-17-2026)).
+
+## Probability audit (November 18, 2026)
+
+The November 17 development results are already known. This follow-up is a diagnostic on
+the same data. The two primary fast labels remain `fast_atr_1_q25` and `fast_atr_1_q50`.
+
+- In `benchmark models`, fit a logistic baseline to decision-time displacement alone.
+  Use the same highs/lows, training sample, standardization, folds and scored rows as the
+  full logistic model. Compare both full models with this baseline by paired log loss.
+  This compares alternative forecasts on the same rows. A separate incremental test
+  would give both models the exact displacement and add indicators to just one.
+- Both model commands report reliability in fixed probability bands of width 0.1. Each
+  occupied band shows its count, mean forecast and observed reversal rate. The binary
+  target groups invalidations and timeouts together. Its complement includes both.
+- For pooled log-loss intervals, resample whole trade dates, carrying GC and SI together.
+  Report both product-session and distinct trade-date counts. Point estimates still
+  weight each scored candidate equally. The November 17 intervals used product-sessions
+  as independent draws. These descriptive intervals do not adjust for testing multiple
+  variants or for dependence across dates.
+
+The September 1 cutoff applies to pivot-model selection and benchmarking. Historical
+engineering runs include September execution results. Use the development period for
+examples and parity checks, and record any prior exposure when reporting a final test.

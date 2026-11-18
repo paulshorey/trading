@@ -1,8 +1,8 @@
 {
   "product": "GC",
   "contract": "GCZ6",
-  "start": "2026-09-15",
-  "end": "2026-09-15",
+  "start": "2026-08-31",
+  "end": "2026-08-31",
   "warmup_sessions": 0,
   "strategy": "bias_pullback",
   "strategy_params": {

@@ -37,6 +37,8 @@ backtests and live sessions. The state of each step is in the
 6. **The decision model.** Trained on everything above; its inference makes the backtest
    and live decisions. It is judged by one portfolio's results after costs.
 
+Step 5's pivot-only part (structure and divergence from the swings) is computed before
+step 4 and is an input to it; step 5 runs again after step 4 with its probabilities.
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
 ([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).

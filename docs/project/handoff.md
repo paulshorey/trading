@@ -463,6 +463,12 @@ which early reversals complete. Structure signals computed from the same swings 
 sweeps, breaks, and reclaims are already among the `base` inputs) are unlikely to change
 that, so a `signal_*` stage is not built. The untested information is the order book.
 
+**Withdrawn November 19, 2026.** The last two sentences went further than the experiment:
+it tested the swing rows as they are, not divergences, indicators of indicators, or pivots
+of RSI and CVD, which did not exist. Structure and divergence are in the
+[build order](roadmap.md#build-order)
+([limits of this result](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+
 ## Displacement baseline (November 18, 2026)
 
 `uv run research benchmark models GC SI --labels fast_atr_1_q25 fast_atr_1_q50`

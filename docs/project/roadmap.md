@@ -69,9 +69,10 @@ again with the model's probabilities ([decision 2](#design-decisions-november-19
 ### Layers 3 and 4: predictions that later layers read
 
 Layer 2 confirms a swing only after price has reversed by the full threshold, which is
-late. Layer 3 would estimate the chance of reaching the reversal barrier from the
-current candidate before invalidation or timeout. The remaining probability covers both
-outcomes. The confirmed swing retains its actual confirmation time. A later structure
+late. Layer 3 would estimate, from the current candidate, three probabilities that sum to
+one: the reversal barrier is reached first, the invalidation barrier is reached first, or
+neither is reached within the horizon ([targets](#design-decisions-november-19-2026)). The
+confirmed swing retains its actual confirmation time. A later structure
 model could use this forecast alongside the previous confirmed highs and lows.
 
 A model's output is only a valid input for a later layer if the model could not have seen
@@ -155,8 +156,8 @@ entry, and the slower one sets the bracket and the holding time.
    interval of the difference above zero. The scale and label are named before the run.
 6. **After-cost portfolio replay is the yardstick, not the first model.** The replay of
    would-be bracket trades for every candidate, compared in one portfolio against staying
-   flat, taking every candidate, and a displacement rule, is built once and reused to judge
-   each new layer ([replay rules](#after-cost-replay)). A learned policy counts as better
+   flat, taking every candidate, and the [displacement rule](#after-cost-replay), is built
+   once and reused to judge each new layer ([replay rules](#after-cost-replay)). A learned policy counts as better
    only if its net dollars beat both rules, each difference paired on the same candidates
    with a 95% trade-date bootstrap interval above zero (whole dates are resampled, because
    outcomes overlap and the one-position replay is path-dependent), on neither product
@@ -177,7 +178,7 @@ entry, and the slower one sets the bracket and the holding time.
 ## Build order
 
 1. **After-cost replay** on the stored fast candidates: gross and net R of take-all and the
-   displacement rule, reported before anything is fitted. `labels.py` already simulates
+   displacement rule, reported before any model with other inputs is fitted. `labels.py` already simulates
    would-be trades, but sizes the bracket with the `1m@1s` ATR and holds for at most three
    minutes (`strategies.Bracket`). The replay sizes the bracket with the ATR of the
    candidate's frozen slower-timeframe row and a holding time on that scale; the fast
@@ -249,6 +250,10 @@ before reading outcomes.
     under both; no total leaves a held trade out.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
+- **The displacement rule** is a policy with one input. For each scored block, fit the
+  value of attempting on displacement alone (a linear fit, one coefficient and an
+  intercept) on the purged training folds, and take a candidate when its predicted value
+  is above zero. Nothing is chosen by hand, and its side is the candidate's own.
 - Replay each policy with the same capital, position limit, and cooldown. Report net
   dollars, drawdown, fills, and opportunities skipped while occupied, by month and product,
   and again with longer order latency and one more tick of adverse execution.

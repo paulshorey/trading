@@ -201,6 +201,16 @@ a set that does not is reported as it is, and its inputs are not tuned afterward
 **Result (November 17, after the runs):** the rule is not met for any set
 ([results](handoff.md#context-input-results-november-17-2026)).
 
+## Partner swing inputs (changed November 19, 2026)
+
+The `pair` set read the partner product's swing row of the label's scale at the candidate's
+own second. Fast swing rows are now stored at each product's own decision rows, event rows,
+and minute ends ([rule](ingestion.md#fast-swing-rows-are-stored-where-they-are-read)), so
+`research benchmark context` reads the partner's swing row at the last second of its latest
+completed minute, as it reads the slow scales. The partner's `candle_1m_1s` and `vol_1s`
+rows are still read at the same second. The November 17 result used the same-second rows and
+is not rerun; a rerun would differ in this one input.
+
 ## Probability audit (November 18, 2026)
 
 The November 17 development results are already known. This follow-up is a diagnostic on

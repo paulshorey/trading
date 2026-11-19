@@ -54,7 +54,7 @@ from strategy_core import warmup
 from strategy_core.execution import ExecutionConfig
 from strategy_core.features import FeatureConfig
 from strategy_core.market import NS, PRODUCTS, Product
-from strategy_core.pipeline import STAGES, Pipeline
+from strategy_core.pipeline import SPARSE, SPARSE_LABELS, STAGES, STORED_ROWS, Pipeline, stored_rows
 from strategy_core.stages import StageContext
 from strategy_core.state import from_bytes, to_bytes
 
@@ -148,7 +148,9 @@ def identities(product: Product, calendar_name: str) -> dict[str, dict]:
                 "columns": [f"{c.name} {c.sql}" for c in cls.COLUMNS],
                 "packages": {p: version(p) for p in STAGE_PACKAGES},
                 "inputs": {n: out["source" if n == "market" else n]["sha256"] for n in cls.INPUTS},
-            },
+            }
+            # which of its rows are stored: a changed rule rebuilds the stage
+            | ({"stored_rows": STORED_ROWS} if cls.NAME in SPARSE else {}),
         )
     return out
 
@@ -791,6 +793,8 @@ def build_contract(
             _, write, _ = session_state(s.trade_date, stored, builders, {s.trade_date: files})
             source_current = stored.source.get(s.trade_date) == (builders["source"], files)
             dirty = set(names) if not source_current else downstream(dirty | set(write))
+            if dirty & SPARSE_LABELS:  # label rows are among the rows the sparse stages keep
+                dirty = downstream(dirty | SPARSE)
             base = rows.tables["bar_1s"].values
             report = {
                 "aggregation": asdict(rows.report),
@@ -837,7 +841,7 @@ def build_contract(
                 for name in written:
                     table, variant = store.STAGE_TABLE[name], variants[name]
                     store.copy_table(
-                        conn, table, rows.tables[name], cid, variant_id=variant or None
+                        conn, table, stored_rows(name, rows), cid, variant_id=variant or None
                     )
                     if name in store.STAGE_EVENTS:  # its events, replaced with its rows
                         store.copy_table(

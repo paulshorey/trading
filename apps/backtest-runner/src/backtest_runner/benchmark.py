@@ -534,7 +534,8 @@ def context_sources(scale, ids) -> list[tuple]:
     out += [("scales", "", s.NAME, slow, ids[slow, s.VARIANT], "minute") for s in SLOW_SCALES]
     out += [("hour", "", t, t, None, "minute") for t in CONTEXT_HOUR]
     out += [("pair", "partner:", t, t, None, "partner") for t in STREAMS["fast"]["features"]]
-    out.append(("pair", "partner:", scale.NAME, fast, ids[fast, scale.VARIANT], "partner"))
+    # the partner's swing rows are stored at its own decision rows and at minute ends only
+    out.append(("pair", "partner:", scale.NAME, fast, ids[fast, scale.VARIANT], "partner_minute"))
     return out
 
 
@@ -548,6 +549,10 @@ CONTEXT_JOIN = {
     # the same second of the partner's front contract; the calendars are identical
     "partner": "{a}.contract_id = pf.contract_id AND {a}.slot_ordinal = l.slot_ordinal "
     "AND {a}.end_ns = l.end_ns",
+    # the last second of the latest completed minute of the partner's front contract
+    "partner_minute": "{a}.contract_id = pf.contract_id "
+    "AND {a}.slot_ordinal = (l.slot_ordinal / 60) * 60 "
+    "AND {a}.end_ns <= l.end_ns AND {a}.end_ns > l.end_ns - {reach}",
 }
 
 
@@ -634,8 +639,8 @@ def load_candidates(conn, products, label, stream, start, end, ids, context=Fals
              AND l.outcome = 0"""
     ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
     needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id), (label.TABLE, label_id)]
-    own = [(t, v or 0) for _, _, _, t, v, how in extra if how != "partner"]
-    partner = [(t, v or 0) for _, _, _, t, v, how in extra if how == "partner"]
+    own = [(t, v or 0) for _, _, _, t, v, how in extra if not how.startswith("partner")]
+    partner = [(t, v or 0) for _, _, _, t, v, how in extra if how.startswith("partner")]
     parts, sessions, dates, resolved = [], {}, [], 0
     for k, product in enumerate(products):
         found = front_sessions(conn, product, start, end, [*needed, *own])

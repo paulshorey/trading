@@ -101,13 +101,14 @@ has already moved. That result is real, and narrow:
 - It tested one question (will a candidate reach its confirmation threshold) on the fast
   scales, where the threshold is about 5 basis points for GC. The slow scales had too few
   candidates in one year to fit.
-- Its inputs were the raw rows of steps 1 to 3 for price. The inputs the process names as
-  the important ones, divergences and indicators of indicators, did not exist, and the book
-  was not read.
+- Its inputs were the 138 to 147 stored features of the decision row: steps 1 to 3 for
+  price and the swing structure of step 5 (higher and lower highs and lows, breaches). The
+  inputs the process names as the important ones, divergences and indicators of indicators,
+  did not exist, and the book was not read.
 - It says nothing about continuation, which has no label yet.
 
-So it does not show that reversals cannot be predicted. It shows that raw price features do
-not predict a 5 basis point barrier. The conclusion drawn on November 17, that structure
+So it does not show that reversals cannot be predicted. It shows that the stored price and
+swing features add nothing to displacement for a 5 basis point barrier. The conclusion drawn on November 17, that structure
 signals were not worth building, is withdrawn.
 
 **Costs decide which timeframe can pay.** Crossing the spread costs 15% (GC) to 23% (SI) of
@@ -132,6 +133,10 @@ entry, and the slower one sets the bracket and the holding time.
    - *direction*: from the current price, the upper barrier is reached before the lower one,
      at equal distance. A random walk scores exactly one half here, so any skill is visible
      without a displacement baseline.
+
+   Each variant states its horizon in rows and keeps timeouts, session ends and unknowns as
+   outcomes of their own, as the [turn label does](pivot-label-spec.md); none scans past a
+   session end or reads rows without data coverage.
 4. **Models are trained on a thinned sample and score every row.** Adjacent rows share 59 of
    60 members; training on all of them adds cost, not information. Train on candidates plus
    rows drawn at a spacing of about one window, walk-forward with a purge
@@ -168,12 +173,16 @@ entry, and the slower one sets the bracket and the holding time.
 3. **Indicators of indicators** (step 3): RSI and EMA of the RSI series, and RSI, EMA and
    slope of the window's net flow, per phase, as one new tier-1 stage per timeframe.
 4. **Swings of RSI and of CVD** with the existing detector, which already measures additive
-   series; thresholds above the measured row-to-row noise.
+   series; thresholds above the measured row-to-row noise. CVD comes from a source that does
+   not reset at the session open (a rolling net flow, not `session_cvd`), or the detector's
+   state ends at each reset, so a reopen is never read as a move.
 5. **Structure and divergence** (`signal_*`, tier 3): price against RSI pivots, price against
    flow pivots, higher-low and lower-high sequences, agreement across timeframes.
 6. **The three targets and their model stages** (decisions 3 to 5), first for price, then for
    RSI and CVD. Each new input set is tested through the benchmark and the replay.
-7. **The book stage** (`book_1s`) as a further input set, tested the same way.
+7. **The book stage** (`book_1s`) as a further input set, tested the same way. It follows
+   the model stages on purpose: each input set is benchmarked against the sets before it, so
+   no earlier result is rerun, and its test on candidates needs no table.
 8. **The middle timeframe** (decision 8), then more products and history as disk and budget allow.
 9. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
 

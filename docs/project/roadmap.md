@@ -72,8 +72,9 @@ Layer 2 confirms a swing only after price has reversed by the full threshold, wh
 late. Layer 3 would estimate, from the current candidate, three probabilities that sum to
 one: the reversal barrier is reached first, the invalidation barrier is reached first, or
 neither is reached within the horizon ([targets](#design-decisions-november-19-2026)).
-Candidates whose outcome is a session end or unknown are not a fourth class: they are
-left out of fitting and scoring, and counted. The confirmed swing retains its actual confirmation time. A later structure
+A candidate whose horizon does not fit in its session, or whose follow-up has no data
+coverage, is not a fourth class: it is left out and counted
+([decision 3](#design-decisions-november-19-2026)). The confirmed swing retains its actual confirmation time. A later structure
 model could use this forecast alongside the previous confirmed highs and lows.
 
 A model's output is only a valid input for a later layer if the model could not have seen
@@ -141,9 +142,13 @@ entry, and the slower one sets the bracket and the holding time.
    Each variant states its horizon in rows and keeps timeouts, session ends and unknowns as
    outcomes of their own, as the [turn label does](pivot-label-spec.md); none scans past a
    session end or reads rows without data coverage. A timeout is a class the model
-   predicts. A session end or an unknown outcome is not: such a row is left out of fitting
-   and scoring and counted beside every result, as the benchmark does today, and is never
-   filed under timeout.
+   predicts. A session end is not, and it is removed by eligibility, never by outcome: a
+   row is eligible only if its whole horizon fits before the session's last row, whatever
+   happened after it. Dropping only the rows that ended at the close would keep the
+   near-close rows that hit a barrier and bias the timeout rate. (The first benchmark
+   dropped them by outcome, 118 to 310 rows per label; new targets do not.) A row whose
+   follow-up has no data coverage is left out as unknown. Both are counted beside every
+   result, and neither is filed under timeout.
 4. **A model is trained and scored only where its target is defined.** *Turn* is defined at
    a candidate's decision row, *continue* at a pivot's confirmation row, and *direction* at
    any row. *Direction* is scored at every row; because adjacent rows share 59 of 60

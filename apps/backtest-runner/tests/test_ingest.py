@@ -13,7 +13,7 @@ from backtest_runner.source import DayCache, HistoricalSource, next_front
 from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
-from strategy_core.pipeline import Pipeline
+from strategy_core.pipeline import SPARSE, Pipeline, stored_ordinals, stored_rows
 from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
 from strategy_core.stage_candle_1h_1m import HourCandleStage
@@ -667,9 +667,15 @@ def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world
                 + " ORDER BY end_ns",
                 (cid[0], int(ends[0]), int(ends[-1])),
             ).fetchall()
-            assert len(stored) == len(ends), stage
-            for j, (name, values) in enumerate(table.values.items()):
-                null = table.nulls.get(name, np.zeros(len(values), bool))
+            names = list(table.values)
+            kept = np.array([r[names.index("end_ns")] for r in stored], np.int64)
+            # a sparse stage stores some of its rows (a backtest computes no labels, so it
+            # cannot name them): what is stored must be rows the backtest computed
+            at = np.isin(ends, kept) if stage in SPARSE else np.ones(len(ends), bool)
+            assert at.sum() == len(stored) and (len(stored) >= 1380 or not len(ends)), stage
+            for j, (name, every) in enumerate(table.values.items()):
+                values = every[at]
+                null = table.nulls.get(name, np.zeros(len(every), bool))[at]
                 if values.dtype.kind == "f":
                     null = null | np.isnan(values)
                 want_null = np.array([r[j] is None for r in stored])
@@ -1154,24 +1160,24 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
         warm = {}
         for s in scales:
             table, variant = store.STAGE_TABLE[s.NAME], variants[s.NAME]
-            per = 82_800 if table == "pivot_1s" else 1380
-            assert prints[table, variant][0] == 4 * per, s.NAME  # two contracts, two sessions
             series = conn.execute(
                 f"SELECT count(*), count(DISTINCT slot_ordinal) FROM market.continuous_{table} "
                 "WHERE product = 'GC' AND variant_id = %s",
                 (variant,),
             ).fetchone()
-            assert series == (3 * per, 3 * per), s.NAME
-            # stored rows equal the in-memory build (every 53rd second of the fast scales)
-            every = 53 if table == "pivot_1s" else 1
+            if table == "pivot_1m":  # every minute: two contracts, two sessions
+                assert prints[table, variant][0] == 4 * 1380, s.NAME
+                assert series == (3 * 1380, 3 * 1380), s.NAME
+            else:  # the fast scales store the seconds something reads, far fewer than all
+                assert 3 * 1380 <= series[0] == series[1] < 3 * 82_800 // 4, s.NAME
+            # stored rows equal the in-memory build, at the rows storage keeps
             got = conn.execute(
                 f"SELECT {', '.join(columns)} FROM market.{table} WHERE contract_id = %s "
-                "AND variant_id = %s AND slot_ordinal %% %s = 0 ORDER BY slot_ordinal",
-                (ids["GCG7"], variant, every),
+                "AND variant_id = %s ORDER BY slot_ordinal",
+                (ids["GCG7"], variant),
             ).fetchall()
             tables = [p.tables[s.NAME] for p in expected]
-            ordinal = np.concatenate([t.values["slot_ordinal"] for t in tables])
-            assert_stored(got, columns, tables, ordinal % every == 0)
+            assert_stored(got, columns, [stored_rows(s.NAME, p) for p in expected])
             # ... and so do its events, each carrying the scale's builder
             events = [p.products["events"][s.NAME] for p in expected]
             got = conn.execute(
@@ -1195,6 +1201,27 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
             assert [f[0] for f in flags] == want, s.NAME
             warm[s.NAME] = want
         assert warm["pivot_1s:fast_atr_0p5"] == [False, True]  # a first session starts cold
+        # Every fast scale keeps the same seconds: each minute's last, every row of a fast
+        # label, and every row with a fast event. So a candidate finds every scale at its row.
+        fast = [variants[s.NAME] for s in FAST_SCALES]
+        keys = conn.execute(
+            "SELECT variant_id, md5(string_agg(contract_id || ':' || slot_ordinal, ',' "
+            "ORDER BY contract_id, slot_ordinal)) FROM market.pivot_1s GROUP BY 1"
+        ).fetchall()
+        assert sorted(v for v, _ in keys) == sorted(fast) and len({k for _, k in keys}) == 1
+        missing = """SELECT count(*) FROM {} x WHERE NOT EXISTS (SELECT 1 FROM market.pivot_1s p
+                     WHERE p.contract_id = x.contract_id AND p.slot_ordinal = x.slot_ordinal
+                       AND p.end_ns = x.end_ns AND p.variant_id = %s)"""
+        for source in (
+            "market.pivot_label_1s",
+            "(SELECT * FROM market.pivot_event WHERE variant_id = ANY(%s))",
+            "(SELECT * FROM market.candle_1m_1s WHERE slot_ordinal %% 60 = 0)",
+        ):
+            args = (fast, fast[0]) if "ANY" in source else (fast[0],)
+            assert conn.execute(missing.format(source), args).fetchone()[0] == 0, source
+        assert conn.execute("SELECT count(*) FROM market.pivot_label_1s").fetchone()[0] > 100
+        kept = stored_ordinals(expected[1])
+        assert len(kept) and (kept % 60 != 0).any()  # not only minute ends
         assert prints["pivot_event", variants["pivot_1s:fast_atr_0p5"]][0] > 2000
         assert prints["pivot_event", variants["pivot_1m:slow_atr_0p5"]][0] > 10
         reads = conn.execute(
@@ -1222,9 +1249,11 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     assert {t for r in result["results"] for t in r["tables"]} == {
         "pivot_1s", "pivot_event", "pivot_label_1s",
     }  # fmt: skip
-    rewritten = {("pivot_1s", variants[stale])} | {
-        ("pivot_label_1s", labels[s.NAME]) for s in FAST_LABELS if stale == s.SCALE.NAME
-    }  # the scale and the two label variants that read it
+    # The scale and its labels are rebuilt; the label rows are among the seconds every fast
+    # scale keeps, so the other fast scales and their labels are written again with them.
+    rewritten = {("pivot_1s", variants[s.NAME]) for s in FAST_SCALES} | {
+        ("pivot_label_1s", labels[s.NAME]) for s in FAST_LABELS
+    }
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
@@ -1287,7 +1316,8 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
         active = (*scales, *SLOW_LABELS, *FAST_LABELS)
         assert retired == {"fast_old": True} | {s.VARIANT: False for s in active}
         count = "SELECT count(*) FROM market.{} WHERE variant_id = %s"
-        assert conn.execute(count.format("pivot_1s"), (old,)).fetchone()[0] == 4 * 82_800
+        copied = conn.execute(count.format("pivot_1s"), (kept,)).fetchone()[0]
+        assert conn.execute(count.format("pivot_1s"), (old,)).fetchone()[0] == copied > 4 * 1380
         assert conn.execute(count.format("continuous_pivot_1s"), (old,)).fetchone()[0] == 0
         assert conn.execute(count.format("continuous_pivot_1s"), (kept,)).fetchone()[0] > 0
         # A registered name never changes meaning: other parameters under it are refused, so

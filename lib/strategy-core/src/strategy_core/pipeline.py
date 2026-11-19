@@ -13,6 +13,11 @@ backtests, rehearsals, and stored rows compute every feature with the same code.
 
 This module only composes stages; it computes nothing itself, so it is not part of any stage's
 identity. Tests prove that stored rows equal its output in any chunking.
+
+It also names which rows of a stage are stored (`stored`). Most stages store every row. The
+fast swing scales are computed for every second but stored only where something reads them;
+the rule's name (`STORED_ROWS`) is part of their builder identity, so changing the rule
+rebuilds them.
 """
 
 from dataclasses import dataclass, field
@@ -57,6 +62,13 @@ BY_NAME = {s.NAME: s for s in STAGES}
 FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
 
 
+# Stages computed for every row but stored only at `stored_ordinals` (docs/project/ingestion.md).
+SPARSE = frozenset(s.NAME for s in FAST_SCALES)
+SPARSE_LABELS = frozenset(s.NAME for s in FAST_LABELS)  # their rows are the decision rows
+STORED_ROWS = "label_rows+events+minute_ends:v1"
+MINUTE_ROWS = 60  # minute m ends with second 60m
+
+
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
     """Every stage reads only the source or stages before it, of no higher tier, and never a
     label stage."""
@@ -84,6 +96,30 @@ class PipelineRows:
 
     def __len__(self) -> int:
         return len(next(iter(self.tables.values())))
+
+
+def stored_ordinals(rows: PipelineRows) -> np.ndarray:
+    """The seconds of this chunk at which the sparse stages keep a row, besides each minute's
+    last second: every row of a fast label (a candidate's decision row, or the confirmation row
+    of a swing that never had one) and every row in which a fast scale emitted an event. All
+    sparse stages keep the same seconds, so any scale can be joined to any other there."""
+    parts = [rows.tables[name].values["slot_ordinal"] for name in sorted(SPARSE_LABELS)]
+    parts += [rows.products["events"][name].values["slot_ordinal"] for name in sorted(SPARSE)]
+    return np.unique(np.concatenate(parts).astype(np.int64))
+
+
+def stored_rows(name: str, rows: PipelineRows) -> Table:
+    """The rows of stage `name` that storage keeps: all of them, or for a sparse stage those at
+    `stored_ordinals` and at each minute's last second. Values are never changed."""
+    table = rows.tables[name]
+    if name not in SPARSE:
+        return table
+    ordinal = table.values["slot_ordinal"]
+    keep = (ordinal % MINUTE_ROWS == 0) | np.isin(ordinal, stored_ordinals(rows))
+    return Table(
+        {k: v[keep] for k, v in table.values.items()},
+        {k: v[keep] for k, v in table.nulls.items()},
+    )
 
 
 class Pipeline:

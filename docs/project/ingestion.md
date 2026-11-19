@@ -35,7 +35,7 @@ stage has its own table, version, and per-session checkpoint:
 | `market.stats_1h_1m` (tier 1)  | minute `m`                      | 16 statistics of the same window: realized volatility, minute-return moments, path, session levels, price-flow correlation |
 | `market.vol_1s` (tier 1)       | second `o`                      | 28 volatility features of the `1m@1s` window: as `vol_1m`, plus realized volatility from its one-second returns            |
 | `market.vol_1m` (tier 1)       | minute `m`                      | 26 volatility features of the same window: ATR horizons, bullish/bearish and adverse ATR, extremes, time-of-day, daily ATR |
-| `market.pivot_1s` (tier 2)     | second `o` and fast scale       | 30 swing features per scale (0.5, 1, 2 × the `1m@1s` ATR): the open leg, the latest confirmed high and low, trend          |
+| `market.pivot_1s` (tier 2)     | stored second `o` and fast scale | 30 swing features per scale (0.5, 1, 2 × the `1m@1s` ATR): the open leg, the latest confirmed high and low, trend ([which seconds](#fast-swing-rows-are-stored-where-they-are-read)) |
 | `market.pivot_1m` (tier 2)     | minute `m` and slow scale       | The same 30 features per scale (0.5, 1, 2 × the `1h@1m` ATR), published at each minute's end                               |
 | `market.pivot_event`           | swing event                     | Confirmed highs and lows, breaches, and reclaims of every scale, with the row of the trade that produced them              |
 
@@ -57,6 +57,42 @@ with its rows, session by session, and carry the builder that wrote them. A scal
 are fixed under its name (a changed scale needs a new name), and a scale no stage defines any
 more is marked retired and left out of the continuous views, never deleted by the planner
 ([what is stored](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
+
+### Fast swing rows are stored where they are read
+
+Decided November 19, 2026. The fast swing scales are computed for every second, in ingestion
+as in backtests and live sessions, but `market.pivot_1s` stores a row only for:
+
+- each minute's last second (`slot_ordinal % 60 = 0`);
+- every row of a fast label: a candidate's decision row, or the confirmation row of a swing
+  that never had a candidate;
+- every second in which a fast scale emitted an event.
+
+All three scales keep the same seconds, so a candidate finds every scale at its own row.
+Any other second is recomputed by the engine from the DBN files; `market.pivot_event` still
+holds every confirmed swing, breach, and reclaim.
+
+Applied to `trading` on November 19, 2026: `TRUNCATE market.pivot_1s`, then
+`research ingest run GC SI --rebuild --workers 8` (run 4: the three fast scales, their
+events, and their six label variants for 12 contracts and 858 contract-sessions, in
+5 min 21 s). Each scale now holds 4,762,271 rows, 6.7% of the 70,731,900 seconds, and the
+table takes 4.5 GB where it took 64 GB. The database went from 169 GB to 110 GB. The label
+rows (5,029,757) and events (2,403,082) are the same counts as before; no label row, fast
+event row, or minute end lacks a swing row; the three scales hold one key set; and a fresh
+`ingest plan GC SI` reports every contract `current`
+(`~/ingest-gc-si-sparse.log` and `.json`).
+
+The rule is `pipeline.stored_rows`, and its name (`pipeline.STORED_ROWS`) is part of each
+fast scale's builder identity: changing it makes them `stale`. Because label rows are among
+the kept seconds, ingestion writes the fast scales again whenever it writes a fast label,
+and their labels with them, in the same transaction per session. A scale's builder
+therefore identifies its values, and the kept seconds follow from that builder together
+with the fast labels' builders of the same session, all recorded in `market.stage_slice`.
+The label builders are not folded into the scale's identity: a label's identity already
+contains its scale's, and a new label variant would then make every fast scale `stale`
+where today it is simply added. A stage that needs swing state at other seconds must either
+read it in memory, as stages do, or extend the rule. The slow scales (`pivot_1m`) store
+every minute.
 
 Rows are stored per contract. Each product also reads as **one permanent series**,
 `product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,

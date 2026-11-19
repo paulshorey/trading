@@ -200,8 +200,12 @@ entry, and the slower one sets the bracket and the holding time.
 8. **The book stage** (`book_1s`), if item 3 showed the book adds information, so that
    stored model stages are trained once with it.
 9. **Stored model stages** for the targets and input sets that passed decision 5, then the
-   second structure pass on their probabilities.
-10. **The middle timeframe** (decision 8), then more products and history as disk and budget allow.
+   second structure pass on their probabilities. On the one year held today, only the scales
+   it can fit (decision 9) are stored; the slow scales, and any model that feeds another,
+   wait for the history of item 10.
+10. **More history** (decision 9), which unlocks the slow-scale and chained model stages
+    deferred in item 9; then the middle timeframe (decision 8) and more products, as disk
+    and budget allow.
 11. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
 
 ### After-cost replay

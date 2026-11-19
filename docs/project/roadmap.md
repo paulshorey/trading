@@ -242,10 +242,11 @@ before reading outcomes.
   the path:
   - as a training example it stands alone, so both of its values are NULL and it is left out;
   - in the portfolio replay the position was held and blocked other entries, so the trade
-    stays in the ledger at the fallback price, flagged. Each policy's total is reported
-    with the count and the dollars of its flagged trades, and a second time with every
-    flagged exit charged one further stop distance. A policy beats a rule only if it does
-    so under both totals; no total leaves a held trade out.
+    stays in the ledger at the fallback price, flagged. Net dollars and drawdown are each
+    reported twice, with the count and the dollars of the flagged trades beside them: at
+    the fallback price, and with every flagged exit charged, on top of its fallback result,
+    one further stop distance of its own bracket. A policy beats a rule only if it does so
+    under both; no total leaves a held trade out.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
 - Replay each policy with the same capital, position limit, and cooldown. Report net

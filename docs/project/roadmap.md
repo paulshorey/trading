@@ -222,11 +222,13 @@ before reading outcomes.
   amount, subtracted after converting R to dollars; folding it into R would make its size
   depend on each candidate's risk.
 - Two values are kept apart for every candidate, with a state that says which case it is:
-  - the **trade result** (R, dollars): NULL unless a trade closed. Win rate, average R, and
-    every other trade statistic read only this;
+  - the **trade result** (R, dollars): NULL unless a trade closed at prices the book showed.
+    Win rate, average R, and every other trade statistic read only this;
   - the **value of attempting** the entry, the take-or-skip training target and what the
     portfolio comparison adds up: the trade result when a trade closed, zero when it is
-    known that no trade happened, and NULL when the outcome is unknown.
+    known that no trade happened, and NULL when the outcome is unknown. Unknown covers an
+    entry that met no usable book, follow-up cut off by the end of the data, and an exit
+    priced without a book.
 
   The simulator cancels a market entry in two cases (`Simulator.fill`), which `labels.py`
   reports together as `unfilled` today and the replay must separate. It arrived at or after
@@ -235,10 +237,9 @@ before reading outcomes.
   unknown (`entry_no_book`), excluded from training and from the comparison. A limit entry
   the market never reached is a known non-trade. Report the count of each state beside
   every result, so zeros can never hide how many entries did not trade.
-- Exclude and count censored follow-up. An exit priced without a book (`no_book`) uses a
-  fallback price, not an executable one: count it, leave it out of training and of the policy
-  comparison, and report each policy's results with those exits excluded and, as a bound,
-  with them at the fallback price.
+- An exit priced without a book (`no_book`) used a fallback price, not an executable one, so
+  both of its values are NULL. As a bound only, report each policy again with those exits
+  at the fallback price.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
 - Replay each policy with the same capital, position limit, and cooldown. Report net

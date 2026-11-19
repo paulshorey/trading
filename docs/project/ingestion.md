@@ -68,10 +68,19 @@ as in backtests and live sessions, but `market.pivot_1s` stores a row only for:
   that never had a candidate;
 - every second in which a fast scale emitted an event.
 
-All three scales keep the same seconds, so a candidate finds every scale at its own row. A
-pilot (GCZ6, ten sessions) kept 11% of the rows. Any other second is recomputed by the
-engine from the DBN files; `market.pivot_event` still holds every confirmed swing, breach,
-and reclaim. Stored every second, the three scales took 64 GB for GC and SI.
+All three scales keep the same seconds, so a candidate finds every scale at its own row.
+Any other second is recomputed by the engine from the DBN files; `market.pivot_event` still
+holds every confirmed swing, breach, and reclaim.
+
+Applied to `trading` on November 19, 2026: `TRUNCATE market.pivot_1s`, then
+`research ingest run GC SI --rebuild --workers 8` (run 4: the three fast scales, their
+events, and their six label variants for 12 contracts and 858 contract-sessions, in
+5 min 21 s). Each scale now holds 4,762,271 rows, 6.7% of the 70,731,900 seconds, and the
+table takes 4.5 GB where it took 64 GB. The database went from 169 GB to 110 GB. The label
+rows (5,029,757) and events (2,403,082) are the same counts as before; no label row, fast
+event row, or minute end lacks a swing row; the three scales hold one key set; and a fresh
+`ingest plan GC SI` reports every contract `current`
+(`~/ingest-gc-si-sparse.log` and `.json`).
 
 The rule is `pipeline.stored_rows`, and its name (`pipeline.STORED_ROWS`) is part of each
 fast scale's builder identity: changing it makes them `stale`. Because label rows are among

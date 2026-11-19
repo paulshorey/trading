@@ -1,11 +1,18 @@
 # Handoff
 
-Updated November 18, 2026 after the GC/SI context experiment and benchmark review. Start here, then read
+Updated November 19, 2026 after a design review against the project goal. Start here, then read
 [AGENTS.md](../../AGENTS.md). The [roadmap](roadmap.md) is the map of what is computed and in
 what order; tasks are tracked in [todo.md](todo.md); this page explains the architecture, the
 decisions behind it, where the work stands, and exactly how to continue.
 
 ## Start here (next session)
+
+**Read first:** the [goal and the six-step process](../../AGENTS.md#goal), then the roadmap's
+[state of each step](roadmap.md#the-process-and-where-it-stands),
+[design decisions](roadmap.md#design-decisions-november-19-2026) and
+[build order](roadmap.md#build-order). Steps 1 and 2 are built and verified. Steps 3 to 6 are
+the work: the next task is the [after-cost replay](roadmap.md#after-cost-replay), then the
+storage change, which waits for Paul's agreement to drop the dense `pivot_1s` rows.
 
 1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, the seven stages of
    layers 0 and 1 and the six swing scales of layer 2, every contract `current`
@@ -23,11 +30,11 @@ decisions behind it, where the work stands, and exactly how to continue.
    hourly window, and the partner product, already stored, do not help either
    ([context results](#context-input-results-november-17-2026)), so no model and no signal
    stage is stored. A [one-input model](#displacement-baseline-november-18-2026) outperformed
-   both full models on the two primary targets. Choose the next experiment by the decision it supports
-   ([research decision](roadmap.md#next-research-decision)). The pivot benchmark reserves
+   both full models on the two primary targets. These results are narrower than they look
+   ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)). The pivot benchmark reserves
    September 1 onward. Earlier [engine checks](#the-move-to-mbp-1-november-15-2026) used September data.
-4. The [book inputs](../research/pivots/2026-11-06-second-scale-and-mbp1.md) can be tested
-   on candidates before allocating a full second-resolution table. GC and SI are the first
+4. The [book inputs](../research/pivots/2026-11-06-second-scale-and-mbp1.md) are one input
+   set among several in the build order, tested on candidates before any table is allocated. GC and SI are the first
    [pair](pair-design.md).
 5. **Backtests equal storage; keep it so.** A backtest warms each contract for the stored lead
    by default and computes exactly the stored rows from every roll on. A new stage needs no
@@ -477,7 +484,7 @@ reached the reversal barrier. This measures calibration for that event and popul
 
 Use displacement as the comparator for the next forecast. A future test of incremental
 book or indicator value should include that same displacement in both arms. For
-profitability, use the separate [portfolio test](roadmap.md#next-research-decision).
+profitability, use the separate [portfolio replay](roadmap.md#after-cost-replay).
 The [audit specification](pivot-label-spec.md#probability-audit-november-18-2026)
 records the development-data exposure and resampling rule. Local JSON reports are in
 `data/runs/research/2026-11-18-displacement/`.
@@ -958,14 +965,12 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 4. **Context inputs from stored rows: tested November 17, no gain**
    ([results](#context-input-results-november-17-2026)). No signal stage and no model stage
    is stored.
-   **For reversal forecasting, test book inputs on the candidates only.** Read the
-   best bid and ask around each provisional candidate from the DBN files (spread, size
-   imbalance, quote changes over the last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)),
-   freeze the list in the spec first, and add them as a fifth set to
-   `research benchmark context`. This needs no new table, so the disk does not block it. If
-   they help, consider permanent storage. Report the result for the tested inputs, horizon and population.
-   For a take-or-skip decision, prioritize the [after-cost experiment](roadmap.md#next-research-decision).
-5. **Permanent book and pair stages** depend on the chosen experiment and available space.
+   **Next: the roadmap's [build order](roadmap.md#build-order)**, which replaces the plan to
+   test book inputs first. The book test stays in it as step 7: read the best bid and ask
+   around each candidate from the DBN files (spread, size imbalance, quote changes over the
+   last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), freeze
+   the list in the spec first, and add it as a further set to `research benchmark context`.
+5. **Permanent book and pair stages** follow the storage change and available space.
 6. **Training data**: store the would-be trades (ML rows) from front-contract sessions in
    PostgreSQL, then a training pipeline that follows
    [training across contracts](#training-across-contracts-decided-november-2-2026).
@@ -998,15 +1003,12 @@ hour, or the partner product ([results](#context-input-results-november-17-2026)
    values as plain ATR multiples and clip or exclude at training, or floor the normalizer
    (for example at the spread, as the threshold already is). The second changes stored
    values of the swing stages, and the same question applies to layer 1.
-3. **What comes after the context result** ([recommendation](#next-steps)): test book
-   inputs on the candidates, or change the question. The labels ask "will this early
-   reversal complete?", and trade-derived inputs answer no better than the position of
-   price. Other targets on the same rows: the size of the move after a confirmed swing, or
-   a bracket trade's outcome at fixed risk.
+3. **More history.** One year cannot fit the slow scales or models that feed other models
+   ([decision 9](roadmap.md#design-decisions-november-19-2026)). Which products, how many
+   years, and where the files live are Paul's to decide (cost and disk).
 4. **Which products next.** PL, YM, RTY, and ES are on disk. A pair needs both legs: YM or
    RTY could pair with ES before NQ arrives.
-5. Which unstored reference metrics to add first, and which training outcome to use
-   (simulated bracket trade or fixed-horizon return)?
+5. Which unstored reference metrics to add first.
 
 ## Things to know
 

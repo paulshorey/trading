@@ -13,10 +13,11 @@ exits within minutes. Every feature is normalized: basis points, ATR multiples,
 ratios, oscillators, or time. The same engine runs whole-session backtests and
 second-by-second historical rehearsals. A live feed and broker adapter are planned.
 
-The current ML benchmark asks whether an early swing candidate reaches its reversal
-threshold. The proposed trading experiment compares decisions to take or skip provisional
-higher lows and lower highs after execution costs. The [research roadmap](docs/project/roadmap.md#next-research-decision)
-explains how to test the value of the sliding windows and each model layer.
+The goal is a trained model that makes the trading decisions from layers of signals on
+several timeframes: indicators, indicators of indicators, reversal and continuation
+probabilities, and structure and divergence ([goal and process](AGENTS.md#goal)). The
+[roadmap](docs/project/roadmap.md#the-process-and-where-it-stands) shows which steps are
+built, what the first benchmark did and did not show, and the build order.
 
 ## Workspace
 

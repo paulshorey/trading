@@ -76,11 +76,20 @@ task live in [handoff: next steps](handoff.md#next-steps).
       product, on the same rows as the base inputs. No set helps
       ([results](handoff.md#context-input-results-november-17-2026)); no signal stage and no
       model stage is stored.
-- [ ] **Select the next target.** The [research decision](roadmap.md#next-research-decision)
-      sets out the structure forecast, the reversal benchmark and the executable take-or-skip comparison.
-- [ ] **Book inputs for the reversal target.** Best bid and ask around
-      each candidate, read from the DBN files, as a fifth input set; no new table
-      ([recommendation](handoff.md#next-steps)).
+- [x] **Design review against the goal (November 19).** Steps 3 to 6 of the
+      [process](../../AGENTS.md#the-process-required-order) are the work
+      ([decisions](roadmap.md#design-decisions-november-19-2026)).
+- [ ] **After-cost replay.** Would-be bracket trades for every stored fast candidate; gross
+      and net R of take-all and the displacement rule, in one portfolio
+      ([rules](roadmap.md#after-cost-replay)).
+- [ ] **Store sparse layers as events and decision rows.** Needs Paul's agreement to drop the
+      dense `pivot_1s` rows (64 GB).
+- [ ] **Indicators of indicators.** RSI and EMA of RSI; RSI, EMA and slope of net flow.
+- [ ] **Swings of RSI and CVD,** then **structure and divergence** (`signal_*`).
+- [ ] **Targets *continue* and *direction*,** then the first stored model stage.
+- [ ] **Book inputs** as a further input set, read from the DBN files; then `book_1s`.
+- [ ] **Timeframes as a parameter, and a middle timeframe.**
+- [ ] **More history and products** (Paul: budget and disk).
 - [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk
       baseline, a tuned CUSUM (the frozen one finds 3–7%), and pooled or longer history for
       the slow scales, which have too few candidates to fit.

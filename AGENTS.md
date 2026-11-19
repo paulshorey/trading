@@ -1,20 +1,56 @@
 # Project: Trading research
 
-Build a backtesting and trading bot development platform for futures (crypto may follow).
-Developers configure, troubleshoot, and test custom metrics, strategies, and ML
-models trained on those metrics. Historical research comes first; paper and live
-trading will reuse strategy logic with a UI for monitoring and human overrides.
+## Goal
+
+Train a machine-learning model that makes the trading decisions, first in backtests and
+then live, for futures (crypto may follow). The model does not read raw prices. It reads
+layers of pre-processed signals, built to remove noise and keep what predicts, on several
+timeframes at once.
+
+The central signal: on a faster and a slower timeframe, how likely is it that price has
+recently reversed and is now continuing? When both say "reversed up, continuing up", that is
+a buy; the mirror is a sell. The model combines this with other signals, above all
+divergences between price and RSI and between price and volume flow (CVD).
+
+## The process (required order)
+
+Each step is a pass over the timeline that reads only the steps before it. Every step runs
+on every timeframe (`1m@1s` and `1h@1m` today; more will be added) with the same code in
+backtests and live sessions. The state of each step is in the
+[roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
+
+1. **Base rows.** From the raw MBP-1 records, one row per second: OHLCV, CVD, and every
+   other number the trades and the book give. Later steps add metrics and occasional signal
+   events to these rows.
+2. **Sliding windows.** A minute candle is always the last 60 seconds and an hour candle the
+   last 60 minutes, recomputed at every step: a `1m@1s` row every second and a `1h@1m` row
+   every minute, even when the window reaches into the previous session or week.
+3. **Indicators, then indicators of indicators.** RSI, EMA, ATR and the like on the windows;
+   then the same tools applied to those series (RSI of RSI, EMA of RSI, trends of CVD), so
+   the analysis covers derivatives of price and not only price.
+4. **Reversal and continuation probabilities.** For the price path, and for derived series
+   such as CVD and RSI: the probability that the current move will continue or reverse, and
+   that it has just reversed or continued. Trained models produce these, and their
+   out-of-sample predictions are stored as inputs for the next steps.
+5. **Structure and divergence.** Higher lows, lower highs, and divergences between the
+   pivots of price and those of RSI and of volume flow, within and across timeframes.
+6. **The decision model.** Trained on everything above; its inference makes the backtest
+   and live decisions. It is judged by one portfolio's results after costs.
+
+Do not skip a step because an early experiment on it was flat. Record the result, then
+build the next input the process names and test again
+([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+
+## Data and scope
 
 Prototype with CME futures GC (gold) and SI (silver); one year of MBP-1 for GC, SI, PL,
 ES, YM, and RTY is in `data/databento/mbp-1/` (NQ is not downloaded yet). Compute and store
 everything per contract, so products can be added; each product also reads as one permanent series
 (`market.continuous_*`) that takes every session's rows from its front contract. Never
-merge trades or prices of different delivery months. Metrics are built in layers, each
-reading only the ones below it (`docs/project/roadmap.md`): trade flow, indicators and
-volatility, swing structure, model predictions, and the final model, for one product and
-for pairs that move together (GC with SI, ES with NQ). Strategies predict only the next few
-minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
-the allowed direction. Market data is Databento MBP-1 only, under the same rules for
+merge trades or prices of different delivery months. Products that move together (GC with
+SI, ES with NQ) are also read as pairs. The faster timeframe times an entry; the slower one
+sets the direction and the size of the move traded, so that the move is large against the
+spread and commission. Market data is Databento MBP-1 only, under the same rules for
 every product: every trade and every change to the best bid and ask, one price level deep
 (see `docs/project/engine.md#data-limits-mbp-1`). Trades build the rows and metrics;
 simulated orders fill at the book the exchange showed when they arrive. Validate trades
@@ -93,7 +129,7 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   unknown observations and session ends identifiable. Any learned probability passed into
   a later model must come from an earlier purged training fold and carry its model version.
 - Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
-  one portfolio, explicit costs and latency. See [the research plan](docs/project/roadmap.md#next-research-decision).
+  one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
 - Report data gaps and unavailable inputs; do not invent observations or order flow.
 - Compute features and decisions using only information available at that time.
@@ -136,6 +172,6 @@ If unsure about something, research, search the web, find latest techniques and 
 Consider what was recently done, what's in progress, and how it contributes to the goal.
 Decide and recommend what to do next.
 
-# Goal: Develop reproducible strategies from historical research through live trading
+# Goal: a trained model that makes the trading decisions, from historical research through live trading
 
 # Read the handoff and documentation: `docs/project/handoff.md`

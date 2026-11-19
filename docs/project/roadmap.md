@@ -217,7 +217,9 @@ before reading outcomes.
   the entry-to-stop distance (`r_multiple` in `execution.py`). Commission is a known dollar
   amount, subtracted after converting R to dollars; folding it into R would make its size
   depend on each candidate's risk.
-- An entry that does not fill has no trade result, and why it did not fill decides its use.
+- An entry that does not fill has no trade result: its stored result is NULL with a state,
+  never zero. Why it did not fill decides its use, and a zero appears only as the derived
+  value of having tried.
   The simulator cancels a market entry in two cases (`Simulator.fill`), which `labels.py`
   reports together as `unfilled` today and the replay must separate:
   - it arrived at or after the forced exit before the close. The outcome is known: no

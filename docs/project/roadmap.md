@@ -237,9 +237,15 @@ before reading outcomes.
   unknown (`entry_no_book`), excluded from training and from the comparison. A limit entry
   the market never reached is a known non-trade. Report the count of each state beside
   every result, so zeros can never hide how many entries did not trade.
-- An exit priced without a book (`no_book`) used a fallback price, not an executable one, so
-  both of its values are NULL. As a bound only, report each policy again with those exits
-  at the fallback price.
+- An exit priced without a book (`no_book`) used a fallback price, not an executable one.
+  The two uses of the replay treat it differently, because only one of them depends on
+  the path:
+  - as a training example it stands alone, so both of its values are NULL and it is left out;
+  - in the portfolio replay the position was held and blocked other entries, so the trade
+    stays in the ledger at the fallback price, flagged. Each policy's total is reported
+    with the count and the dollars of its flagged trades, and a second time with every
+    flagged exit charged one further stop distance. A policy beats a rule only if it does
+    so under both totals; no total leaves a held trade out.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
 - Replay each policy with the same capital, position limit, and cooldown. Report net

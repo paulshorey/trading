@@ -11,8 +11,8 @@ decisions behind it, where the work stands, and exactly how to continue.
 [state of each step](roadmap.md#the-process-and-where-it-stands),
 [design decisions](roadmap.md#design-decisions-november-19-2026) and
 [build order](roadmap.md#build-order). Steps 1 and 2 are built and verified. Steps 3 to 6 are
-the work: the next task is the [after-cost replay](roadmap.md#after-cost-replay), then the
-storage change, which waits for Paul's agreement to drop the dense `pivot_1s` rows.
+the work: the next task is the [after-cost replay](roadmap.md#after-cost-replay). The storage change
+(Paul agreed on November 19 to drop the dense `pivot_1s` rows) is in PR #89.
 
 1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, the seven stages of
    layers 0 and 1 and the six swing scales of layer 2, every contract `current`
@@ -965,8 +965,8 @@ The order follows the [roadmap](roadmap.md#next) and the decisions of November 3
 4. **Context inputs from stored rows: tested November 17, no gain**
    ([results](#context-input-results-november-17-2026)). No signal stage and no model stage
    is stored.
-   **Next: the roadmap's [build order](roadmap.md#build-order)**, which replaces the plan to
-   test book inputs first. The book test stays in it as step 7: read the best bid and ask
+   **Next: the roadmap's [build order](roadmap.md#build-order)**, in which the book
+   test is item 3, after the replay and the storage change: read the best bid and ask
    around each candidate from the DBN files (spread, size imbalance, quote changes over the
    last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), freeze
    the list in the spec first, and add it as a further set to `research benchmark context`.

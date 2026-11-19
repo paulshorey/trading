@@ -82,12 +82,13 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [ ] **After-cost replay.** Would-be bracket trades for every stored fast candidate; gross
       and net R of take-all and the displacement rule, in one portfolio
       ([rules](roadmap.md#after-cost-replay)).
-- [ ] **Store sparse layers as events and decision rows.** Needs Paul's agreement to drop the
-      dense `pivot_1s` rows (64 GB).
+- [ ] **Store sparse layers as events and decision rows.** Paul agreed on November 19 to
+      drop the dense `pivot_1s` rows (64 GB); PR #89.
+- [ ] **Book inputs on the stored candidates,** read from the DBN files; no table.
 - [ ] **Indicators of indicators.** RSI and EMA of RSI; RSI, EMA and slope of net flow.
 - [ ] **Swings of RSI and CVD,** then **structure and divergence** (`signal_*`).
-- [ ] **Targets *continue* and *direction*,** then the first stored model stage.
-- [ ] **Book inputs** as a further input set, read from the DBN files; then `book_1s`.
+- [ ] **Targets *continue* and *direction*** and their benchmark.
+- [ ] **`book_1s`** if the candidate test shows the book helps, then **stored model stages**.
 - [ ] **Timeframes as a parameter, and a middle timeframe.**
 - [ ] **More history and products** (Paul: budget and disk).
 - [ ] **Benchmark follow-ups, when a result needs them:** the horizon-aware random-walk

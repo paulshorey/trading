@@ -14,7 +14,8 @@ divergences between price and RSI and between price and volume flow (CVD).
 
 ## The process (required order)
 
-Each step is a pass over the timeline that reads only the steps before it. Every step runs
+Each step is one or more passes over the timeline, and a pass reads only passes that ran
+before it. Every step runs
 on every timeframe (`1m@1s` and `1h@1m` today; more will be added) with the same code in
 backtests and live sessions. The state of each step is in the
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
@@ -30,15 +31,16 @@ backtests and live sessions. The state of each step is in the
    the analysis covers derivatives of price and not only price.
 4. **Reversal and continuation probabilities.** For the price path, and for derived series
    such as CVD and RSI: the probability that the current move will continue or reverse, and
-   that it has just reversed or continued. Trained models produce these, and their
-   out-of-sample predictions are stored as inputs for the next steps.
+   that it has just reversed or continued. Pivots are found by rule first; trained models
+   then produce the probabilities, and their out-of-sample predictions are stored as inputs
+   for the next steps.
 5. **Structure and divergence.** Higher lows, lower highs, and divergences between the
-   pivots of price and those of RSI and of volume flow, within and across timeframes.
+   pivots of price and those of RSI and of volume flow, within and across timeframes. It
+   has two passes: the first uses only the pivots and is an input to the models of step 4;
+   the second adds their probabilities.
 6. **The decision model.** Trained on everything above; its inference makes the backtest
    and live decisions. It is judged by one portfolio's results after costs.
 
-Step 5's pivot-only part (structure and divergence from the swings) is computed before
-step 4 and is an input to it; step 5 runs again after step 4 with its probabilities.
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
 ([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).

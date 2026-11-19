@@ -108,8 +108,8 @@ has already moved. That result is real, and narrow:
 - It says nothing about continuation, which has no label yet.
 
 So it does not show that reversals cannot be predicted. It shows that the stored price and
-swing features add nothing to displacement for a 5 basis point barrier. The conclusion drawn on November 17, that structure
-signals were not worth building, is withdrawn.
+swing features add nothing to displacement for a 5 basis point barrier. The conclusion drawn
+on November 17, that structure signals were not worth building, is withdrawn.
 
 **Costs decide which timeframe can pay.** Crossing the spread costs 15% (GC) to 23% (SI) of
 a typical `1m@1s` true range (`vol_1s.spread_atr`). A bracket sized on that range gives away
@@ -125,31 +125,34 @@ entry, and the slower one sets the bracket and the holding time.
    higher-low sequences need only confirmed and provisional pivots, so they are computed
    before any model and are inputs to it (tier 3). A model's stored probabilities (tier 4)
    then feed a second structure pass and the decision model (tier 5 and up). This is how a
-   model sits in the middle of the pipeline. Step 5 of the process therefore runs twice: its
-   pivot-only part before step 4, as inputs to the models, and again after step 4 with their
-   probabilities.
+   model sits in the middle of the pipeline. Step 5 of the process therefore has two passes,
+   one before the models of step 4 and one after them.
 3. **Three targets per series and scale,** each a label variant of its own:
    - *turn*: the candidate extreme holds and price moves the full threshold away (stored today);
    - *continue*: after a confirmed pivot, the new leg extends by a further threshold before
      price returns to the pivot;
-   - *direction*: from the current price, the upper barrier is reached before the lower one,
-     at equal distance. Among resolved rows a random walk scores exactly one half, so skill is
+   - *direction*: from the current price, with barriers at equal distance above and below:
+     the upper one is reached first, the lower one is reached first, or neither is reached
+     within the horizon. For a random walk the first two are equally likely, so skill is
      visible without a displacement baseline.
 
    Each variant states its horizon in rows and keeps timeouts, session ends and unknowns as
    outcomes of their own, as the [turn label does](pivot-label-spec.md); none scans past a
-   session end or reads rows without data coverage.
-4. **Models are trained and scored where their target is defined, on a thinned sample.**
-   *Turn* is defined on candidates, *continue* on confirmed pivots, and *direction* on any
-   row. A model scores only the rows of its own target. Adjacent rows share 59 of 60
-   members, so *direction* trains on rows drawn at a spacing of about one window, and the
-   others on every candidate or pivot; all walk-forward with a purge
+   session end or reads rows without data coverage. A timeout is a class the model
+   predicts, never a row dropped after the fact.
+4. **A model is trained and scored only where its target is defined.** *Turn* is defined at
+   a candidate's decision row, *continue* at a pivot's confirmation row, and *direction* at
+   any row. *Direction* is scored at every row; because adjacent rows share 59 of 60
+   members, it trains on rows drawn about one window apart. *Turn* and *continue* train on
+   every candidate or pivot, and a later row carries the latest such probability with its
+   age, as it carries the latest completed minute. All are walk-forward with a purge
    ([model stages](feature-pipeline.md#model-stages)).
-5. **A model stage is stored only if it beats its structural baseline** (displacement for
-   *turn* and *continue*; for *direction*, one half among resolved rows, with timeouts
-   scored by the training fold's timeout rate) in out-of-fold log loss, pooled over the
-   products, with a 95% trade-date bootstrap interval above zero. The scale and label are
-   named before the run.
+5. **A model stage is stored only if it beats the simplest model fitted on the same
+   training fold**: displacement alone for *turn* and *continue*, and the fold's class
+   frequencies for *direction*. Both predict every outcome class, timeouts included, so
+   neither can gain from how unresolved rows are treated. The measure is out-of-fold log
+   loss on the same rows, pooled over the products, with a 95% trade-date bootstrap
+   interval of the difference above zero. The scale and label are named before the run.
 6. **After-cost portfolio replay is the yardstick, not the first model.** The replay of
    would-be bracket trades for every candidate, compared in one portfolio against staying
    flat, taking every candidate, and a displacement rule, is built once and reused to judge
@@ -158,11 +161,11 @@ entry, and the slower one sets the bracket and the holding time.
    with a 95% trade-date bootstrap interval above zero (whole dates are resampled, because
    outcomes overlap and the one-position replay is path-dependent), on neither product
    alone does it lose, and it stays positive under the latency and extra-tick stress.
-7. **Sparse layers store events and decision rows, not every second.** Swing state is
+7. **Sparse layers store events and decision rows, not every second.** Swing state was
    stored for all 70 million seconds per scale (64 GB for GC and SI), which is why RSI swings,
-   the book, and more products do not fit. Swings, structure, and model outputs are recomputed
+   the book, and more products did not fit. Swings, structure, and model outputs are recomputed
    by the engine in minutes; store their events and the feature rows at decision and sample
-   rows. Dropping the dense `pivot_1s` rows needs Paul's agreement.
+   rows. Paul agreed on November 19 to drop the dense `pivot_1s` rows.
 8. **Timeframes become a parameter, and a middle one is added.** Between a 5 basis point
    swing and a 40 basis point one there is nothing. A window such as `10m@10s` has a tenth of
    the `1m@1s` rows, moves that are large against the spread, and many more swings than the
@@ -175,25 +178,31 @@ entry, and the slower one sets the bracket and the holding time.
 
 1. **After-cost replay** on the stored fast candidates: gross and net R of take-all and the
    displacement rule, reported before anything is fitted. `labels.py` already simulates
-   would-be trades, but with the `1m@1s` ATR and a fast holding time; the replay passes the
-   frozen slower-row ATR and a slower-scale holding time (the fast bracket is kept as a
-   control), and separates a missing entry book from an unfilled order.
+   would-be trades, but sizes the bracket with the `1m@1s` ATR and holds for at most three
+   minutes (`strategies.Bracket`). The replay sizes the bracket with the ATR of the
+   candidate's frozen slower-timeframe row and a holding time on that scale; the fast
+   bracket is run beside it as a control.
 2. **Storage change** (decision 7), which frees the disk for everything after it.
-3. **Indicators of indicators** (step 3): RSI and EMA of the RSI series, and RSI, EMA and
+3. **Book inputs on the stored candidates.** Read the best bid and ask around each candidate
+   from the DBN files, as a further input set of the benchmark; no table is needed. This
+   comes early because it is cheap and it tells whether the permanent book stage (item 8)
+   must exist before any model stage is stored.
+4. **Indicators of indicators** (step 3): RSI and EMA of the RSI series, and RSI, EMA and
    slope of the window's net flow, per phase, as one new tier-1 stage per timeframe.
-4. **Swings of RSI and of CVD** with the existing detector, which already measures additive
+5. **Swings of RSI and of CVD** with the existing detector, which already measures additive
    series; thresholds above the measured row-to-row noise. CVD comes from a source that does
    not reset at the session open (a rolling net flow, not `session_cvd`), or the detector's
    state ends at each reset, so a reopen is never read as a move.
-5. **Structure and divergence** (`signal_*`, tier 3): price against RSI pivots, price against
+6. **Structure and divergence** (`signal_*`, tier 3): price against RSI pivots, price against
    flow pivots, higher-low and lower-high sequences, agreement across timeframes.
-6. **The three targets and their model stages** (decisions 3 to 5), first for price, then for
+7. **The three targets and their benchmark** (decisions 3 to 5), first for price, then for
    RSI and CVD. Each new input set is tested through the benchmark and the replay.
-7. **The book stage** (`book_1s`) as a further input set, tested the same way. It follows
-   the model stages on purpose: each input set is benchmarked against the sets before it, so
-   no earlier result is rerun, and its test on candidates needs no table.
-8. **The middle timeframe** (decision 8), then more products and history as disk and budget allow.
-9. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
+8. **The book stage** (`book_1s`), if item 3 showed the book adds information, so that
+   stored model stages are trained once with it.
+9. **Stored model stages** for the targets and input sets that passed decision 5, then the
+   second structure pass on their probabilities.
+10. **The middle timeframe** (decision 8), then more products and history as disk and budget allow.
+11. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
 
 ### After-cost replay
 
@@ -208,10 +217,17 @@ before reading outcomes.
   the entry-to-stop distance (`r_multiple` in `execution.py`). Commission is a known dollar
   amount, subtracted after converting R to dollars; folding it into R would make its size
   depend on each candidate's risk.
-- An order that arrived at a usable book and did not fill has an `unfilled` state and no
-  trade result; its value as a training target is zero. An absent, crossed, or flagged
-  entry book is a separate state (`entry_no_book`): counted, and excluded from training. Exclude and count censored follow-up, and count exits priced without a
-  book (`no_book`) separately.
+- An entry that does not fill has no trade result, and why it did not fill decides its use.
+  The simulator cancels a market entry in two cases (`Simulator.fill`), which `labels.py`
+  reports together as `unfilled` today and the replay must separate:
+  - it arrived at or after the forced exit before the close. The outcome is known: no
+    trade, value zero. Eligibility should exclude such candidates in the first place;
+  - it met no usable book (absent, one-sided, or flagged). The outcome is unknown
+    (`entry_no_book`): counted, and excluded from training and from the policy comparison.
+
+  A limit entry that the market never reached is also a known zero.
+- Exclude and count censored follow-up, and count exits priced without a book (`no_book`)
+  separately.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
 - Replay each policy with the same capital, position limit, and cooldown. Report net
@@ -262,8 +278,8 @@ held for minutes is an empirical question. [Gould and Bonart](https://arxiv.org/
    ([results](handoff.md#context-input-results-november-17-2026)). Read with
    [its limits](#what-the-results-so-far-do-and-do-not-show).
 5. **Steps 3 to 5 of the process**, in the [build order](#build-order): the after-cost
-   replay, the storage change, indicators of indicators, swings of RSI and CVD, structure
-   and divergence, the model stages, the book, a middle timeframe.
+   replay, the storage change, book inputs on candidates, indicators of indicators, swings
+   of RSI and CVD, structure and divergence, the targets and model stages, a middle timeframe.
 6. **Decision model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a
    final holdout of the newest data, evaluated once.

@@ -232,8 +232,10 @@ before reading outcomes.
     (`entry_no_book`): counted, and excluded from training and from the policy comparison.
 
   A limit entry that the market never reached is also a known zero.
-- Exclude and count censored follow-up, and count exits priced without a book (`no_book`)
-  separately.
+- Exclude and count censored follow-up. An exit priced without a book (`no_book`) uses a
+  fallback price, not an executable one: count it, leave it out of training and of the policy
+  comparison, and report each policy's results with those exits excluded and, as a bound,
+  with them at the fallback price.
 - Fit on earlier folds only, purging training outcomes whose decision-to-exit interval
   overlaps the scored block; choose thresholds on the same training history.
 - Replay each policy with the same capital, position limit, and cooldown. Report net

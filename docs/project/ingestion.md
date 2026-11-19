@@ -85,7 +85,12 @@ event row, or minute end lacks a swing row; the three scales hold one key set; a
 The rule is `pipeline.stored_rows`, and its name (`pipeline.STORED_ROWS`) is part of each
 fast scale's builder identity: changing it makes them `stale`. Because label rows are among
 the kept seconds, ingestion writes the fast scales again whenever it writes a fast label,
-and their labels with them. A stage that needs swing state at other seconds must either
+and their labels with them, in the same transaction per session. A scale's builder
+therefore identifies its values, and the kept seconds follow from that builder together
+with the fast labels' builders of the same session, all recorded in `market.stage_slice`.
+The label builders are not folded into the scale's identity: a label's identity already
+contains its scale's, and a new label variant would then make every fast scale `stale`
+where today it is simply added. A stage that needs swing state at other seconds must either
 read it in memory, as stages do, or extend the rule. The slow scales (`pivot_1m`) store
 every minute.
 

@@ -314,9 +314,12 @@ Paul's, after the review. The numbers continue the list above.
     - *They are untouched, so they test what 2026 suggested.* Before anything else reads
       them, rerun `research replay` and `research benchmark` with their settings unchanged
       and record the result. Both read stored rows, so the years are ingested first, and
-      both now refuse dates before 2026-01-02 (`benchmark.check_period`): a frozen
-      evaluation period for the new years is added to that check before the run, and is
-      not changed after it. Running them on the 2026 dates would test nothing new.
+      both now refuse dates before 2026-01-02 (`benchmark.check_period`) and score
+      walk-forward test blocks only in 2026 (`TEST_MONTHS` with the year 2026 written into
+      `replay.py`, and an assert tying the last block to `DEV_END`). So a frozen evaluation
+      period for the new years is added to that check before the run, and its test-block
+      dates (months, year, and the end the assert checks) become a frozen setting too; none
+      is changed after the run. Running them on the 2026 dates would test nothing new.
       Named in advance: taking every fast candidate at the slow bracket loses about
       one spread; entering against the `slow_atr_1` trend is worse than entering with it;
       displacement alone matches the full models on the turn label.

@@ -52,13 +52,20 @@ def test_the_graph_reads_only_earlier_stages():
     check_graph()
     assert [s.NAME for s in STAGES if not getattr(s, "LABEL", False)] == [
         "bar_1s",
+        "bar_10s",
         "bar_1m",
         "candle_1m_1s",
+        "candle_10m_10s",
+        "stats_10m_10s",
+        "vol_10s",
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
         "vol_1s",
-        "pivot_1m:slow_atr_0p5",  # each swing scale is a stage of its own (a variant)
+        "pivot_10s:mid_atr_0p5",
+        "pivot_10s:mid_atr_1",
+        "pivot_10s:mid_atr_2",
+        "pivot_1m:slow_atr_0p5",
         "pivot_1m:slow_atr_1",
         "pivot_1m:slow_atr_2",
         "pivot_1s:fast_atr_0p5",

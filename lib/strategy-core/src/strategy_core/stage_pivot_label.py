@@ -22,6 +22,7 @@ from .columns import Table
 from .engine import MarketChunk
 from .market import SECOND
 from .stage_pivot_1s import SCALES as FAST_SCALES
+from .stage_step_pivot import MIDDLE_SCALES
 from .stage_step_pivot import SCALES as SLOW_SCALES
 from .stages import Stage
 from .swings import HIGH, LOW, NONE
@@ -29,7 +30,9 @@ from .swings import HIGH, LOW, NONE
 LABEL_TIER = 9  # above every tier of inputs: labels read them and nothing reads labels
 Q_STAGES = (0.25, 0.5)  # progress that makes a candidate
 REVERSAL, INVALIDATION = 1.0, 0.25  # barriers, in thetas from and beyond the extreme
-HORIZON = {"1s": 300, "1m": 240}  # rows of the scale's stream after the decision row
+# Rows of the scale's stream after the decision row: 5 minutes fast, 40 minutes middle, 4 hours
+# slow (docs/project/pivot-label-spec.md).
+HORIZON = {"1s": 300, "10s": 240, "1m": 240}
 COLUMNS = (*pivot_labels.KEY_COLUMNS, *pivot_labels.LABEL_COLUMNS)
 
 
@@ -147,4 +150,5 @@ def label(scale: type[Stage], q: float) -> type[PivotLabelStage]:
 
 
 SLOW_LABELS = tuple(label(s, q) for s in SLOW_SCALES for q in Q_STAGES)
+MIDDLE_LABELS = tuple(label(s, q) for s in MIDDLE_SCALES for q in Q_STAGES)
 FAST_LABELS = tuple(label(s, q) for s in FAST_SCALES for q in Q_STAGES)

@@ -63,5 +63,5 @@ class Timeframe:
 
 SLOW = Timeframe("1h@1m", 60, "1m", "1h_1m", "slow")
 MIDDLE = Timeframe("10m@10s", 10, "10s", "10m_10s", "mid")
-# Timeframes whose stages are registered (`pipeline.STAGES`) and stored, slowest last.
-MERGED: tuple[Timeframe, ...] = (SLOW,)
+# Which timeframes are registered and stored is `pipeline.MERGED`: this module is part of every
+# step stage's builder identity, so the list is kept out of it.

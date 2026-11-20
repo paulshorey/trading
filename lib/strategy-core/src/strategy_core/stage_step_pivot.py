@@ -29,12 +29,15 @@ from .columns import Table
 from .engine import MarketChunk
 from .market import PX
 from .stages import Stage
-from .timeframes import SLOW, Timeframe
+from .timeframes import MIDDLE, SLOW, Timeframe
 
 SPEC = swings.dense_columns()
 COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC))
 FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
 NEVER = -(2**62)  # no step row seen yet
+# Step rows within which a breached level can be reclaimed: a quarter of the hourly window (15
+# minutes), half of the ten-minute one (5 minutes); the fast scales use one whole window (60 s).
+RECLAIM_ROWS = {"1m": 15, "10s": 30}
 
 
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
@@ -69,7 +72,7 @@ class StepPivotStage(Stage):
     VARIANT: ClassVar[str]  # the scale's name in `market.variant`
     K: ClassVar[float]  # threshold, in ATRs
     FLOOR: ClassVar[float] = 2.0  # and at least this many spreads
-    WINDOW: ClassVar[int] = 15  # step rows within which a breached level can be reclaimed
+    WINDOW: ClassVar[int]  # step rows within which a breached level can be reclaimed
     TIER = 2
     MODULES = (
         "stages",
@@ -177,6 +180,7 @@ def step_pivot(tf: Timeframe) -> type[StepPivotStage]:
     attrs = {
         "TF": tf,
         "TABLE": f"pivot_{tf.rows}",
+        "WINDOW": RECLAIM_ROWS[tf.rows],
         "RESOLUTION": tf.rows,
         "INPUTS": ("market", "bar_1s", f"bar_{tf.rows}", f"candle_{tf.window}", f"vol_{tf.rows}"),
     }
@@ -194,10 +198,8 @@ def scale(base: type[StepPivotStage], k: float) -> type[StepPivotStage]:
 MULTIPLIERS = (0.5, 1.0, 2.0)
 
 
-def scales(tf: Timeframe) -> tuple[type[StepPivotStage], ...]:
-    base = step_pivot(tf)
-    return tuple(scale(base, k) for k in MULTIPLIERS)
-
-
 PivotMinuteStage = step_pivot(SLOW)
-SCALES = tuple(scale(PivotMinuteStage, k) for k in MULTIPLIERS)
+SCALES = tuple(scale(PivotMinuteStage, k) for k in MULTIPLIERS)  # the slow scales
+PivotMiddleStage = step_pivot(MIDDLE)
+MIDDLE_SCALES = tuple(scale(PivotMiddleStage, k) for k in MULTIPLIERS)
+BY_TIMEFRAME = {SLOW.name: SCALES, MIDDLE.name: MIDDLE_SCALES}

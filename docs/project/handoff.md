@@ -11,8 +11,12 @@ decisions behind it, where the work stands, and exactly how to continue.
 [state of each step](roadmap.md#the-process-and-where-it-stands),
 [design decisions](roadmap.md#design-decisions-november-19-2026) and
 [build order](roadmap.md#build-order). Steps 1 and 2 are built and verified. Steps 3 to 6 are
-the work: the next task is the [after-cost replay](roadmap.md#after-cost-replay). The storage change
-(Paul agreed on November 19 to drop the dense `pivot_1s` rows) is in PR #89.
+the work. The first two items of the build order are done: the storage change (PR #89) and the
+[after-cost replay](replay.md) (`research replay`), which found that taking a fast candidate's
+side loses about one spread on a `1m@1s` bracket and on a `1h@1m` one, so a candidate alone has
+no edge and staying flat is the rule every later input set must beat. The next task is
+build-order item 3, the book inputs on the stored candidates, judged through the benchmark and
+the replay.
 
 1. **The stored rows are rebuilt from MBP-1** (November 16): GC and SI, the seven stages of
    layers 0 and 1 and the six swing scales of layer 2, every contract `current`

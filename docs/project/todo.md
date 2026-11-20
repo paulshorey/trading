@@ -79,11 +79,11 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **Design review against the goal (November 19).** Steps 3 to 6 of the
       [process](../../AGENTS.md#the-process-required-order) are the work
       ([decisions](roadmap.md#design-decisions-november-19-2026)).
-- [ ] **After-cost replay.** Would-be bracket trades for every stored fast candidate; gross
-      and net R of take-all and the displacement rule, in one portfolio
-      ([rules](roadmap.md#after-cost-replay)).
-- [ ] **Store sparse layers as events and decision rows.** Paul agreed on November 19 to
-      drop the dense `pivot_1s` rows (64 GB); PR #89.
+- [x] **After-cost replay.** `research replay`: would-be bracket trades for every stored fast
+      candidate; take-all and the displacement rule, per candidate and in one portfolio
+      ([settings and results](replay.md)). Neither bracket pays; staying flat is the rule to beat.
+- [x] **Store sparse layers as events and decision rows.** Done November 19 (PR #89):
+      `pivot_1s` went from 64 GB to 4.5 GB.
 - [ ] **Book inputs on the stored candidates,** read from the DBN files; no table.
 - [ ] **Indicators of indicators.** RSI and EMA of RSI; RSI, EMA and slope of net flow.
 - [ ] **Swings of RSI and CVD,** then **structure and divergence** (`signal_*`).

@@ -125,26 +125,12 @@ class Engine:
     def book_view(self, chunk: MarketChunk, ends: np.ndarray) -> BookView:
         """The chunk's book events by slot, then receive order, as a live session releases
         them. A chunk without a book (a warm-up session) leaves no book to carry forward."""
-        book = chunk.book
-        if book is None:
+        if chunk.book is None:
             if chunk.tradable and (self.signals or self.pending or self.position):
                 raise ValueError(f"Tradable chunk {chunk.session!r} has no book events to fill at")
             self.quote = None
             return BookView.empty()
-        if not len(book) or not len(ends):
-            return BookView.empty(self.quote, chunk.coverage)
-        c = self.config
-        assign = assignment_ns(book.ts_event, book.ts_recv, c.feed_latency, c.close_delay)
-        slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
-        order = np.argsort(slot, kind="stable")
-        return BookView(
-            book.take(order),
-            ends[slot[order]],
-            self.quote,
-            self.book_floor,
-            self.book_recv,
-            chunk.coverage,
-        )
+        return book_view(chunk, ends, self.config, self.quote, self.book_floor, self.book_recv)
 
     def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:
         closed: list[dict] = []
@@ -229,6 +215,53 @@ class Engine:
             "quality": {k: asdict(v) for k, v in self.reports.items()},
             "contracts": self.contracts,
         }
+
+
+def book_view(
+    chunk: MarketChunk,
+    ends: np.ndarray,
+    config: ExecutionConfig,
+    quote: Quote | None = None,
+    book_floor: int = 0,
+    book_recv: int = 0,
+) -> BookView:
+    """A chunk's book events by slot, then receive order, after the book (`quote`) and the
+    latest event and receive times of earlier chunks."""
+    book = chunk.book
+    if not len(book) or not len(ends):
+        return BookView.empty(quote, chunk.coverage)
+    assign = assignment_ns(book.ts_event, book.ts_recv, config.feed_latency, config.close_delay)
+    slot = np.minimum(np.searchsorted(ends, assign, side="right"), len(ends) - 1)
+    order = np.argsort(slot, kind="stable")
+    return BookView(
+        book.take(order), ends[slot[order]], quote, book_floor, book_recv, chunk.coverage
+    )
+
+
+def session_view(
+    chunk: MarketChunk, calendar: SessionCalendar, config: ExecutionConfig
+) -> ExecView:
+    """A whole session's trades and book for matching orders, read on its own, as
+    `Engine.process` builds them for its first chunk: nothing is carried in from an earlier
+    session, and the records of the closure before the open set the opening book. For
+    simulating would-be trades of stored decision rows without running the stages."""
+    ends = calendar.slot_ends(chunk.start, chunk.end, SECOND)
+    agg = aggregate(
+        chunk.trades,
+        ends,
+        SECOND,
+        chunk.coverage,
+        feed_latency=config.feed_latency,
+        close_delay=config.close_delay,
+    )
+    return ExecView.from_aggregation(
+        chunk.trades,
+        agg.order,
+        agg.slot_end,
+        config.close_delay,
+        book_view(chunk, ends, config),
+        chunk.end,
+    )
 
 
 def equity_curve(trades: list[dict]) -> list[dict]:

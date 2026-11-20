@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytest
 from helpers import T0, calendar, coverage, quotes, trades
-from strategy_core.engine import Engine, MarketChunk, split_by_second
+from strategy_core.engine import Engine, MarketChunk, session_view, split_by_second
 from strategy_core.execution import (
     CANCELLED,
     FILLED,
@@ -16,6 +16,7 @@ from strategy_core.execution import (
 from strategy_core.features import FeatureConfig, FeatureFrame
 from strategy_core.labels import (
     CandidateSummary,
+    attempt,
     candidate_outcomes,
     iter_candidate_outcomes,
     summarize_candidates,
@@ -524,3 +525,61 @@ def test_a_tradable_chunk_without_book_events_cannot_fill():
     assert not warm.process(
         MarketChunk("GCZ6", T0, T0 + HOUR, t, coverage(cal), "test", False)
     ).trades
+
+
+def test_an_attempt_says_whether_a_trade_closed_did_not_happen_or_is_unknown():
+    """The two values of a candidate depend on it: a trade result exists only for `closed`,
+    and the value of attempting is zero only for `late`."""
+    sim = Simulator(GC, CFG, Bracket(9, 9, 600), CAL)
+    rows = [(T0 + 61 * S, 2000.0, 1, 1), (T0 + 3296 * S, 2000.3, 1, 1)]
+    book = [ENTRY, (T0 + 3290 * S, 2000.0, 2000.1), (T0 + 3295 * S, None, 2000.4)]
+    view = exec_view(trades(rows), quotes(book))
+
+    def state(signal_s, data=view):
+        pos = sim.order(1, "GCZ6", T0 + signal_s * S, 0.5, {}, data)
+        return attempt(sim, data, pos)
+
+    closed, trade, known = state(60)  # the 600 s timer ends on a two-sided book
+    assert closed == "closed" and trade["exit_reason"] == "time"
+    assert known == int(trade["exit_known_ns"])
+    fallback, trade, _ = state(3290)  # the forced exit meets a one-sided book
+    assert fallback == "exit_no_book" and "no_book" in trade["flags"]
+    assert state(3296) == ("entry_no_book", None, T0 + 3297_100_000_000)
+    assert state(3300) == ("late", None, T0 + 3300 * S)  # at the forced exit: known, no trade
+    short = exec_view(trades(rows[:1]), quotes(book[:1]), end=T0 + 300 * S)  # the data ends
+    assert state(60, short) == ("censored", None, 0)
+    assert state(300, short) == ("pending", None, 0)
+
+
+def test_adverse_ticks_charge_every_marketable_order_and_no_resting_limit():
+    book = [ENTRY, (T0 + 66 * S, 2000.4, 2000.5)]
+    rows = [(T0 + 63 * S, 2000.3, 1, 1)]
+    timed = Bracket(5.0, 5.0, 5)
+    _, plain = simulate(rows, book, bracket=timed)
+    worse = ExecutionConfig(**{**CFG.__dict__, "adverse_ticks": 1})
+    _, out = simulate(rows, book, bracket=timed, config=worse)
+    assert out["entry_px"] == pytest.approx(plain["entry_px"] + 0.1)  # bought a tick higher
+    assert out["exit_px"] == pytest.approx(plain["exit_px"] - 0.1)  # the timed exit sold lower
+    assert out["pnl_ticks"] == pytest.approx(plain["pnl_ticks"] - 2)
+    rows = [(T0 + 63 * S, 2000.9, 1, 1)]  # through a target 0.5 above either entry
+    _, plain = simulate(rows, book)
+    _, out = simulate(rows, book, config=worse)
+    assert plain["exit_reason"] == out["exit_reason"] == "target"
+    assert out["pnl_ticks"] == plain["pnl_ticks"]  # the bracket moves with the entry
+    with pytest.raises(ValueError, match="adverse_ticks"):
+        ExecutionConfig(adverse_ticks=-1)
+
+
+def test_a_session_view_is_the_view_the_engine_builds_for_the_session():
+    cal = calendar((0, 1))
+    t = random_trades(T0, T0 + HOUR, seed=4, rate=3)
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100, order_latency_ms=50)
+    chunk = session_chunk(cal, t, int(cal.opens[0]), int(cal.closes[0]))
+    strategy = OneShot()
+    engine = Engine(GC, cal, strategy, config)
+    result = engine.process(chunk)
+    sim = Simulator(GC, config, strategy.bracket, cal)
+    alone = session_view(chunk, cal, config)
+    for view in (result.view, alone):
+        rows = candidate_outcomes(sim, "GCZ6", result.frame, result.signals, view)
+        assert rows == engine.finish()["trades"] and len(rows) == 1

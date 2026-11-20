@@ -34,7 +34,7 @@ No row is ever matched by clock time.
 Pair rows describe the **partner** relative to the **target**, the product being traded:
 `GC|SI`, `SI|GC`, `ES|NQ`, and `NQ|ES`. A model that trades GC reads GC's own stages plus
 the `GC|SI` rows. Storing both directions doubles the rows. That is small next to the second
-tables, and disk is not a constraint ([decision 5](plan-1h-and-pivots.md#6-decisions)). In
+tables ([decision 5](plan-1h-and-pivots.md#6-decisions)). In
 exchange, every feature has a single meaning from the trader's side.
 
 ## Rolls and warm-up

@@ -238,8 +238,7 @@ make each change rebuild only what depends on it.
 
 - **Live latency.** Every tier must finish within the 100 ms close delay each second.
   Measure the full graph per second in PR A and again after each new tier.
-- **Storage growth.** GC and SI take 110 GB (November 20, 2026) and 114 GB of disk is free,
-  so disk is a constraint: sparse layers store only the rows that are read. Measure query
-  and ML-extraction speed as tables grow.
+- **Storage growth.** GC and SI take 110 GB for one year (November 20, 2026). Sparse layers
+  store only the rows that are read. Measure query and ML-extraction speed as tables grow.
 - **Tier-0 additions.** These rebuild everything. PR A therefore adds the per-second fields
   already known to be needed (price-path drawdown and drawup, and the order of each second's high and low; [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).

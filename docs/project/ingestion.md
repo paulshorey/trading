@@ -573,8 +573,8 @@ stored stages.
 ## Next
 
 1. **Structure signals** and other new inputs for the reversal question
-   ([roadmap](roadmap.md#next)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
-   detector once disk allows.
+   ([roadmap](roadmap.md#build-order)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
+   detector.
 2. Let backtests read stored rows when the builder matches the run: the values are already
    equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

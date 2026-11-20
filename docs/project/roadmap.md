@@ -27,6 +27,57 @@ hit first inside a candle. Fast and slow swing scales use their respective compl
 ATR and publish state at second and minute closes. A second-level decision can read the
 latest completed minute, including its age.
 
+## How the analysis is structured
+
+The six steps say what is computed and in what order. This section says what each part is
+for, so that every task can name the question it answers.
+
+| Role | The question it answers | What it holds | Steps |
+| --- | --- | --- | --- |
+| **State** | What is the market doing now? | Base rows, windows, indicators and indicators of indicators, volatility, the book, net flow, time to scheduled news, on every timeframe | 1 to 3 |
+| **Events** | Is there something to decide now? | Swing candidates and confirmations, breaches and reclaims, divergences, agreement across timeframes. Sparse: a few per hour | 4 (pivots) and 5 |
+| **Forecasts** | What will probably happen? | Models with one label each: turn, continue, direction, and the size of the coming move. Stored out of fold | 4 (models) |
+| **Decisions** | What to do? | Take or skip, side, size, the entry order, exits. One portfolio, after costs | 6 |
+
+Beside all four stands **evaluation**: labels, splits by time, the replay, and the record of
+every variant tried. It is built before the things it judges.
+
+### The trade the system looks for
+
+Three timeframes, each with one job:
+
+- **Slow (`1h@1m`)** sets direction and regime. Its ATR sizes the stop and the target, so the
+  move traded is large against the spread. A trade lasts minutes to a few hours and is flat
+  before the session closes (Paul, November 20: intraday first, overnight later).
+- **Middle (`10m@10s`)** is where decisions happen. An event on it creates a decision row
+  and names a side.
+- **Fast (`1m@1s`)** times the entry and chooses the order: a market order, or a limit
+  order resting at the level, counted as filled only when a trade goes through its price.
+
+An event family is a hypothesis with a side. Each is replayed the same way, alone and
+together, and none is known to pay:
+
+1. **A pullback that holds** (the goal's central signal): the slow timeframe has turned up
+   and is continuing; the middle one pulls back and makes a higher low; buy. Mirror for a sell.
+2. **A failed break:** a middle swing level is breached and then reclaimed; trade back inside.
+3. **Flow divergence:** price makes a new extreme and net flow does not; fade it.
+4. **RSI divergence:** the same against RSI.
+5. **The partner lags:** one metal has turned and the other has not; trade the laggard.
+
+**The decision model is asked a narrow question.** At an event row the side is given, and
+the model learns whether to take the trade, and how large, from what attempting it earned
+after costs (the replay's [value of attempting](#after-cost-replay)). Choosing a direction
+from nothing is the hardest question there is: the return of one block says nothing about the
+next at the five horizons measured, and only that linear check was made
+([measured](#review-of-november-20-2026)). "Is this setup worth taking now" has plain
+baselines (take all, take none) and is the question the goal asks. The *direction* target
+at any row stays as a forecast, and as the check that the events are not hiding an edge.
+
+**Size is easier to forecast than direction.** How far price will move in the next window
+follows the recent range, the time of day, and scheduled news closely. A policy that trades
+only when the expected move is large against the cost needs a smaller edge in direction. The
+size of the coming move is therefore a forecast of its own.
+
 ## The process and where it stands
 
 Reviewed November 20, 2026 against the six steps in [AGENTS.md](../../AGENTS.md#the-process-required-order).
@@ -120,8 +171,7 @@ entry, and the slower one sets the bracket and the holding time.
 
 A second review, asked for by Paul, of the design and of its chances. It checked the claims
 of this page against the code, the database, and the stored rows (`pnpm lint` and `pnpm test`
-pass on `main`; `ingest plan GC SI` reports every contract current; the database is 110 GB
-with 114 GB of disk free).
+pass on `main`; `ingest plan GC SI` reports every contract current; the database is 110 GB).
 
 **What holds.** Rows counted by index, per-phase indicators, per-contract computation, one
 engine with fills at the book, labels that can never be inputs, specs frozen before a run,
@@ -146,8 +196,8 @@ clock earns is still not built.
 
 A trade that wins or loses one typical move and pays one spread breaks even at a hit rate of
 50% plus half the ratio: 68% on GC at one minute, 55% at fifteen, 52% at an hour, before
-commission. One block's return says nothing about the next at any horizon, so there is no
-plain momentum or reversal to collect: an edge has to come from conditions, which is what
+commission. One block's return says nothing about the next at these horizons (a one-lag
+linear check only), so there is no plain momentum or reversal to collect: an edge has to come from conditions, which is what
 steps 3 to 5 build.
 
 **One year cannot judge the hourly scale.** Results are only as many as their independent
@@ -176,11 +226,8 @@ times. Making the timeframe a parameter first is the one structural change this 
 for. It is a refactor of stage modules, checked by rebuilding and comparing stored rows; no
 rule, table design, or engine behavior changes.
 
-**What changed in the plan.** The [build order](#build-order) below: the timeframe
-parameter and a middle timeframe move to the front, a first decision model is trained early
-as the yardstick, and flow comes before RSI. Three choices are Paul's and are listed in the
-[handoff](handoff.md#open-questions): which products to build next, when to buy more
-history, and the size of the middle timeframe.
+**What changed in the plan.** The [build order](#build-order) below, which Paul approved
+the same day with the [decisions of November 20](#decisions-of-november-20-2026).
 
 ## Design decisions (November 19, 2026)
 
@@ -233,23 +280,74 @@ history, and the size of the middle timeframe.
    outcomes overlap and the one-position replay is path-dependent), on neither product
    alone does it lose, and it stays positive under the latency and extra-tick stress.
 7. **Sparse layers store events and decision rows, not every second.** Swing state was
-   stored for all 70 million seconds per scale (64 GB for GC and SI), which is why RSI swings,
-   the book, and more products did not fit. Swings, structure, and model outputs are recomputed
+   stored for all 70 million seconds per scale (64 GB for GC and SI), and almost none of it was
+   read. Swings, structure, and model outputs are recomputed
    by the engine in minutes; store their events and the feature rows at decision and sample
    rows. Paul agreed on November 19 to drop the dense `pivot_1s` rows.
 8. **Timeframes become a parameter, and a middle one is added.** Between a 5 basis point
    swing and a 40 basis point one there is nothing. A window such as `10m@10s` has a tenth of
    the `1m@1s` rows, moves that are large against the spread, and many more swings than the
-   hourly one. Its exact size is chosen when it is built.
+   hourly one. It is `10m@10s` ([decision 11](#decisions-of-november-20-2026)).
 9. **More history is the largest single lever.** One year gives about 2,000 confirmed hourly highs
    per product at 1 ATR and two months of holdout. Models that feed other models need
-   several years, and the slow scales cannot be fitted without them.
+   several years, and the slow scales cannot be fitted without them. Five more years of GC
+   and SI are coming ([decision 13](#decisions-of-november-20-2026)).
+
+## Decisions of November 20, 2026
+
+Paul's, after the review. The numbers continue the list above.
+
+10. **The revised build order is approved**, with the structure in
+    [how the analysis is structured](#how-the-analysis-is-structured).
+11. **The middle timeframe is `10m@10s`.** The midpoint between a one-second and a
+    one-minute step is 7.75 seconds. An 8-second step does not divide a minute: over six
+    years of the GC and SI calendar, 549 of 1,553 sessions would open and close inside a
+    row, which would then mix the seconds before a close with those after the reopen.
+    Steps of 6 and 10 seconds never do, are equally near the midpoint (6 × 10 = 60), and
+    nest in minute rows. Ten has the lower cost share.
+12. **GC and SI are the proof of concept.** The files of PL, ES, YM, and RTY were removed
+    from this machine on November 20; they and NQ return after Paul moves to a larger
+    one. Everything is built for any number of products and pairs, and GC with SI
+    exercises both. Disk space is not a design constraint.
+13. **Five more years of GC and SI** will be downloaded after the move. Until then work
+    continues on the one year held. Two rules for the new years:
+    - *They are untouched, so they test what 2026 suggested.* Before anything else reads
+      them, rerun `research replay` and `research benchmark` with their settings unchanged
+      and record the result. Both read stored rows, so the years are ingested first, and
+      both now refuse dates before 2026-01-02 (`benchmark.check_period`) and score
+      walk-forward test blocks only in 2026 (`TEST_MONTHS` with the year 2026 written into
+      `replay.py`, and an assert tying the last block to `DEV_END`). So a frozen evaluation
+      period for the new years is added to that check before the run, and its test-block
+      dates (months, year, and the end the assert checks) become a frozen setting too; none
+      is changed after the run. Running them on the 2026 dates would test nothing new.
+      Named in advance: taking every fast candidate at the slow bracket loses about
+      one spread; entering against the `slow_atr_1` trend is worse than entering with it;
+      displacement alone matches the full models on the turn label.
+    - *Build them once.* Every change to base rows lands before they are ingested
+      ([build order](#build-order), item 5).
+
+    Afterwards they are development data, walked forward by year. September 1, 2026 onward
+    stays the final holdout, and paper trading is the test after it.
+14. **Intraday first.** Positions are flat before each close. Holding overnight, with a
+    slower timeframe, comes after the intraday system is proven.
+15. **Scheduled news is an input.** A table of release times known in advance (inflation,
+    employment, central bank decisions) gives every row its time to the next release and
+    since the last one. It is the one input that is not derived from MBP-1; results are
+    also reported without the minutes around a release.
+16. **The live contract is undecided** (full-size GC and SI, or the micros MGC and SIL).
+    Every policy result is reported at full-size costs and again at micro costs, where
+    commission is a larger share. The micro books are not in the data, so the second is a
+    stress, not a simulation.
+17. **A fourth target, *size***, joins the three of decision 3: the range of the next window
+    against the current ATR. Its simplest model is the current ATR and the time of day
+    ([why](#the-trade-the-system-looks-for)).
+18. **The decision model takes or skips a trade that an event proposes**; it does not choose
+    a direction at every row. Its target is the value of attempting the trade after costs.
 
 ## Build order
 
-Revised November 20, 2026 ([review](#review-of-november-20-2026)). Items 1 and 2 are done.
-Every step of the process is still built, in its order; what moved is which timeframe and
-which series come first, and when the yardstick exists.
+Approved November 20, 2026. Items 1 and 2 are done. Every step of the process is built, in
+its order. Items 3 to 5 change base rows, so they come before the long history is ingested.
 
 1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
    [settings and results](replay.md)). Taking every candidate loses about one spread at
@@ -260,36 +358,45 @@ which series come first, and when the yardstick exists.
    60 rows of step `S`, whose base rows are merged exactly from `bar_1s` as `bar_1m` is.
    `1m@1s` and `1h@1m` become two instances and must reproduce today's stored rows, which
    is the test. Do this before any stage of steps 3 to 5 is written, so each is written once.
-4. **A middle timeframe**, one more instance (`15m@15s` unless Paul chooses another size):
-   its base rows, window, indicators, volatility, swings, and labels for GC and SI.
-5. **The yardstick decision model.** Define the *direction* label (decision 3) at the
-   middle and slow horizons, since only the turn label exists today, and train on the
-   features that exist, walk-forward and purged. Extend `research replay`, which takes only
-   the stored fast candidates and their own side today, to decisions at sampled rows of the
-   middle and slow timeframes, with the bracket fixed in the spec; then run the policy
-   through it. Store no model. It will probably not beat staying flat. Its
-   purpose is that every later input set is judged by one question: is the decision model
-   better after costs with it than without it, on the same rows?
-6. **Book inputs on decision rows.** Read the best bid and ask around each decision row
-   from the DBN files, as a further input set; no table is needed. It is the only information
-   in the files that nothing reads yet. Step 1 stays open until the permanent stage
-   (`book_1s`) exists; if the inputs help, build it before any model stage is stored.
-7. **Flow, then RSI, through steps 3 to 5.** For net flow: a rolling series that does not
-   reset at the session open (not `session_cvd`) and is NULL while its window holds rows
-   without data coverage, its RSI, EMA and slope per phase (step
-   3), its swings with the existing detector and thresholds above the measured row-to-row
-   noise (step 4), and price against flow divergence (step 5, `signal_*`). Then the same for
-   RSI: RSI and EMA of the RSI series, RSI swings, price against RSI divergence. Then
-   higher-low and lower-high sequences and agreement across timeframes.
-8. **The three targets and their benchmark** (decisions 3 to 5), first for price, then for
-   flow and RSI. Each new input set is tested through the benchmark, the yardstick model,
-   and the replay.
-9. **Stored model stages** for the targets and input sets that passed decision 5 and that
-   improve the yardstick model, then the second structure pass on their probabilities. On
-   one year only one level of model reading model is stored; chains wait for item 10.
-10. **More history and products** (decision 9), as budget and disk allow. PL, ES, YM, and RTY
-    are on disk and cost only space; more years cost money.
-11. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
+4. **The middle timeframe `10m@10s`**, one more instance: its base rows, window, indicators,
+   volatility, swings, and labels for GC and SI.
+5. **Complete the state before the long build.**
+   - *The book between trades* (`book_1s`, merged to every step): queue imbalance,
+     order-flow imbalance, spread over time, depletion and refill. Step 1 is not finished
+     without it, and it is the only information in the files that nothing reads.
+   - *A rolling net-flow series* that does not reset at the session open (not
+     `session_cvd`) and is NULL while its window holds rows without data coverage.
+   - *The scheduled-news table* and its two elapsed-time features (decision 15).
+   - *The ATR normalizer in thin markets* and the `source.py` change in the
+     [to-do list](todo.md#housekeeping), which also rebuild every row.
+6. **Six years of GC and SI**, when the files arrive: the named checks on the untouched
+   years first, then the build (decision 13). Items 7 and later start on the one year held
+   and are rerun on six.
+7. **The yardstick decision model.** Extend `research replay` from the fast candidates to
+   the middle timeframe's, with the slow bracket, a market entry and a resting-limit entry,
+   and the micro-cost stress (decision 16). Then train take-or-skip on the value of
+   attempting, walk-forward and purged, on the features that exist. Store no model. It will
+   probably not beat staying flat. Its purpose is that every later input is judged by one
+   question: is the decision model better after costs with it than without it, on the same
+   rows?
+8. **The event families, through steps 3 to 5.** Each adds its indicators of indicators,
+   its swings, and its structure, and is then replayed alone and inside the yardstick:
+   - *the failed break*, from the breaches and reclaims the swing stages already emit;
+   - *flow*: RSI, EMA and slope of net flow per phase, its swings with thresholds above the
+     measured row-to-row noise, price against flow divergence (`signal_*`);
+   - *RSI*: RSI and EMA of the RSI series, RSI swings, price against RSI divergence;
+   - *sequences and agreement*: higher-low and lower-high runs, and the pullback that holds
+     across the three timeframes;
+   - *the partner*: the [pair stage](pair-design.md) for GC with SI.
+9. **The four targets and their benchmark** (decisions 3 to 5): turn, continue, direction,
+   and the size of the coming move, whose simplest model is the current ATR and the time
+   of day. First for price, then for flow and RSI.
+10. **Stored model stages** for the targets that passed decision 5 and that improve the
+    yardstick model, then the second structure pass on their probabilities. A model that
+    reads another model is stored only on the six-year history.
+11. **More products** on the larger machine: ES with NQ, YM, RTY, PL.
+12. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout. Then
+    paper trading on the live feed, and live trading after it.
 
 ### After-cost replay
 
@@ -355,42 +462,12 @@ extracting them. Gould and Bonart found queue imbalance predicted the next mid-p
 for ten Nasdaq stocks; whether that lasts through retail order arrival and a futures trade
 held for minutes is an empirical question. [Gould and Bonart](https://arxiv.org/abs/1512.03492)
 
-## Done
+## After the build order
 
-- uv-managed Python workspace with numpy, numba, Databento, and exchange calendars.
-- One year of Databento MBP-1 for GC, SI, PL, ES, YM, and RTY, verified ([data](data.md)).
-- DBN catalog with checksums, per-date contract resolution, volume-based front-month
-  rolls, and per-session data-quality reports.
-- Layers 0 and 1 as stages with their own versions, checkpoints, and derived warm-ups.
-- Layer 2 for price: six swing scales, each a stage of its own, with their events.
-- One engine for whole-session backtests and second-by-second rehearsals, verified
-  identical; fills at the MBP-1 book the order meets, ATR brackets, one portfolio.
-- Per-signal would-be-trade outcomes (ML rows) and a UI to inspect runs and trades.
-- Local PostgreSQL 18 database `trading` with numbered migrations and a file registry.
+- **Paper trading**: a Databento live MBP-1 source feeding one-second chunks into the same
+  engine; record each day and replay it as a backtest to confirm identical decisions.
+- **Live trading**: a broker execution adapter with order reconciliation, risk limits,
+  pause and resume, manual overrides, and a log of automated and human decisions.
 
-## Next
-
-1. Rebuild the stored rows from MBP-1 for GC and SI: done November 16
-   ([results](build-log.md#rebuilt-from-mbp-1-november-16-2026)).
-2. Swings of the price path (PR D): done November 16
-   ([results](build-log.md#pr-d-results-swings)). Swings of RSI (`pivot_rsi_*`) reuse the same
-   detector and wait for disk space ([handoff](handoff.md#open-questions)).
-3. Outcome labels and the benchmark (PR F): done November 17
-   ([results](build-log.md#pr-f-results-labels-and-benchmark)). The stored swings find turning
-   points sooner than fixed extrema, slope sign, or CUSUM at a like false-alarm rate. Logistic
-   regression and a boosted model on the stored features rank early candidates no better than
-   the position of price alone (AUC about 0.60 for both), so no model is stored yet.
-4. **Context inputs for the reversal model: tested November 17, no gain**
-   ([results](build-log.md#context-input-results-november-17-2026)). Read with
-   [its limits](#what-the-results-so-far-do-and-do-not-show).
-5. **Steps 3 to 5 of the process**, in the [build order](#build-order): the after-cost
-   replay and the storage change (both done), the timeframe parameter and a middle
-   timeframe, the yardstick model, book inputs, then flow and RSI through indicators of
-   indicators, swings, and divergence, and the targets and model stages.
-6. **Decision model**: purged walk-forward training on pooled examples from front-contract
-   sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a
-   final holdout of the newest data, evaluated once.
-7. **Paper trading**: a Databento live MBP-1 source feeding one-second chunks into the
-   same engine; record each day and replay it as a backtest to confirm identical decisions.
-8. **Live trading**: a broker execution adapter with order reconciliation, risk limits,
-   pause and resume, manual overrides, and a log of automated and human decisions.
+What is finished is listed in the [to-do list](todo.md#done) and recorded in the
+[build log](build-log.md).

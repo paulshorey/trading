@@ -20,7 +20,8 @@ divergences between price and RSI and between price and volume flow (CVD).
 Each step is one or more passes over the timeline, and a pass reads only passes that ran
 before it. Every step runs on every timeframe with the same code in backtests and live
 sessions. A timeframe `W@S` is a window of 60 rows of step `S`, recomputed at every step:
-`1m@1s` and `1h@1m` exist today, and more will be added, a middle one first. Write a stage
+`1m@1s` (fast) and `1h@1m` (slow) exist today, `10m@10s` (middle) is next, and more may
+follow. A step divides a minute, so rows never straddle a session close. Write a stage
 once, for any timeframe. The state of each step is in the
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
 
@@ -47,20 +48,29 @@ once, for any timeframe. The state of each step is in the
    is trained early, on what exists, as the yardstick: an input earns its place when the
    decision model is better after costs with it than without it.
 
+Each part has a role ([structure](docs/project/roadmap.md#how-the-analysis-is-structured)):
+steps 1 to 3 describe the **state** of the market; pivots and structure raise **events**, the
+moments worth a decision; models give **forecasts**; step 6 makes **decisions**. An event
+names a side, on the middle timeframe; the slow one sets direction and the size of the
+bracket; the fast one times the entry. The decision model learns whether to take the trade
+an event proposes. Trades are intraday and flat before each close.
+
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
 ([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).
 
 ## Data and scope
 
-Prototype with CME futures GC (gold) and SI (silver); one year of MBP-1 for GC, SI, PL,
-ES, YM, and RTY is in `data/databento/mbp-1/` (NQ is not downloaded yet). Compute and store
+GC (gold) and SI (silver) are the proof of concept: one year of MBP-1 for each is in
+`data/databento/mbp-1/`, and five more years will be added. Other products (ES, NQ, YM,
+RTY, PL) come later, so build everything for any number of products and pairs. Compute and store
 everything per contract, so products can be added; each product also reads as one permanent series
 (`market.continuous_*`) that takes every session's rows from its front contract. Never
 merge trades or prices of different delivery months. Products that move together (GC with
 SI, ES with NQ) are also read as pairs. The faster timeframe times an entry; the slower one
 sets the direction and the size of the move traded, so that the move is large against the
-spread and commission. Market data is Databento MBP-1 only, under the same rules for
+spread and commission. Market data is Databento MBP-1 only (the one other input is a table
+of scheduled news release times), under the same rules for
 every product: every trade and every change to the best bid and ask, one price level deep
 (see `docs/project/engine.md#data-limits-mbp-1`). Trades build the rows and metrics;
 simulated orders fill at the book the exchange showed when they arrive. Validate trades

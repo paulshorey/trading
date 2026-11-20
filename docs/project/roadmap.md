@@ -67,7 +67,8 @@ together, and none is known to pay:
 **The decision model is asked a narrow question.** At an event row the side is given, and
 the model learns whether to take the trade, and how large, from what attempting it earned
 after costs (the replay's [value of attempting](#after-cost-replay)). Choosing a direction
-from nothing is the hardest question there is: returns here have no memory at any horizon
+from nothing is the hardest question there is: the return of one block says nothing about the
+next at the five horizons measured, and only that linear check was made
 ([measured](#review-of-november-20-2026)). "Is this setup worth taking now" has plain
 baselines (take all, take none) and is the question the goal asks. The *direction* target
 at any row stays as a forecast, and as the check that the events are not hiding an edge.
@@ -195,8 +196,8 @@ clock earns is still not built.
 
 A trade that wins or loses one typical move and pays one spread breaks even at a hit rate of
 50% plus half the ratio: 68% on GC at one minute, 55% at fifteen, 52% at an hour, before
-commission. One block's return says nothing about the next at any horizon, so there is no
-plain momentum or reversal to collect: an edge has to come from conditions, which is what
+commission. One block's return says nothing about the next at these horizons (a one-lag
+linear check only), so there is no plain momentum or reversal to collect: an edge has to come from conditions, which is what
 steps 3 to 5 build.
 
 **One year cannot judge the hourly scale.** Results are only as many as their independent
@@ -311,8 +312,12 @@ Paul's, after the review. The numbers continue the list above.
 13. **Five more years of GC and SI** will be downloaded after the move. Until then work
     continues on the one year held. Two rules for the new years:
     - *They are untouched, so they test what 2026 suggested.* Before anything else reads
-      them, rerun `research replay` and `research benchmark` unchanged and record the
-      result. Named in advance: taking every fast candidate at the slow bracket loses about
+      them, rerun `research replay` and `research benchmark` with their settings unchanged
+      and record the result. Both read stored rows, so the years are ingested first, and
+      both now refuse dates before 2026-01-02 (`benchmark.check_period`): a frozen
+      evaluation period for the new years is added to that check before the run, and is
+      not changed after it. Running them on the 2026 dates would test nothing new.
+      Named in advance: taking every fast candidate at the slow bracket loses about
       one spread; entering against the `slow_atr_1` trend is worse than entering with it;
       displacement alone matches the full models on the turn label.
     - *Build them once.* Every change to base rows lands before they are ingested

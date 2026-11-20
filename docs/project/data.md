@@ -10,9 +10,11 @@ window engine described in the [sliding-window design](../sliding-windows/design
 
 One year of Databento **MBP-1** (every trade with its aggressor side, and every change to
 the best bid and ask: price, displayed size, and order count on each side), November 9,
-2025 to November 5, 2026, for six CME products. **GC and SI are the prototype pair.** NQ
-is not downloaded yet (its year is about 50 GB); ES is here
-but waits for NQ, its partner.
+2025 to November 5, 2026. **GC and SI are the proof of concept** and the only products on
+this machine. PL, ES, YM, and RTY were downloaded and verified with them, and their files
+were removed on November 20, 2026 (Paul keeps them in cloud storage); they return, with NQ
+and five more years of GC and SI, on a larger machine. What this page says about those four
+describes the downloads as they were verified.
 
 | Product | Exchange contract      | Tick, value  | Files | Size    | Records/day (median) | Trades/day (median) | Book changes per trade |
 | ------- | ---------------------- | ------------ | ----- | ------- | -------------------- | ------------------- | ---------------------- |
@@ -28,7 +30,7 @@ Counts cover all contracts and spreads of a product; medians are over days with 
 
 Layout: one Databento job folder per product, kept exactly as delivered (manifest,
 metadata, condition, and daily `glbx-mdp3-YYYYMMDD.mbp-1.dbn.zst` files), under
-`data/databento/mbp-1/<ROOT>--2025-11-08--2026-11-07/` (gitignored, 123 GB; back it up).
+`data/databento/mbp-1/<ROOT>--2025-11-08--2026-11-07/` (gitignored, 27 GB for GC and SI; back it up).
 Every job is dataset `GLBX.MDP3`, schema `mbp-1`, parent symbology (`GC.FUT` and so on:
 all contracts and calendar spreads), DBN with zstd, split by UTC day, requested for
 2025-11-08 to 2026-11-07.
@@ -70,7 +72,7 @@ Verified on November 15, 2026:
 are the same, and the book between trades lets a simulated order fill at the price it
 would have met, so execution costs are measured instead of guessed; see
 [data limits](engine.md#data-limits-mbp-1). The TBBO files were deleted. The price is
-size: 123 GB against 7.3 GB, and about 20 to 60 book records for every trade to decode.
+size: 123 GB for the six products against 7.3 GB, and about 20 to 60 book records for every trade to decode.
 
 **Contract definitions (recommended, not yet downloaded):** Databento quoted $0.00 for
 a year of `definition` records for all seven parents. They give each contract's
@@ -92,7 +94,7 @@ PostgreSQL holds everything derived from them, including one row per scheduled-o
 second per contract.** There is no Parquet or DuckDB layer.
 
 - **DBN files** keep every trade and every change to the best bid and ask. Fills and any
-  rebuild read them. A year of six products is 123 GB with zstd.
+  rebuild read them. A year of GC and SI is 27 GB with zstd (123 GB for the six products first downloaded).
 - **One-second rows** (OHLCV plus per-second metrics such as aggressor flow, CVD,
   spread, and top-of-book size and imbalance at trades) are computed by an ingestion
   job and stored for SQL research, ML exports, and fast backtests. **Every

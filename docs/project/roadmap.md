@@ -37,7 +37,7 @@ Reviewed November 19, 2026 against the six steps in [AGENTS.md](../../AGENTS.md#
 | 2. Sliding windows | Built (`1m@1s`, `1h@1m`), with row counting and per-phase indicators | Each timeframe has its own stage modules; a third timeframe should be a parameter, not new code |
 | 3. Indicators, then indicators of indicators | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
 | 4. Reversal and continuation probabilities | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
-| 5. Structure and divergence | Higher and lower highs and lows, trend, breaches (in the swing rows) | No divergence of any kind; no cross-timeframe agreement signal |
+| 5. Structure and divergence | Higher and lower highs and lows, trend, breaches (in the swing rows) | No divergence of any kind; cross-timeframe agreement was tested only as rules on the slow swings, and [none paid](replay.md#agreement-results-november-19-2026) |
 | 6. Decision model | An engine with fills at the book, would-be trade rows (`labels.py`), a losing rule-based baseline, and the [after-cost replay](replay.md) that compares policies in one portfolio | No trained decision model; no policy beats staying flat |
 
 The foundation (steps 1 and 2, the stage graph, the engine, the checks that stored rows equal

@@ -82,6 +82,9 @@ task live in [handoff: next steps](handoff.md#next-steps).
 - [x] **After-cost replay.** `research replay`: would-be bracket trades for every stored fast
       candidate; take-all and the displacement rule, per candidate and in one portfolio
       ([settings and results](replay.md)). Neither bracket pays; staying flat is the rule to beat.
+- [x] **Agreement with the slower timeframe, by rule.** The replay's slow bracket split by the
+      slow swings' leg, trend and a fresh reversal at three scales
+      ([results](replay.md#agreement-results-november-19-2026)): no rule passed.
 - [x] **Store sparse layers as events and decision rows.** Done November 19 (PR #89):
       `pivot_1s` went from 64 GB to 4.5 GB.
 - [ ] **Book inputs on the stored candidates,** read from the DBN files; no table.

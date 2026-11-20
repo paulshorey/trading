@@ -219,7 +219,7 @@ it. So a model stage is worth storing when the decision model is better with its
 out-of-fold probability than without it, on the same rows. Every stacked level also spends
 history, because its readers train only on out-of-fold rows: one year supports one level.
 
-**Code.** Each timeframe is a copy: `stage_vol_1s.py` and `stage_vol_1m.py` differ in
+**Code.** Each timeframe was a copy (changed the same day, build-order item 3): `stage_vol_1s.py` and `stage_vol_1m.py` differed in
 about 200 of 400 lines, the candle and swing stages are separate modules too, and every
 table and migration is per timeframe. Every stage of steps 3 to 5 would be written two or three
 times. Making the timeframe a parameter first is the one structural change this review asks
@@ -343,21 +343,42 @@ Paul's, after the review. The numbers continue the list above.
     ([why](#the-trade-the-system-looks-for)).
 18. **The decision model takes or skips a trade that an event proposes**; it does not choose
     a direction at every row. Its target is the value of attempting the trade after costs.
+19. **A daily loss cap:** $3,000 a session on the full-size contracts and $300 on the
+    micros. An entry is taken only if its stop, added to the session's losses so far, stays
+    inside the cap, and no entry follows once the cap is reached. Every portfolio replay
+    applies it and reports how often it bound.
+20. **No trade count is aimed for.** The system takes the setups that stand out against the
+    rest of the history, whether that is none in a month or ten in a day. A policy is never
+    tuned toward a number of trades.
+21. **It runs unattended, inside the session.** Entries are allowed from the session's open
+    until three hours before its close, and every position is flat at the close. This is the
+    replay's eligibility rule already (the longest hold must fit).
+22. **The purpose is to prove the method before any capital is committed.** Unusual ideas
+    are welcome; each is still written down before it is run and recorded whatever it shows.
+23. **No trade where the market cannot be trusted** (Paul left the rule to judgment). An
+    entry is not eligible when the session's data is flagged, the book at the decision is
+    missing, one-sided or flagged, or the spread is too large a share of the bracket's ATR
+    (the limit is frozen in each spec). Such rows are left out of training, by eligibility
+    at the decision row, and counted. The ATR that normalizes features is floored at the
+    spread, as the swing threshold already is, so a market that has stopped moving cannot
+    produce unbounded values; this changes stored values and lands before the six-year build.
 
 ## Build order
 
-Approved November 20, 2026. Items 1 and 2 are done. Every step of the process is built, in
+Approved November 20, 2026. Items 1 to 3 are done. Every step of the process is built, in
 its order. Items 3 to 5 change base rows, so they come before the long history is ingested.
 
 1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
    [settings and results](replay.md)). Taking every candidate loses about one spread at
    either bracket, and the displacement rule stays flat.
 2. **Storage change** (decision 7): done November 19 (PR #89).
-3. **Timeframe as a parameter** (decision 8). One stage class per kind (base rows, candle,
-   window statistics, volatility, swings, labels), built for a timeframe `W@S`: a window of
-   60 rows of step `S`, whose base rows are merged exactly from `bar_1s` as `bar_1m` is.
-   `1m@1s` and `1h@1m` become two instances and must reproduce today's stored rows, which
-   is the test. Do this before any stage of steps 3 to 5 is written, so each is written once.
+3. **Timeframe as a parameter** (decision 8): done November 20
+   ([what was built](build-log.md#timeframe-as-a-parameter-november-20-2026)). One stage class
+   per kind (step rows, window, window statistics, volatility, swings) is built for a
+   timeframe `W@S`: a window of 60 rows of step `S`, whose step rows are merged exactly from
+   `bar_1s`. `1h@1m` is its first instance and its stored rows did not change. `1m@1s`, whose
+   rows come from the trades, keeps its own stage modules on the same calculations. A stage
+   of steps 3 to 5 is written once, against a timeframe's frame of in-memory values.
 4. **The middle timeframe `10m@10s`**, one more instance: its base rows, window, indicators,
    volatility, swings, and labels for GC and SI.
 5. **Complete the state before the long build.**

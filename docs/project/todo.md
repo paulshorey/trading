@@ -7,10 +7,8 @@ the [build log](build-log.md).
 
 ## Now: the build order
 
-- [ ] **Timeframe as a parameter** (item 3). One stage class per kind, built for a
-      timeframe `W@S`; `1m@1s` and `1h@1m` become two instances that reproduce today's
-      stored rows ([how](handoff.md#next-steps)).
-- [ ] **The middle timeframe `10m@10s`** (item 4).
+- [ ] **Store the middle timeframe `10m@10s`** (item 4): register it, its tables, its
+      labels, and its join into the engine ([how](handoff.md#next-steps)).
 - [ ] **Complete the state** (item 5), before the six-year build:
   - [ ] `book_1s`, merged to every step: tier 0 from every book event (queue imbalance,
         order-flow imbalance, time-weighted spread, depletion and refill;
@@ -18,10 +16,9 @@ the [build log](build-log.md).
         day cache switched to keep book events;
   - [ ] a rolling net-flow series without session resets;
   - [ ] the scheduled-news table and its elapsed-time features;
-  - [ ] the ATR normalizer for thin markets: `*_atr` values grow without bound when the ATR
-        has decayed to almost nothing (rare on front sessions, common in lead sessions):
-        clip at training, or floor the normalizer
-        ([finding](build-log.md#pr-d-results-swings));
+  - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
+        ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
+        [decision 23](roadmap.md#decisions-of-november-20-2026));
   - [ ] the `source.py` change under [housekeeping](#housekeeping).
 - [ ] **Six years of GC and SI** (item 6; Paul downloads them after moving to a larger
       machine): the named checks on the untouched years, then the build.
@@ -115,3 +112,5 @@ Details of each are in the [build log](build-log.md).
 - [x] Sparse storage of the fast swing rows: `pivot_1s` from 64 GB to 4.5 GB (#89).
 - [x] After-cost replay (#90) and agreement with the slower timeframe by rule (#91): no
       rule beats staying flat.
+- [x] Timeframe as a parameter (build-order item 3): one stage class per kind for
+      merged-step timeframes; stored rows unchanged.

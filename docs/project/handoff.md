@@ -31,13 +31,15 @@ The experiments so far say three things:
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next task** is item 4 of the [build order](roadmap.md#build-order): register the
-middle timeframe `10m@10s` ([how](#next-steps)). Item 3, the timeframe as a parameter, is
-done. Items 4 and 5 change base rows and should be finished before the six-year history is
-ingested, so that it is built once.
+**The next task** is item 5 of the [build order](roadmap.md#build-order): complete the
+state (the book between trades, a rolling net-flow series, the scheduled-news table, the
+ATR normalizer) before the six-year history is ingested, so that it is built once
+([how](#next-steps)). Items 3 and 4, the timeframe as a parameter and the middle timeframe
+`10m@10s`, are done. Item 7, the yardstick decision model, does not wait for the history
+and can be built beside item 5.
 
 **The state of the machine** (checked November 20): `main` is clean, lint and tests pass,
-`ingest plan GC SI` reports every contract `current`, and the database is 110 GB. One year
+`ingest plan GC SI` reports every contract `current`, and the database is 141 GB. One year
 of MBP-1 for GC and SI is in `data/databento/mbp-1/` (27 GB). They are the proof of
 concept: the files of PL, ES, YM, and RTY were removed on November 20 and return, with NQ
 and five more years of GC and SI, after Paul moves to a larger machine. `market.source_file`
@@ -87,7 +89,7 @@ lib/strategy-core                  The same code for history and live sessions
         ▼                                      ▼
 Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
 (research backtest, verify)           one table per stage, per contract:
-                                        bar_1s, bar_1m (tier 0)
+                                        bar_1s, bar_10s, bar_1m (tier 0)
                                         candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1s,
                                         vol_1m (tier 1)
                                         pivot_1s, pivot_1m, pivot_event (tier 2)
@@ -193,9 +195,9 @@ These are fundamental; changing any of them changes every stored value.
 
 | Area     | State |
 | -------- | ----- |
-| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); **the after-cost replay and its agreement rules** (#90, #91) |
+| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); the after-cost replay and its agreement rules (#90, #91); **the timeframe as a parameter and the middle timeframe `10m@10s`** (#94 and the PR after it) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC and SI in `data/databento/mbp-1/` (27 GB), checksums and full decode verified; PL, ES, YM, and RTY were verified too and removed on November 20 (Paul keeps the files in cloud storage); NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 110 GB: `0001_baseline` through `0007_pivot_labels` applied; GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
+| Database | PostgreSQL 18 database `trading`, 141 GB: `0001_baseline` through `0008_middle_timeframe` applied; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; no rule or model tested so far beats staying flat after costs |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -225,28 +227,17 @@ than a second are one class per kind in `stage_step_*.py`, built from a
 `timeframes.Timeframe`; `1h@1m` is the instance stored today. The one-second stages keep
 modules of their own.
 
-**4. The middle timeframe `10m@10s`.** `timeframes.MIDDLE` exists and its stages are tested
-in memory (`tests/test_timeframes.py`). A minute holds exactly six of its rows, and every
-session opens and closes on a row boundary
-([why not 8 seconds](roadmap.md#decisions-of-november-20-2026)). To store it:
+**4. The middle timeframe `10m@10s`: done**
+([what was built](build-log.md#the-middle-timeframe-10m10s-november-20-2026)). Its step rows,
+window, statistics, volatility, three swing scales (`mid_atr_*`), and six label variants are
+stored for GC and SI, and the engine reads its latest completed row at every second, as it
+reads the latest minute. `pipeline.MERGED` lists the stored timeframes; another one is a
+`Timeframe`, an entry there, its scales and label horizon, and a migration that copies the
+tables (`0008` is the pattern).
 
-- Add `MIDDLE` to `timeframes.MERGED` and build `pipeline.STAGES` from `MERGED` (step rows,
-  candle, statistics, volatility, swing scales `mid_atr_*`, and their labels).
-- Migration `0008`: the tables `bar_10s`, `candle_10m_10s`, `stats_10m_10s`, `vol_10s`,
-  `pivot_10s`, `pivot_label_10s` and their continuous views, as `0002` to `0007` made the
-  minute ones.
-- `stage_pivot_label.HORIZON` needs an entry for `10s` (rows after the decision row; 300
-  fast and 240 slow today). Freeze it in the [label spec](pivot-label-spec.md) first.
-- `pipeline.StageFeatures` joins the slow rows as of each second (`HOURLY`, `1h@1m.age_s`).
-  Make that join a loop over `MERGED`, so the middle rows join the same way with their own
-  age, and the engine's feature names for `1h@1m` stay as they are.
-- `stats_*` columns named for minutes (`minute_returns`, `up_minute_ratio`, `vr_5`) count
-  step rows on any timeframe. Either keep the names with that meaning stated, or rename
-  them in the same migration; decide it, and report it.
-- `benchmark.py` and `replay.py` read the slow scales by name (`row = ordinal // 60`);
-  give them the timeframe, since item 7 runs the replay on the middle candidates.
-- The rebuild adds stages only: plan must show `add` for the new ones and `current` for
-  the rest.
+Still to do when item 7 needs it: `benchmark.py` and `replay.py` read the fast candidates
+and the slow scales by name (`row = ordinal // 60`). Give them the timeframe, so the replay
+runs on the middle candidates with the slow bracket.
 
 **5. Complete the state:** the book stage, a rolling net-flow series, the scheduled-news
 table, the ATR normalizer, and the `source.py` change, each as the

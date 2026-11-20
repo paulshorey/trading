@@ -79,7 +79,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | -------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
 | `bar_1s`       | 0    | `market` (trades, coverage), calendar                                                                                |
 | `book_1s`      | 0    | `market` (book events, coverage), calendar; planned                                                                  |
-| `bar_1m`       | 0    | `bar_1s`                                                                                                             |
+| `bar_10s`, `bar_1m` | 0 | `bar_1s`: the step rows of `10m@10s` and `1h@1m`, one class ([timeframes](#stages)) |
 | `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
 | `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
 | `stats_1h_1m`  | 1    | `bar_1m`, `candle_1h_1m` (its status, ATR, and path fields: a declared edge within tier 1)                           |
@@ -91,7 +91,10 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series); planned                                                                             |
 | `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
 | `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
-| `pivot_label_1s`, `pivot_label_1m` | — | `market`, `bar_1s`, and one swing scale each: twelve label stages ([spec](pivot-label-spec.md)) |
+| `pivot_label_1s`, `pivot_label_10s`, `pivot_label_1m` | — | `market`, `bar_1s`, and one swing scale each: eighteen label stages ([spec](pivot-label-spec.md)) |
+
+Every `1h@1m` row of this table has a `10m@10s` twin with the same inputs one timeframe down:
+`candle_10m_10s`, `stats_10m_10s`, `vol_10s`, and `pivot_10s`.
 
 The two resolutions are independent branches below tier 3: nothing at second resolution
 feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slow swing
@@ -103,8 +106,10 @@ is longer than a second is a `Timeframe` value (its name, its step in seconds, a
 of its tables), and each kind of stage is one class built for it: `stage_step_bar.py` (step
 rows merged from `bar_1s`), `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`,
 and `stage_step_pivot.py`. `bar_1m`, `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, and the slow swing
-scales are the instances for `1h@1m`; `timeframes.MERGED` lists the timeframes that are
-registered and stored. A step divides a minute, so step rows nest in minutes and never straddle
+scales are the instances for `1h@1m`, and `bar_10s`, `candle_10m_10s`, `stats_10m_10s`,
+`vol_10s`, and the scales `mid_atr_*` in `pivot_10s` those for `10m@10s`, with the same
+columns. `pipeline.MERGED` lists the timeframes that are registered and stored; adding one
+adds stages and changes no other stage's identity. A step divides a minute, so step rows nest in minutes and never straddle
 a session boundary. The one-second timeframe `1m@1s` is the base case with modules of its own
 (`stage_bar_1s`, `stage_candle_1m_1s`, `stage_vol_1s`, `stage_pivot_1s`): its rows come from
 the trades, and it shares the calculation modules (`windows`, `indicators`, `volatility`,

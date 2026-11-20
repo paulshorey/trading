@@ -6,6 +6,59 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## The middle timeframe `10m@10s` (November 20, 2026)
+
+Build-order item 4. `10m@10s` is a window of 60 rows of ten seconds, between `1m@1s` and
+`1h@1m`. Its stages are the classes that build the `1h@1m` ones, for another `Timeframe`.
+
+**What was built**
+
+- Stages `bar_10s`, `candle_10m_10s`, `stats_10m_10s`, `vol_10s`, the swing scales
+  `mid_atr_0p5`, `mid_atr_1`, `mid_atr_2` (`pivot_10s`), and six label variants
+  (`pivot_label_10s`): 38 stages in all. `pipeline.MERGED` lists the stored timeframes.
+- Migration `0008_middle_timeframe`: each table is created `LIKE` its minute counterpart, so
+  the columns are the same, with its continuous view.
+- The engine (`pipeline.StageFeatures`) joins every merged timeframe as of each second, with
+  its age (`10m@10s.age_s`): 625 features, 415 before. The `1h@1m` feature names did not change.
+- Label parameters were frozen first ([spec](pivot-label-spec.md#middle-scales-added-november-20-2026-before-any-label-was-computed)):
+  a horizon of 240 rows (40 minutes) and a reclaim window of 30 rows.
+
+Decisions made here (derived, reported in the PR):
+
+- **The fast swing rows are kept at every ten-second row's end**, not only at minute ends
+  ([rule](ingestion.md#fast-swing-rows-are-stored-where-they-are-read)), so a decision on
+  the middle timeframe finds the fast scales in storage. `pivot_1s` went from 14,286,813 to
+  31,095,900 rows.
+- **`stats_*` column names stay** (`minute_returns`, `up_minute_ratio`, `vr_5`); on another
+  timeframe they count its step rows, and the descriptions say so. A rename would have meant
+  a migration of the hourly table and its view for no change in values.
+- **The list of stored timeframes moved to `pipeline.py`**, out of `timeframes.py`, which is
+  part of every step stage's identity: adding a timeframe now rebuilds nothing else.
+
+**Results** (`research ingest run GC SI --rebuild --workers 8`, run 6, 13 minutes; the
+database went from 110 GB to 141 GB):
+
+- 7,073,190 rows in each ten-second table, exactly a tenth of the 70,731,900 second rows;
+  21,219,570 `pivot_10s` rows; 384,566 events; 915,075 label rows. The continuous series has
+  2,118,600 ten-second rows per product over 257 sessions. `ingest plan GC SI` reports every
+  contract `current`.
+- **Nothing else changed.** The 96 fingerprints of the hourly tables, the slow swings, the
+  labels, and the fast and slow events equal those taken after the refactor.
+- **The middle scales sit between the others.** September front sessions, thresholds at
+  0.5, 1, and 2 ATR: 8.2, 16.5, and 34.3 bps for GC and 13.4, 27.3, and 57.0 bps for SI
+  (fast: 2.4, 4.8, 9.8 and 4.3, 7.5, 14.7; slow: 21 to 144). Confirmed highs in the year at
+  1 ATR: 11,587 GC and 10,665 SI (fast 87,034 and 76,619; slow 2,077 and 1,968).
+- **Labels.** Candidates that reverse: 46% and 62% at 0.5 ATR (25% and 50% stages), 42% and
+  59% at 1 ATR, 28% and 46% at 2 ATR, like the other timeframes. `mid_atr_1_q25` has
+  136,611 candidates, about forty times what the slow scale gave the first benchmark.
+- **Warm sessions.** `vol_10s` is warm on 464 of 858 contract-sessions (its daily chain needs
+  37 sessions, as `vol_1m`'s does); the candle and statistics on 834.
+- **Pilot first:** GCZ6, 15 sessions, built from scratch into a throwaway database in 69
+  seconds; volume equal across the 1-second, 10-second, and 1-minute rows.
+
+Evidence: `~/middle-timeframe.ingest.json` and `.log`, `hash-after.txt`, `hash-diff.txt`
+(empty), `pilot.json` and `.log`, `verify.json`.
+
 ## Timeframe as a parameter (November 20, 2026)
 
 Build-order item 3. The stages of `1h@1m` were modules of their own beside those of `1m@1s`.

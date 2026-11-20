@@ -162,10 +162,11 @@ def _task(args: tuple) -> dict:
     return replay_sessions(*args)
 
 
-def interval(values: np.ndarray, rng) -> list[float]:
-    """95% interval of the mean of per-trade-date values, resampling whole trade dates."""
+def interval(values: np.ndarray, rng) -> list[float | None]:
+    """95% interval of the mean of per-trade-date values, resampling whole trade dates.
+    With no values it is undefined: [None, None], never a zero-width interval."""
     if not len(values):
-        return [0.0, 0.0]
+        return [None, None]
     draw = rng.integers(0, len(values), (benchmark.RESAMPLES, len(values)))
     return [round(float(v), 2) for v in np.percentile(values[draw].mean(axis=1), [2.5, 97.5])]
 
@@ -533,6 +534,11 @@ def run(
             collect(f.result() for f in as_completed([pool.submit(_task, t) for t in tasks]))
     parts.sort(key=lambda p: (p[0], int(p[1]["day"][0])))  # the same rows in the same order
     frame = Frame(products, parts, days)
+    if not frame.n:
+        raise ValueError(
+            f"No candidates to replay for {products} from {start} to {end}: "
+            f"{sessions}. Are the stored rows built (`research ingest plan`)?"
+        )
     out = {
         "period": [start.isoformat(), end.isoformat()],
         "test_months": [f"2026-{m:02d}" for m in TEST_MONTHS],

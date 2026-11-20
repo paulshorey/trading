@@ -205,3 +205,9 @@ def test_a_month_without_enough_history_is_not_scored():
 def test_the_holdout_is_refused():
     with pytest.raises(ValueError, match="holdout"):
         replay.run(["GC"], date(2026, 8, 1), date(2026, 9, 1))
+
+
+def test_an_interval_of_no_values_is_undefined_not_zero():
+    rng = np.random.default_rng(0)
+    assert replay.interval(np.zeros(0), rng) == [None, None]
+    assert replay.interval(np.array([1.0, 1.0]), rng) == [1.0, 1.0]

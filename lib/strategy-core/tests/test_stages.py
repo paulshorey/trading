@@ -8,12 +8,12 @@ from strategy_core.engine import MarketChunk
 from strategy_core.features import FeatureConfig
 from strategy_core.market import HOUR, NS
 from strategy_core.pipeline import STAGES, Pipeline, check_graph
-from strategy_core.stage_bar_1m import MinuteBarStage
 from strategy_core.stage_bar_1s import BarStage
-from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS, CandleStage
-from strategy_core.stage_stats_1h_1m import HourStatsStage
-from strategy_core.stage_vol_1m import VolMinuteStage
+from strategy_core.stage_step_bar import MinuteBarStage
+from strategy_core.stage_step_candle import HourCandleStage
+from strategy_core.stage_step_stats import HourStatsStage
+from strategy_core.stage_step_vol import VolMinuteStage
 from strategy_core.stage_vol_1s import VolSecondStage
 from strategy_core.stages import StageContext
 from strategy_core.synthetic import random_trades

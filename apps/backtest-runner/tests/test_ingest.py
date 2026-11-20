@@ -14,20 +14,20 @@ from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
 from strategy_core.pipeline import SPARSE, Pipeline, stored_ordinals, stored_rows
-from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
-from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
-from strategy_core.stage_pivot_1m import SCALES as SLOW_SCALES
-from strategy_core.stage_pivot_1m import PivotMinuteStage
 from strategy_core.stage_pivot_1s import COLUMNS as PIVOT_COLUMNS
 from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
 from strategy_core.stage_pivot_label import COLUMNS as LABEL_COLUMNS
 from strategy_core.stage_pivot_label import FAST_LABELS, SLOW_LABELS
-from strategy_core.stage_stats_1h_1m import COLUMNS as STATS_COLUMNS
-from strategy_core.stage_stats_1h_1m import HourStatsStage
-from strategy_core.stage_vol_1m import COLUMNS as VOL_COLUMNS
-from strategy_core.stage_vol_1m import VolMinuteStage
+from strategy_core.stage_step_bar import COLUMNS as MINUTE_COLUMNS
+from strategy_core.stage_step_candle import HourCandleStage
+from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
+from strategy_core.stage_step_pivot import PivotMinuteStage
+from strategy_core.stage_step_stats import COLUMNS as STATS_COLUMNS
+from strategy_core.stage_step_stats import HourStatsStage
+from strategy_core.stage_step_vol import COLUMNS as VOL_COLUMNS
+from strategy_core.stage_step_vol import VolMinuteStage
 from strategy_core.stage_vol_1s import COLUMNS as VOL_SECOND_COLUMNS
 from strategy_core.stage_vol_1s import VolSecondStage
 from strategy_core.swings import EVENT_COLUMNS

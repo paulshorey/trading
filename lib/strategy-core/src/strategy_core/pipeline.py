@@ -30,15 +30,15 @@ from .columns import Table
 from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
-from .stage_bar_1m import MinuteBarStage
 from .stage_bar_1s import BarStage
-from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
-from .stage_pivot_1m import SCALES as SLOW_SCALES
 from .stage_pivot_1s import SCALES as FAST_SCALES
 from .stage_pivot_label import FAST_LABELS, SLOW_LABELS
-from .stage_stats_1h_1m import HourStatsStage
-from .stage_vol_1m import VolMinuteStage
+from .stage_step_bar import MinuteBarStage
+from .stage_step_candle import HourCandleStage
+from .stage_step_pivot import SCALES as SLOW_SCALES
+from .stage_step_stats import HourStatsStage
+from .stage_step_vol import VolMinuteStage
 from .stage_vol_1s import VolSecondStage
 from .stages import Stage, StageContext
 from .state import export_state, import_state

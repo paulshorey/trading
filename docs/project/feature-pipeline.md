@@ -98,6 +98,20 @@ feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slo
 scales, which replay the trades second by second), so changing a second-resolution
 indicator never rebuilds the minute branch.
 
+**Timeframes are a parameter** (`strategy_core/timeframes.py`). A timeframe `W@S` whose step
+is longer than a second is a `Timeframe` value (its name, its step in seconds, and the labels
+of its tables), and each kind of stage is one class built for it: `stage_step_bar.py` (step
+rows merged from `bar_1s`), `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`,
+and `stage_step_pivot.py`. `bar_1m`, `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, and the slow swing
+scales are the instances for `1h@1m`; `timeframes.MERGED` lists the timeframes that are
+registered and stored. A step divides a minute, so step rows nest in minutes and never straddle
+a session boundary. The one-second timeframe `1m@1s` is the base case with modules of its own
+(`stage_bar_1s`, `stage_candle_1m_1s`, `stage_vol_1s`, `stage_pivot_1s`): its rows come from
+the trades, and it shares the calculation modules (`windows`, `indicators`, `volatility`,
+`swings`). A stage passes in-memory values to later stages of its timeframe through
+`Timeframe.frame(products)`: `bars`, `metrics`, `ordinal`, `observed_seconds`, `candles`, and
+`window`. A new stage for steps 3 to 5 is written once against that frame.
+
 **Variants are stages** (implemented in PR D). Each swing scale is a stage class of its own
 (`pivot_1s:fast_atr_1`, …) that writes to its resolution's shared table under its
 `variant_id` (`market.variant`). It therefore has its own builder identity, checkpoint, and

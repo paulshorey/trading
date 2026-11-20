@@ -211,3 +211,8 @@ def test_an_interval_of_no_values_is_undefined_not_zero():
     rng = np.random.default_rng(0)
     assert replay.interval(np.zeros(0), rng) == [None, None]
     assert replay.interval(np.array([1.0, 1.0]), rng) == [1.0, 1.0]
+
+
+def test_a_mean_without_finite_values_is_none():
+    assert replay.finite_mean(np.array([np.nan, np.nan]), 4) is None
+    assert replay.finite_mean(np.array([1.0, np.nan, 2.0]), 4) == 1.5

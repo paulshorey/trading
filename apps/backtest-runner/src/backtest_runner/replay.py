@@ -171,6 +171,12 @@ def interval(values: np.ndarray, rng) -> list[float | None]:
     return [round(float(v), 2) for v in np.percentile(values[draw].mean(axis=1), [2.5, 97.5])]
 
 
+def finite_mean(values: np.ndarray, digits: int) -> float | None:
+    """Mean of the finite values, or None when there are none (JSON has no NaN)."""
+    values = values[np.isfinite(values)]
+    return round(float(values.mean()), digits) if len(values) else None
+
+
 def drawdown(pnl: np.ndarray) -> float:
     curve = np.r_[0.0, np.cumsum(pnl)]
     return float(np.max(np.maximum.accumulate(curve) - curve))
@@ -278,8 +284,8 @@ class Frame:
                     "avg_r_net": round(float((usd / m["risk_usd"][closed]).mean()), 4),
                     "avg_net_usd": round(float(usd.mean()), 2),
                     "avg_commission_r": round(float(m["cost_r"][closed].mean()), 4),
-                    "avg_decision_spread_r": round(float(np.nanmean(m["spread_r"][closed])), 4),
-                    "avg_entry_slip_r": round(float(np.nanmean(m["slip_r"][closed])), 4),
+                    "avg_decision_spread_r": finite_mean(m["spread_r"][closed], 4),
+                    "avg_entry_slip_r": finite_mean(m["slip_r"][closed], 4),
                     "exit_reasons": {
                         REASONS[k]: int(c)
                         for k, c in enumerate(
@@ -423,10 +429,13 @@ def report(frame: Frame, variant: int, provisional: bool) -> dict:
         base = frame.money(bracket, "base")
         taken, scored, fits = displacement_rule(frame, eligible, base)  # chosen at base costs
         dates = np.zeros(0, int)
-        if scored.any():  # every warm session of the scored months, with or without a candidate
-            lo, hi = a["day"][scored].min(), a["day"][scored].max()
+        if months := [int(f["month"][-2:]) for f in fits if "skipped" not in f]:
+            # every warm session of the scored months, with or without a candidate
+            base = date(2000, 1, 1)
+            lo = (date(2026, min(months), 1) - base).days
+            hi = (date(2026 + max(months) // 12, max(months) % 12 + 1, 1) - base).days
             every = np.unique(np.concatenate([np.asarray(d, dtype=int) for d in frame.days]))
-            dates = every[(every >= lo) & (every <= hi)]
+            dates = every[(every >= lo) & (every < hi)]
         entry: dict = {
             "displacement_rule_fits": fits,
             "null_displacement": int((scored & ~np.isfinite(a["disp"])).sum()),

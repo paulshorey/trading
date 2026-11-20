@@ -17,8 +17,8 @@ and the [handoff](handoff.md) (current state and how to continue).
    of a lower one: `1m@1s` is the last 60 one-second rows, every second; `1h@1m` is the last
    60 one-minute rows, every minute. Windows count rows of scheduled trading time, never
    clock time ([sliding windows](../sliding-windows/README.md)).
-2. **Layers.** History is processed in passes, like floors of a building: each layer reads
-   only the layers below it, and a layer is finished for a moment in time before anything
+2. **Passes.** History is processed in passes, like floors of a building: each pass reads
+   only the passes below it, and a pass is finished for a moment in time before anything
    above reads it. A value never uses information from after its own row.
 
 Indicators that advance by one candle period read the previous window of the same phase.
@@ -29,47 +29,41 @@ latest completed minute, including its age.
 
 ## The process and where it stands
 
-Reviewed November 19, 2026 against the six steps in [AGENTS.md](../../AGENTS.md#the-process-required-order).
+Reviewed November 20, 2026 against the six steps in [AGENTS.md](../../AGENTS.md#the-process-required-order).
+A **step** is a part of the process; a **tier** is a dependency level in the code
+([feature pipeline](feature-pipeline.md#tiers-calculations-in-dependency-order)); a **stage**
+is one stored table with its own version. Pages written before November 19 say "layers":
+layer 0 is step 1, layer 1 is steps 2 and 3, layer 2 is the pivots of step 4, layer 3 its
+models, layer 4 is step 5, and layer 5 is step 6.
 
-| Step | State | What is missing |
-| --- | --- | --- |
-| 1. Base rows | Built from trades (`bar_1s`, `bar_1m`) | The book between trades (`book_1s`): the data reaches the engine, no stage reads it |
-| 2. Sliding windows | Built (`1m@1s`, `1h@1m`), with row counting and per-phase indicators | Each timeframe has its own stage modules; a third timeframe should be a parameter, not new code |
-| 3. Indicators, then indicators of indicators | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
-| 4. Reversal and continuation probabilities | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
-| 5. Structure and divergence | Higher and lower highs and lows, trend, breaches (in the swing rows) | No divergence of any kind; cross-timeframe agreement was tested only as rules on the slow swings, and [none paid](replay.md#agreement-results-november-19-2026) |
-| 6. Decision model | An engine with fills at the book, would-be trade rows (`labels.py`), a losing rule-based baseline, and the [after-cost replay](replay.md) that compares policies in one portfolio | No trained decision model; no policy beats staying flat |
+| Step | Stages | State | What is missing |
+| --- | --- | --- | --- |
+| 1. Base rows | `bar_1s`, `bar_1m`; planned `book_1s` | Built from trades | The book between trades: the data reaches the engine, no stage reads it |
+| 2. Sliding windows | `candle_1m_1s`, `candle_1h_1m` | Built, with row counting and per-phase indicators | Each timeframe is its own copy of the stage modules; a third timeframe should be a parameter, not new code ([review](#review-of-november-20-2026)) |
+| 3. Indicators, then indicators of indicators | `candle_*`, `stats_1h_1m`, `vol_1s`, `vol_1m` | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
+| 4. Reversal and continuation probabilities | `pivot_1s`, `pivot_1m`, `pivot_event`, `pivot_label_*`; planned `pivot_rsi_*`, `pivot_flow_*`, `model_*` | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
+| 5. Structure and divergence | In the swing rows today; planned `signal_*` | Higher and lower highs and lows, trend, breaches | No divergence of any kind; cross-timeframe agreement was tested only as rules on the slow swings, and [none paid](replay.md#agreement-results-november-19-2026) |
+| 6. Decision model | `labels.py`, `research replay`; planned `ml.*` | An engine with fills at the book, would-be trade rows, a losing rule-based baseline, and the [after-cost replay](replay.md) that compares policies in one portfolio | No trained decision model; no policy beats staying flat |
 
 The foundation (steps 1 and 2, the stage graph, the engine, the checks that stored rows equal
 live ones) is sound and stays. The work is in steps 3 to 6.
 
-## The layers
+Base rows and indicator stages hold one row per scheduled slot and contract. Swing events,
+labels, and model outputs are sparse: stored at events and decision rows
+([decision 7](#design-decisions-november-19-2026)).
 
-Base rows and indicator stages use a scheduled grid per contract. Swing events and labels
-are sparse. Prediction stages are proposed and will need a versioned model per forecast.
-
-| Layer             | What it holds                                                                                                              | Examples                                                                                         | Stages                                                            | State                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | --------------------------------------------------- |
-| 0. Trades         | Exact per-second and per-minute statistics, updated with each trade                                                        | OHLCV by aggressor side, CVD and its extremes, sweeps, the price path, the book as trades saw it | `bar_1s`, `bar_1m`                                                | Done                                                |
-| 0b. Book          | The same grid from every change to the best bid and ask                                                                    | Queue imbalance, order-flow imbalance, spread over time, depletion and refill                    | `book_1s`                                                         | Planned; the data is on disk and reaches the engine |
-| 1. Indicators     | Rolling candles and what is computed from price and volume                                                                 | ATR family, RSI, EMA, MACD, ADX, realized volatility, session levels                             | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m` | Done                                                |
-| 2. Swings         | Turning points of the price path, sized by layer-1 volatility                                                              | Confirmed highs and lows at 0.5, 1, and 2 ATR; the open leg and its progress; breaches           | `pivot_1s`, `pivot_1m` (+ `pivot_event`); `pivot_rsi_*` planned   | Price implemented; RSI awaits disk and a research case              |
-| 3. Reversal model | Probability of reaching the frozen reversal barrier within the candidate horizon | P(reversal) at the candidate decision row            | `pivot_label` (outcomes), then `model_reversal_*`                 | Labels and benchmark implemented; model deferred                         |
-| 4. Structure      | Patterns across the latest reversals and the current one                                                                   | Higher lows, lower highs, breaks of structure, pullback quality, divergences                     | `signal_1s`, `signal_1m`                                          | Designed ([contract](pivot-structure-design.md))    |
-| 5. Final model    | One model on every stored feature of layers 0–4, for one product and its partner                                           | Trade or no trade, direction, expected outcome after costs                                       | training pipeline, `ml.*` tables                                  | After layers 2–4                                    |
-
-**Pairs.** Layers 0–4 are computed for each product alone. Pair stages then read two
+**Pairs.** Steps 1 to 5 are computed for each product alone. Pair stages then read two
 products that move together at the same row (`GC` with `SI`, `ES` with `NQ`): relative
-strength, spread and ratio moves, lead and lag, and each partner's layer-2 to layer-4
-state ([pair design](pair-design.md)). The final model reads both.
+strength, spread and ratio moves, lead and lag, and each partner's swing, model, and
+structure state ([pair design](pair-design.md)). The final model reads both.
 
 Structure is computed twice: once from the deterministic swings, before any model, and
 again with the model's probabilities ([decision 2](#design-decisions-november-19-2026)).
 
-### Layers 3 and 4: predictions that later layers read
+### Predictions that later steps read
 
-Layer 2 confirms a swing only after price has reversed by the full threshold, which is
-late. Layer 3 would estimate, from the current candidate, three probabilities that sum to
+The swing detector confirms a swing only after price has reversed by the full threshold, which is
+late. A model of step 4 would estimate, from the current candidate, three probabilities that sum to
 one: the reversal barrier is reached first, the invalidation barrier is reached first, or
 neither is reached within the horizon ([targets](#design-decisions-november-19-2026)).
 A candidate whose horizon does not fit in its session, or whose follow-up has no data
@@ -77,7 +71,7 @@ coverage, is not a fourth class: it is left out and counted
 ([decision 3](#design-decisions-november-19-2026)). The confirmed swing retains its actual confirmation time. A later structure
 model could use this forecast alongside the previous confirmed highs and lows.
 
-A model's output is only a valid input for a later layer if the model could not have seen
+A model's output is only a valid input for a later step if the model could not have seen
 the future of the row it scores. The rule (proposed November 15, 2026; details in the
 [feature pipeline](feature-pipeline.md#model-stages)):
 
@@ -86,10 +80,10 @@ the future of the row it scores. The rule (proposed November 15, 2026; details i
   the label horizon. The first sessions of the history have no prediction (NULL).
 - Each stored prediction records the model that produced it. A retrained model adds a new
   version; nothing is overwritten in place.
-- Layer 4 and the final model train only on rows that have these out-of-sample
+- The second structure pass and the decision model train only on rows that have these out-of-sample
   predictions, so they learn from predictions of the quality they will get live.
 
-The proposed layer 4 can build on the deterministic layer-2 swings and
+The first structure pass builds on the deterministic swings and
 their provisional (not yet confirmed) relations, as the
 [contract](pivot-structure-design.md#provisional-higher-lows-and-lower-highs-are-causal-candidate-features)
 specifies. The model's probability then joins as one more input, and the benchmark decides
@@ -97,7 +91,7 @@ whether it improves on the rule.
 
 ## What the results so far do and do not show
 
-The benchmark ([results](handoff.md#pr-f-results-labels-and-benchmark)) found that models on
+The benchmark ([results](build-log.md#pr-f-results-labels-and-benchmark)) found that models on
 the stored features tell which early reversals complete no better than the distance price
 has already moved. That result is real, and narrow:
 
@@ -119,6 +113,72 @@ a typical `1m@1s` true range (`vol_1s.spread_atr`). A bracket sized on that rang
 about a fifth of its risk on entry, before commission, so a small edge there cannot pay. On
 `1h@1m` the same spread is a few percent of the range. The fast timeframe therefore times an
 entry, and the slower one sets the bracket and the holding time.
+
+## Review of November 20, 2026
+
+A second review, asked for by Paul, of the design and of its chances. It checked the claims
+of this page against the code, the database, and the stored rows (`pnpm lint` and `pnpm test`
+pass on `main`; `ingest plan GC SI` reports every contract current; the database is 110 GB
+with 114 GB of disk free).
+
+**What holds.** Rows counted by index, per-phase indicators, per-contract computation, one
+engine with fills at the book, labels that can never be inputs, specs frozen before a run,
+and intervals resampled by trade date are each correct and are kept. The six-step process is
+a sound way to build training data, and the stage graph is the multi-pass mechanism it needs.
+
+**What the sliding window is.** It removes the arbitrary start of a candle and updates
+every step. It is a better view of the same one-second rows, not new information, so it is
+not an edge on its own. The [control](#after-cost-replay) that measures what the faster
+clock earns is still not built.
+
+**Costs choose the timeframe.** Measured on the continuous minute rows, January 2 to August
+31, 2026 (non-overlapping blocks inside a session; the spread is the mean at trades):
+
+| Block | GC median move | GC spread ÷ move | SI median move | SI spread ÷ move | Blocks per product | Return autocorrelation, GC / SI |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 minute | 2.2 bps | 36% | 5.1 bps | 50% | 234,000 | −0.01 / −0.02 |
+| 5 minutes | 4.7 bps | 17% | 10.6 bps | 24% | 47,000 | −0.01 / −0.03 |
+| 15 minutes | 8.1 bps | 9.5% | 18.0 bps | 14% | 15,700 | −0.01 / +0.01 |
+| 60 minutes | 16.2 bps | 4.7% | 35.9 bps | 7.1% | 3,900 | −0.02 / −0.01 |
+| 240 minutes | 32.3 bps | 2.3% | 69.1 bps | 3.6% | 980 | +0.03 / −0.01 |
+
+A trade that wins or loses one typical move and pays one spread breaks even at a hit rate of
+50% plus half the ratio: 68% on GC at one minute, 55% at fifteen, 52% at an hour, before
+commission. One block's return says nothing about the next at any horizon, so there is no
+plain momentum or reversal to collect: an edge has to come from conditions, which is what
+steps 3 to 5 build.
+
+**One year cannot judge the hourly scale.** Results are only as many as their independent
+trade dates. The four test months hold 87, and a mean per attempt is known to ±$140 to
+±$300 against a cost of about $80 ([replay](replay.md#agreement-results-november-19-2026)).
+An hourly policy that takes one block in ten has about 390 trades in eight months. At
+fifteen minutes the same policy has four times as many, and the cost is still a tenth of
+the move. The middle timeframe is where an edge is both affordable and measurable with the
+data held today; the fast one cannot pay and the slow one cannot be measured yet.
+
+**Information before transforms.** RSI of RSI and EMA of RSI are new views of the price
+path. The book between trades, net flow (CVD), the partner product, and the time of day are
+different information. Both are in the process; where the order is free, different
+information comes first, and price against flow before price against RSI.
+
+**What a model in the middle adds.** A boosted model that reads the same inputs gains
+nothing from a probability computed from those inputs, except what the extra label taught
+it. So a model stage is worth storing when the decision model is better with its
+out-of-fold probability than without it, on the same rows. Every stacked level also spends
+history, because its readers train only on out-of-fold rows: one year supports one level.
+
+**Code.** Each timeframe is a copy: `stage_vol_1s.py` and `stage_vol_1m.py` differ in
+about 200 of 400 lines, the candle and swing stages are separate modules too, and every
+table and migration is per timeframe. Every stage of steps 3 to 5 would be written two or three
+times. Making the timeframe a parameter first is the one structural change this review asks
+for. It is a refactor of stage modules, checked by rebuilding and comparing stored rows; no
+rule, table design, or engine behavior changes.
+
+**What changed in the plan.** The [build order](#build-order) below: the timeframe
+parameter and a middle timeframe move to the front, a first decision model is trained early
+as the yardstick, and flow comes before RSI. Three choices are Paul's and are listed in the
+[handoff](handoff.md#open-questions): which products to build next, when to buy more
+history, and the size of the middle timeframe.
 
 ## Design decisions (November 19, 2026)
 
@@ -185,38 +245,44 @@ entry, and the slower one sets the bracket and the holding time.
 
 ## Build order
 
-1. **After-cost replay** on the stored fast candidates (done November 19:
-   `research replay`, [settings and results](replay.md)): gross and net R of take-all and the
-   displacement rule, reported before any model with other inputs is fitted. Taking every
-   candidate loses about one spread at either bracket, and the displacement rule stays flat. `labels.py` already simulates
-   would-be trades, but sizes the bracket with the `1m@1s` ATR and holds for at most three
-   minutes (`strategies.Bracket`). The replay sizes the bracket with the ATR of the
-   candidate's frozen slower-timeframe row and a holding time on that scale; the fast
-   bracket is run beside it as a control.
-2. **Storage change** (decision 7), which frees the disk for everything after it.
-3. **Book inputs on the stored candidates.** Read the best bid and ask around each candidate
-   from the DBN files, as a further input set of the benchmark; no table is needed. This
-   comes early because it is cheap and it tells whether the permanent book stage (item 8)
-   must exist before any model stage is stored.
-4. **Indicators of indicators** (step 3): RSI and EMA of the RSI series, and RSI, EMA and
-   slope of the window's net flow, per phase, as one new tier-1 stage per timeframe.
-5. **Swings of RSI and of CVD** with the existing detector, which already measures additive
-   series; thresholds above the measured row-to-row noise. CVD comes from a source that does
-   not reset at the session open (a rolling net flow, not `session_cvd`), or the detector's
-   state ends at each reset, so a reopen is never read as a move.
-6. **Structure and divergence** (`signal_*`, tier 3): price against RSI pivots, price against
-   flow pivots, higher-low and lower-high sequences, agreement across timeframes.
-7. **The three targets and their benchmark** (decisions 3 to 5), first for price, then for
-   RSI and CVD. Each new input set is tested through the benchmark and the replay.
-8. **The book stage** (`book_1s`), if item 3 showed the book adds information, so that
-   stored model stages are trained once with it.
-9. **Stored model stages** for the targets and input sets that passed decision 5, then the
-   second structure pass on their probabilities. On the one year held today, only the scales
-   it can fit (decision 9) are stored; the slow scales, and any model that feeds another,
-   wait for the history of item 10.
-10. **More history** (decision 9), which unlocks the slow-scale and chained model stages
-    deferred in item 9; then the middle timeframe (decision 8) and more products, as disk
-    and budget allow.
+Revised November 20, 2026 ([review](#review-of-november-20-2026)). Items 1 and 2 are done.
+Every step of the process is still built, in its order; what moved is which timeframe and
+which series come first, and when the yardstick exists.
+
+1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
+   [settings and results](replay.md)). Taking every candidate loses about one spread at
+   either bracket, and the displacement rule stays flat.
+2. **Storage change** (decision 7): done November 19 (PR #89).
+3. **Timeframe as a parameter** (decision 8). One stage class per kind (base rows, candle,
+   window statistics, volatility, swings, labels), built for a timeframe `W@S`: a window of
+   60 rows of step `S`, whose base rows are merged exactly from `bar_1s` as `bar_1m` is.
+   `1m@1s` and `1h@1m` become two instances and must reproduce today's stored rows, which
+   is the test. Do this before any stage of steps 3 to 5 is written, so each is written once.
+4. **A middle timeframe**, one more instance (`15m@15s` unless Paul chooses another size):
+   its base rows, window, indicators, volatility, swings, and labels for GC and SI.
+5. **The yardstick decision model.** Train the *direction* target (decision 3) at the
+   middle and slow horizons on the features that exist, walk-forward and purged, and run its
+   policy through the replay. Store nothing. It will probably not beat staying flat. Its
+   purpose is that every later input set is judged by one question: is the decision model
+   better after costs with it than without it, on the same rows?
+6. **Book inputs on decision rows.** Read the best bid and ask around each decision row
+   from the DBN files, as a further input set; no table is needed. This completes step 1,
+   and it is the only information in the files that nothing reads yet. If it helps, build
+   the permanent stage (`book_1s`) before any model stage is stored.
+7. **Flow, then RSI, through steps 3 to 5.** For net flow: a rolling series that does not
+   reset at the session open (not `session_cvd`), its RSI, EMA and slope per phase (step
+   3), its swings with the existing detector and thresholds above the measured row-to-row
+   noise (step 4), and price against flow divergence (step 5, `signal_*`). Then the same for
+   RSI: RSI and EMA of the RSI series, RSI swings, price against RSI divergence. Then
+   higher-low and lower-high sequences and agreement across timeframes.
+8. **The three targets and their benchmark** (decisions 3 to 5), first for price, then for
+   flow and RSI. Each new input set is tested through the benchmark, the yardstick model,
+   and the replay.
+9. **Stored model stages** for the targets and input sets that passed decision 5 and that
+   improve the yardstick model, then the second structure pass on their probabilities. On
+   one year only one level of model reading model is stored; chains wait for item 10.
+10. **More history and products** (decision 9), as budget and disk allow. PL, ES, YM, and RTY
+    are on disk and cost only space; more years cost money.
 11. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout.
 
 ### After-cost replay
@@ -299,21 +365,22 @@ held for minutes is an empirical question. [Gould and Bonart](https://arxiv.org/
 ## Next
 
 1. Rebuild the stored rows from MBP-1 for GC and SI: done November 16
-   ([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)).
+   ([results](build-log.md#rebuilt-from-mbp-1-november-16-2026)).
 2. Swings of the price path (PR D): done November 16
-   ([results](handoff.md#pr-d-results-swings)). Swings of RSI (`pivot_rsi_*`) reuse the same
+   ([results](build-log.md#pr-d-results-swings)). Swings of RSI (`pivot_rsi_*`) reuse the same
    detector and wait for disk space ([handoff](handoff.md#open-questions)).
 3. Outcome labels and the benchmark (PR F): done November 17
-   ([results](handoff.md#pr-f-results-labels-and-benchmark)). The stored swings find turning
+   ([results](build-log.md#pr-f-results-labels-and-benchmark)). The stored swings find turning
    points sooner than fixed extrema, slope sign, or CUSUM at a like false-alarm rate. Logistic
    regression and a boosted model on the stored features rank early candidates no better than
    the position of price alone (AUC about 0.60 for both), so no model is stored yet.
 4. **Context inputs for the reversal model: tested November 17, no gain**
-   ([results](handoff.md#context-input-results-november-17-2026)). Read with
+   ([results](build-log.md#context-input-results-november-17-2026)). Read with
    [its limits](#what-the-results-so-far-do-and-do-not-show).
 5. **Steps 3 to 5 of the process**, in the [build order](#build-order): the after-cost
-   replay (done, [results](replay.md)), the storage change (done), book inputs on candidates, indicators of indicators, swings
-   of RSI and CVD, structure and divergence, the targets and model stages, a middle timeframe.
+   replay and the storage change (both done), the timeframe parameter and a middle
+   timeframe, the yardstick model, book inputs, then flow and RSI through indicators of
+   indicators, swings, and divergence, and the targets and model stages.
 6. **Decision model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a
    final holdout of the newest data, evaluated once.

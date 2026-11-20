@@ -138,7 +138,7 @@ data quality as separate fields. Version any eventual persisted detector state.
 
 The current main at preparation time, `bfece3398946ebf8abc7b5900920a5109f46a2d5`, records
 the first GC/SI ingest as completed. This documentation task did not query the database
-or repeat ingestion. Before any experiment, read the current [ingestion handoff](handoff.md#rebuild-with-stages-gc-and-si),
+or repeat ingestion. Before any experiment, read the current [ingestion handoff](build-log.md#rebuild-with-stages-gc-and-si),
 check catalog/coverage/builder compatibility and `uv run research ingest status`, and
 inspect degraded sessions. Do not assume current database state from this snapshot.
 

@@ -62,8 +62,9 @@ See [historical data](docs/project/data.md) for the layout and verification.
 - [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
 - [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
 - [Historical data](docs/project/data.md), the [roadmap](docs/project/roadmap.md) (the
-  layers of metrics and what comes next), the
-  [handoff notes](docs/project/handoff.md) with decisions and next steps, and the
+  steps of the process and the build order), the
+  [handoff notes](docs/project/handoff.md) with the current state and next steps, the
+  [build log](docs/project/build-log.md) of what was built and found, and the
   prioritized [to-do list](docs/project/todo.md).
 - [Ingestion](docs/project/ingestion.md), the [trade-metrics reference](docs/project/trade-metrics-reference.md) it implements, and the [storage contract](lib/db-research/README.md).
 - [Research UI](docs/project/metric-explorer.md).

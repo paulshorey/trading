@@ -38,7 +38,7 @@ Reviewed November 19, 2026 against the six steps in [AGENTS.md](../../AGENTS.md#
 | 3. Indicators, then indicators of indicators | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
 | 4. Reversal and continuation probabilities | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
 | 5. Structure and divergence | Higher and lower highs and lows, trend, breaches (in the swing rows) | No divergence of any kind; no cross-timeframe agreement signal |
-| 6. Decision model | An engine with fills at the book, would-be trade rows (`labels.py`), a losing rule-based baseline | No trained decision model; no policy comparison |
+| 6. Decision model | An engine with fills at the book, would-be trade rows (`labels.py`), a losing rule-based baseline, and the [after-cost replay](replay.md) that compares policies in one portfolio | No trained decision model; no policy beats staying flat |
 
 The foundation (steps 1 and 2, the stage graph, the engine, the checks that stored rows equal
 live ones) is sound and stays. The work is in steps 3 to 6.
@@ -185,8 +185,10 @@ entry, and the slower one sets the bracket and the holding time.
 
 ## Build order
 
-1. **After-cost replay** on the stored fast candidates: gross and net R of take-all and the
-   displacement rule, reported before any model with other inputs is fitted. `labels.py` already simulates
+1. **After-cost replay** on the stored fast candidates (done November 19:
+   `research replay`, [settings and results](replay.md)): gross and net R of take-all and the
+   displacement rule, reported before any model with other inputs is fitted. Taking every
+   candidate loses about one spread at either bracket, and the displacement rule stays flat. `labels.py` already simulates
    would-be trades, but sizes the bracket with the `1m@1s` ATR and holds for at most three
    minutes (`strategies.Bracket`). The replay sizes the bracket with the ATR of the
    candidate's frozen slower-timeframe row and a holding time on that scale; the fast
@@ -310,7 +312,7 @@ held for minutes is an empirical question. [Gould and Bonart](https://arxiv.org/
    ([results](handoff.md#context-input-results-november-17-2026)). Read with
    [its limits](#what-the-results-so-far-do-and-do-not-show).
 5. **Steps 3 to 5 of the process**, in the [build order](#build-order): the after-cost
-   replay, the storage change, book inputs on candidates, indicators of indicators, swings
+   replay (done, [results](replay.md)), the storage change (done), book inputs on candidates, indicators of indicators, swings
    of RSI and CVD, structure and divergence, the targets and model stages, a middle timeframe.
 6. **Decision model**: purged walk-forward training on pooled examples from front-contract
    sessions ([rules](handoff.md#training-across-contracts-decided-november-2-2026)); a

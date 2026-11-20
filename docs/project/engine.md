@@ -68,7 +68,8 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
 4. **Entry.** The order reaches the exchange `order_latency` later and fills then, at the
    best ask (buy) or bid (sell) the exchange showed at that moment: the book after the last
    event at or before the arrival. Size beyond the displayed size at that price pays
-   `depth_penalty_ticks`. An order that meets no two-sided book is cancelled.
+   `depth_penalty_ticks`. An order that meets no two-sided book is cancelled. `adverse_ticks`
+   (default 0) charges every marketable order further ticks, as a stress test.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
    at or beyond it triggers it, and it fills at the book that trade left (the book events

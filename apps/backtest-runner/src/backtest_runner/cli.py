@@ -58,6 +58,18 @@ def main() -> None:
     p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
     p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
     p.add_argument("--labels", nargs="*", help="models: label variants, such as fast_atr_1_q25")
+    p = sub.add_parser(
+        "replay",
+        help="After-cost replay of the stored fast candidates (docs/project/replay.md)",
+        description="Simulates a would-be entry for every stored fast candidate of the "
+        "development period and compares take-all with the displacement rule. Reads stored "
+        "rows and the DBN files; stores nothing.",
+    )
+    p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
+    p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
+    p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
+    p.add_argument("--labels", nargs="*", help="Fast label variants, such as fast_atr_1_q25")
+    p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
@@ -128,6 +140,17 @@ def main() -> None:
                     context=args.action == "context",
                     **period,
                 )
+        elif args.command == "replay":
+            from . import benchmark, replay
+
+            result = replay.run(
+                args.products,
+                args.start or benchmark.DEV_START,
+                args.end or benchmark.DEV_END,
+                args.labels,
+                args.workers,
+                log=benchmark.stderr,
+            )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)
             result = {k: run[k] for k in ("id", "summary", "candidates", "performance")}

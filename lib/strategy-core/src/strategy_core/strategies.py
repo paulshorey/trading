@@ -14,7 +14,8 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Bracket:
-    """Exit plan fixed at entry, sized by the 1m@1s ATR at the signal."""
+    """Exit plan fixed at entry, sized by the ATR passed with the order: the engine passes the
+    1m@1s ATR at the signal; the candidate replay also sizes it with the 1h@1m ATR."""
 
     target_atr: float = 1.5
     stop_atr: float = 1.0

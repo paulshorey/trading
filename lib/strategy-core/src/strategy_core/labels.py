@@ -11,10 +11,34 @@ from collections.abc import Iterable, Iterator
 
 import numpy as np
 
-from .execution import FILLED, ExecView, Position, Simulator
+from .execution import CANCELLED, WAIT, ExecView, Position, Simulator
 from .features import FeatureFrame
 
 UNFILLED, CENSORED = "unfilled", "censored"
+# What became of one attempted entry (`attempt`). Only the first is a trade result; only the
+# first two give the value of attempting the entry (the result, or zero); the rest are unknown.
+CLOSED = "closed"  # a trade closed at prices the book showed
+LATE = "late"  # the order arrived at or after the forced exit: known, and no trade
+ENTRY_NO_BOOK = "entry_no_book"  # the order met no usable book: whether it traded is unknown
+EXIT_NO_BOOK = "exit_no_book"  # the exit was priced without a book, at a fallback price
+PENDING = "pending"  # the data ended before the order arrived
+STATES = (CLOSED, LATE, ENTRY_NO_BOOK, EXIT_NO_BOOK, PENDING, CENSORED)
+
+
+def attempt(sim: Simulator, view: ExecView, pos: Position) -> tuple[str, dict | None, int]:
+    """Send one would-be entry and follow it to its exit, independently of any portfolio.
+    Returns its state, the trade when there is one (also for `exit_no_book`, whose prices are
+    not executable), and when the engine would learn the outcome (0 while unknown)."""
+    status, known = sim.fill(view, pos)
+    if status == WAIT:
+        return PENDING, None, 0
+    if status == CANCELLED:
+        return (LATE if pos.arrival_ns >= pos.force_exit_ns else ENTRY_NO_BOOK), None, known
+    _, trade = sim.advance(view, 0, pos)
+    if trade is None:
+        return CENSORED, None, 0
+    state = EXIT_NO_BOOK if "no_book" in trade["flags"] else CLOSED
+    return state, trade, int(trade["exit_known_ns"])
 
 
 def iter_candidate_outcomes(
@@ -34,12 +58,11 @@ def iter_candidate_outcomes(
         if not np.isfinite(atr):
             continue
         pos = sim.order(int(signals[i]), contract, int(frame.end[i]), atr, frame.row(i), view)
-        status, _ = sim.fill(view, pos)
-        if status != FILLED:  # cancelled, or the session's data ends before the order arrives
-            yield marker(pos, UNFILLED)
-            continue
-        _, trade = sim.advance(view, 0, pos)
-        yield trade if trade is not None else marker(pos, CENSORED)
+        state, trade, _ = attempt(sim, view, pos)
+        if trade is not None:
+            yield trade
+        else:  # cancelled, or the session's data ends before the order arrives or the exit
+            yield marker(pos, CENSORED if state == CENSORED else UNFILLED)
 
 
 def marker(pos: Position, reason: str) -> dict:

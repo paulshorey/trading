@@ -272,7 +272,8 @@ which series come first, and when the yardstick exists.
    and it is the only information in the files that nothing reads yet. If it helps, build
    the permanent stage (`book_1s`) before any model stage is stored.
 7. **Flow, then RSI, through steps 3 to 5.** For net flow: a rolling series that does not
-   reset at the session open (not `session_cvd`), its RSI, EMA and slope per phase (step
+   reset at the session open (not `session_cvd`) and is NULL while its window holds rows
+   without data coverage, its RSI, EMA and slope per phase (step
    3), its swings with the existing detector and thresholds above the measured row-to-row
    noise (step 4), and price against flow divergence (step 5, `signal_*`). Then the same for
    RSI: RSI and EMA of the RSI series, RSI swings, price against RSI divergence. Then

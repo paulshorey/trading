@@ -107,6 +107,15 @@ def frame(seed=0, days=140, per_day=60):
                 "day": np.full(n, day, np.int32),
             }
             part["disp"][0] = np.nan
+            side = np.where(part["kind"] == 1, -1, 1)
+            for scale in replay.SLOW_SCALES:
+                for rule in replay.RULES:
+                    # the first scale's leg knows the result's sign; every other signal is noise
+                    part[f"slow:{scale}:{rule}"] = rng.integers(-1, 2, n).astype(np.int8)
+            told = np.where(disp > 0.5, side, -side)
+            part[f"slow:{replay.SLOW_SCALES[0]}:leg"] = np.where(
+                rng.random(n) < 0.2, 0, told
+            ).astype(np.int8)
             for name in replay.BRACKETS:
                 stop = np.full(n, 40.0 if name == "slow" else 5.0)
                 part[f"stop:{name}"] = stop
@@ -216,3 +225,59 @@ def test_an_interval_of_no_values_is_undefined_not_zero():
 def test_a_mean_without_finite_values_is_none():
     assert replay.finite_mean(np.array([np.nan, np.nan]), 4) is None
     assert replay.finite_mean(np.array([1.0, np.nan, 2.0]), 4) == 1.5
+
+
+def test_the_slow_direction_is_read_at_the_latest_completed_minute():
+    minute = np.array([10, 11, 12, 14])  # minute 13 has no row
+    minute_end = (minute * 60 + 1000) * NS
+    values = np.array(
+        [  # state, dir, trend, high_conf_age_s, low_conf_age_s
+            [2, 1, 1, 9000, 3500],  # an up leg from a low confirmed 3,500 s before
+            [2, -1, 0, 3600, 100],  # a down leg from a high confirmed 3,600 s before
+            [1, np.nan, np.nan, np.nan, np.nan],  # a segment without a direction yet
+            [2, -1, -1, np.nan, 50],  # a down leg whose high's confirmation age is unknown
+        ]
+    )
+    ordinal = np.array([600, 659, 660, 661, 720, 780, 840, 900, 599])
+    end = (ordinal + 1000) * NS
+    out = replay.slow_direction(ordinal, end, minute, minute_end, values)
+    # 600..659 read minute 10; 660 and 661 read minute 11; 780 has no row; 599 is before any
+    assert out["leg"].tolist() == [1, 1, -1, -1, 0, 0, -1, 0, 0]
+    assert out["trend"].tolist() == [1, 1, 0, 0, 0, 0, -1, 0, 0]
+    # 3,500 s at the minute's end is fresh there and 59 s later; 3,600 s is fresh only at the end
+    assert out["fresh"].tolist() == [1, 1, -1, 0, 0, 0, 0, 0, 0]
+    late = replay.slow_direction(ordinal[:1], end[:1] + replay.MINUTE_REACH_NS, minute, minute_end,
+                                 values)  # fmt: skip
+    assert late["leg"].tolist() == [0]  # a minute row older than the reach is not read
+    none = replay.slow_direction(ordinal, end, minute[:0], minute_end[:0], values[:0])
+    assert all(not v.any() and len(v) == len(ordinal) for v in none.values())
+
+
+def test_agreement_splits_the_same_candidates_and_never_fits():
+    f = frame()
+    out = replay.report(f, 3, False)["brackets"]
+    assert "agreement" not in out["fast"]["base"]
+    first, other = replay.SLOW_SCALES[0], replay.SLOW_SCALES[1]
+    for mode in replay.EXECUTIONS:
+        split = out["slow"][mode]["agreement"]
+        assert set(split) == set(replay.SLOW_SCALES) and set(split[first]) == set(replay.RULES)
+        told = split[first]["leg"]
+        for period in ("development_period", "before_test_months", "test_months"):
+            good, bad = told["with"][period]["all"], told["against"][period]["all"]
+            assert good["avg_r_before_commission"] > 0.4 and bad["avg_r_before_commission"] < -0.4
+            assert good["value_of_attempting"]["mean_net_usd_interval_95"][0] > 0
+        # the periods partition the development period
+        whole = told["with"]["development_period"]["all"]["candidates"]
+        assert whole == sum(
+            told["with"][p]["all"]["candidates"] for p in ("before_test_months", "test_months")
+        )
+        book = told["with"]["test_months_portfolio"]
+        assert book["candidates_taken"] == told["with"]["test_months"]["all"]["candidates"]
+        assert book["net_usd"] > 0 > told["against"]["test_months_portfolio"]["net_usd"]
+        noise = split[other]["leg"]["with"]["development_period"]["all"]
+        assert abs(noise["avg_r_before_commission"]) < 0.1
+    # with, against and neither cover every eligible candidate
+    base = out["slow"]["base"]["agreement"][first]["leg"]
+    eligible = replay.report(f, 3, False)["eligible"]
+    taken = sum(base[k]["development_period"]["all"]["candidates"] for k in ("with", "against"))
+    assert 0.7 * eligible < taken < 0.9 * eligible

@@ -46,6 +46,30 @@ fill against that book's mid-price.
 A middle hold, other multiples, and a per-product portfolio were not run. Any further variant
 is added here before it is run, with its result, whether or not it helps.
 
+### Agreement with the slower timeframe (frozen November 19, 2026, before its run)
+
+The question: is a fast candidate worth taking when the slower timeframe points the same way?
+On the slow bracket only, every eligible candidate is split by rules that read one slow swing
+scale (`market.pivot_1m`: `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`) at the latest completed
+minute, the same row the bracket's hourly ATR comes from. Each rule gives a direction, up or
+down or none. A candidate is **with** the rule when that direction is its entry's side (a buy
+at a candidate low while the slow direction is up), **against** it when it is the opposite
+side, and in neither group when the rule gives no direction.
+
+| Rule | The slow direction |
+| --- | --- |
+| `leg` | The open leg's direction (`dir` while `state = 2`): up after a confirmed slow low |
+| `trend` | The stored `trend`: up after a higher high and a higher low, down after the mirror |
+| `fresh` | `leg`, only while the pivot that started the leg was confirmed at most 3,600 scheduled-open seconds before the decision row (one `1h@1m` window): the slower timeframe has recently reversed |
+
+That is 3 scales by 3 rules, each with its `against` group as the control: 18 groups for
+every label variant, candidate group and execution setting. No rule is fitted, so each is
+reported on the whole development period, on January to April, and on the test months (May
+to August), where it also runs as one portfolio. A rule counts only if the value of attempting
+its `with` group is above zero, with its 95% interval, in both parts of the period and under
+both execution settings; with 18 groups per cell, one positive cell alone is expected by
+chance and counts for nothing.
+
 Not built: the [sliding-clock control](roadmap.md#after-cost-replay) (the same policy on
 minute boundaries). It needs candidates detected on a minute clock, which are not stored.
 

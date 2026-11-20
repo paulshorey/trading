@@ -9,7 +9,9 @@ buy at a candidate low), through the engine's simulator: the book the order meet
 arrives, and a bracket fixed at the fill. Each is simulated under every bracket and execution
 setting below, independently of any portfolio. Policies are then compared on the candidates of
 the walk-forward test months: per candidate, and as one portfolio that holds one position at a
-time. The command reads stored rows and the DBN files and stores nothing.
+time. On the slow bracket the candidates are also split by whether the slower timeframe's swing
+state, at the latest completed minute, points the same way as the entry (`agreement`). The
+command reads stored rows and the DBN files and stores nothing.
 """
 
 import multiprocessing as mp
@@ -19,10 +21,11 @@ from dataclasses import asdict
 from datetime import date, timedelta
 
 import numpy as np
-from strategy_core import labels
+from strategy_core import labels, swings
 from strategy_core.engine import session_view
 from strategy_core.execution import ExecutionConfig, Simulator, merged
 from strategy_core.market import NS, PRODUCTS
+from strategy_core.stage_pivot_1m import SCALES as SLOW_STAGES
 from strategy_core.stage_pivot_label import FAST_LABELS
 from strategy_core.strategies import Bracket
 
@@ -54,9 +57,17 @@ TRADES = tuple(STATES.index(s) for s in (labels.CLOSED, labels.EXIT_NO_BOOK, UNC
 REASONS = ("", "target", "stop", "time", "session_close")
 MIN_TRAIN = 500  # known values a product needs before a block to fit the displacement rule
 SESSIONS_PER_TASK = 4
+# Agreement with the slower timeframe, frozen before any outcome was read (replay.md). Each
+# rule reads one slow swing scale's row of the latest completed minute and gives a direction:
+# 1 up, -1 down, 0 none. A candidate is `with` the rule when that direction is its entry's side
+# and `against` it when it is the opposite side.
+SLOW_SCALES = tuple(s.VARIANT for s in SLOW_STAGES)
+RULES = ("leg", "trend", "fresh")
+FRESH_S = 3_600  # `fresh`: the open leg's starting pivot was confirmed within one 1h window
+AGREEMENT_BRACKET = "slow"  # the fast bracket cannot pay (replay.md), so it is not split
 QUERY = """
     SELECT l.variant_id, l.end_ns, l.kind, coalesce(l.prov, 0), l.displacement,
-           c.atr_bps, c.close, h.atr_bps, h.close
+           c.atr_bps, c.close, h.atr_bps, h.close, l.slot_ordinal
     FROM market.pivot_label_1s l
     JOIN market.candle_1m_1s c ON c.contract_id = l.contract_id
      AND c.slot_ordinal = l.slot_ordinal AND c.end_ns = l.end_ns
@@ -65,6 +76,12 @@ QUERY = """
     WHERE l.contract_id = %s AND l.slot_ordinal BETWEEN %s AND %s AND l.end_ns > %s
       AND l.end_ns <= %s AND l.variant_id = ANY(%s) AND l.outcome <> 0
     ORDER BY l.end_ns, l.variant_id, l.seq"""
+SLOW_QUERY = """
+    SELECT variant_id, slot_ordinal, end_ns, state, dir, trend, high_conf_age_s, low_conf_age_s
+    FROM market.pivot_1m
+    WHERE contract_id = %s AND variant_id = ANY(%s) AND slot_ordinal BETWEEN %s AND %s
+      AND end_ns > %s AND end_ns <= %s
+    ORDER BY variant_id, slot_ordinal"""
 
 
 def stop_ticks(bracket: Bracket, atr: np.ndarray, tick: int) -> np.ndarray:
@@ -127,9 +144,48 @@ def simulate(
     return out
 
 
-def replay_sessions(root: str, sessions: list[tuple], variants: list[int], url: str | None) -> dict:
+def slow_direction(
+    ordinal: np.ndarray,
+    end: np.ndarray,
+    minute: np.ndarray,
+    minute_end: np.ndarray,
+    values: np.ndarray,
+) -> dict[str, np.ndarray]:
+    """Each rule's direction (1, -1, or 0 for none) for candidates decided at the second rows
+    `ordinal` ending at `end`, from one slow scale's minute rows: their index counters, ends,
+    and the columns state, dir, trend, high_conf_age_s, low_conf_age_s (NaN for NULL). A
+    candidate reads the latest completed minute, the row `ordinal // 60`, as its hourly ATR does,
+    and nothing when that row is absent.
+
+    - `leg`: the direction of the open leg, so the last confirmed pivot was a low (up) or a
+      high (down);
+    - `trend`: the stored trend (a higher high and a higher low, or the mirror);
+    - `fresh`: `leg`, while the pivot that started the leg was confirmed at most `FRESH_S`
+      scheduled-open seconds before the decision row."""
+    n = len(ordinal)
+    if not len(minute):
+        return {rule: np.zeros(n, np.int8) for rule in RULES}
+    want = ordinal // 60
+    at = np.minimum(np.searchsorted(minute, want), len(minute) - 1)
+    ok = (minute[at] == want) & (minute_end[at] <= end) & (minute_end[at] > end - MINUTE_REACH_NS)
+    state, direction, trend, high_age, low_age = values[at].T
+    leg = np.where(ok & (state == swings.ACTIVE) & np.isfinite(direction), direction, 0.0)
+    with np.errstate(invalid="ignore"):  # an unknown age is not fresh
+        age = np.where(leg > 0, low_age, high_age) + (end - minute_end[at]) / NS
+        fresh = (leg != 0) & (age <= FRESH_S)
+    return {
+        "leg": leg.astype(np.int8),
+        "trend": np.where(ok & np.isfinite(trend), trend, 0.0).astype(np.int8),
+        "fresh": np.where(fresh, leg, 0.0).astype(np.int8),
+    }
+
+
+def replay_sessions(
+    root: str, sessions: list[tuple], variants: list[int], slow: dict[str, int], url: str | None
+) -> dict:
     """One worker's task: consecutive front sessions (trade date, contract id, symbol, first and
-    last second ordinal, open, close) of one product."""
+    last second ordinal, open, close) of one product. `slow` maps each slow swing scale to its
+    variant id."""
     data = ProductData.load(root)
     product, base = data.product, EXECUTIONS["base"]
     calendar, _, spans = load_sessions(product, sessions[0][0], sessions[-1][0], 0)
@@ -154,6 +210,24 @@ def replay_sessions(root: str, sessions: list[tuple], variants: list[int], url: 
             view = session_view(chunk, calendar, base)
             part = simulate(product, calendar, symbol, chunk, view, end, rows)
             part["day"] = np.full(len(rows), (day - date(2000, 1, 1)).days, np.int32)
+            ordinal = np.array([r[9] for r in found], np.int64)
+            minutes = conn.execute(
+                SLOW_QUERY,
+                (cid, list(slow.values()), first // 60, last // 60,
+                 open_ns - MINUTE_REACH_NS, close_ns),
+            ).fetchall()  # fmt: skip
+            conn.rollback()
+            for scale, variant in slow.items():
+                own = [r for r in minutes if r[0] == variant]
+                signals = slow_direction(
+                    ordinal,
+                    end,
+                    np.array([r[1] for r in own], np.int64),
+                    np.array([r[2] for r in own], np.int64),
+                    np.array([r[3:] for r in own], np.float64).reshape(len(own), 5),
+                )
+                for rule, signal in signals.items():
+                    part[f"slow:{scale}:{rule}"] = signal
             parts.append(part)
     return {"root": root, "parts": parts}
 
@@ -409,6 +483,36 @@ def displacement_rule(
     return taken, scored, fits
 
 
+def agreement(frame: Frame, eligible: np.ndarray, m: dict, mode: str) -> dict:
+    """The eligible candidates split by each slow scale and rule into those the slower
+    timeframe is `with` and `against`. No rule is fitted, so each is reported on the whole
+    development period, on the months before the test months, and on the test months, where
+    each also runs as one portfolio."""
+    a = frame.a
+    side = np.where(a["kind"] == HIGH, -1, 1)
+    lo = (date(2026, TEST_MONTHS[0], 1) - date(2000, 1, 1)).days
+    periods = {
+        "development_period": eligible,
+        "before_test_months": eligible & (a["day"] < lo),
+        "test_months": eligible & (a["day"] >= lo),
+    }
+    every = np.unique(np.concatenate([np.asarray(d, dtype=int) for d in frame.days]))
+    dates = every[every >= lo]
+    out: dict = {}
+    for scale in SLOW_SCALES:
+        out[scale] = {}
+        for rule in RULES:
+            signal = a[f"slow:{scale}:{rule}"]
+            entry = {}
+            for name, pick in (("with", signal == side), ("against", signal == -side)):
+                book = frame.ledger(periods["test_months"] & pick, m, mode, dates)
+                entry[name] = {
+                    period: frame.candidate_stats(sel & pick, m) for period, sel in periods.items()
+                } | {"test_months_portfolio": {k: v for k, v in book.items() if k != "daily"}}
+            out[scale][rule] = entry
+    return out
+
+
 def report(frame: Frame, variant: int, provisional: bool) -> dict:
     """One label variant's candidates: what was left out, then every bracket and execution
     setting, with the policies compared on the test months."""
@@ -468,6 +572,8 @@ def report(frame: Frame, variant: int, provisional: bool) -> dict:
                     },
                 },
             }
+            if bracket == AGREEMENT_BRACKET:
+                entry[mode]["agreement"] = agreement(frame, eligible, m, mode)
         out["brackets"][bracket] = entry
     return out
 
@@ -481,6 +587,17 @@ def settings() -> dict:
         "forced exit before the close",
         "portfolio": "one position at a time across the products; one contract a trade",
         "policies_chosen_at": "base execution; the stressed replay keeps the same choices",
+        "agreement": {
+            "bracket": AGREEMENT_BRACKET,
+            "slow_scales": list(SLOW_SCALES),
+            "read_at": "the slow scale's row of the latest completed minute",
+            "rules": {
+                "leg": "direction of the open leg",
+                "trend": "the stored trend",
+                "fresh": f"leg, its starting pivot confirmed at most {FRESH_S} s ago",
+            },
+            "with": "the rule's direction is the entry's side; against: the opposite side",
+        },
     }
 
 
@@ -506,6 +623,8 @@ def run(
         needed = [("candle_1m_1s", 0), ("candle_1h_1m", 0)]
         needed += [(pivot, ids[pivot, v.SCALE.VARIANT]) for v in chosen]
         needed += [(v.TABLE, variants[v.VARIANT]) for v in chosen]
+        slow = {scale: ids[SLOW_STAGES[0].TABLE, scale] for scale in SLOW_SCALES}
+        needed += [(SLOW_STAGES[0].TABLE, variant) for variant in slow.values()]
         for root in products:
             found = benchmark.front_sessions(conn, root, start, end, sorted(set(needed)))
             symbols = dict(
@@ -518,7 +637,7 @@ def run(
             sessions[root] = {"used": len(warm), "not_warm": len(found) - len(warm)}
             days.append(sorted((s[0] - date(2000, 1, 1)).days for s in warm))
             tasks += [
-                (root, warm[i : i + SESSIONS_PER_TASK], list(variants.values()), url)
+                (root, warm[i : i + SESSIONS_PER_TASK], list(variants.values()), slow, url)
                 for i in range(0, len(warm), SESSIONS_PER_TASK)
             ]
     workers = workers or max(1, min(8, (mp.cpu_count() or 2) - 2))

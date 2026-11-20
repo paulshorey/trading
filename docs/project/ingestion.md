@@ -3,22 +3,22 @@
 Status (November 16, 2026, PR D): the six swing scales were added to the stored GC and SI
 contracts in 17 min 55 s (`add`; 212,195,700 `pivot_1s` rows at 316 bytes each with the
 index, 64 GB; the database is 168 GB), and every confirmed pivot equals an independent
-replay of the trades ([results](handoff.md#pr-d-results-swings)).
+replay of the trades ([results](build-log.md#pr-d-results-swings)).
 
 Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
 reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
 rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the
 TBBO-built ones on every day both have
-([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
+([results](build-log.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
 3–5) was measured on the TBBO-built rows and still describes the design and its costs.
 
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema
-([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
-([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
-hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), run 5 the
-minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)), and run 6 the second
-volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [trade-metrics reference](trade-metrics-reference.md);
+([results](build-log.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
+([results](build-log.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
+hourly window statistics ([results](build-log.md#pr-b2-results-hourly-statistics)), run 5 the
+minute volatility ([results](build-log.md#pr-c1-results-minute-volatility)), and run 6 the second
+volatility ([results](build-log.md#pr-c2-results-second-volatility)). Metrics follow the [trade-metrics reference](trade-metrics-reference.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads the trade records of Databento MBP-1 files and stores, for every contract
@@ -273,39 +273,39 @@ contracts (`add`, 8 workers): 858 contract-sessions in 3.5 minutes, computing ev
 writing only the label tables, 5,029,757 rows in `pivot_label_1s` and 197,721 in
 `pivot_label_1m`, 1.3 GB including indexes. A label table has one row per candidate, not per
 slot: about 2,100 rows per contract-session for the smallest fast scale at the 25% stage and
-5 for the largest slow scale at 50% ([checks](handoff.md#pr-f-results-labels-and-benchmark)).
+5 for the largest slow scale at 50% ([checks](build-log.md#pr-f-results-labels-and-benchmark)).
 
 Run 6 (November 4, 2026, PR C2) added `vol_1s` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 5 min 47 s, computing every stage and writing only the new
 table, 71,559,900 rows in 24.05 GB including indexes, plus 159 MB of checkpoints. Every row equals
-an independent recomputation from the stored rows ([checks](handoff.md#pr-c2-results-second-volatility)).
+an independent recomputation from the stored rows ([checks](build-log.md#pr-c2-results-second-volatility)).
 In live sessions the stage adds about 0.08 ms per second (`research verify`).
 
 Run 5 (November 4, 2026, PR C1) added `vol_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
 new table, 1,192,665 rows in 0.42 GB including indexes, plus 156 MB of checkpoints (the
 time-of-day buffer). Every complete window equals an independent recomputation from the stored
-rows ([checks](handoff.md#pr-c1-results-minute-volatility)). The stage sets the required lead:
+rows ([checks](build-log.md#pr-c1-results-minute-volatility)). The stage sets the required lead:
 37 typical sessions (the daily percentile), inside the 40-session lead.
 
 Run 4 (November 4, 2026, PR B2) added `stats_1h_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
 new table, 1,192,665 rows in 0.35 GB including indexes. Every complete window equals an
-independent recomputation from the stored rows ([checks](handoff.md#pr-b2-results-hourly-statistics)).
+independent recomputation from the stored rows ([checks](build-log.md#pr-b2-results-hourly-statistics)).
 
 Run 3 (November 4, 2026, PR B1) added the minute stages to the stored GC and SI contracts
 (`add`, 8 workers): 868 contract-sessions in 2 min 29 s, about 1.4 s of wall time per
 session per worker, computing every stage and writing only `bar_1m` and `candle_1h_1m`.
 They hold 1,192,665 rows each (596,235 GC and 596,430 SI minutes) and use 0.62 GB and
 1.05 GB including indexes. Every minute equals the second rows at ordinal `60m`
-([checks](handoff.md#pr-b1-results-minute-stages)).
+([checks](build-log.md#pr-b1-results-minute-stages)).
 
 The baseline rebuild completed November 4, 2026: 12 contracts, 868 contract-sessions,
 71,559,900 rows per table, and 257/257 front sessions per product. The initial 8-worker
 run took 14 min 47 s and ended `partial` after a stalled COPY connection was terminated;
 a 1-worker retry built only SIU6's remaining 84 sessions in 3 min 29 s and ended `done`.
 A fresh plan is entirely `current`; exact replay, warm-up, roll, and NULL checks passed
-([results and evidence](handoff.md#baseline-rebuild-gc-and-si)). Fresh partitions use
+([results and evidence](build-log.md#baseline-rebuild-gc-and-si)). Fresh partitions use
 21.28 GB for `bar_1s` and 61.79 GB for `candle_1m_1s`,
 83.07 GB total including indexes (decimal); no `VACUUM FULL` was needed.
 
@@ -314,7 +314,7 @@ contracts and 868 contract-sessions, 71,559,900 rows per table, in 1,423.9 s (23
 about 1.6 s of wall time per contract-session per worker including deletes of the replaced
 rows. Compute alone is about 0.4 s per GC session for both stages. After compaction,
 `bar_1s` is 20.11 GB and `candle_1m_1s` 60.73 GB including indexes, 80.84 GB total
-([details](handoff.md#rebuild-with-stages-gc-and-si)).
+([details](build-log.md#rebuild-with-stages-gc-and-si)).
 
 Run #1 (November 3, 2026, one builder, 5-session lead) stored 46,503,000 rows per table in
 11 min 2 s with 8 workers, using 57.65 GB including indexes; its rows were replaced by run #2
@@ -334,7 +334,7 @@ If the rerun builds sessions, require `status: done`; a successful no-op instead
 `run_id: null`, empty `results`, and no `status` field. In either case, finish with a fresh
 plan reporting every contract `current`. An uncommitted session rolls back if its connection
 is closed; completed sessions remain readable. A stalled
-COPY was recovered this way during the [baseline rebuild](handoff.md#baseline-rebuild-gc-and-si);
+COPY was recovered this way during the [baseline rebuild](build-log.md#baseline-rebuild-gc-and-si);
 bounded transfer timeouts and a nonzero exit for incomplete runs remain reliability work.
 
 ## Row rules

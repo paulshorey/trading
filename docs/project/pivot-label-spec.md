@@ -160,7 +160,7 @@ Made during review, before the benchmark read any outcome of the full data:
 
 **Why.** The first benchmark found that the decision row's own features rank early
 candidates no better than the position of price alone
-([results](handoff.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
+([results](build-log.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
 stored, this experiment asks whether information the candidate's own row does not hold
 helps: the other swing scales, the hourly window, and the paired product. It reads stored
 rows only and stores nothing (`research benchmark context GC SI`).
@@ -199,7 +199,7 @@ A set that helps is a reason to store its signals as a stage and to build the mo
 a set that does not is reported as it is, and its inputs are not tuned afterwards.
 
 **Result (November 17, after the runs):** the rule is not met for any set
-([results](handoff.md#context-input-results-november-17-2026)).
+([results](build-log.md#context-input-results-november-17-2026)).
 
 ## Partner swing inputs (changed November 19, 2026)
 

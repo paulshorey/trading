@@ -2,9 +2,9 @@
 
 Proposed November 3, 2026; decisions recorded the same day ([section 6](#6-decisions)).
 Status November 4: PR A is done (#70), the schema folded into a baseline (#71), and
-GC/SI rebuilt on it ([results](handoff.md#baseline-rebuild-gc-and-si)). PR B1 (#74) added
+GC/SI rebuilt on it ([results](build-log.md#baseline-rebuild-gc-and-si)). PR B1 (#74) added
 the minute stages and moved the engine onto the stages
-([results](handoff.md#pr-b1-results-minute-stages)); B2 and the volatility tier (C1, C2)
+([results](build-log.md#pr-b1-results-minute-stages)); B2 and the volatility tier (C1, C2)
 followed. Status November 16: PR D stores the swings of the price path
 ([what was built](#36-implemented-in-pr-d-price-swings)); RSI swings, signals (E), and labels
 (F) remain. It answers four questions: are the stored `1m@1s` rows
@@ -328,13 +328,13 @@ a new version declares a different scale set.
 
 **Implemented November 17, 2026:** the open parameters are frozen in
 [pivot-label-spec.md](pivot-label-spec.md); results are in the
-[handoff](handoff.md#pr-f-results-labels-and-benchmark).
+[handoff](build-log.md#pr-f-results-labels-and-benchmark).
 
 ### 3.6 Implemented in PR D (price swings)
 
 Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented for price as
 `strategy_core/swings.py` (the detector), `stage_pivot_1s.py`, and `stage_pivot_1m.py`
-(migration `0006_swings`; [results](handoff.md#pr-d-results-swings)). Derived details:
+(migration `0006_swings`; [results](build-log.md#pr-d-results-swings)). Derived details:
 
 - **Each scale is a stage of its own** (a variant): `pivot_1s:fast_atr_0p5`, `fast_atr_1`,
   `fast_atr_2` write to `market.pivot_1s`, and `pivot_1m:slow_atr_0p5`, `slow_atr_1`,
@@ -490,7 +490,7 @@ resumable versioned stage, pilot then backfill). Amend them as follows:
    - Correlation of minute closes with minute cumulative delta inside the window.
 
    Implemented in PR B2 as stage `stats_1h_1m` (tier 1, reading `bar_1m` and `candle_1h_1m`;
-   [results](handoff.md#pr-b2-results-hourly-statistics)). Derived details: a window's minute
+   [results](build-log.md#pr-b2-results-hourly-statistics)). Derived details: a window's minute
    returns run between consecutive minute closes inside it, carried through minutes without
    trades from its first observed minute (59 when the oldest minute traded), so a window never
    reads rows older than its own; the return statistics need 10 of them (two VR(5) horizons);

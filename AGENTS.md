@@ -1,5 +1,8 @@
 # Project: Trading research
 
+Read this page, then the [handoff](docs/project/handoff.md): where the work stands and what
+to do next. The [roadmap](docs/project/roadmap.md) is the map and the build order.
+
 ## Goal
 
 Train a machine-learning model that makes the trading decisions, first in backtests and
@@ -15,14 +18,15 @@ divergences between price and RSI and between price and volume flow (CVD).
 ## The process (required order)
 
 Each step is one or more passes over the timeline, and a pass reads only passes that ran
-before it. Every step runs
-on every timeframe (`1m@1s` and `1h@1m` today; more will be added) with the same code in
-backtests and live sessions. The state of each step is in the
+before it. Every step runs on every timeframe with the same code in backtests and live
+sessions. A timeframe `W@S` is a window of 60 rows of step `S`, recomputed at every step:
+`1m@1s` and `1h@1m` exist today, and more will be added, a middle one first. Write a stage
+once, for any timeframe. The state of each step is in the
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
 
 1. **Base rows.** From the raw MBP-1 records, one row per second: OHLCV, CVD, and every
-   other number the trades and the book give. Later steps add metrics and occasional signal
-   events to these rows.
+   other number the trades and the book give (the book between trades is not read yet).
+   Later steps add metrics and occasional signal events to these rows.
 2. **Sliding windows.** A minute candle is always the last 60 seconds and an hour candle the
    last 60 minutes, recomputed at every step: a `1m@1s` row every second and a `1h@1m` row
    every minute, even when the window reaches into the previous session or week.
@@ -39,7 +43,9 @@ backtests and live sessions. The state of each step is in the
    has two passes: the first uses only the pivots and is an input to the models of step 4;
    the second adds their probabilities.
 6. **The decision model.** Trained on everything above; its inference makes the backtest
-   and live decisions. It is judged by one portfolio's results after costs.
+   and live decisions. It is judged by one portfolio's results after costs. A first version
+   is trained early, on what exists, as the yardstick: an input earns its place when the
+   decision model is better after costs with it than without it.
 
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
@@ -132,6 +138,13 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   confirmed structure and after-cost trade outcomes are different labels. Keep timeouts,
   unknown observations and session ends identifiable. Any learned probability passed into
   a later model must come from an earlier purged training fold and carry its model version.
+- State the horizon of a test and what a trade costs there. The spread is about a third of
+  a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
+  hourly one ([measured](docs/project/roadmap.md#review-of-november-20-2026)).
+- State how many independent trade dates a result rests on. Rows that share a window or a
+  day are not independent; one year cannot settle an hourly question.
+- Where the order is free, add different information (the book, net flow, the partner
+  product, time of day) before another transform of the price path.
 - Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
   one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
@@ -176,6 +189,5 @@ If unsure about something, research, search the web, find latest techniques and 
 Consider what was recently done, what's in progress, and how it contributes to the goal.
 Decide and recommend what to do next.
 
-# Goal: a trained model that makes the trading decisions, from historical research through live trading
-
-# Read the handoff and documentation: `docs/project/handoff.md`
+The goal is a trained model that makes the trading decisions, from historical research
+through live trading. Each task should name the step of the process it advances.

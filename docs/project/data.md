@@ -11,7 +11,7 @@ window engine described in the [sliding-window design](../sliding-windows/design
 One year of Databento **MBP-1** (every trade with its aggressor side, and every change to
 the best bid and ask: price, displayed size, and order count on each side), November 9,
 2025 to November 5, 2026, for six CME products. **GC and SI are the prototype pair.** NQ
-is not downloaded yet (its year is about 50 GB and the disk was nearly full); ES is here
+is not downloaded yet (its year is about 50 GB); ES is here
 but waits for NQ, its partner.
 
 | Product | Exchange contract      | Tick, value  | Files | Size    | Records/day (median) | Trades/day (median) | Book changes per trade |

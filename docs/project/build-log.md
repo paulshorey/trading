@@ -53,6 +53,11 @@ database went from 110 GB to 141 GB):
   136,611 candidates, about forty times what the slow scale gave the first benchmark.
 - **Warm sessions.** `vol_10s` is warm on 464 of 858 contract-sessions (its daily chain needs
   37 sessions, as `vol_1m`'s does); the candle and statistics on 834.
+- **Engine.** `research verify` on the example GC day (GCZ6 2026-08-31, 82,800 seconds): all
+  625 features and all 18 trades identical, whole session against second by second, at 7.0 ms
+  per market second (5.6 ms with 415 features), inside the 100 ms close delay. The example
+  backtest gives the same 18 trades and result on `main` and on this branch: the added
+  features change no decision of the baseline strategy.
 - **Pilot first:** GCZ6, 15 sessions, built from scratch into a throwaway database in 69
   seconds; volume equal across the 1-second, 10-second, and 1-minute rows.
 

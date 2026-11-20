@@ -60,10 +60,13 @@ more is marked retired and left out of the continuous views, never deleted by th
 
 ### Fast swing rows are stored where they are read
 
-Decided November 19, 2026. The fast swing scales are computed for every second, in ingestion
-as in backtests and live sessions, but `market.pivot_1s` stores a row only for:
+Decided November 19, 2026; the first rule widened on November 20 for the middle timeframe.
+The fast swing scales are computed for every second, in ingestion as in backtests and live
+sessions, but `market.pivot_1s` stores a row only for:
 
-- each minute's last second (`slot_ordinal % 60 = 0`);
+- the last second of every step row of a longer timeframe (`slot_ordinal % 10 = 0`: every
+  ten-second row's end, which includes every minute's), so a decision on a slower timeframe
+  finds the fast scales at its own row;
 - every row of a fast label: a candidate's decision row, or the confirmation row of a swing
   that never had a candidate;
 - every second in which a fast scale emitted an event.

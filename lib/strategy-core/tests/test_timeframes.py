@@ -1,17 +1,18 @@
 """A timeframe is a parameter: the stages of `1h@1m` built for `10m@10s` (`timeframes.MIDDLE`).
 
-The middle timeframe is not registered in `pipeline.STAGES` yet; these tests build its stages
-in memory beside the minute branch and check them against it and against any chunking.
+These tests build the middle timeframe's stages beside the minute branch and check them against
+it and against any chunking.
 """
 
 import numpy as np
 import pytest
 from strategy_core.engine import split_by_second
+from strategy_core.pipeline import StageFeatures
 from strategy_core.stage_bar_1s import BarStage
 from strategy_core.stage_step_bar import MinuteBarStage, step_bar
 from strategy_core.stage_step_candle import step_candle
+from strategy_core.stage_step_pivot import MIDDLE_SCALES
 from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
-from strategy_core.stage_step_pivot import scales
 from strategy_core.stage_step_stats import step_stats
 from strategy_core.stage_step_vol import step_vol
 from strategy_core.timeframes import MIDDLE, SLOW, Timeframe
@@ -19,7 +20,6 @@ from strategy_core.windows import COMPLETE
 from test_minutes import CONFIG, builder, join, regroup
 from test_minutes import sessions as sessions  # the fixture: two sessions with gaps
 
-MIDDLE_SCALES = scales(MIDDLE)
 MIDDLE_STAGES = (
     step_bar(MIDDLE),
     step_candle(MIDDLE),
@@ -27,7 +27,7 @@ MIDDLE_STAGES = (
     step_vol(MIDDLE),
     *MIDDLE_SCALES,
 )
-BRANCH = (BarStage, MinuteBarStage, *MIDDLE_STAGES)
+BRANCH = (BarStage, MinuteBarStage, *MIDDLE_STAGES)  # in tier order
 OBSERVED, MISSING = 2, 0
 
 
@@ -119,3 +119,35 @@ def test_middle_windows_hold_sixty_rows_of_ten_seconds(sessions):
     for scale in MIDDLE_SCALES:
         rows, _ = join(out, scale.NAME)
         np.testing.assert_array_equal(rows["slot_ordinal"], base["slot_ordinal"])
+
+
+def test_the_engine_reads_the_latest_completed_ten_second_row(sessions):
+    """Every second carries the features of the middle and slow rows completed at or before it,
+    with their ages: 0 to 9 seconds for `10m@10s` inside a session, 0 to 59 for `1h@1m`."""
+    cal, chunks = sessions
+    engine = StageFeatures(cal, feed_latency=0, close_delay=CONFIG.close_delay)
+    frames = [engine.update(c) for c in chunks]
+    end = np.concatenate([f.end for f in frames])
+    get = lambda name: np.concatenate([f.features[name] for f in frames])  # noqa: E731
+    p = builder(cal)
+    out = [p.process(c) for c in chunks]
+    names = [s.name for s in engine.specs()]
+    assert len(names) == len(set(names))
+    for timeframe, table, seconds in (
+        ("10m@10s", "candle_10m_10s", 10),
+        ("1h@1m", "candle_1h_1m", 60),
+    ):
+        rows, nulls = join(out, table)
+        age = get(f"{timeframe}.age_s")
+        at = np.searchsorted(rows["end_ns"], end, side="right") - 1
+        known = at >= 0
+        assert not np.isnan(age[known]).any() and np.isnan(age[~known]).all()
+        np.testing.assert_array_equal(age[known], (end[known] - rows["end_ns"][at[known]]) / 10**9)
+        first = chunks[0]
+        inside = known & (end <= first.end)  # within the first session no closure adds to an age
+        assert age[inside].max() == seconds - 1 and age[inside].min() == 0
+        for name in ("rsi", "atr_bps", "active_ratio"):
+            want = np.where(nulls[name], np.nan, rows[name])[at[known]]
+            np.testing.assert_array_equal(get(f"{timeframe}.{name}")[known], want)
+    assert f"10m@10s.{MIDDLE_SCALES[1].VARIANT}.progress" in names
+    assert engine.sources()["10m@10s.age_s"] == "candle_10m_10s"

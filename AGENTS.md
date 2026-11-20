@@ -20,7 +20,7 @@ divergences between price and RSI and between price and volume flow (CVD).
 Each step is one or more passes over the timeline, and a pass reads only passes that ran
 before it. Every step runs on every timeframe with the same code in backtests and live
 sessions. A timeframe `W@S` is a window of 60 rows of step `S`, recomputed at every step:
-`1m@1s` (fast) and `1h@1m` (slow) exist today, `10m@10s` (middle) is next, and more may
+`1m@1s` (fast), `10m@10s` (middle), and `1h@1m` (slow) exist today, and more may
 follow. A step divides a minute, so rows never straddle a session close. Write a stage
 once, for any timeframe. The state of each step is in the
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
@@ -155,6 +155,8 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   day are not independent; one year cannot settle an hourly question.
 - Where the order is free, add different information (the book, net flow, the partner
   product, time of day) before another transform of the price path.
+- Report every policy result for buys and sells apart, and by product. A year in which a
+  product trended makes one side look skilled.
 - Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
   one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.

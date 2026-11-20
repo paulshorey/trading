@@ -7,8 +7,6 @@ the [build log](build-log.md).
 
 ## Now: the build order
 
-- [ ] **Store the middle timeframe `10m@10s`** (item 4): register it, its tables, its
-      labels, and its join into the engine ([how](handoff.md#next-steps)).
 - [ ] **Complete the state** (item 5), before the six-year build:
   - [ ] `book_1s`, merged to every step: tier 0 from every book event (queue imbalance,
         order-flow imbalance, time-weighted spread, depletion and refill;
@@ -22,8 +20,9 @@ the [build log](build-log.md).
   - [ ] the `source.py` change under [housekeeping](#housekeeping).
 - [ ] **Six years of GC and SI** (item 6; Paul downloads them after moving to a larger
       machine): the named checks on the untouched years, then the build.
-- [ ] **The yardstick decision model** (item 7): the replay on the middle timeframe's
-      candidates with market and resting-limit entries and the micro-cost stress, then
+- [ ] **The yardstick decision model** (item 7): give `replay.py` and `benchmark.py` the
+      timeframe (they read the fast candidates and slow scales by name), then the replay on
+      the middle timeframe's candidates with market and resting-limit entries and the micro-cost stress, then
       take-or-skip on the value of attempting; nothing stored.
 - [ ] **The event families** (item 8): the failed break; flow (indicators of indicators,
       swings, divergence); RSI (the same; measure the row-to-row RSI noise and set
@@ -114,3 +113,5 @@ Details of each are in the [build log](build-log.md).
       rule beats staying flat.
 - [x] Timeframe as a parameter (build-order item 3): one stage class per kind for
       merged-step timeframes; stored rows unchanged.
+- [x] The middle timeframe `10m@10s` (build-order item 4): stored for GC and SI with its
+      swing scales and labels, and joined into the engine.

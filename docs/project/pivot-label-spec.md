@@ -233,3 +233,21 @@ the same data. The two primary fast labels remain `fast_atr_1_q25` and `fast_atr
 The September 1 cutoff applies to pivot-model selection and benchmarking. Historical
 engineering runs include September execution results. Use the development period for
 examples and parity checks, and record any prior exposure when reporting a final test.
+
+## Middle scales (added November 20, 2026, before any label was computed)
+
+The middle timeframe `10m@10s` has three swing scales, `mid_atr_0p5`, `mid_atr_1`, and
+`mid_atr_2`, with the threshold rule of the other scales (`max(K × ATR, 2 × spread)`, the ATR
+being the `10m@10s` ATR(14) as of the ten-second row completed before the trade's own). Their
+labels use the parameters of the table above unchanged, with these values for the stream:
+
+| Parameter | Value | Meaning |
+| --- | --- | --- |
+| Row | 10 scheduled-open seconds | A candidate is found at a ten-second row's close |
+| Horizon `K` | 240 rows | 40 minutes after the decision row, four windows, as the slow scales' 240 minutes are four hourly windows. Paul agreed on November 20 |
+| Survival deadline | 240 rows | Equal to the horizon, as for the other scales |
+| Reclaim window (detector) | 30 rows | 5 minutes, half a window: between the fast scales' 60 seconds and the slow scales' 15 minutes |
+
+Label variants: `mid_atr_0p5_q25`, `mid_atr_0p5_q50`, `mid_atr_1_q25`, `mid_atr_1_q50`,
+`mid_atr_2_q25`, `mid_atr_2_q50`, stored in `market.pivot_label_10s`. No benchmark or replay
+of them is specified here; each gets its own section before it is run.

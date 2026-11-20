@@ -89,10 +89,10 @@ models, layer 4 is step 5, and layer 5 is step 6.
 
 | Step | Stages | State | What is missing |
 | --- | --- | --- | --- |
-| 1. Base rows | `bar_1s`, `bar_1m`; planned `book_1s` | Built from trades | The book between trades: the data reaches the engine, no stage reads it |
-| 2. Sliding windows | `candle_1m_1s`, `candle_1h_1m` | Built, with row counting and per-phase indicators | Each timeframe is its own copy of the stage modules; a third timeframe should be a parameter, not new code ([review](#review-of-november-20-2026)) |
-| 3. Indicators, then indicators of indicators | `candle_*`, `stats_1h_1m`, `vol_1s`, `vol_1m` | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
-| 4. Reversal and continuation probabilities | `pivot_1s`, `pivot_1m`, `pivot_event`, `pivot_label_*`; planned `pivot_rsi_*`, `pivot_flow_*`, `model_*` | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
+| 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`; planned `book_1s` | Built from trades | The book between trades: the data reaches the engine, no stage reads it |
+| 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Built on three timeframes, with row counting and per-phase indicators; a timeframe is a parameter | A slower window for holding overnight, when that is wanted ([decision 14](#decisions-of-november-20-2026)) |
+| 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built | Nothing is computed on an indicator: no RSI of RSI, no EMA of RSI, no trend of CVD |
+| 4. Reversal and continuation probabilities | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event`, `pivot_label_*`; planned `pivot_rsi_*`, `pivot_flow_*`, `model_*` | Swings, labels and a benchmark exist for price | No model is stored; only "will this early reversal complete" has a label; no swings of RSI or CVD |
 | 5. Structure and divergence | In the swing rows today; planned `signal_*` | Higher and lower highs and lows, trend, breaches | No divergence of any kind; cross-timeframe agreement was tested only as rules on the slow swings, and [none paid](replay.md#agreement-results-november-19-2026) |
 | 6. Decision model | `labels.py`, `research replay`; planned `ml.*` | An engine with fills at the book, would-be trade rows, a losing rule-based baseline, and the [after-cost replay](replay.md) that compares policies in one portfolio | No trained decision model; no policy beats staying flat |
 
@@ -365,7 +365,7 @@ Paul's, after the review. The numbers continue the list above.
 
 ## Build order
 
-Approved November 20, 2026. Items 1 to 3 are done. Every step of the process is built, in
+Approved November 20, 2026. Items 1 to 4 are done. Every step of the process is built, in
 its order. Items 3 to 5 change base rows, so they come before the long history is ingested.
 
 1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
@@ -379,7 +379,8 @@ its order. Items 3 to 5 change base rows, so they come before the long history i
    `bar_1s`. `1h@1m` is its first instance and its stored rows did not change. `1m@1s`, whose
    rows come from the trades, keeps its own stage modules on the same calculations. A stage
    of steps 3 to 5 is written once, against a timeframe's frame of in-memory values.
-4. **The middle timeframe `10m@10s`**, one more instance: its base rows, window, indicators,
+4. **The middle timeframe `10m@10s`**: done November 20
+   ([what was built](build-log.md#the-middle-timeframe-10m10s-november-20-2026)). One more instance: its base rows, window, indicators,
    volatility, swings, and labels for GC and SI.
 5. **Complete the state before the long build.**
    - *The book between trades* (`book_1s`, merged to every step): queue imbalance,

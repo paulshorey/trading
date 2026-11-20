@@ -72,18 +72,22 @@ FEATURES: tuple[tuple[str, Unit, str], ...] = (
     (
         "ret_std_bps",
         Unit.BPS,
-        "Population standard deviation of the window's minute log returns (closes carried "
-        "through minutes without trades)",
+        "Population standard deviation of the window's step-row log returns (closes carried "
+        "through rows without trades); the rows are minutes on 1h@1m",
     ),
-    ("ret_skew", Unit.RATIO, "Skewness of the window's minute returns"),
-    ("ret_autocorr", Unit.RATIO, "Lag-1 autocorrelation of the window's minute returns"),
+    ("ret_skew", Unit.RATIO, "Skewness of the window's step-row returns"),
+    ("ret_autocorr", Unit.RATIO, "Lag-1 autocorrelation of the window's step-row returns"),
     (
         "vr_5",
         Unit.RATIO,
-        "Lo-MacKinlay variance ratio of overlapping 5-minute to 1-minute returns: above 1 "
+        "Lo-MacKinlay variance ratio of overlapping 5-row to 1-row returns: above 1 "
         "trending, below 1 mean-reverting",
     ),
-    ("up_minute_ratio", Unit.RATIO, "Minutes whose close rose / minutes whose close changed"),
+    (
+        "up_minute_ratio",
+        Unit.RATIO,
+        "Step rows whose close rose / step rows whose close changed (minutes on 1h@1m)",
+    ),
     ("drawdown_atr", Unit.ATR, "Largest drop from a trade to a later trade in the window, in ATRs"),
     ("drawup_atr", Unit.ATR, "Largest rise from a trade to a later trade in the window, in ATRs"),
     (
@@ -103,8 +107,8 @@ FEATURES: tuple[tuple[str, Unit, str], ...] = (
     (
         "cvd_close_corr",
         Unit.RATIO,
-        "Correlation of the minute closes with the cumulative buy - sell volume of the window's "
-        "minutes",
+        "Correlation of the step-row closes with the cumulative buy - sell volume of the "
+        "window's rows",
     ),
 )
 COLUMNS: tuple[Column, ...] = (
@@ -116,7 +120,9 @@ COLUMNS: tuple[Column, ...] = (
         SMALLINT,
         "One-second returns in rv_bps (pairs of consecutive observed second closes)",
     ),
-    Column("minute_returns", SMALLINT, "Minute returns in the return statistics"),
+    Column(
+        "minute_returns", SMALLINT, "Step-row returns in the return statistics (minutes on 1h@1m)"
+    ),
     Column(
         "session_vwap",
         DOUBLE,

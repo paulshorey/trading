@@ -111,7 +111,9 @@ on November 17, that structure signals were not worth building, is withdrawn.
 **Costs decide which timeframe can pay.** Crossing the spread costs 15% (GC) to 23% (SI) of
 a typical `1m@1s` true range (`vol_1s.spread_atr`). A bracket sized on that range gives away
 about a fifth of its risk on entry, before commission, so a small edge there cannot pay. On
-`1h@1m` the same spread is a few percent of the range. The fast timeframe therefore times an
+`1h@1m` the same spread is a few percent of the range. (The [review](#review-of-november-20-2026)
+measures the spread against the median close-to-close move, which is smaller than the
+average true range, so its shares are larger: 36% for GC at one minute.) The fast timeframe therefore times an
 entry, and the slower one sets the bracket and the holding time.
 
 ## Review of November 20, 2026

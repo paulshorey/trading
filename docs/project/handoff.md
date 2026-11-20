@@ -261,7 +261,7 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 For Paul:
 
 1. **Which products to build next.** PL, ES, YM, and RTY are on disk and cost only space,
-   about 55 GB of rows each; 114 GB is free, so two fit. More products add candidates for
+   about 55 GB of rows each; 114 GB is free, so two fit with little to spare. More products add candidates for
    every model, though products that move together add fewer independent days than their
    row counts suggest. ES is the most liquid; a pair needs both legs (YM or RTY with ES
    until NQ is downloaded).

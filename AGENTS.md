@@ -25,8 +25,8 @@ once, for any timeframe. The state of each step is in the
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
 
 1. **Base rows.** From the raw MBP-1 records, one row per second: OHLCV, CVD, and every
-   other number the trades and the book give (the book between trades is not read yet). Later steps add metrics and occasional signal
-   events to these rows.
+   other number the trades and the book give (the book between trades is not read yet).
+   Later steps add metrics and occasional signal events to these rows.
 2. **Sliding windows.** A minute candle is always the last 60 seconds and an hour candle the
    last 60 minutes, recomputed at every step: a `1m@1s` row every second and a `1h@1m` row
    every minute, even when the window reaches into the previous session or week.

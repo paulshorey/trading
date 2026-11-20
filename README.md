@@ -2,7 +2,7 @@
 
 A developer platform for building, testing, and running short-horizon futures
 strategies and the machine-learning models behind them. It prototypes with CME GC
-(gold) and SI (silver); a year of data for six CME products is on disk.
+(gold) and SI (silver), the proof of concept; other products are added later.
 
 The engine reads Databento MBP-1 trades and best-quote changes. In the baseline strategy, a rolling
 `1h@1m` candle (the last 60 one-minute rows, every minute) sets the direction bias; a
@@ -53,8 +53,8 @@ uv run research benchmark models GC SI --labels fast_atr_1_q25 fast_atr_1_q50
 pnpm lint && pnpm test && pnpm build
 ```
 
-Market data is not in git: one year of Databento MBP-1 for GC, SI, PL, ES, YM, and RTY
-lives in `data/databento/mbp-1/` (123 GB; NQ is not downloaded yet).
+Market data is not in git: one year of Databento MBP-1 for GC and SI lives in
+`data/databento/mbp-1/` (27 GB).
 See [historical data](docs/project/data.md) for the layout and verification.
 
 ## Documentation

@@ -10,29 +10,34 @@ the [build log](build-log.md).
 - [ ] **Timeframe as a parameter** (item 3). One stage class per kind, built for a
       timeframe `W@S`; `1m@1s` and `1h@1m` become two instances that reproduce today's
       stored rows ([how](handoff.md#next-steps)).
-- [ ] **A middle timeframe** (item 4): `15m@15s` unless Paul chooses another size.
-- [ ] **The yardstick decision model** (item 5): the *direction* target at the middle and
-      slow horizons on the features that exist, through the replay; nothing stored.
-- [ ] **Book inputs on decision rows** (item 6), read from the DBN files; no table.
-      `book_1s` follows if they help: tier 0 from every book event (queue imbalance,
-      order-flow imbalance, time-weighted spread, depletion and refill;
-      [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
-      day cache switched to keep book events.
-- [ ] **Net flow through steps 3 to 5** (item 7): a rolling flow series without session
-      resets (a window reaches into the previous session, by the row-counting rule) that is
-      NULL while its window holds rows without data coverage; its RSI, EMA, and slope; its
-      swings; price against flow divergence.
-- [ ] **RSI through steps 3 to 5** (item 7): RSI and EMA of RSI; RSI swings (measure the
-      row-to-row RSI noise and set thresholds above it;
-      [contract](pivot-structure-design.md#swing-sources-price-and-rsi)); price against RSI
-      divergence. Then higher-low and lower-high sequences and agreement across timeframes
-      (`signal_*`).
-- [ ] **Targets *continue* and *direction*** and their benchmark (item 8).
-- [ ] **Stored model stages**, then the second structure pass (item 9).
-- [ ] **More history and products** (item 10; Paul: budget and disk,
-      [open questions](handoff.md#open-questions)). PL, ES, YM, and RTY are on disk with
-      specs; NQ still has to be downloaded.
-- [ ] **The decision model and the final holdout** (item 11). September 1, 2026 onward is
+- [ ] **The middle timeframe `10m@10s`** (item 4).
+- [ ] **Complete the state** (item 5), before the six-year build:
+  - [ ] `book_1s`, merged to every step: tier 0 from every book event (queue imbalance,
+        order-flow imbalance, time-weighted spread, depletion and refill;
+        [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
+        day cache switched to keep book events;
+  - [ ] a rolling net-flow series without session resets;
+  - [ ] the scheduled-news table and its elapsed-time features;
+  - [ ] the ATR normalizer for thin markets: `*_atr` values grow without bound when the ATR
+        has decayed to almost nothing (rare on front sessions, common in lead sessions):
+        clip at training, or floor the normalizer
+        ([finding](build-log.md#pr-d-results-swings));
+  - [ ] the `source.py` change under [housekeeping](#housekeeping).
+- [ ] **Six years of GC and SI** (item 6; Paul downloads them after moving to a larger
+      machine): the named checks on the untouched years, then the build.
+- [ ] **The yardstick decision model** (item 7): the replay on the middle timeframe's
+      candidates with market and resting-limit entries and the micro-cost stress, then
+      take-or-skip on the value of attempting; nothing stored.
+- [ ] **The event families** (item 8): the failed break; flow (indicators of indicators,
+      swings, divergence); RSI (the same; measure the row-to-row RSI noise and set
+      thresholds above it, [contract](pivot-structure-design.md#swing-sources-price-and-rsi));
+      sequences and agreement across timeframes (`signal_*`); the partner
+      ([pair design](pair-design.md)).
+- [ ] **The four targets** and their benchmark (item 9): turn (stored), continue,
+      direction, and the size of the coming move.
+- [ ] **Stored model stages**, then the second structure pass (item 10).
+- [ ] **More products** (item 11): ES with NQ, YM, RTY, PL, on the larger machine.
+- [ ] **The decision model and the final holdout** (item 12). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 
 ## Also open
@@ -40,10 +45,6 @@ the [build log](build-log.md).
 - [ ] **The sliding-clock control.** The same policy on completed minute boundaries and on
       every eligible second, in one portfolio, to measure what the faster clock earns
       ([rule](roadmap.md#after-cost-replay)). Run it with the first policy that is not flat.
-- [ ] **Decide the ATR normalizer for thin markets.** `*_atr` values grow without bound when
-      the ATR has decayed to almost nothing (rare on front sessions, common in lead
-      sessions): clip at training, or floor the normalizer
-      ([finding](build-log.md#pr-d-results-swings)).
 - [ ] **Session quality policy.** Backtests include degraded sessions with only a report.
       Decide and implement a default: skip, or mark and exclude from ML rows. Examples are
       2025-11-28 (CME outage; NQ, YM, and RTY records flag a possibly wrong book) and the

@@ -22,17 +22,26 @@ The experiments so far say three things:
   indicators, divergences, and the book ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
 - The spread is a third of a typical one-minute move and a twentieth of an hourly one, and
   one year holds too few independent days to judge an hourly policy
-  ([review](roadmap.md#review-of-november-20-2026)). A middle timeframe is where an edge
-  can both pay and be measured.
+  ([review](roadmap.md#review-of-november-20-2026)). So a middle timeframe, `10m@10s`, is
+  added, and five more years of GC and SI are coming
+  ([decisions](roadmap.md#decisions-of-november-20-2026)).
+
+**What the system is for** is in the roadmap's
+[structure](roadmap.md#how-the-analysis-is-structured): state, events, forecasts, and
+decisions; three timeframes with one job each; and a decision model that is given a side by
+an event and learns whether to take the trade.
 
 **The next task** is item 3 of the [build order](roadmap.md#build-order): make the timeframe
 a parameter of the stages, so that the middle timeframe (item 4) and every stage of steps 3
-to 5 is written once ([how](#next-steps)).
+to 5 is written once ([how](#next-steps)). Items 3 to 5 change base rows and should be
+finished before the six-year history is ingested, so that it is built once.
 
 **The state of the machine** (checked November 20): `main` is clean, lint and tests pass,
-`ingest plan GC SI` reports every contract `current`, the database is 110 GB, and 114 GB of
-disk is free. One year of MBP-1 for six products is in `data/databento/mbp-1/` (123 GB);
-only GC and SI are built.
+`ingest plan GC SI` reports every contract `current`, and the database is 110 GB. One year
+of MBP-1 for GC and SI is in `data/databento/mbp-1/` (27 GB). They are the proof of
+concept: the files of PL, ES, YM, and RTY were removed on November 20 and return, with NQ
+and five more years of GC and SI, after Paul moves to a larger machine. `market.source_file`
+still lists the removed files.
 
 How to work in this repository:
 
@@ -184,7 +193,7 @@ These are fundamental; changing any of them changes every stored value.
 | Area     | State |
 | -------- | ----- |
 | Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); **the after-cost replay and its agreement rules** (#90, #91) |
-| Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC, SI, PL, ES, YM, RTY in `data/databento/mbp-1/` (123 GB), checksums and full decode verified; NQ not downloaded; TBBO files deleted |
+| Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC and SI in `data/databento/mbp-1/` (27 GB), checksums and full decode verified; PL, ES, YM, and RTY were verified too and removed on November 20 (Paul keeps the files in cloud storage); NQ not downloaded; TBBO files deleted |
 | Database | PostgreSQL 18 database `trading`, 110 GB: `0001_baseline` through `0007_pivot_labels` applied; GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; no rule or model tested so far beats staying flat after costs |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
@@ -227,23 +236,29 @@ The order is the roadmap's [build order](roadmap.md#build-order). Items 1 and 2 
 - The check is equality. Module names are part of every builder identity, so the plan will
   call every stage stale. Fingerprint the stored rows per contract and day first (as the
   [MBP-1 rebuild](build-log.md#rebuilt-from-mbp-1-november-16-2026) did), prove equality on
-  a pilot in a throwaway database, then rebuild `trading` once (about 45 minutes; an
-  in-place rebuild of `candle_1m_1s` needs 57 GB free) and compare all rows.
+  a pilot in a throwaway database, then rebuild `trading` once (about 45 minutes) and
+  compare all rows.
 
-**4. The middle timeframe** is then one more instance, with its migration: `15m@15s` unless
-Paul chooses another size ([open questions](#open-questions)). Sessions open on whole
-minutes, so step rows of 15 seconds align with the second and minute ordinals.
+**4. The middle timeframe `10m@10s`** is then one more instance, with its migration. A
+minute holds exactly six of its rows, and every session opens and closes on a row boundary
+([why not 8 seconds](roadmap.md#decisions-of-november-20-2026)).
 
-**5. The yardstick decision model.** The *direction* target at the middle and slow horizons
-on the features that exist, walk-forward and purged, its policy run through
-`research replay`. Spec first; nothing stored.
+**5. Complete the state:** the book stage, a rolling net-flow series, the scheduled-news
+table, the ATR normalizer, and the `source.py` change, each as the
+[build order](roadmap.md#build-order) describes. For the book, freeze the list of inputs
+first ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and switch
+ingestion's day cache to keep book events. For the news table, use release times that were
+published in advance, never the time a number was revised.
 
-**6. Book inputs on decision rows,** read from the DBN files (spread, size imbalance, quote
-changes over the last seconds; [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)):
-freeze the list in the spec first.
+**6. Six years of GC and SI,** when Paul has the files: the named checks on the untouched
+years first ([decision 13](roadmap.md#decisions-of-november-20-2026)).
 
-Then items 7 to 11: flow and RSI through steps 3 to 5, the three targets, stored model
-stages, more history, and the decision model.
+**7. The yardstick decision model:** the replay extended to the middle timeframe's
+candidates, then take-or-skip trained on the value of attempting. Spec first; nothing
+stored. It does not wait for item 6.
+
+Then items 8 to 12: the event families through steps 3 to 5, the four targets, stored model
+stages, more products, and the decision model.
 
 Also open, in no fixed order ([todo](todo.md)): store runs and would-be trades in
 PostgreSQL; a session quality policy; the free `definition` download (needs the account
@@ -258,26 +273,19 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 ## Open questions
 
-For Paul:
+For Paul. His decisions of November 20 are in the
+[roadmap](roadmap.md#decisions-of-november-20-2026).
 
-1. **Which products to build next.** PL, ES, YM, and RTY are on disk and cost only space,
-   about 55 GB of rows each; 114 GB is free, so one fits with room and two would leave almost
-   none (and the middle timeframe adds rows). Recompute the budget when item 10 starts. More products add candidates for
-   every model, though products that move together add fewer independent days than their
-   row counts suggest. ES is the most liquid; a pair needs both legs (YM or RTY with ES
-   until NQ is downloaded).
-2. **More history.** One year cannot judge an hourly policy or fit a model that reads
-   another model ([review](roadmap.md#review-of-november-20-2026)). Which products, how many
-   years, and where the files live are choices of budget and disk.
-3. **The size of the middle timeframe.** `15m@15s` is proposed: the spread is about a tenth
-   of GC's typical move there, and it has four times the hourly blocks. `10m@10s` is the
-   alternative (more rows, a higher cost share).
-4. **The ATR normalizer in thin markets** ([finding](build-log.md#pr-d-results-swings)): keep
+1. **The ATR normalizer in thin markets** ([finding](build-log.md#pr-d-results-swings)): keep
    `*_atr` values as plain ATR multiples and clip or exclude at training, or floor the
    normalizer (for example at the spread, as the swing threshold already is). The second
-   changes stored values, so it belongs in the rebuild of build-order item 3 if chosen.
-5. **Session quality.** Degraded sessions are included with only a report; skip them, or
+   changes stored values, so it is decided before the six-year build.
+2. **Session quality.** Degraded sessions are included with only a report; skip them, or
    mark them and exclude them from training rows?
+3. **The live contract** (full-size or micro), which sets the cost model. Until it is
+   chosen, results are reported at both.
+4. **Risk limits for a policy to count as acceptable**: the largest loss in a day and from
+   a peak that Paul would accept on one contract, and how many trades a day he expects.
 
 ## Things to know
 
@@ -317,7 +325,7 @@ The core rules above, plus:
 | MBP-1 only, the same rules for every product (November 15, 2026, replacing TBBO) | The same trades, plus every change to the best bid and ask, so an order fills at the book it would have met and its cost is measured. The price is size: 123 GB a year for six products | [Data limits](engine.md#data-limits-mbp-1) |
 | DBN files are the permanent archive; PostgreSQL holds everything derived                             | Every stored value can be rebuilt or extended; SQL for research; no Parquet layer                                               | [Data](data.md#storage), [storage](../../lib/db-research/README.md)              |
 | Store each second's base row and its `1m@1s` candle with features; NULL when undefined, never zero   | Research and ML read compiled rows; base rows stay mergeable into any window; missing, quiet, and invalid stay distinct         | [Ingestion](ingestion.md)                                                        |
-| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk is limited (114 GB free, November 20): exactness comes first, sparse layers save space                                          | [Measured](ingestion.md#measured)                                                |
+| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly                                          | [Measured](ingestion.md#measured)                                                |
 | Event-time assignment and per-phase indicators confirmed against the trade-metrics reference (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)                         |
 | A builder identity per stage covers its code, settings, packages, columns, and inputs (PR A)         | Rows never mix code versions; a changed stage and those reading it are `stale`, the others stay current, new stages are added   | [Ingestion](ingestion.md#what-the-plan-decides), [pipeline](feature-pipeline.md) |
 | Fills at the MBP-1 book the order meets (market orders at arrival, stops at the book their trigger left and never better than it, trade-through targets) | Costs are what the book showed, not an estimate; every setting is recorded with the run | [Timing model](engine.md#timing-model) |
@@ -328,7 +336,7 @@ The core rules above, plus:
 
 ```sh
 pnpm deps:install && pnpm dev            # UI http://127.0.0.1:4400
-uv run research catalog --verify         # DBN files against their checksums (123 GB: minutes)
+uv run research catalog --verify         # DBN files against their checksums
 uv run research db migrate               # schema migrations
 uv run research ingest plan GC SI        # what would be stored; then: run GC SI, status
 uv run research backtest apps/backtest-runner/examples/gc.json

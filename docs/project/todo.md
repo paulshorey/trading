@@ -69,7 +69,9 @@ the [build log](build-log.md).
       entries do. (The replay already reruns with longer latency and one more adverse tick.)
 - [ ] **UI views.** A session explorer and run comparison
       ([research UI](metric-explorer.md#next)).
-- [ ] **Slower bias.** Optionally a `1d@1h` window, once timeframes are a parameter.
+- [ ] **Slower bias.** Optionally a slower window of 60 hourly
+      rows (`60h@1h`; a one-day window would need a row count other than 60), once timeframes
+      are a parameter.
 
 ## Live trading: after research shows an edge
 

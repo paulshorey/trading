@@ -2,7 +2,9 @@
 
 What was built, how it was checked, and what each experiment found, newest first. The
 [handoff](handoff.md) says where the work stands and what to do next; this page is the
-record behind it. Add a section here when a stage, a rebuild, or an experiment is finished.
+record behind it. "This PR" in a section means the PR it names (the heading or the numbers in
+the text), not the one that created this page. Add a section here when a stage, a rebuild,
+or an experiment is finished.
 
 ## The move to MBP-1 (November 15, 2026)
 

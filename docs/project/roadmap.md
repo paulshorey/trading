@@ -262,15 +262,18 @@ which series come first, and when the yardstick exists.
    is the test. Do this before any stage of steps 3 to 5 is written, so each is written once.
 4. **A middle timeframe**, one more instance (`15m@15s` unless Paul chooses another size):
    its base rows, window, indicators, volatility, swings, and labels for GC and SI.
-5. **The yardstick decision model.** Train the *direction* target (decision 3) at the
-   middle and slow horizons on the features that exist, walk-forward and purged, and run its
-   policy through the replay. Store nothing. It will probably not beat staying flat. Its
+5. **The yardstick decision model.** Define the *direction* label (decision 3) at the
+   middle and slow horizons, since only the turn label exists today, and train on the
+   features that exist, walk-forward and purged. Extend `research replay`, which takes only
+   the stored fast candidates and their own side today, to decisions at sampled rows of the
+   middle and slow timeframes, with the bracket fixed in the spec; then run the policy
+   through it. Store no model. It will probably not beat staying flat. Its
    purpose is that every later input set is judged by one question: is the decision model
    better after costs with it than without it, on the same rows?
 6. **Book inputs on decision rows.** Read the best bid and ask around each decision row
-   from the DBN files, as a further input set; no table is needed. This completes step 1,
-   and it is the only information in the files that nothing reads yet. If it helps, build
-   the permanent stage (`book_1s`) before any model stage is stored.
+   from the DBN files, as a further input set; no table is needed. It is the only information
+   in the files that nothing reads yet. Step 1 stays open until the permanent stage
+   (`book_1s`) exists; if the inputs help, build it before any model stage is stored.
 7. **Flow, then RSI, through steps 3 to 5.** For net flow: a rolling series that does not
    reset at the session open (not `session_cvd`) and is NULL while its window holds rows
    without data coverage, its RSI, EMA and slope per phase (step

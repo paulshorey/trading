@@ -18,8 +18,8 @@ The experiments so far say three things:
 - Models on the stored price and swing features do not tell which early reversals complete
   better than the distance price has already moved
   ([benchmark](build-log.md#pr-f-results-labels-and-benchmark)). That tested one target on
-  one timeframe with none of the inputs steps 3 to 5 name
-  ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+  one timeframe, without the inputs the process names as the important ones: indicators of
+  indicators, divergences, and the book ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
 - The spread is a third of a typical one-minute move and a twentieth of an hourly one, and
   one year holds too few independent days to judge an hourly policy
   ([review](roadmap.md#review-of-november-20-2026)). A middle timeframe is where an edge
@@ -261,7 +261,8 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 For Paul:
 
 1. **Which products to build next.** PL, ES, YM, and RTY are on disk and cost only space,
-   about 55 GB of rows each; 114 GB is free, so two fit with little to spare. More products add candidates for
+   about 55 GB of rows each; 114 GB is free, so one fits with room and two would leave almost
+   none (and the middle timeframe adds rows). Recompute the budget when item 10 starts. More products add candidates for
    every model, though products that move together add fewer independent days than their
    row counts suggest. ES is the most liquid; a pair needs both legs (YM or RTY with ES
    until NQ is downloaded).
@@ -316,7 +317,7 @@ The core rules above, plus:
 | MBP-1 only, the same rules for every product (November 15, 2026, replacing TBBO) | The same trades, plus every change to the best bid and ask, so an order fills at the book it would have met and its cost is measured. The price is size: 123 GB a year for six products | [Data limits](engine.md#data-limits-mbp-1) |
 | DBN files are the permanent archive; PostgreSQL holds everything derived                             | Every stored value can be rebuilt or extended; SQL for research; no Parquet layer                                               | [Data](data.md#storage), [storage](../../lib/db-research/README.md)              |
 | Store each second's base row and its `1m@1s` candle with features; NULL when undefined, never zero   | Research and ML read compiled rows; base rows stay mergeable into any window; missing, quiet, and invalid stay distinct         | [Ingestion](ingestion.md)                                                        |
-| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk space is not a concern                                            | [Measured](ingestion.md#measured)                                                |
+| Store features as `double precision`, not `real` (decided November 2, 2026)                          | Stored features equal in-memory and live values exactly; disk is limited (114 GB free, November 20): exactness comes first, sparse layers save space                                          | [Measured](ingestion.md#measured)                                                |
 | Event-time assignment and per-phase indicators confirmed against the trade-metrics reference (November 2, 2026) | Stored rows equal what backtests and live sessions compute; the two clocks disagree on about 1 trade in 2,000                   | [Differences](ingestion.md#differences-from-the-handoff)                         |
 | A builder identity per stage covers its code, settings, packages, columns, and inputs (PR A)         | Rows never mix code versions; a changed stage and those reading it are `stale`, the others stay current, new stages are added   | [Ingestion](ingestion.md#what-the-plan-decides), [pipeline](feature-pipeline.md) |
 | Fills at the MBP-1 book the order meets (market orders at arrival, stops at the book their trigger left and never better than it, trade-through targets) | Costs are what the book showed, not an estimate; every setting is recorded with the run | [Timing model](engine.md#timing-model) |

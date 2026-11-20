@@ -133,8 +133,58 @@ What this shows:
    (0.3%) and 116 entries that met no usable book; none was late, uncovered or
    censored. No slow portfolio held more than one flagged trade.
 
-What it does not show: whether a candidate is worth taking when the slower timeframe agrees
-with it, or with the book, divergences or indicators of indicators as inputs. Those are the
-next items of the [build order](roadmap.md#build-order), and each is judged here: an input
-set earns its place when a policy using it has a value of attempting above zero on the slow
-bracket, on the same candidates, under both execution settings.
+What it does not show: whether a candidate is worth taking with the book, divergences or
+indicators of indicators as inputs. Those are the next items of the
+[build order](roadmap.md#build-order), and each is judged here: an input set earns its place
+when a policy using it has a value of attempting above zero on the slow bracket, on the same
+candidates, under both execution settings.
+
+## Agreement results (November 19, 2026)
+
+The same 2,783,418 candidates, split by the [agreement rules](#agreement-with-the-slower-timeframe-frozen-november-19-2026-before-its-run).
+Evidence: `~/replay-agreement-gc-si.json` and `.log`. **No rule passed**: of the 18 groups
+in each of the 12 cells (label variant and candidate group), none has a value of attempting
+with a 95% interval above zero in both parts of the period, under either execution setting.
+
+`fast_atr_0p5_q25`, every candidate, base execution: mean net dollars per attempt (the other
+eleven cells read the same way; the stressed setting is about $28 lower throughout):
+
+| Scale | Rule | With: Jan–Apr | With: May–Aug | Against: Jan–Apr | Against: May–Aug | With portfolio, May–Aug (fills) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `slow_atr_0p5` | `leg` | -143 | -99 | -8 | -54 | -97,690 (917) |
+| `slow_atr_0p5` | `trend` | -1 | -85 | -148 | -66 | -2,620 (875) |
+| `slow_atr_0p5` | `fresh` | -115 | -84 | -60 | -74 | -102,425 (880) |
+| `slow_atr_1` | `leg` | -126 | -106 | -24 | -46 | -38,745 (908) |
+| `slow_atr_1` | `trend` | -26 | +23 | -142 | -175 | +128,765 (818) |
+| `slow_atr_1` | `fresh` | +95 | -155 | -205 | -20 | -67,220 (698) |
+| `slow_atr_2` | `leg` | -118 | -28 | -33 | -125 | -9,805 (910) |
+| `slow_atr_2` | `trend` | +119 | -74 | -303 | -78 | -58,695 (841) |
+| `slow_atr_2` | `fresh` | +259 | -8 | -462 | -49 | -14,620 (340) |
+
+What this shows:
+
+1. **Agreement defined by a rule on the slow swings does not make a fast candidate pay.** The
+   best groups sit near zero, not above it: `slow_atr_1` `trend` is -26 then +23 an attempt,
+   with intervals of about ±$300 and ±$140.
+2. **The rules that looked best from January to April did not hold.** `slow_atr_2` `fresh`
+   (the slower timeframe has just reversed the entry's way) was +$127 to +$265 an attempt in
+   the first part and -$8 to -$72 in the second over the six label variants; `slow_atr_1`
+   `fresh` changed sign the same way in the table above. Chosen on the first part, either would have lost in the second.
+3. **One pattern held in both parts, and it is a loss avoided, not a gain.** Entering against
+   the `slow_atr_1` trend was $106 to $253 an attempt worse than entering with it, in both
+   parts and in all 12 cells but two provisional ones in the first part (-1 and +36). The
+   slow trend therefore carries some information about direction; alone it removes losing
+   trades and leaves a result near zero. No interval was computed for this difference, which
+   was not a predeclared test, so it is a lead for the model's inputs and not a finding.
+4. **Following the open leg is worse than fading it at the two smaller scales**: `leg` `with`
+   lost $45 to $218 more than `against` in every cell and both parts at `slow_atr_0p5`, and
+   $40 to $195 more at `slow_atr_1`. A fast pullback inside a slow leg did not resume it more
+   often than not.
+5. **Four months cannot resolve an edge of this size.** Three-hour trades overlap, so the
+   test months hold about 87 independent dates; the interval of a group's mean is ±$140 to
+   ±$300 an attempt, against a cost of about $80. More history
+   ([decision 9](roadmap.md#design-decisions-november-19-2026)) is what narrows it.
+
+So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
+It remains to be tested as probabilities from models (build-order item 7), with the slow
+trend among their inputs.

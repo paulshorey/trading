@@ -14,7 +14,10 @@ decisions behind it, where the work stands, and exactly how to continue.
 the work. The first two items of the build order are done: the storage change (PR #89) and the
 [after-cost replay](replay.md) (`research replay`), which found that taking a fast candidate's
 side loses about one spread on a `1m@1s` bracket and on a `1h@1m` one, so a candidate alone has
-no edge and staying flat is the rule every later input set must beat. The next task is
+no edge and staying flat is the rule every later input set must beat. Splitting the candidates
+by whether the slow swings point the same way ([agreement](replay.md#agreement-results-november-19-2026))
+did not change that: no rule passed, and entering against the `slow_atr_1` trend was the one
+consistent loss. The next task is
 build-order item 3, the book inputs on the stored candidates, judged through the benchmark and
 the replay.
 

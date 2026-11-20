@@ -20,7 +20,8 @@ the [build log](build-log.md).
       day cache switched to keep book events.
 - [ ] **Net flow through steps 3 to 5** (item 7): a rolling flow series without session
       resets (a window reaches into the previous session, by the row-counting rule) that is
-      NULL while its window holds rows without data coverage; its RSI, EMA, and slope; its swings; price against flow divergence.
+      NULL while its window holds rows without data coverage; its RSI, EMA, and slope; its
+      swings; price against flow divergence.
 - [ ] **RSI through steps 3 to 5** (item 7): RSI and EMA of RSI; RSI swings (measure the
       row-to-row RSI noise and set thresholds above it;
       [contract](pivot-structure-design.md#swing-sources-price-and-rsi)); price against RSI

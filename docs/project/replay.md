@@ -142,7 +142,7 @@ candidates, under both execution settings.
 ## Agreement results (November 19, 2026)
 
 The same 2,783,418 candidates, split by the [agreement rules](#agreement-with-the-slower-timeframe-frozen-november-19-2026-before-its-run).
-Evidence: `~/replay-agreement-gc-si.json` and `.log`. **No rule passed**: of the 18 groups
+Evidence: `~/replay-agreement-gc-si-v2.json` and `.log`. **No rule passed**: of the 18 groups
 in each of the 12 cells (label variant and candidate group), none has a value of attempting
 with a 95% interval above zero in both parts of the period, under either execution setting.
 
@@ -153,13 +153,13 @@ eleven cells read the same way; the stressed setting is about $28 lower througho
 | --- | --- | --- | --- | --- | --- | --- |
 | `slow_atr_0p5` | `leg` | -143 | -99 | -8 | -54 | -97,690 (917) |
 | `slow_atr_0p5` | `trend` | -1 | -85 | -148 | -66 | -2,620 (875) |
-| `slow_atr_0p5` | `fresh` | -115 | -84 | -60 | -74 | -102,425 (880) |
+| `slow_atr_0p5` | `fresh` | -113 | -84 | -62 | -75 | -98,380 (889) |
 | `slow_atr_1` | `leg` | -126 | -106 | -24 | -46 | -38,745 (908) |
 | `slow_atr_1` | `trend` | -26 | +23 | -142 | -175 | +128,765 (818) |
-| `slow_atr_1` | `fresh` | +95 | -155 | -205 | -20 | -67,220 (698) |
+| `slow_atr_1` | `fresh` | +94 | -155 | -205 | -20 | -55,895 (694) |
 | `slow_atr_2` | `leg` | -118 | -28 | -33 | -125 | -9,805 (910) |
 | `slow_atr_2` | `trend` | +119 | -74 | -303 | -78 | -58,695 (841) |
-| `slow_atr_2` | `fresh` | +259 | -8 | -462 | -49 | -14,620 (340) |
+| `slow_atr_2` | `fresh` | +261 | -8 | -463 | -49 | -15,720 (340) |
 
 What this shows:
 
@@ -167,8 +167,8 @@ What this shows:
    best groups sit near zero, not above it: `slow_atr_1` `trend` is -26 then +23 an attempt,
    with intervals of about ±$300 and ±$140.
 2. **The rules that looked best from January to April did not hold.** `slow_atr_2` `fresh`
-   (the slower timeframe has just reversed the entry's way) was +$127 to +$265 an attempt in
-   the first part and -$8 to -$72 in the second over the six label variants; `slow_atr_1`
+   (the slower timeframe has just reversed the entry's way) was +$135 to +$271 an attempt in
+   the first part and -$8 to -$74 in the second over the six label variants; `slow_atr_1`
    `fresh` changed sign the same way in the table above. Chosen on the first part, either would have lost in the second.
 3. **One pattern held in both parts, and it is a loss avoided, not a gain.** Entering against
    the `slow_atr_1` trend was $106 to $253 an attempt worse than entering with it, in both
@@ -184,6 +184,12 @@ What this shows:
    test months hold about 87 independent dates; the interval of a group's mean is ±$140 to
    ±$300 an attempt, against a cost of about $80. More history
    ([decision 9](roadmap.md#design-decisions-november-19-2026)) is what narrows it.
+
+**Correction before the merge.** The first run added the seconds since the minute row to a
+leg's age in clock time, so a candidate in the minute after a closure had the closure added and
+was dropped from `fresh`. Review caught it; the age now counts rows, as the rule above says.
+The rerun changed only the `fresh` groups, by at most 245 candidates of a group and $8 an
+attempt, and no conclusion (first run: `~/replay-agreement-gc-si.json`).
 
 So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
 It remains to be tested as probabilities from models (build-order item 7), with the slow

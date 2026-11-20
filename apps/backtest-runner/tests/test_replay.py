@@ -246,6 +246,10 @@ def test_the_slow_direction_is_read_at_the_latest_completed_minute():
     assert out["trend"].tolist() == [1, 1, 0, 0, 0, 0, -1, 0, 0]
     # 3,500 s at the minute's end is fresh there and 59 s later; 3,600 s is fresh only at the end
     assert out["fresh"].tolist() == [1, 1, -1, 0, 0, 0, 0, 0, 0]
+    # rows after a closure are as old as their row count says, never the clock time between
+    reopened = end + np.where(ordinal > 600, 5 * 3600 * NS, 0)
+    again = replay.slow_direction(ordinal, reopened, minute, minute_end, values)
+    assert all(again[rule].tolist() == out[rule].tolist() for rule in replay.RULES)
     late = replay.slow_direction(ordinal[:1], end[:1] + replay.MINUTE_REACH_NS, minute, minute_end,
                                  values)  # fmt: skip
     assert late["leg"].tolist() == [0]  # a minute row older than the reach is not read

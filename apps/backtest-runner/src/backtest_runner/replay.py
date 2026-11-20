@@ -171,7 +171,8 @@ def slow_direction(
     state, direction, trend, high_age, low_age = values[at].T
     leg = np.where(ok & (state == swings.ACTIVE) & np.isfinite(direction), direction, 0.0)
     with np.errstate(invalid="ignore"):  # an unknown age is not fresh
-        age = np.where(leg > 0, low_age, high_age) + (end - minute_end[at]) / NS
+        # ages count rows: the stored one at the minute row, then the second rows since it
+        age = np.where(leg > 0, low_age, high_age) + (ordinal - 60 * want)
         fresh = (leg != 0) & (age <= FRESH_S)
     return {
         "leg": leg.astype(np.int8),

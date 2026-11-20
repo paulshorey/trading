@@ -31,10 +31,10 @@ The experiments so far say three things:
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next task** is item 3 of the [build order](roadmap.md#build-order): make the timeframe
-a parameter of the stages, so that the middle timeframe (item 4) and every stage of steps 3
-to 5 is written once ([how](#next-steps)). Items 3 to 5 change base rows and should be
-finished before the six-year history is ingested, so that it is built once.
+**The next task** is item 4 of the [build order](roadmap.md#build-order): register the
+middle timeframe `10m@10s` ([how](#next-steps)). Item 3, the timeframe as a parameter, is
+done. Items 4 and 5 change base rows and should be finished before the six-year history is
+ingested, so that it is built once.
 
 **The state of the machine** (checked November 20): `main` is clean, lint and tests pass,
 `ingest plan GC SI` reports every contract `current`, and the database is 110 GB. One year
@@ -113,9 +113,10 @@ a stage that reads the book only needs the cache switched on, since
 `HistoricalSource.stored_chunk` already passes the book when the cache keeps it.
 
 **Stages** ([feature pipeline](feature-pipeline.md)): each stored table is a `Stage`
-(`strategy_core/stages.py`) in its own module (`stage_bar_1s.py`, `stage_bar_1m.py`,
-`stage_candle_1m_1s.py`, `stage_candle_1h_1m.py`, `stage_stats_1h_1m.py`, `stage_vol_1m.py`,
-`stage_vol_1s.py`, and one class per swing scale in `stage_pivot_1m.py` and `stage_pivot_1s.py`),
+(`strategy_core/stages.py`) in a module: the one-second stages in `stage_bar_1s.py`, `stage_candle_1m_1s.py`,
+`stage_vol_1s.py`, and `stage_pivot_1s.py`, and those of every longer step in
+`stage_step_bar.py`, `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`, and
+`stage_step_pivot.py`, one class per kind built for a timeframe (`timeframes.py`),
 registered in tier order in `pipeline.STAGES`. A stage declares its inputs, columns (with
 roles and units), `MODULES` (hashed into its builder identity), settings, checkpoint state,
 and `warmup()` in scheduled-open seconds. `Pipeline` runs them per chunk and passes in-memory
@@ -218,30 +219,34 @@ yet ([list](ingestion.md#metrics)) and can be added by rebuilding from the DBN f
 
 The order is the roadmap's [build order](roadmap.md#build-order). Items 1 and 2 are done.
 
-**3. Timeframe as a parameter.** Today each timeframe is a copy: `stage_candle_1m_1s.py` and
-`stage_candle_1h_1m.py`, `stage_vol_1s.py` and `stage_vol_1m.py`, `stage_pivot_1s.py` and
-`stage_pivot_1m.py`, each with its own table and migration. The target:
+**3. Timeframe as a parameter: done** ([what was built](build-log.md#timeframe-as-a-parameter-november-20-2026),
+[how it works](feature-pipeline.md#stages)). The stages of a timeframe whose step is longer
+than a second are one class per kind in `stage_step_*.py`, built from a
+`timeframes.Timeframe`; `1h@1m` is the instance stored today. The one-second stages keep
+modules of their own.
 
-- A timeframe `W@S` is a value: its name, its step `S` in seconds, and a window of 60 rows.
-  Step rows are merged exactly from `bar_1s`, as `stage_bar_1m.py` merges 60 seconds; step
-  row `k` holds seconds `S·k − (S − 1) … S·k`.
-- Each kind of stage (step rows, candle, window statistics, volatility, swings, labels) is
-  one class built for a timeframe, the way each swing scale is already a stage class made
-  from `SCALES`. What differs between timeframes today becomes a declared option of the
-  timeframe, not a copy: the hourly-only statistics, realized volatility from one-second
-  returns, the latest-observation features the hour leaves out, and which slower row a
-  faster one reads as of availability (`StageFeatures.HOURLY`).
-- Tables stay one per stage and timeframe. Whether existing tables are renamed is a derived
-  detail: decide it, and report it.
-- The check is equality. Module names are part of every builder identity, so the plan will
-  call every stage stale. Fingerprint the stored rows per contract and day first (as the
-  [MBP-1 rebuild](build-log.md#rebuilt-from-mbp-1-november-16-2026) did), prove equality on
-  a pilot in a throwaway database, then rebuild `trading` once (about 45 minutes) and
-  compare all rows.
+**4. The middle timeframe `10m@10s`.** `timeframes.MIDDLE` exists and its stages are tested
+in memory (`tests/test_timeframes.py`). A minute holds exactly six of its rows, and every
+session opens and closes on a row boundary
+([why not 8 seconds](roadmap.md#decisions-of-november-20-2026)). To store it:
 
-**4. The middle timeframe `10m@10s`** is then one more instance, with its migration. A
-minute holds exactly six of its rows, and every session opens and closes on a row boundary
-([why not 8 seconds](roadmap.md#decisions-of-november-20-2026)).
+- Add `MIDDLE` to `timeframes.MERGED` and build `pipeline.STAGES` from `MERGED` (step rows,
+  candle, statistics, volatility, swing scales `mid_atr_*`, and their labels).
+- Migration `0008`: the tables `bar_10s`, `candle_10m_10s`, `stats_10m_10s`, `vol_10s`,
+  `pivot_10s`, `pivot_label_10s` and their continuous views, as `0002` to `0007` made the
+  minute ones.
+- `stage_pivot_label.HORIZON` needs an entry for `10s` (rows after the decision row; 300
+  fast and 240 slow today). Freeze it in the [label spec](pivot-label-spec.md) first.
+- `pipeline.StageFeatures` joins the slow rows as of each second (`HOURLY`, `1h@1m.age_s`).
+  Make that join a loop over `MERGED`, so the middle rows join the same way with their own
+  age, and the engine's feature names for `1h@1m` stay as they are.
+- `stats_*` columns named for minutes (`minute_returns`, `up_minute_ratio`, `vr_5`) count
+  step rows on any timeframe. Either keep the names with that meaning stated, or rename
+  them in the same migration; decide it, and report it.
+- `benchmark.py` and `replay.py` read the slow scales by name (`row = ordinal // 60`);
+  give them the timeframe, since item 7 runs the replay on the middle candidates.
+- The rebuild adds stages only: plan must show `add` for the new ones and `current` for
+  the rest.
 
 **5. Complete the state:** the book stage, a rolling net-flow series, the scheduled-news
 table, the ATR normalizer, and the `source.py` change, each as the
@@ -276,16 +281,13 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 For Paul. His decisions of November 20 are in the
 [roadmap](roadmap.md#decisions-of-november-20-2026).
 
-1. **The ATR normalizer in thin markets** ([finding](build-log.md#pr-d-results-swings)): keep
-   `*_atr` values as plain ATR multiples and clip or exclude at training, or floor the
-   normalizer (for example at the spread, as the swing threshold already is). The second
-   changes stored values, so it is decided before the six-year build.
-2. **Session quality.** Degraded sessions are included with only a report; skip them, or
-   mark them and exclude them from training rows?
-3. **The live contract** (full-size or micro), which sets the cost model. Until it is
+1. **Session quality.** Degraded sessions are included with only a report. Decision 23
+   makes a flagged session ineligible for entries; whether its rows also stay out of
+   indicator history is still open.
+2. **The live contract** (full-size or micro), which sets the cost model. Until it is
    chosen, results are reported at both.
-4. **Risk limits for a policy to count as acceptable**: the largest loss in a day and from
-   a peak that Paul would accept on one contract, and how many trades a day he expects.
+3. **The largest loss from a peak** that would make a policy unacceptable. The daily cap is
+   set (decision 19); a drawdown limit is not.
 
 ## Things to know
 

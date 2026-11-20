@@ -333,7 +333,7 @@ a new version declares a different scale set.
 ### 3.6 Implemented in PR D (price swings)
 
 Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented for price as
-`strategy_core/swings.py` (the detector), `stage_pivot_1s.py`, and `stage_pivot_1m.py`
+`strategy_core/swings.py` (the detector), `stage_pivot_1s.py`, and `stage_pivot_1m.py` (now `stage_step_pivot.py`)
 (migration `0006_swings`; [results](build-log.md#pr-d-results-swings)). Derived details:
 
 - **Each scale is a stage of its own** (a variant): `pivot_1s:fast_atr_0p5`, `fast_atr_1`,

@@ -378,7 +378,7 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   low or at the high came first (0: the same trade). They show what the high and low cannot,
   such as 99, 105, 100 falling 5 in a second that closes up, and merge exactly into windows
   with the high and low.
-- **Minutes** (`bar_1m`) merge their 60 second rows by these rules (`stage_bar_1m.combine_metrics`
+- **Minutes** (`bar_1m`) merge their 60 second rows by these rules (`stage_step_bar.combine_metrics`
   applies the window rules within each minute), so a minute equals the `1m@1s` window that
   ends at ordinal `60m`, field by field. A minute with any missing second is missing
   (`status` 0) and stores only its keys and status. `session_cvd` is the value at the

@@ -23,9 +23,9 @@ import psycopg
 from numba import njit
 from psycopg import sql
 from strategy_core.pipeline import StageFeatures
-from strategy_core.stage_pivot_1m import SCALES as SLOW_SCALES
 from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
 from strategy_core.stage_pivot_label import FAST_LABELS, INVALIDATION, REVERSAL, SLOW_LABELS
+from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
 
 from . import db, store
 

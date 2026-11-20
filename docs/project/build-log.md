@@ -6,6 +6,35 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Timeframe as a parameter (November 20, 2026)
+
+Build-order item 3. The stages of `1h@1m` were modules of their own beside those of `1m@1s`.
+They are now one class per kind, built for a `timeframes.Timeframe`: `stage_step_bar.py`
+(step rows merged from `bar_1s`), `stage_step_candle.py`, `stage_step_stats.py`,
+`stage_step_vol.py`, and `stage_step_pivot.py`. `bar_1m`, `candle_1h_1m`, `stats_1h_1m`,
+`vol_1m`, and the slow swing scales are the instances for `1h@1m`, with the same names,
+columns, and settings as before.
+
+- **The one-second stages were left alone.** Their rows come from the trades, not from
+  merged rows, and they already share the calculation modules. Their builder identities did
+  not change, so `bar_1s`, `candle_1m_1s`, `vol_1s`, and the fast swing scales stayed
+  current: 100 GB of rows were not rewritten.
+- **A second instance, in memory.** `tests/test_timeframes.py` builds `10m@10s` beside the
+  minute branch: six 10-second rows equal one minute (sums, extremes, close, missing), every
+  stage gives identical rows in any chunking, windows hold 60 rows across a closure, and the
+  swing scales publish one row per step row. A step that does not divide a minute is refused.
+- **Stored rows did not change.** Before the rebuild, every row of the eight affected tables
+  was hashed per contract over all columns but `builder_id` (96 fingerprints: `bar_1m`,
+  `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_label_1m`, `pivot_label_1s`,
+  `pivot_event`). `research ingest run GC SI --rebuild --workers 8` (run 5; 12 contracts, 858
+  contract-sessions, 6 minutes) rewrote the stale stages, and all 96 fingerprints are identical.
+  `ingest plan GC SI` reports every contract `current`; `pivot_1s` still holds 14,286,813 rows.
+- **Not done here:** storing `10m@10s` (its tables, labels, and join into the engine) is
+  item 4 ([how](handoff.md#next-steps)).
+
+Evidence: `~/timeframe-refactor.hash-before.txt`, `hash-after.txt`, `hash-diff.txt` (empty),
+`ingest.json`, and `ingest.log`.
+
 ## The move to MBP-1 (November 15, 2026)
 
 Paul replaced TBBO with MBP-1 for every product: the trades are the same, and the book

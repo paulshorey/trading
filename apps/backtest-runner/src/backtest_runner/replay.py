@@ -25,8 +25,8 @@ from strategy_core import labels, swings
 from strategy_core.engine import session_view
 from strategy_core.execution import ExecutionConfig, Simulator, merged
 from strategy_core.market import NS, PRODUCTS
-from strategy_core.stage_pivot_1m import SCALES as SLOW_STAGES
 from strategy_core.stage_pivot_label import FAST_LABELS
+from strategy_core.stage_step_pivot import SCALES as SLOW_STAGES
 from strategy_core.strategies import Bracket
 
 from . import benchmark, db, store

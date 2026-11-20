@@ -1,10 +1,14 @@
-"""Stage `vol_1m` (tier 1): the volatility family of the rolling `1h@1m` window
+"""Stages `vol_<rows>` (tier 1), one class and one stage per timeframe (`timeframes.py`),
+described here for `vol_1m`, whose step rows are minutes.
+
+The volatility family of the rolling `1h@1m` window
 (docs/project/plan-1h-and-pivots.md, section 7), one row per scheduled-open minute, next to
 `candle_1h_1m`'s row for the same window. The calculations are in `volatility.py`, which the
 second-resolution stage `vol_1s` will share.
 
 It reads the minute rows (`bar_1m`) and, through a declared same-tier edge, the hourly candle
-(`candle_1h_1m`): its windows (`hour_candles`) and their exact path fields (`hour_window`), and its
+(`candle_1h_1m`): its windows
+(`candles` of the timeframe's frame) and their exact path fields (`window`), and its
 stored ATR(14) (`atr_bps`), which this stage never stores again. Values are per phase `m % 60` on
 same-phase windows, like the ATR, and normalized (`features.Unit`):
 
@@ -35,7 +39,7 @@ daily ATR and its percentile belong to the session and are defined at every row 
 units and in dollars per contract are context for stops and sizing, never features.
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -43,13 +47,13 @@ from . import kernels, warmup
 from .columns import BIGINT, DOUBLE, SMALLINT, Column, Table
 from .engine import MarketChunk
 from .features import Unit  # unit labels of the registry; they do not change stored values
-from .market import MINUTE, PRODUCTS, PX, SECOND
-from .stage_bar_1m import empty_table
+from .market import PRODUCTS, PX, SECOND
+from .stage_step_bar import empty_table
 from .stages import Stage
+from .timeframes import SLOTS, SLOW, Timeframe
 from .volatility import DailyScale, TimeOfDay, garman_klass, parkinson, session_minute, split_atr
-from .windows import BIAS, COMPLETE
+from .windows import COMPLETE
 
-WINDOW_SECONDS = BIAS.period // SECOND  # scheduled-open seconds per window and per period
 DAY_SECONDS = 86_400  # no exchange session is longer: a chain of whole sessions fits in this
 
 FEATURES: tuple[tuple[str, Unit, str], ...] = (
@@ -183,17 +187,16 @@ def usd_per_price(contract: str) -> float:
     return float("nan")
 
 
-class VolMinuteStage(Stage):
-    NAME = "vol_1m"
+class StepVolStage(Stage):
+    TF: ClassVar[Timeframe]  # set by `step_vol`, with NAME, RESOLUTION, and INPUTS
     TIER = 1
-    RESOLUTION = "1m"
-    INPUTS = ("bar_1m", "candle_1h_1m")
     MODULES = (
         "stages",
         "columns",
-        "stage_vol_1m",
+        "stage_step_vol",
         "volatility",
-        "stage_bar_1m",
+        "stage_step_bar",
+        "timeframes",
         "bars",
         "kernels",
         "market",
@@ -201,7 +204,6 @@ class VolMinuteStage(Stage):
         "warmup",
         "state",
     )
-    COLUMNS = COLUMNS
     STATE = ("atr", "atr5", "atr50", "split", "tod", "daily")
     SHORT, LONG = 5, 50  # ATR horizons next to the configured ATR(14)
     TOD_SESSIONS = 20  # sessions in the time-of-day normal
@@ -209,7 +211,7 @@ class VolMinuteStage(Stage):
 
     def __init__(self, context):
         super().__init__(context)
-        p = BIAS.slots
+        p = SLOTS
 
         def atr():
             return kernels.PhaseState(p, prev="nan", atr="zero", count="count")
@@ -219,11 +221,11 @@ class VolMinuteStage(Stage):
             p, prev="nan", bull="zero", bear="zero", long="zero", short="zero", count="count"
         )
         self.tod = TimeOfDay(self.TOD_SESSIONS)
-        self.daily = DailyScale(context.calendar, MINUTE, self.DAY_PERIOD, self.DAY_RANK)
+        self.daily = DailyScale(context.calendar, self.TF.step, self.DAY_PERIOD, self.DAY_RANK)
 
     def settings(self) -> dict[str, Any]:
         return {
-            "window": BIAS.name,
+            "window": self.TF.name,
             "atr_period": self.context.features.atr_period,
             "atr_short": self.SHORT,
             "atr_long": self.LONG,
@@ -238,22 +240,24 @@ class VolMinuteStage(Stage):
         the daily percentile, `DAY_PERIOD + 1` sessions for the daily ATR (each true range needs
         the previous close), then `DAY_RANK` daily ATRs. Session chains count whole days."""
         atr = warmup.wilder(self.context.features.atr_period)  # also the split and adverse ATRs
-        hourly = max(atr, warmup.wilder(self.SHORT), warmup.wilder(self.LONG)) * WINDOW_SECONDS
-        tod = atr * WINDOW_SECONDS + warmup.window(self.TOD_SESSIONS) * DAY_SECONDS
+        period = self.TF.window_seconds  # scheduled-open seconds per same-phase period
+        hourly = max(atr, warmup.wilder(self.SHORT), warmup.wilder(self.LONG)) * period
+        tod = atr * period + warmup.window(self.TOD_SESSIONS) * DAY_SECONDS
         daily = (warmup.window(self.DAY_PERIOD) + 1 + warmup.window(self.DAY_RANK)) * DAY_SECONDS
         return max(hourly, tod, daily)
 
     def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
-        minutes = products["minutes"]
-        if not len(minutes):  # most one-second chunks finish no minute; nothing changes
+        frame = self.TF.frame(products)
+        minutes = frame["bars"]
+        if not len(minutes):  # most one-second chunks finish no step row; nothing changes
             return empty_table(COLUMNS, NULLABLE)
-        base, candle = products["tables"]["bar_1m"], products["tables"]["candle_1h_1m"]
+        base, candle = (products["tables"][name] for name in self.INPUTS)
         if not (
             np.array_equal(base.values["end_ns"], minutes.end)
             and np.array_equal(candle.values["end_ns"], minutes.end)
         ):
-            raise AssertionError("vol_1m rows must align with bar_1m and candle_1h_1m")
-        c, win = products["hour_candles"], products["hour_window"]
+            raise AssertionError(f"{self.NAME} rows must align with its step rows and candle")
+        c, win = frame["candles"], frame["window"]
         m, cfg = len(c), self.context.features
         complete = c.status == COMPLETE
         priced = complete | c.carried  # the ATR's inputs
@@ -283,8 +287,10 @@ class VolMinuteStage(Stage):
         )  # fmt: skip
         atr_bps = candle.values["atr_bps"]
         atr_bps = np.where(~candle.nulls["atr_bps"] & (atr_bps > 0), atr_bps, np.nan)
-        key = session_minute(self.context.calendar, minutes.end, MINUTE)
-        normal = self.tod.update(key, atr_bps, np.isfinite(atr_bps))
+        key = session_minute(self.context.calendar, minutes.end, self.TF.step)
+        # one sample per minute: the window ending with the minute's last step row
+        sample = (c.ordinal % self.TF.per_minute == 0) & np.isfinite(atr_bps)
+        normal = self.tod.update(key, atr_bps, sample)
         day = self.daily.update(
             minutes.end, minutes.status, minutes.high, minutes.low, minutes.close
         )
@@ -360,10 +366,11 @@ class VolMinuteStage(Stage):
 
     def ages(self, c, complete: np.ndarray) -> dict[str, np.ndarray]:
         """Scheduled-open seconds from the second of the window's first trade at its high (low) to
-        the window's newest second, `60 m`: counted by the calendar's index counter, never by
+        the window's newest second, the last of its newest step row:
+        counted by the calendar's index counter, never by
         clock time, so a window across a closure counts only open seconds."""
         out = {}
-        newest = c.ordinal * (MINUTE // SECOND)
+        newest = c.ordinal * self.TF.seconds
         for name, at in (("high", c.high_at), ("low", c.low_at)):
             age = np.full(len(c), np.nan)
             if complete.any():
@@ -372,3 +379,18 @@ class VolMinuteStage(Stage):
                 age[complete] = newest[complete] - ordinal
             out[name] = age
         return out
+
+
+def step_vol(tf: Timeframe) -> type[StepVolStage]:
+    """The volatility stage of timeframe `tf`."""
+    attrs = {
+        "TF": tf,
+        "NAME": f"vol_{tf.rows}",
+        "RESOLUTION": tf.rows,
+        "INPUTS": (f"bar_{tf.rows}", f"candle_{tf.window}"),
+        "COLUMNS": COLUMNS,
+    }
+    return type(f"StepVol_{tf.rows}", (StepVolStage,), attrs)
+
+
+VolMinuteStage = step_vol(SLOW)

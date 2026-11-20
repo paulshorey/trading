@@ -24,8 +24,15 @@ EVENT_TABLES: dict[str, tuple[Column, ...]] = {
     s.EVENTS: s.EVENT_COLUMNS for s in STAGES if hasattr(s, "EVENTS")
 }
 STAGE_EVENTS = {s.NAME: s.EVENTS for s in STAGES if hasattr(s, "EVENTS")}
+
+
+def resolution_seconds(resolution: str) -> int:
+    """Seconds per row of a stage's `RESOLUTION`: "1s", "10s", "1m"."""
+    return int(resolution[:-1]) * {"s": 1, "m": 60}[resolution[-1]]
+
+
 # Seconds per row of each table: its `slot_ordinal` counts rows of this many seconds
-SLOT_SECONDS = {STAGE_TABLE[s.NAME]: {"1s": 1, "1m": 60}[s.RESOLUTION] for s in STAGES}
+SLOT_SECONDS = {STAGE_TABLE[s.NAME]: resolution_seconds(s.RESOLUTION) for s in STAGES}
 VARIANT = Column("variant_id", SMALLINT, "The variant (a swing scale): market.variant.id")
 BUILDER = Column("builder_id", BIGINT, "The builder that wrote the row: market.builder.id")
 
@@ -61,8 +68,9 @@ def copy_table(
 
 def row_bounds(name: str, first: int, last: int) -> tuple[int, int]:
     """Index counters in table `name` of the rows inside seconds `first ... last` (second
-    ordinals). Sessions are whole minutes, so minute `m` (seconds 60m - 59 ... 60m) lies inside
-    them exactly when `(first + 59) // 60 <= m <= last // 60`."""
+    ordinals). Sessions are whole minutes and a step divides a minute, so the row `k` of `S`
+    seconds (seconds Sk - (S - 1) ... Sk) lies inside them exactly when
+    `(first + S - 1) // S <= k <= last // S`."""
     k = SLOT_SECONDS[name]
     return -(-first // k), last // k
 

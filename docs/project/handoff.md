@@ -1,10 +1,11 @@
 # Handoff
 
-Updated November 20, 2026 after a second design review. Read [AGENTS.md](../../AGENTS.md)
-first: it holds the goal, the six-step process, and the rules. This page says where the work
-stands and how to continue. The [roadmap](roadmap.md) is the map of what is computed and in
-what order, [todo.md](todo.md) lists the tasks, and the [build log](build-log.md) records
-what was built, how it was checked, and what every experiment found.
+Updated November 20, 2026, at the end of the work on the first development machine. The next
+session starts on a new machine. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal,
+the six-step process, and the rules. This page says where the work stands and how to
+continue. The [roadmap](roadmap.md) is the map of what is computed and in what order,
+[todo.md](todo.md) lists the tasks, and the [build log](build-log.md) records what was
+built, how it was checked, and what every experiment found.
 
 ## Start here (next session)
 
@@ -22,28 +23,32 @@ The experiments so far say three things:
   indicators, divergences, and the book ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
 - The spread is a third of a typical one-minute move and a twentieth of an hourly one, and
   one year holds too few independent days to judge an hourly policy
-  ([review](roadmap.md#review-of-november-20-2026)). So a middle timeframe, `10m@10s`, is
-  added, and five more years of GC and SI are coming
+  ([review](roadmap.md#review-of-november-20-2026)). So a middle timeframe, `10m@10s`, was
+  built, and five more years of GC and SI are coming
   ([decisions](roadmap.md#decisions-of-november-20-2026)).
+
+None of this has found an edge. What exists is the machinery to look for one honestly:
+three timeframes built by one set of classes, an engine that gives the same rows live and in
+backtests, labels that cannot leak, a replay that prices every trade at the book, and rules
+for judging a result that were written before the data that will test them
+([how results are judged](roadmap.md#how-results-are-judged-on-six-years)).
 
 **What the system is for** is in the roadmap's
 [structure](roadmap.md#how-the-analysis-is-structured): state, events, forecasts, and
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next task** is item 5 of the [build order](roadmap.md#build-order): complete the
-state (the book between trades, a rolling net-flow series, the scheduled-news table, the
-ATR normalizer) before the six-year history is ingested, so that it is built once
-([how](#next-steps)). Items 3 and 4, the timeframe as a parameter and the middle timeframe
-`10m@10s`, are done. Item 7, the yardstick decision model, does not wait for the history
-and can be built beside item 5.
+**The next tasks**, in order ([build order](roadmap.md#build-order)): set up the new machine
+and rebuild the database there ([steps](#moving-to-the-new-machine)); then item 6, the
+replay of the middle timeframe's candidates, which needs no rebuild and no new data; then
+items 7 to 9, the base changes, the book, and the news table, all before the six-year
+history is built in item 10 ([how](#next-steps)). Items 1 to 5 are done.
 
-**The state of the machine** (checked November 20): `main` is clean, lint and tests pass,
-`ingest plan GC SI` reports every contract `current`, and the database is 141 GB. One year
-of MBP-1 for GC and SI is in `data/databento/mbp-1/` (27 GB). They are the proof of
-concept: the files of PL, ES, YM, and RTY were removed on November 20 and return, with NQ
-and five more years of GC and SI, after Paul moves to a larger machine. `market.source_file`
-still lists the removed files.
+**The state of the first machine** (November 20): `main` is clean, lint and tests pass,
+`ingest plan GC SI` reports every contract `current`, and the database holds one year of GC
+and SI on three timeframes. One year of MBP-1 for GC and SI is in `data/databento/mbp-1/`
+(27 GB). They are the proof of concept: Paul keeps the files of PL, ES, YM, and RTY in cloud
+storage, and they return, with NQ and five more years of GC and SI, on the new machine.
 
 How to work in this repository:
 
@@ -115,10 +120,10 @@ a stage that reads the book only needs the cache switched on, since
 `HistoricalSource.stored_chunk` already passes the book when the cache keeps it.
 
 **Stages** ([feature pipeline](feature-pipeline.md)): each stored table is a `Stage`
-(`strategy_core/stages.py`) in a module: the one-second stages in `stage_bar_1s.py`, `stage_candle_1m_1s.py`,
-`stage_vol_1s.py`, and `stage_pivot_1s.py`, and those of every longer step in
-`stage_step_bar.py`, `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`, and
-`stage_step_pivot.py`, one class per kind built for a timeframe (`timeframes.py`),
+(`strategy_core/stages.py`). The one-second rows come from the trades (`stage_bar_1s.py`)
+and every longer step's are merged from them (`stage_step_bar.py`); everything above is one
+class per kind of stage, built for every timeframe (`timeframes.py`): `stage_step_candle.py`,
+`stage_step_stats.py`, `stage_step_vol.py`, and `stage_step_pivot.py`. They are
 registered in tier order in `pipeline.STAGES`. A stage declares its inputs, columns (with
 roles and units), `MODULES` (hashed into its builder identity), settings, checkpoint state,
 and `warmup()` in scheduled-open seconds. `Pipeline` runs them per chunk and passes in-memory
@@ -217,48 +222,103 @@ one-second returns. Each is a stage with its own version and checkpoints
 yet ([list](ingestion.md#metrics)) and can be added by rebuilding from the DBN files
 ([how](ingestion.md#adding-a-metric-or-feature)).
 
+## Moving to the new machine
+
+The new machine has 4 TB. Nothing in the database needs to be copied: every row is rebuilt
+from the DBN files by the code, in under an hour for the year held.
+
+1. **Copy** the repository folders under `~/git` (this one, `local-dev`, and the workspace
+   `AGENTS.md`), `data/databento/` (27 GB, gitignored; keep each job folder unchanged), the
+   shared agent configuration (`~/.agents`, `~/.secrets.sh`, `~/.shortcuts.sh`), and the
+   evidence files named in the [build log](build-log.md) (`~/*.hash-*.txt` and the others).
+   Agent memory lives outside the repository, in a folder named after the checkout's path.
+2. **Install** PostgreSQL 18 (`brew install postgresql@18`, `brew services start
+   postgresql@18`), uv, and pnpm; then `pnpm deps:install` at the repository root.
+3. **Build the database:**
+
+   ```sh
+   createdb trading
+   uv run research catalog --verify      # every file against its checksum
+   uv run research db migrate            # 0001 to 0009
+   uv run research db register
+   caffeinate -i uv run research ingest run GC SI 2> ~/ingest-new-machine.log
+   uv run research ingest plan GC SI     # every contract `current`
+   ```
+
+4. **Prove it is the same database.** `scripts/db-fingerprint.sh > ~/fingerprint-new.txt`,
+   then `diff` it with `fingerprint-old-machine.txt` from the first machine (among the
+   evidence files). Integer columns and row counts must match exactly. If a float column
+   differs, find out how much before going on: the two machines may have different
+   processors, and a difference in the last bits of some features would be the first
+   evidence of it. Record what is found in the build log; do not tune anything to hide it.
+5. **Check the rest:** `pnpm lint && pnpm test && pnpm build`, `uv run research verify
+   apps/backtest-runner/examples/gc-day.json`, and the local services
+   (`~/git/local-dev`, the `local-dev-services` skill).
+6. **Then the downloads Paul adds:** five more years of GC and SI, later the other
+   products. Add each job folder unchanged; do not ingest the older years before
+   build-order items 7 to 9 are merged ([decision 13](roadmap.md#decisions-of-november-20-2026)).
+
+Two things from other sessions were left as they were on the first machine: PR #86
+(`agents/self-improvement-instructions`, open since November 18) and the branch
+`docs/first-executable-pivot-model`, which holds unmerged commits.
+
 ## Next steps
 
-The order is the roadmap's [build order](roadmap.md#build-order). Items 1 and 2 are done.
+The order is the roadmap's [build order](roadmap.md#build-order). Items 1 to 5 are done:
+the replay, sparse swing storage, the timeframe as a parameter, the middle timeframe, and
+one set of stages for every timeframe
+([what was built](build-log.md#one-set-of-stages-for-every-timeframe-november-20-2026)).
 
-**3. Timeframe as a parameter: done** ([what was built](build-log.md#timeframe-as-a-parameter-november-20-2026),
-[how it works](feature-pipeline.md#stages)). The stages of a timeframe whose step is longer
-than a second are one class per kind in `stage_step_*.py`, built from a
-`timeframes.Timeframe`; `1h@1m` is the instance stored today. The one-second stages keep
-modules of their own.
+**How a timeframe is built now.** `pipeline.TIMEFRAMES` lists the stored timeframes. Each
+is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stages come from
+`stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`, and
+`stage_step_pivot.py`. Another timeframe is a `Timeframe`, an entry in that list, its
+reclaim window and label horizon, and a migration that copies the tables (`0008` is the
+pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
+timeframe in `pipeline.py`.
 
-**4. The middle timeframe `10m@10s`: done**
-([what was built](build-log.md#the-middle-timeframe-10m10s-november-20-2026)). Its step rows,
-window, statistics, volatility, three swing scales (`mid_atr_*`), and six label variants are
-stored for GC and SI, and the engine reads its latest completed row at every second, as it
-reads the latest minute. `pipeline.MERGED` lists the stored timeframes; another one is a
-`Timeframe`, an entry there, its scales and label horizon, and a migration that copies the
-tables (`0008` is the pattern).
+**6. Replay the middle timeframe's candidates.** `benchmark.py` and `replay.py` read the
+fast candidates and the slow scales by name (`row = ordinal // 60`, `FAST_LABELS`,
+`SLOW_SCALES`). Give them the timeframe of the candidates and of the bracket. Then, with
+the spec written first in [replay.md](replay.md): middle candidates (`pivot_label_10s`),
+the slow bracket, a market entry and a limit entry resting at the candidate's level, the
+daily loss cap ([decision 19](roadmap.md#decisions-of-november-20-2026)), the micro-cost
+stress, and results for buys and sells apart. Run it alone and split by agreement with the
+slow swings, as the fast candidates were.
 
-Still to do when item 7 needs it: `benchmark.py` and `replay.py` read the fast candidates
-and the slow scales by name (`row = ordinal // 60`). Give them the timeframe, so the replay
-runs on the middle candidates with the slow bracket.
+**7. Base changes, in one rebuild.**
 
-**5. Complete the state:** the book stage, a rolling net-flow series, the scheduled-news
-table, the ATR normalizer, and the `source.py` change, each as the
-[build order](roadmap.md#build-order) describes. For the book, freeze the list of inputs
-first ([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)) and switch
-ingestion's day cache to keep book events. For the news table, use release times that were
-published in advance, never the time a number was revised.
+- *One-second feature tables stored where they are read*
+  ([decision 25](roadmap.md#decisions-of-november-20-2026)). `pipeline.SPARSE` and
+  `stored_rows` already do this for the fast swings; extend the rule to `candle_1m_1s`,
+  `stats_1m_1s`, and `vol_1s`. `bar_1s` stays complete. Check what reads those tables at
+  other seconds first (`benchmark.py`'s context joins read minute ends, which are kept).
+- *The ATR floor.* The normalizer of `*_atr` features is floored at the spread, as the swing
+  threshold is. It changes stored values only where the ATR has collapsed; measure how many
+  rows change and record it.
+- *The rolling net-flow series* and *the `source.py` change*.
 
-**6. Six years of GC and SI,** when Paul has the files: the named checks on the untouched
-years first ([decision 13](roadmap.md#decisions-of-november-20-2026)).
+**8. The book between trades.** Freeze the list of inputs first
+([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), switch ingestion's day
+cache to keep book events, and measure the build time and the live cost per second: book
+events are 20 to 60 times the trades.
 
-**7. The yardstick decision model:** the replay extended to the middle timeframe's
-candidates, then take-or-skip trained on the value of attempting. Spec first; nothing
-stored. It does not wait for item 6.
+**9. The scheduled-news table.** Release times that were published in advance (inflation,
+employment, central bank decisions) for the whole history, never the time a number was
+revised. A table, two elapsed-time features, and results reported with and without the
+minutes around a release.
 
-Then items 8 to 12: the event families through steps 3 to 5, the four targets, stored model
-stages, more products, and the decision model.
+**10. Six years of GC and SI:** the named checks on the untouched years first
+([decision 13](roadmap.md#decisions-of-november-20-2026)), then the build, judged by
+[the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
+
+Then items 11 to 16: the yardstick decision model, the event families through steps 3 to
+5, the four targets, stored model stages, more products, and the decision model.
 
 Also open, in no fixed order ([todo](todo.md)): store runs and would-be trades in
-PostgreSQL; a session quality policy; the free `definition` download (needs the account
-owner); backtests reading stored rows for speed.
+PostgreSQL (needed before item 11, so that every variant is counted); a session quality
+policy; the free `definition` download (needs the account owner); backtests reading stored
+rows for speed.
 
 Pivot work so far: the [plan](plan-1h-and-pivots.md#3-pivot-and-structure-design) sets the
 observations, thresholds, segments, storage, and labels; the

@@ -15,21 +15,24 @@ from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
 from strategy_core.pipeline import SPARSE, STEP_STAGES, Pipeline, stored_ordinals, stored_rows
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
-from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
-from strategy_core.stage_pivot_1s import COLUMNS as PIVOT_COLUMNS
-from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
 from strategy_core.stage_pivot_label import COLUMNS as LABEL_COLUMNS
 from strategy_core.stage_pivot_label import FAST_LABELS, MIDDLE_LABELS, SLOW_LABELS
 from strategy_core.stage_step_bar import COLUMNS as MINUTE_COLUMNS
+from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as FEATURE_COLUMNS
 from strategy_core.stage_step_candle import HourCandleStage
-from strategy_core.stage_step_pivot import MIDDLE_SCALES, PivotMiddleStage, PivotMinuteStage
+from strategy_core.stage_step_pivot import COLUMNS as PIVOT_COLUMNS
+from strategy_core.stage_step_pivot import (
+    FAST_SCALES,
+    MIDDLE_SCALES,
+    PivotMiddleStage,
+    PivotMinuteStage,
+)
 from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
 from strategy_core.stage_step_stats import COLUMNS as STATS_COLUMNS
-from strategy_core.stage_step_stats import HourStatsStage
+from strategy_core.stage_step_stats import HourStatsStage, SecondStatsStage
 from strategy_core.stage_step_vol import COLUMNS as VOL_COLUMNS
-from strategy_core.stage_step_vol import VolMinuteStage
-from strategy_core.stage_vol_1s import COLUMNS as VOL_SECOND_COLUMNS
-from strategy_core.stage_vol_1s import VolSecondStage
+from strategy_core.stage_step_vol import COLUMNS as VOL_SECOND_COLUMNS
+from strategy_core.stage_step_vol import VolMinuteStage, VolSecondStage
 from strategy_core.swings import EVENT_COLUMNS
 from strategy_core.synthetic import random_trades
 from strategy_core.timeframes import MIDDLE
@@ -101,6 +104,7 @@ def world(monkeypatch):
     monkeypatch.setattr(PivotMinuteStage, "warmup", lambda self: 3600)
     for stage in (*STEP_STAGES[MIDDLE.name][1:], PivotMiddleStage):  # the middle timeframe's
         monkeypatch.setattr(stage, "warmup", lambda self: 3600)
+    monkeypatch.setattr(SecondStatsStage, "warmup", lambda self: 3600)  # a whole prior session
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -446,6 +450,7 @@ def test_minute_bounds_follow_the_session_seconds():
         "pivot_1m": 60,  # one table for the slow swing scales, one for the fast
         "pivot_1s": 1,
         "pivot_label_1m": 60,  # labels are keyed by their decision row, of the scale's stream
+        "stats_1m_1s": 1,
         "bar_10s": 10,  # the middle timeframe: six rows a minute
         "candle_10m_10s": 10,
         "stats_10m_10s": 10,
@@ -883,8 +888,9 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     with db.connect(database) as conn:
         after = slices(conn)
         for key, (builder, _, at) in after.items():
-            # the fast scales read both, and their labels read them
-            if key[0] not in ("candle_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s"):
+            # the statistics and the fast scales read the candle, and their labels read them
+            fast = ("candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s")
+            if key[0] not in fast:
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
                 assert at > before[key][2] and builder == before[key][0], key  # rewritten
@@ -919,6 +925,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "stats_1h_1m": 1,
         "vol_1m": 1,
         "vol_1s": 1,
+        "stats_1m_1s": 1,
         "bar_10s": 0,
         "candle_10m_10s": 1,
         "stats_10m_10s": 1,
@@ -984,7 +991,8 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            if key[0] in ("bar_1s", "candle_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s") or (
+            fast = ("bar_1s", "candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s", "pivot_label_1s")
+            if key[0] in fast or (
                 key[0].split(":")[0].endswith("10s")  # the middle timeframe is another branch
             ):
                 assert (builder, at) == before[key], key  # untouched
@@ -1021,7 +1029,7 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
     [
         ("stats_1h_1m", STATS_COLUMNS, ("rv_bps", "prior_close_atr"), 1380, 1),  # PR B2
         ("vol_1m", VOL_COLUMNS, ("bull_atr_bps", "tr_atr", "atr_usd"), 1380, 1),  # PR C1
-        ("vol_1s", VOL_SECOND_COLUMNS, ("bull_atr_bps", "rv_atr", "atr_usd"), 82_800, 7),  # C2
+        ("vol_1s", VOL_SECOND_COLUMNS, ("bull_atr_bps", "tr_atr", "atr_usd"), 82_800, 7),  # C2
     ],
 )
 def test_a_new_stage_is_added_alone(database, world, stage, columns, defined, per, every):

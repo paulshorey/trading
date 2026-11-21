@@ -156,6 +156,19 @@ def combine_metrics(
     return out
 
 
+def second_frame(products: dict[str, Any]) -> dict[str, Any]:
+    """The frame (`Timeframe.frame`) of the one-second timeframe, whose step rows are the source
+    rows themselves (`stage_bar_1s`): nothing is merged."""
+    bars = products["bars"]
+    return {
+        "bars": bars,
+        "metrics": products["metrics"],
+        "ordinal": products["ordinal"],
+        "observed_seconds": (bars.status == OBSERVED).astype(np.int64),
+        "session": products["session"],
+    }
+
+
 def empty_table(columns: tuple[Column, ...], nullable) -> Table:
     """A table without rows, for chunks that finish none, with the NULL masks of `nullable`."""
     dtypes = {DOUBLE: np.float64, SMALLINT: np.int16}

@@ -15,10 +15,14 @@ from strategy_core.engine import MarketChunk, split_by_second
 from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import MINUTE, NS, PX
 from strategy_core.pipeline import STAGES, Pipeline, StageFeatures
-from strategy_core.stage_pivot_1s import COLUMNS, FEATURE_COLUMNS, PivotSecondStage
-from strategy_core.stage_pivot_1s import SCALES as FAST
+from strategy_core.stage_step_pivot import (
+    COLUMNS,
+    FEATURE_COLUMNS,
+    PivotMinuteStage,
+    PivotSecondStage,
+)
+from strategy_core.stage_step_pivot import FAST_SCALES as FAST
 from strategy_core.stage_step_pivot import SCALES as SLOW
-from strategy_core.stage_step_pivot import PivotMinuteStage
 from strategy_core.stage_step_pivot import scale as slow_scale
 from strategy_core.state import from_bytes, to_bytes
 from strategy_core.swings import (

@@ -31,45 +31,42 @@ from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
 from .stage_bar_1s import BarStage
-from .stage_candle_1m_1s import CandleStage
-from .stage_pivot_1s import SCALES as FAST_SCALES
 from .stage_pivot_label import FAST_LABELS, MIDDLE_LABELS, SLOW_LABELS
 from .stage_step_bar import MinuteBarStage, step_bar
-from .stage_step_candle import HourCandleStage, step_candle
+from .stage_step_candle import CandleStage, HourCandleStage, step_candle
 from .stage_step_pivot import BY_TIMEFRAME as STEP_SCALES
-from .stage_step_stats import HourStatsStage, step_stats
-from .stage_step_vol import VolMinuteStage, step_vol
-from .stage_vol_1s import VolSecondStage
+from .stage_step_pivot import FAST_SCALES
+from .stage_step_stats import HourStatsStage, SecondStatsStage, step_stats
+from .stage_step_vol import VolMinuteStage, VolSecondStage, step_vol
 from .stages import Stage, StageContext
 from .state import export_state, import_state
+from .timeframes import FAST as FAST_TF
 from .timeframes import MIDDLE, SLOW, Timeframe
 
-# The merged timeframes whose stages are registered and stored, slowest last. Adding one adds
-# stages; it changes no other stage's identity.
-MERGED: tuple[Timeframe, ...] = (MIDDLE, SLOW)
+# The timeframes whose stages are registered and stored, fastest first. Adding one adds stages;
+# it changes no other stage's identity.
+TIMEFRAMES: tuple[Timeframe, ...] = (FAST_TF, MIDDLE, SLOW)
+MERGED = tuple(tf for tf in TIMEFRAMES if tf.merged)  # their step rows are merged from seconds
 
-# The stages of each merged timeframe (`timeframes.MERGED`): step rows, window, statistics,
-# volatility. `1h@1m` keeps the classes its modules export.
-STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
-    tf.name: (MinuteBarStage, HourCandleStage, HourStatsStage, VolMinuteStage)
-    if tf == SLOW
-    else (step_bar(tf), step_candle(tf), step_stats(tf), step_vol(tf))
-    for tf in MERGED
+# The stages of each timeframe: step rows (the source rows for one second), window, statistics,
+# volatility. `1m@1s` and `1h@1m` keep the classes their modules export.
+EXPORTED = {
+    FAST_TF.name: (BarStage, CandleStage, SecondStatsStage, VolSecondStage),
+    SLOW.name: (MinuteBarStage, HourCandleStage, HourStatsStage, VolMinuteStage),
 }
-STEP_LABELS = {SLOW.name: SLOW_LABELS, MIDDLE.name: MIDDLE_LABELS}
+STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
+    tf.name: EXPORTED.get(tf.name) or (step_bar(tf), step_candle(tf), step_stats(tf), step_vol(tf))
+    for tf in TIMEFRAMES
+}
+STEP_LABELS = {FAST_TF.name: FAST_LABELS, MIDDLE.name: MIDDLE_LABELS, SLOW.name: SLOW_LABELS}
 
 # In dependency (tier) order; the timeframes are independent branches above `bar_1s`.
 STAGES: tuple[type[Stage], ...] = (
-    BarStage,
-    *(STEP_STAGES[tf.name][0] for tf in MERGED),
-    CandleStage,
-    *(s for tf in MERGED for s in STEP_STAGES[tf.name][1:]),
-    VolSecondStage,
-    *(s for tf in MERGED for s in STEP_SCALES[tf.name]),
-    *FAST_SCALES,
+    *(STEP_STAGES[tf.name][0] for tf in TIMEFRAMES),
+    *(s for tf in TIMEFRAMES for s in STEP_STAGES[tf.name][1:]),
+    *(s for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]),
     # labels look into the future: stored, but never read by a stage or the engine
-    *(s for tf in MERGED for s in STEP_LABELS[tf.name]),
-    *FAST_LABELS,
+    *(s for tf in TIMEFRAMES for s in STEP_LABELS[tf.name]),
 )
 BY_NAME = {s.NAME: s for s in STAGES}
 # What a backtest or live session computes: every stage but the labels.
@@ -79,10 +76,11 @@ FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
 # Stages computed for every row but stored only at `stored_ordinals` (docs/project/ingestion.md).
 SPARSE = frozenset(s.NAME for s in FAST_SCALES)
 SPARSE_LABELS = frozenset(s.NAME for s in FAST_LABELS)  # their rows are the decision rows
-STORED_ROWS = "label_rows+events+step_ends:v2"
-# Every merged timeframe's step rows end on a multiple of the shortest step (steps divide a
-# minute), so keeping those seconds lets any slower row read the fast scales as of its own end.
+# Every merged timeframe's step rows end on a multiple of the shortest merged step (steps divide
+# a minute), so keeping those seconds lets any slower row read the fast scales as of its own
+# end. The step is part of the rule's name: another shortest step rebuilds the sparse stages.
 STEP_ROWS = min(tf.seconds for tf in MERGED)
+STORED_ROWS = f"label_rows+events+step_ends_{STEP_ROWS}s:v3"
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
@@ -178,8 +176,11 @@ class StageFeatures:
     to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
-    # rows per second, joined row by row
-    SECONDLY = (FAST, "vol_1s", *(s.NAME for s in FAST_SCALES))
+    # rows per second, joined row by row: the one-second timeframe's
+    SECONDLY = (
+        *(s.NAME for s in STEP_STAGES[FAST_TF.name][1:]),
+        *(s.NAME for s in STEP_SCALES[FAST_TF.name]),
+    )
     # rows per completed step row of each merged timeframe, joined as of each second; the
     # first stage of each is its candle
     STEPWISE: ClassVar[dict[str, tuple[str, ...]]] = {
@@ -191,10 +192,8 @@ class StageFeatures:
     }
     HOURLY = STEPWISE[SLOW.name]
     PREFIX: ClassVar[dict[str, str]] = {
-        **{name: "1m@1s" for name in (FAST, "vol_1s")},
-        **{s.NAME: f"1m@1s.{s.VARIANT}" for s in FAST_SCALES},
-        **{s.NAME: tf.name for tf in MERGED for s in STEP_STAGES[tf.name][1:]},
-        **{s.NAME: f"{tf.name}.{s.VARIANT}" for tf in MERGED for s in STEP_SCALES[tf.name]},
+        **{s.NAME: tf.name for tf in TIMEFRAMES for s in STEP_STAGES[tf.name][1:]},
+        **{s.NAME: f"{tf.name}.{s.VARIANT}" for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]},
     }
     AGES: ClassVar[dict[str, FeatureSpec]] = {
         tf.name: FeatureSpec(
@@ -275,7 +274,7 @@ class StageFeatures:
             features |= {f"{prefix}.{n}": v for n, v in self.read(table, stage).items()}
         for timeframe, group in self.STEPWISE.items():
             features |= self.as_of(timeframe, group, rows, ends)
-        candles = rows.products["candles"]
+        candles = FAST_TF.frame(rows.products)["candles"]
         return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr(rows)})
 
     def as_of(

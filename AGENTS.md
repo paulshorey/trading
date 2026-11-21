@@ -192,13 +192,20 @@ through `research ingest`. Report what you ran.
 
 # Research and report
 
-If something goes wrong, stop the affected operation and report relevant findings, data, and logs.
-Redact secrets and private content.
-If unsure about something, research, search the web, find latest techniques and best practices.
+If something goes wrong, stop the affected operation and report the relevant findings,
+data, and logs. Redact secrets and private content.
+When unsure, research before deciding: search the web for current techniques and best practices.
+
+# Improve your instructions
+
+Before you finish, note where you struggled and which instructions, tools, or skills
+were missing or wrong, and fix them: this file and the project docs for this project,
+`~/.agents` for every project. Without access to `~/.agents`, as a cloud agent or
+reviewer, suggest the fixes in your reply instead.
 
 # Next steps
 
-Consider what was recently done, what's in progress, and how it contributes to the goal.
+Consider what was recently done, what is in progress, and how it serves the goal.
 Decide and recommend what to do next.
 
 The goal is a trained model that makes the trading decisions, from historical research

@@ -258,9 +258,10 @@ from the DBN files by the code, in under an hour for the year held.
    products. Add each job folder unchanged; do not ingest the older years before
    build-order items 7 to 9 are merged ([decision 13](roadmap.md#decisions-of-november-20-2026)).
 
-Two things from other sessions were left as they were on the first machine: PR #86
-(`agents/self-improvement-instructions`, open since November 18) and the branch
-`docs/first-executable-pivot-model`, which holds unmerged commits.
+One thing from another session was left as it was on the first machine: the branch
+`docs/first-executable-pivot-model` (worktree `~/git/trading-wt-review-87`), which holds
+unmerged commits. Its content predates the reviews of November 19 and 20; read it before
+deciding whether anything in it is still wanted.
 
 ## Next steps
 

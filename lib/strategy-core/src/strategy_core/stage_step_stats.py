@@ -51,7 +51,7 @@ from .features import Unit  # unit labels of the registry; they do not change st
 from .market import PX, SECOND, SessionCalendar
 from .stage_step_bar import empty_table
 from .stages import Stage
-from .timeframes import SLOTS, SLOW, Timeframe
+from .timeframes import FAST, SLOTS, SLOW, Timeframe
 from .windows import COMPLETE
 
 PRICE = "Databento fixed-point price (1e-9)"
@@ -392,6 +392,13 @@ class StepStatsStage(Stage):
         ):
             raise AssertionError(f"{self.NAME} rows must align with its step rows and candle")
         b = base.values
+        if self.TF.merged:  # one-second returns inside each merged row, and its first close
+            first_close = b["first_close"].astype(np.int64)
+            ret2 = b["ret2_sum"].astype(np.float64)
+            ret_n = b["ret_count"].astype(np.int64)
+        else:  # a one-second row holds one close: every return is a bridge between rows
+            first_close = np.where(minutes.status == OBSERVED, minutes.close, 0).astype(np.int64)
+            ret2, ret_n = np.zeros(len(minutes)), np.zeros(len(minutes), np.int64)
         cur = {
             "status": minutes.status.astype(np.int8),
             "close": minutes.close,
@@ -400,9 +407,9 @@ class StepStatsStage(Stage):
             "high_at": minutes.high_at,
             "low_at": minutes.low_at,
             "end": minutes.end,
-            "first_close": b["first_close"].astype(np.int64),
-            "ret2": b["ret2_sum"].astype(np.float64),
-            "ret_n": b["ret_count"].astype(np.int64),
+            "first_close": first_close,
+            "ret2": ret2,
+            "ret_n": ret_n,
             "net": (minutes.buy - minutes.sell).astype(np.int64),
         }
         m = len(minutes)
@@ -505,3 +512,4 @@ def step_stats(tf: Timeframe) -> type[StepStatsStage]:
 
 
 HourStatsStage = step_stats(SLOW)
+SecondStatsStage = step_stats(FAST)

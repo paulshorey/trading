@@ -6,9 +6,9 @@ One class, one stage per timeframe (`timeframes.py`): `candle_1h_1m` is the wind
 
 Step rows (`stage_step_bar`) carry their own first and last trade, sides, and price path, so
 `MetricWindow(60)` bridges between them exactly as it does between seconds. `active_ratio` is
-the share of the window's seconds with trades. Left out, because at a row's end they repeat the
-second row at the same time: the session features and the latest observation with its age
-(`DROPPED`).
+the share of the window's seconds with trades. The session features and the latest observation
+with its age are stored on the one-second timeframe only (`SECOND_ONLY`): at a longer row's end
+they would repeat the second row at the same time.
 """
 
 from typing import Any, ClassVar
@@ -21,9 +21,9 @@ from .engine import MarketChunk
 from .features import WINDOW_FEATURES, WindowFeatures
 from .indicators import AS_OF_FEATURES, FEATURES, CandleIndicators
 from .market import PX
-from .stage_step_bar import empty_table
+from .stage_step_bar import empty_table, second_frame
 from .stages import Stage
-from .timeframes import SLOW, Timeframe
+from .timeframes import FAST, SLOW, Timeframe
 from .window_metrics import MetricWindow
 from .windows import COMPLETE, WARMUP
 
@@ -35,11 +35,12 @@ SESSION_FEATURES = (
     "session_low_bps",
     "session_delta_ratio",
 )
-DROPPED = frozenset({*AS_OF_FEATURES, *SESSION_FEATURES})
+SECOND_ONLY = frozenset({*AS_OF_FEATURES, *SESSION_FEATURES})
 ENGINE_FEATURES = tuple((name, unit.value, desc) for name, unit, desc in WINDOW_FEATURES)
 
 
 def columns(tf: Timeframe) -> tuple[Column, ...]:
+    dropped = SECOND_ONLY if tf.merged else frozenset()
     return (
         Column("slot_ordinal", BIGINT, "Index counter of the newest step row in the window"),
         Column("end_ns", BIGINT, "Window end, UTC ns"),
@@ -68,14 +69,21 @@ def columns(tf: Timeframe) -> tuple[Column, ...]:
         Column("delta_high", INTEGER, "Highest running buy - sell volume from the window start"),
         Column("delta_low", INTEGER, "Lowest running buy - sell volume from the window start"),
         *(Column(n, DOUBLE, d, u) for n, u, d in ENGINE_FEATURES),
-        *(Column(n, DOUBLE, d, u) for n, u, d in FEATURES if n not in DROPPED),
+        *(Column(n, DOUBLE, d, u) for n, u, d in FEATURES if n not in dropped),
     )
 
 
-COLUMNS = columns(SLOW)  # names, types, and order are the same for every timeframe
-FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
 PRICED = ("open", "high", "low", "close", "high_at_ns", "low_at_ns")  # NULL without trades
-NULLABLE = (*PRICED, "vwap", "start_ns", *FEATURE_COLUMNS)
+
+
+def feature_columns(tf: Timeframe) -> tuple[str, ...]:
+    return tuple(c.name for c in columns(tf) if c.unit)
+
+
+COLUMNS = columns(SLOW)  # of a merged timeframe: the same names, types, and order for each
+FEATURE_COLUMNS = feature_columns(SLOW)
+FAST_COLUMNS = columns(FAST)  # the one-second timeframe also stores `SECOND_ONLY`
+FAST_FEATURE_COLUMNS = feature_columns(FAST)
 
 
 class RollingSum:
@@ -115,6 +123,8 @@ def no_session(ends: np.ndarray) -> dict[str, np.ndarray]:
 
 class StepCandleStage(Stage):
     TF: ClassVar[Timeframe]  # set by `step_candle`, with NAME, RESOLUTION, INPUTS, and COLUMNS
+    FEATURE_NAMES: ClassVar[tuple[str, ...]]
+    NULLABLE: ClassVar[tuple[str, ...]]
     TIER = 1
     MODULES = (
         "stages",
@@ -167,20 +177,25 @@ class StepCandleStage(Stage):
 
     def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
         frame = self.TF.frame(products)
+        if not self.TF.merged:
+            frame.update(second_frame(products))
         minutes, metrics = frame["bars"], frame["metrics"]
         if not len(minutes):  # most one-second chunks finish no step row; nothing changes
-            return empty_table(COLUMNS, NULLABLE)
+            return empty_table(self.COLUMNS, self.NULLABLE)
         candles, engine, atr = self.bias.update(minutes)
         win = self.window.update(minutes, metrics)
         observed = self.observed.update(frame["observed_seconds"])
-        features = self.indicators.update(candles, win, atr, no_session(minutes.end))
-        complete = candles.status == COMPLETE
-        features["active_ratio"] = np.where(complete, observed / self.TF.window_seconds, np.nan)
+        session = frame["session"] if "session" in frame else no_session(minutes.end)
+        features = self.indicators.update(candles, win, atr, session)
+        if self.TF.merged:  # the indicators count rows; a merged row holds several seconds
+            complete = candles.status == COMPLETE
+            share = observed / self.TF.window_seconds
+            features["active_ratio"] = np.where(complete, share, np.nan)
         frame.update(candles=candles, window=win)
         return self.table(candles, engine, features, win, observed)
 
-    @staticmethod
-    def table(c, engine, features, win, observed) -> Table:
+    @classmethod
+    def table(cls, c, engine, features, win, observed) -> Table:
         has_price = np.isfinite(c.close)
 
         def fixed(x):
@@ -207,11 +222,11 @@ class StepCandleStage(Stage):
             "delta_low": win["delta_low"].astype(np.int64),
         }
         v |= {k.split(".", 1)[1]: a for k, a in engine.items()}
-        v |= {k: a for k, a in features.items() if k not in DROPPED}
+        v |= {k: a for k, a in features.items() if k in cls.FEATURE_NAMES}
         nulls = {k: ~has_price for k in PRICED}
         nulls |= {"vwap": ~np.isfinite(c.vwap), "start_ns": c.status == WARMUP}
-        nulls |= {k: ~np.isfinite(v[k]) for k in FEATURE_COLUMNS}
-        return Table(v, {k: nulls[k] for k in NULLABLE})
+        nulls |= {k: ~np.isfinite(v[k]) for k in cls.FEATURE_NAMES}
+        return Table(v, {k: nulls[k] for k in cls.NULLABLE})
 
 
 def step_candle(tf: Timeframe) -> type[StepCandleStage]:
@@ -222,8 +237,11 @@ def step_candle(tf: Timeframe) -> type[StepCandleStage]:
         "RESOLUTION": tf.rows,
         "INPUTS": (f"bar_{tf.rows}",),
         "COLUMNS": columns(tf),
+        "FEATURE_NAMES": feature_columns(tf),
+        "NULLABLE": (*PRICED, "vwap", "start_ns", *feature_columns(tf)),
     }
     return type(f"StepCandle_{tf.window}", (StepCandleStage,), attrs)
 
 
 HourCandleStage = step_candle(SLOW)
+CandleStage = step_candle(FAST)

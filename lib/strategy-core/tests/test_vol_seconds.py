@@ -15,19 +15,18 @@ from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import MINUTE, NS, PX
 from strategy_core.pipeline import Pipeline, StageFeatures
 from strategy_core.stage_bar_1s import BarStage
-from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS as CANDLE_FEATURES
-from strategy_core.stage_candle_1m_1s import CandleStage
 from strategy_core.stage_step_bar import MinuteBarStage
-from strategy_core.stage_step_candle import HourCandleStage
-from strategy_core.stage_step_vol import FEATURE_COLUMNS as MINUTE_FEATURES
-from strategy_core.stage_vol_1s import (
+from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as CANDLE_FEATURES
+from strategy_core.stage_step_candle import CandleStage, HourCandleStage
+from strategy_core.stage_step_stats import FEATURE_COLUMNS as STATS_FEATURES
+from strategy_core.stage_step_stats import SecondStatsStage
+from strategy_core.stage_step_vol import (
     AVERAGES,
     COLUMNS,
     FEATURE_COLUMNS,
     SESSION,
     VolSecondStage,
     usd_per_price,
-    window_rv,
 )
 from strategy_core.stages import StageContext
 from strategy_core.state import from_bytes, to_bytes
@@ -48,7 +47,7 @@ class SmallVolS(VolSecondStage):
     DAY_PERIOD, DAY_RANK = 2, 2
 
 
-BRANCH = (BarStage, CandleStage, SmallVolS)
+BRANCH = (BarStage, CandleStage, SecondStatsStage, SmallVolS)
 
 
 def builder(cal, config=SMALL, stages=BRANCH):
@@ -90,6 +89,7 @@ def test_values_equal_plain_python_references(days):
     sec, _ = join(out, "bar_1s")
     cnd, _ = join(out, "candle_1m_1s")
     vol, null = join(out, "vol_1s")
+    stats, stats_null = join(out, "stats_1m_1s")  # realized volatility is a window statistic
     ends = sec["end_ns"]
     np.testing.assert_array_equal(vol["end_ns"], ends)
     np.testing.assert_array_equal(vol["slot_ordinal"], sec["slot_ordinal"])
@@ -105,7 +105,7 @@ def test_values_equal_plain_python_references(days):
             gate = complete | carried if name in AVERAGES else complete
         assert null[name][~gate].all(), name
         assert (~null[name]).sum() > 300, name
-    np.testing.assert_array_equal(null["rv_returns"], ~complete)
+    np.testing.assert_array_equal(stats_null["rv_returns"], ~complete)
     # carried price: the last second close, never across missing data
     carry, last = np.full(len(status), np.nan), math.nan
     for r in range(len(status)):
@@ -142,13 +142,13 @@ def test_values_equal_plain_python_references(days):
             rows = np.arange(max(r - 59, 0), r + 1)
             closes = sec["close"][rows][sec["status"][rows] == OBSERVED].astype(float)
             rets = [math.log(closes[j] / closes[j - 1]) for j in range(1, len(closes))]
-            assert vol["rv_returns"][r] == len(rets)
+            assert stats["rv_returns"][r] == len(rets)
             if rets:
                 rv = math.sqrt(sum(x * x for x in rets)) * 1e4
-                assert vol["rv_bps"][r] == pytest.approx(rv, rel=1e-12, abs=1e-12)
+                assert stats["rv_bps"][r] == pytest.approx(rv, rel=1e-12, abs=1e-12)
                 rv_checked += 1
             else:
-                assert null["rv_bps"][r] and null["rv_atr"][r]
+                assert stats_null["rv_bps"][r] and stats_null["rv_atr"][r]
         p0 = prev.get(p, op)
         tr = hi - lo if p not in prev else max(hi, p0) - min(lo, p0)
         up, down = max(hi, p0) - p0, p0 - min(lo, p0)
@@ -209,8 +209,8 @@ def test_values_equal_plain_python_references(days):
         gk = 0.5 * math.log(hi / lo) ** 2 - (2 * math.log(2) - 1) * math.log(cl / op) ** 2
         assert vol["gk_bps"][r] == pytest.approx(math.sqrt(gk) * 1e4, rel=1e-10, abs=1e-12)
         assert vol["spread_atr"][r] == pytest.approx(cnd["spread_bps"][r] / atr_bps)
-        if np.isfinite(vol["rv_bps"][r]):
-            assert vol["rv_atr"][r] == pytest.approx(vol["rv_bps"][r] / atr_bps, rel=1e-15)
+        if complete[r] and not stats_null["rv_bps"][r]:
+            assert stats["rv_atr"][r] == pytest.approx(stats["rv_bps"][r] / atr_bps, rel=1e-12)
         checked += 1
     assert checked > 20_000 and rv_checked > 20_000
     # the time-of-day normal: samples are the ATR at each minute's last second (ordinal 60 m),
@@ -305,19 +305,6 @@ def test_the_daily_scale_equals_the_minute_stage_at_each_minute_end(days):
         assert (~mn[name][both]).sum() > 100, name
 
 
-def test_window_rv_by_hand():
-    """Returns pair consecutive observed closes; none crosses missing data (row 4) or enters a
-    window from before it. Windows of four rows, ending at rows 3 ... 7."""
-    status = np.array([2, 1, 2, 2, 0, 2, 2, 1], np.int8)
-    close = np.array([100, 0, 110, 99, 0, 101, 101, 0], np.int64)
-    rv2, count = np.empty(5), np.empty(5, np.int64)
-    window_rv(status, close, 3, 4, rv2, count)
-    r1, r2 = math.log(110 / 100), math.log(99 / 110)
-    assert count.tolist() == [2, 1, 1, 1, 1]
-    assert rv2[0] == r1 * r1 + r2 * r2 and rv2[1] == r2 * r2 and rv2[2] == r2 * r2
-    assert rv2[3] == 0.0 and rv2[4] == 0.0  # 101 -> 101: a zero return
-
-
 def test_identical_in_any_chunking_and_from_checkpoints_inside_a_window(days):
     cal, _, _, chunks = days
     whole = outputs(days)
@@ -367,8 +354,8 @@ def test_features_are_scale_invariant_and_declare_units(days):
     assert len(set(names)) == len(names)
     assert not {c.name for c in COLUMNS if not c.unit} & set(FEATURE_COLUMNS)
     # ... and both resolutions share their names, plus realized volatility at 1m@1s
-    assert set(FEATURE_COLUMNS) - set(MINUTE_FEATURES) == {"rv_bps", "rv_atr"}
-    assert set(MINUTE_FEATURES) <= set(FEATURE_COLUMNS)
+    assert not {"rv_bps", "rv_atr"} & set(FEATURE_COLUMNS)  # on every timeframe, statistics
+    assert {"rv_bps", "rv_atr"} <= set(STATS_FEATURES)
     assert usd_per_price("SIZ6") == 5000.0 and math.isnan(usd_per_price("X"))
 
 

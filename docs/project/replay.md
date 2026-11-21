@@ -192,5 +192,5 @@ The rerun changed only the `fresh` groups, by at most 245 candidates of a group 
 attempt, and no conclusion (first run: `~/replay-agreement-gc-si.json`).
 
 So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
-It remains to be tested as probabilities from models (build-order item 7), with the slow
+It remains to be tested as probabilities from models (build-order items 13 and 14), with the slow
 trend among their inputs.

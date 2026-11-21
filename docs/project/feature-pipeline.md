@@ -101,21 +101,27 @@ feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slo
 scales, which replay the trades second by second), so changing a second-resolution
 indicator never rebuilds the minute branch.
 
-**Timeframes are a parameter** (`strategy_core/timeframes.py`). A timeframe `W@S` whose step
-is longer than a second is a `Timeframe` value (its name, its step in seconds, and the labels
-of its tables), and each kind of stage is one class built for it: `stage_step_bar.py` (step
-rows merged from `bar_1s`), `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`,
-and `stage_step_pivot.py`. `bar_1m`, `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, and the slow swing
-scales are the instances for `1h@1m`, and `bar_10s`, `candle_10m_10s`, `stats_10m_10s`,
-`vol_10s`, and the scales `mid_atr_*` in `pivot_10s` those for `10m@10s`, with the same
-columns. `pipeline.MERGED` lists the timeframes that are registered and stored; adding one
-adds stages and changes no other stage's identity. A step divides a minute, so step rows nest in minutes and never straddle
-a session boundary. The one-second timeframe `1m@1s` is the base case with modules of its own
-(`stage_bar_1s`, `stage_candle_1m_1s`, `stage_vol_1s`, `stage_pivot_1s`): its rows come from
-the trades, and it shares the calculation modules (`windows`, `indicators`, `volatility`,
-`swings`). A stage passes in-memory values to later stages of its timeframe through
+**Timeframes are a parameter** (`strategy_core/timeframes.py`). A timeframe `W@S` is a
+`Timeframe` value (its name, its step in seconds, and the labels of its tables), and every
+timeframe is built by the same classes, one per kind of stage: `stage_step_candle.py` (the
+window), `stage_step_stats.py`, `stage_step_vol.py`, and `stage_step_pivot.py` (the swing
+scales). `candle_1m_1s`, `stats_1m_1s`, `vol_1s`, and the fast scales in `pivot_1s` are the
+instances for `1m@1s`; `candle_10m_10s`, `stats_10m_10s`, `vol_10s`, and `mid_atr_*` in
+`pivot_10s` those for `10m@10s`; `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, and `slow_atr_*` in
+`pivot_1m` those for `1h@1m`. `pipeline.TIMEFRAMES` lists the timeframes that are registered
+and stored; adding one adds stages and changes no other stage's identity.
+
+Only the step rows differ by nature. Those of one second are made from the trades
+(`stage_bar_1s.py`); every longer step's are merged exactly from them (`stage_step_bar.py`:
+`bar_10s`, `bar_1m`). A step divides a minute, so step rows nest in minutes and never
+straddle a session boundary. What else differs between timeframes is declared, not copied:
+the session features and the latest observation are stored on `1m@1s` only, since a longer
+row would repeat them; the fast swing rows are stored sparsely; and each timeframe has its
+own reclaim window and label horizon.
+
+A stage passes in-memory values to later stages of its timeframe through
 `Timeframe.frame(products)`: `bars`, `metrics`, `ordinal`, `observed_seconds`, `candles`, and
-`window`. A new stage for steps 3 to 5 is written once against that frame.
+`window`. A new stage for steps 3 to 5 is written once against that frame, for all three.
 
 **Variants are stages** (implemented in PR D). Each swing scale is a stage class of its own
 (`pivot_1s:fast_atr_1`, …) that writes to its resolution's shared table under its

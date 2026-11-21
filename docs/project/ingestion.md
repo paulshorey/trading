@@ -417,10 +417,11 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   values of the window itself and of the session so far for complete windows, the daily ATR and its
   percentile at every row of the session. ATR in price units (`atr_price`) and dollars per contract
   (`atr_usd`) are context columns for stops and sizing, never features.
-- **The second volatility** (`vol_1s`, the same `volatility.py`) holds the same columns for the
-  rolling `1m@1s` window, per phase `o % 60` on same-phase windows 60 rows apart, plus realized
-  volatility from the window's one-second returns (`rv_bps`, `rv_atr` against the `1m@1s` ATR,
-  and the count `rv_returns` as context). Its time-of-day samples are the `1m@1s` ATR at each
+- **The second volatility** (`vol_1s`, the same stage class) holds the same columns for the
+  rolling `1m@1s` window, per phase `o % 60` on same-phase windows 60 rows apart. Realized
+  volatility from the window's one-second returns (`rv_bps`, `rv_atr`, and the count
+  `rv_returns`) is a window statistic on every timeframe: since migration `0009` it is in
+  `stats_1m_1s`, with the other statistics of that window. Its time-of-day samples are the `1m@1s` ATR at each
   minute's last second (ordinal `60m`), keyed by the minute's offset from the session's open; its
   daily scale equals `vol_1m`'s at every minute end. Ages count rows, 0–59.
 - **Swings** (`pivot_1s`, `pivot_1m`; `swings.py`) replay the released trades, not rows: a
@@ -453,8 +454,8 @@ Definitions, units, and NULL rules are in the code and the column comments:
 | Trend averages and oscillators (A9, A10, A16, A17)                                            | `rsi`, `ema9_atr`, `ema21_atr`, `ema50_atr`, `macd_atr`, `macd_signal_atr`, `macd_hist_atr`, `ppo_bps`, `adx`, `plus_di`, `minus_di`, `stoch_k`, `stoch_d`, `cci`                                                 |
 | Volatility, bands, breakout, recency, statistics (A13–A15, A18–A20)                           | `atr_bps`, `vol_bps`, `bb_z`, `bb_width_bps`, `donchian_*`, `aroon_up`, `aroon_down`, `linreg_slope_atr`, `linreg_r2`, `chop`, `er`                                                                               |
 | Price–volume and flow (A3 rolling, A12, A22, A25)                                             | `delta_ratio`, `delta_ratio_5`, `delta_ratio_15`, `count_delta_ratio`, `cvd_high_ratio`, `cvd_low_ratio`, `rel_volume`, `rel_trades`, `cmf`, `mfi`, `flow_price_corr`                                             |
-| Realized volatility, return moments, variance ratio, prior-session levels (hourly window)     | `stats_1h_1m`: `rv_bps`, `rv_atr`, `ret_std_bps`, `ret_skew`, `ret_autocorr`, `vr_5`, `up_minute_ratio`, `drawdown_atr`, `drawup_atr`, `high_pos`, `low_pos`, `session_vwap_atr`, `prior_*_atr`, `cvd_close_corr` |
-| Volatility family (plan section 7, `1m@1s` window)                                            | `vol_1s`: the `vol_1m` columns below, plus `rv_bps` and `rv_atr` (realized volatility from the window's one-second returns) |
+| Realized volatility, return moments, variance ratio, prior-session levels (every timeframe's window: `stats_1m_1s`, `stats_10m_10s`, `stats_1h_1m`) | `stats_*`: `rv_bps`, `rv_atr`, `ret_std_bps`, `ret_skew`, `ret_autocorr`, `vr_5`, `up_minute_ratio`, `drawdown_atr`, `drawup_atr`, `high_pos`, `low_pos`, `session_vwap_atr`, `prior_*_atr`, `cvd_close_corr` |
+| Volatility family (plan section 7, `1m@1s` window)                                            | `vol_1s`: the `vol_1m` columns below |
 | Volatility family (plan section 7, hourly window)                                             | `vol_1m`: `atr5_bps`, `atr50_bps`, `atr_*_log`, `bull_atr_bps`, `bear_atr_bps`, `bull_bear_skew`, `*_adverse_atr_bps`, `*_excursion_atr`, `*_dist_atr`, `*_age_s`, `extreme_order`, `atr_tod_log`, `day_*`, `tr_atr`, `parkinson_bps`, `gk_bps`, `spread_atr` |
 | Session context (A23)                                                                         | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio`                                                                                                              |
 

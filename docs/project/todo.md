@@ -7,33 +7,37 @@ the [build log](build-log.md).
 
 ## Now: the build order
 
-- [ ] **Complete the state** (item 5), before the six-year build:
-  - [ ] `book_1s`, merged to every step: tier 0 from every book event (queue imbalance,
-        order-flow imbalance, time-weighted spread, depletion and refill;
-        [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
-        day cache switched to keep book events;
-  - [ ] a rolling net-flow series without session resets;
-  - [ ] the scheduled-news table and its elapsed-time features;
+- [ ] **Set up the new machine** and rebuild the database there
+      ([steps](handoff.md#moving-to-the-new-machine)).
+- [ ] **Replay the middle timeframe's candidates** (item 6): give `replay.py` and
+      `benchmark.py` the timeframe, then the replay with the slow bracket, market and
+      resting-limit entries, the daily loss cap, and the micro-cost stress.
+- [ ] **Base changes, in one rebuild** (item 7):
   - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
         ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
         [decision 23](roadmap.md#decisions-of-november-20-2026));
+  - [ ] a rolling net-flow series without session resets;
   - [ ] the `source.py` change under [housekeeping](#housekeeping).
-- [ ] **Six years of GC and SI** (item 6; Paul downloads them after moving to a larger
-      machine): the named checks on the untouched years, then the build.
-- [ ] **The yardstick decision model** (item 7): give `replay.py` and `benchmark.py` the
-      timeframe (they read the fast candidates and slow scales by name), then the replay on
-      the middle timeframe's candidates with market and resting-limit entries and the micro-cost stress, then
-      take-or-skip on the value of attempting; nothing stored.
-- [ ] **The event families** (item 8): the failed break; flow (indicators of indicators,
+- [ ] **`book_1s`**, merged to every step (item 8): tier 0 from every book event (queue
+      imbalance, order-flow imbalance, time-weighted spread, depletion and refill;
+      [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
+      day cache switched to keep book events.
+- [ ] **The scheduled-news table** and its elapsed-time features (item 9).
+- [ ] **Six years of GC and SI** (item 10): the named checks on the untouched years, then
+      the build, judged by [the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
+- [ ] **The yardstick decision model** (item 11): take-or-skip on the value of attempting;
+      nothing stored.
+- [ ] **The event families** (item 12): the failed break; flow (indicators of indicators,
       swings, divergence); RSI (the same; measure the row-to-row RSI noise and set
       thresholds above it, [contract](pivot-structure-design.md#swing-sources-price-and-rsi));
       sequences and agreement across timeframes (`signal_*`); the partner
       ([pair design](pair-design.md)).
-- [ ] **The four targets** and their benchmark (item 9): turn (stored), continue,
+- [ ] **The four targets** and their benchmark (item 13): turn (stored), continue,
       direction, and the size of the coming move.
-- [ ] **Stored model stages**, then the second structure pass (item 10).
-- [ ] **More products** (item 11): ES with NQ, YM, RTY, PL, on the larger machine.
-- [ ] **The decision model and the final holdout** (item 12). September 1, 2026 onward is
+- [ ] **Stored model stages**, then the second structure pass (item 14).
+- [ ] **More products** (item 15): ES with NQ; YM, RTY, and PL need a storage remedy first
+      ([decision 25](roadmap.md#decisions-of-november-20-2026)).
+- [ ] **The decision model and the final holdout** (item 16). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 
 ## Also open
@@ -115,3 +119,5 @@ Details of each are in the [build log](build-log.md).
       merged-step timeframes; stored rows unchanged.
 - [x] The middle timeframe `10m@10s` (build-order item 4): stored for GC and SI with its
       swing scales and labels, and joined into the engine.
+- [x] One set of stages for every timeframe (build-order item 5): `1m@1s` is built by the
+      classes of the other two; stored values unchanged.

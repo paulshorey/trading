@@ -324,7 +324,7 @@ Paul's, after the review. The numbers continue the list above.
       one spread; entering against the `slow_atr_1` trend is worse than entering with it;
       displacement alone matches the full models on the turn label.
     - *Build them once.* Every change to base rows lands before they are ingested
-      ([build order](#build-order), item 5).
+      ([build order](#build-order), items 7 to 9).
 
     Afterwards they are development data, walked forward by year. September 1, 2026 onward
     stays the final holdout, and paper trading is the test after it.
@@ -363,61 +363,114 @@ Paul's, after the review. The numbers continue the list above.
     spread, as the swing threshold already is, so a market that has stopped moving cannot
     produce unbounded values; this changes stored values and lands before the six-year build.
 
+24. **One set of stages for every timeframe** (Paul, November 20). `1m@1s` is built by the
+    classes that build `10m@10s` and `1h@1m`; only the one-second rows themselves are made
+    differently, from the trades. Nothing is kept twice for the sake of an option: the fast
+    swings read the spread where the other scales do.
+25. **The new machine has 4 TB** (Paul, November 20). Estimated from this year's sizes, a
+    product-year takes about 73 GB of rows stored for every second (146 GB for GC and SI),
+    two thirds of it the one-second window, statistics, and volatility tables:
+
+    | Six years of | Files | Rows, every second | Rows, one-second values where read |
+    | --- | ---: | ---: | ---: |
+    | GC and SI | 0.16 TB | 0.9 TB | 0.4 TB |
+    | GC, SI, ES, NQ | 0.75 TB | 1.8 TB | 0.8 TB |
+    | All seven products | 0.9 TB | 3.1 TB | 1.4 TB |
+
+    So every second is stored for GC and SI, and ES with NQ still fit beside them. Seven
+    products, with their files and room to rebuild, do not. When that is wanted there are two remedies, neither built now: keep the
+    download files on an external drive (they are read start to finish, only during a
+    build), and store the one-second window, statistics, and volatility rows only where
+    something reads them (every ten-second row's end, every decision and event row), as the
+    fast swings are. `bar_1s` would stay complete, and the engine computes every second
+    either way: storage is a saved copy for research, never what a backtest or a live
+    session reads. The database itself belongs on the internal drive: a drive that
+    disconnects under a running PostgreSQL can damage its tables.
+
+## How results are judged on six years
+
+Frozen November 20, 2026, before the older years arrive, so that no split is chosen after
+seeing a result. It applies to every model and policy from the yardstick on.
+
+- **Three periods.** *Untouched development*: November 2020 to October 2025, the years
+  nobody has looked at. *Exposed development*: November 2025 to August 2026, the year every
+  design choice so far was made on. *Final holdout*: September 1, 2026 onward, evaluated
+  once, with paper trading after it.
+- **A claim is made on the untouched years.** The exposed year may suggest a hypothesis; it
+  cannot confirm one. A result is reported for each period apart, never pooled.
+- **Walk-forward by quarter.** A model that scores a quarter is fitted on all earlier
+  sessions, less a purge as long as the label's horizon and one session of embargo. The
+  first scored quarter needs at least one year of training. Scaling, feature choice,
+  calibration, and thresholds are fitted on the same training sessions.
+- **What is reported**, for every policy: net dollars and drawdown in one portfolio under
+  the daily loss cap, at base and stressed execution and at full-size and micro costs; the
+  value of attempting with a 95% interval from resampled trade dates; all of it by year, by
+  product, and for buys and sells apart; and the number of independent trade dates.
+- **A policy counts** when its value of attempting is above zero on the untouched years with
+  its interval, in at least four of the five years taken alone, for both products and both
+  sides, and still above zero under stressed execution. One good year, product, or side
+  is a lead, not a result.
+- **Every variant is counted.** Each run is recorded with its spec before it starts
+  (`research.*` tables, when [runs are stored](todo.md#also-open)); the count of variants
+  tried on a period is reported beside any result chosen from them.
+
 ## Build order
 
-Approved November 20, 2026. Items 1 to 4 are done. Every step of the process is built, in
-its order. Items 3 to 5 change base rows, so they come before the long history is ingested.
+Approved November 20, 2026, and revised the same day for the new machine. Items 1 to 5 are
+done. Items 7 to 9 change base rows, so they come before the long history is ingested.
 
 1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
    [settings and results](replay.md)). Taking every candidate loses about one spread at
    either bracket, and the displacement rule stays flat.
 2. **Storage change** (decision 7): done November 19 (PR #89).
 3. **Timeframe as a parameter** (decision 8): done November 20
-   ([what was built](build-log.md#timeframe-as-a-parameter-november-20-2026)). One stage class
-   per kind (step rows, window, window statistics, volatility, swings) is built for a
-   timeframe `W@S`: a window of 60 rows of step `S`, whose step rows are merged exactly from
-   `bar_1s`. `1h@1m` is its first instance and its stored rows did not change. `1m@1s`, whose
-   rows come from the trades, keeps its own stage modules on the same calculations. A stage
-   of steps 3 to 5 is written once, against a timeframe's frame of in-memory values.
+   ([what was built](build-log.md#timeframe-as-a-parameter-november-20-2026)).
 4. **The middle timeframe `10m@10s`**: done November 20
-   ([what was built](build-log.md#the-middle-timeframe-10m10s-november-20-2026)). One more instance: its base rows, window, indicators,
-   volatility, swings, and labels for GC and SI.
-5. **Complete the state before the long build.**
-   - *The book between trades* (`book_1s`, merged to every step): queue imbalance,
-     order-flow imbalance, spread over time, depletion and refill. Step 1 is not finished
-     without it, and it is the only information in the files that nothing reads.
+   ([what was built](build-log.md#the-middle-timeframe-10m10s-november-20-2026)).
+5. **One set of stages for every timeframe** (decision 24): done November 20
+   ([what was built](build-log.md#one-set-of-stages-for-every-timeframe-november-20-2026)).
+   A stage of steps 3 to 5 is written once, against a timeframe's frame of in-memory values.
+6. **Replay the middle timeframe's candidates.** Give `replay.py` and `benchmark.py` the
+   timeframe (they read the fast candidates and the slow scales by name), then replay the
+   middle candidates with the slow bracket, a market entry and a resting-limit entry, the
+   daily loss cap, and the micro-cost stress: taken alone, and when the slow timeframe
+   agrees. It needs no rebuild and no new data, and it is the first test of the timeframe
+   where an edge can both pay and be measured. Its result orders the event families of
+   item 11.
+7. **Base changes, in one rebuild.**
+   - *The ATR normalizer floored at the spread* (decision 23).
    - *A rolling net-flow series* that does not reset at the session open (not
      `session_cvd`) and is NULL while its window holds rows without data coverage.
-   - *The scheduled-news table* and its two elapsed-time features (decision 15).
-   - *The ATR normalizer in thin markets* and the `source.py` change in the
-     [to-do list](todo.md#housekeeping), which also rebuild every row.
-6. **Six years of GC and SI**, when the files arrive: the named checks on the untouched
-   years first, then the build (decision 13). Items 7 and later start on the one year held
-   and are rerun on six.
-7. **The yardstick decision model.** Extend `research replay` from the fast candidates to
-   the middle timeframe's, with the slow bracket, a market entry and a resting-limit entry,
-   and the micro-cost stress (decision 16). Then train take-or-skip on the value of
-   attempting, walk-forward and purged, on the features that exist. Store no model. It will
-   probably not beat staying flat. Its purpose is that every later input is judged by one
-   question: is the decision model better after costs with it than without it, on the same
-   rows?
-8. **The event families, through steps 3 to 5.** Each adds its indicators of indicators,
-   its swings, and its structure, and is then replayed alone and inside the yardstick:
-   - *the failed break*, from the breaches and reclaims the swing stages already emit;
-   - *flow*: RSI, EMA and slope of net flow per phase, its swings with thresholds above the
-     measured row-to-row noise, price against flow divergence (`signal_*`);
-   - *RSI*: RSI and EMA of the RSI series, RSI swings, price against RSI divergence;
-   - *sequences and agreement*: higher-low and lower-high runs, and the pullback that holds
-     across the three timeframes;
-   - *the partner*: the [pair stage](pair-design.md) for GC with SI.
-9. **The four targets and their benchmark** (decisions 3 to 5): turn, continue, direction,
-   and the size of the coming move, whose simplest model is the current ATR and the time
-   of day. First for price, then for flow and RSI.
-10. **Stored model stages** for the targets that passed decision 5 and that improve the
+   - *The `source.py` change* in the [to-do list](todo.md#housekeeping).
+8. **The book between trades** (`book_1s`, merged to every step): queue imbalance,
+   order-flow imbalance, spread over time, depletion and refill. Step 1 is not finished
+   without it, and it is the only information in the files that nothing reads.
+9. **The scheduled-news table** and its two elapsed-time features (decision 15).
+10. **Six years of GC and SI**, when the files are on the new machine: the named checks on
+    the untouched years first, then the build (decision 13), judged as
+    [above](#how-results-are-judged-on-six-years).
+11. **The yardstick decision model.** Train take-or-skip on the value of attempting,
+    walk-forward and purged, on the features that exist. Store no model. It will probably
+    not beat staying flat. Its purpose is that every later input is judged by one question:
+    is the decision model better after costs with it than without it, on the same rows?
+12. **The event families, through steps 3 to 5.** Each adds its indicators of indicators,
+    its swings, and its structure, and is then replayed alone and inside the yardstick:
+    - *the failed break*, from the breaches and reclaims the swing stages already emit;
+    - *flow*: RSI, EMA and slope of net flow per phase, its swings with thresholds above the
+      measured row-to-row noise, price against flow divergence (`signal_*`);
+    - *RSI*: RSI and EMA of the RSI series, RSI swings, price against RSI divergence;
+    - *sequences and agreement*: higher-low and lower-high runs, and the pullback that holds
+      across the three timeframes;
+    - *the partner*: the [pair stage](pair-design.md) for GC with SI.
+13. **The four targets and their benchmark** (decisions 3 to 5): turn, continue, direction,
+    and the size of the coming move, whose simplest model is the current ATR and the time
+    of day. First for price, then for flow and RSI.
+14. **Stored model stages** for the targets that passed decision 5 and that improve the
     yardstick model, then the second structure pass on their probabilities. A model that
     reads another model is stored only on the six-year history.
-11. **More products** on the larger machine: ES with NQ, YM, RTY, PL.
-12. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout. Then
+15. **More products**: ES with NQ first; YM, RTY, and PL need one of the storage remedies of
+    decision 25.
+16. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout. Then
     paper trading on the live feed, and live trading after it.
 
 ### After-cost replay

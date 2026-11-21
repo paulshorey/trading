@@ -9,12 +9,11 @@ from strategy_core.features import FeatureConfig
 from strategy_core.market import HOUR, NS
 from strategy_core.pipeline import STAGES, Pipeline, check_graph
 from strategy_core.stage_bar_1s import BarStage
-from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS, CandleStage
 from strategy_core.stage_step_bar import MinuteBarStage
-from strategy_core.stage_step_candle import HourCandleStage
+from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as FEATURE_COLUMNS
+from strategy_core.stage_step_candle import CandleStage, HourCandleStage
 from strategy_core.stage_step_stats import HourStatsStage
-from strategy_core.stage_step_vol import VolMinuteStage
-from strategy_core.stage_vol_1s import VolSecondStage
+from strategy_core.stage_step_vol import VolMinuteStage, VolSecondStage
 from strategy_core.stages import StageContext
 from strategy_core.synthetic import random_trades
 
@@ -55,22 +54,23 @@ def test_the_graph_reads_only_earlier_stages():
         "bar_10s",
         "bar_1m",
         "candle_1m_1s",
+        "stats_1m_1s",
+        "vol_1s",
         "candle_10m_10s",
         "stats_10m_10s",
         "vol_10s",
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
-        "vol_1s",
+        "pivot_1s:fast_atr_0p5",
+        "pivot_1s:fast_atr_1",
+        "pivot_1s:fast_atr_2",
         "pivot_10s:mid_atr_0p5",
         "pivot_10s:mid_atr_1",
         "pivot_10s:mid_atr_2",
         "pivot_1m:slow_atr_0p5",
         "pivot_1m:slow_atr_1",
         "pivot_1m:slow_atr_2",
-        "pivot_1s:fast_atr_0p5",
-        "pivot_1s:fast_atr_1",
-        "pivot_1s:fast_atr_2",
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
     slow = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")  # trades, and their seconds
@@ -87,7 +87,8 @@ def test_the_graph_reads_only_earlier_stages():
     assert {s.NAME: s.INPUTS for s in inputs if s.RESOLUTION == "1s"} == {
         "bar_1s": ("market",),
         "candle_1m_1s": ("bar_1s",),
-        "vol_1s": ("bar_1s", "candle_1m_1s"),  # a declared edge within tier 1
+        "stats_1m_1s": ("bar_1s", "candle_1m_1s"),  # declared edges within tier 1
+        "vol_1s": ("bar_1s", "candle_1m_1s"),
         **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2")},
     }
     assert {s.TIER for s in inputs if ":" in s.NAME} == {2}  # swings read tiers 0 and 1 only

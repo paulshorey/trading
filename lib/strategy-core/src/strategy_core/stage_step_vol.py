@@ -50,7 +50,7 @@ from .features import Unit  # unit labels of the registry; they do not change st
 from .market import PRODUCTS, PX, SECOND
 from .stage_step_bar import empty_table
 from .stages import Stage
-from .timeframes import SLOTS, SLOW, Timeframe
+from .timeframes import FAST, SLOTS, SLOW, Timeframe
 from .volatility import DailyScale, TimeOfDay, garman_klass, parkinson, session_minute, split_atr
 from .windows import COMPLETE
 
@@ -394,3 +394,4 @@ def step_vol(tf: Timeframe) -> type[StepVolStage]:
 
 
 VolMinuteStage = step_vol(SLOW)
+VolSecondStage = step_vol(FAST)

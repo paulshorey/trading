@@ -21,8 +21,7 @@ from .bars import MISSING
 from .columns import Table
 from .engine import MarketChunk
 from .market import SECOND
-from .stage_pivot_1s import SCALES as FAST_SCALES
-from .stage_step_pivot import MIDDLE_SCALES
+from .stage_step_pivot import FAST_SCALES, MIDDLE_SCALES
 from .stage_step_pivot import SCALES as SLOW_SCALES
 from .stages import Stage
 from .swings import HIGH, LOW, NONE
@@ -58,8 +57,7 @@ class PivotLabelStage(Stage):
 
     def __init__(self, context):
         super().__init__(context)
-        tf = getattr(self.SCALE, "TF", None)  # a merged timeframe; the fast scales have none
-        self.width = tf.seconds if tf else 1  # seconds per row of the stream
+        self.width = self.SCALE.TF.seconds  # seconds per row of the scale's stream
         rows = HORIZON[self.RESOLUTION]
         self.labeler = pivot_labels.Labeler(self.Q, REVERSAL, INVALIDATION, rows, rows)
         self.warm = False  # of the last chunk with rows of the scale; not state

@@ -1,22 +1,30 @@
-"""Stages `pivot_<rows>` (tier 2): the swing scales of a merged timeframe (`timeframes.py`), one
-row per scheduled-open step row and scale. `pivot_1m` holds the slow scales of `1h@1m`.
+"""Stages `pivot_<rows>` (tier 2): the swing scales of a timeframe (`timeframes.py`), one row per
+scheduled-open step row and scale. `pivot_1s` holds the fast scales of `1m@1s`, `pivot_10s` the
+middle ones of `10m@10s`, and `pivot_1m` the slow ones of `1h@1m`.
 
-Each scale is its own stage (a variant: `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`) writing to
-its timeframe's shared table under its `variant_id`, like the fast scales of `pivot_1s`.
+Each scale is its own stage (a variant: `fast_atr_0p5`, `mid_atr_1`, `slow_atr_2`, ...) writing
+to its timeframe's shared table under its `variant_id`, so every scale has its own builder
+identity, checkpoint, and session records, and adding a scale never rebuilds the others.
 
-Such a scale replays the same released trades as a fast one; only its threshold and its
-publication differ. `theta = max(K x ATR, FLOOR x spread)` uses the timeframe's ATR(14)
+Every scale replays the same released trades (`swings.Detector`); only its threshold and its
+publication differ. A running extreme is confirmed by a reversal of
+`theta = max(K x ATR, FLOOR x spread)` in basis points. It uses the timeframe's ATR(14)
 (`candle_<window>.atr_bps`) and the last sampled book spread, both **as of the latest step row
-completed before the trade's own row**, with that row's ATR in price units
-(`vol_<rows>.atr_price`) as the frozen ATR. The spread is carried from the step rows
-(`last_bid`, `last_ask`: the last trade in the row with a usable book), never across a missing
-row, so the branch reads nothing from the second branch but `bar_1s`'s rows.
+completed before the trade's own row** (on `1m@1s`, the previous second: the row of the extreme
+would include trades after it), with that row's ATR in price units (`vol_<rows>.atr_price`) as
+the frozen ATR. The spread is carried from the step rows (`last_bid`, `last_ask`: the last trade
+in the row with a usable book), never across a missing row.
 
 State is published once per step row, after its last second; a confirmation or breach inside a
-row appears on that row and never earlier. Second rows read it through an as-of join
+row appears on that row and never earlier. Faster rows read it through an as-of join
 (`pipeline.StageFeatures`). A missing second ends the segment at once and keeps the scale idle
-for the rest of its row; the next rows then wait for the ATR.
+for the rest of its row; the next rows then wait for the ATR. Events (confirmed highs and lows,
+breaches, reclaims) go to `market.pivot_event` with the row of the trade that produced them.
 Ages count step rows x their seconds: scheduled-open seconds.
+
+Structure depends on arbitrarily old swings, so no lead makes it history-complete: it starts a
+fresh segment at the contract's span start, and `warm` says whether every row of the last
+chunk had a confirmed high and low. `warmup()` covers only the threshold's inputs.
 """
 
 from typing import Any, ClassVar
@@ -29,15 +37,15 @@ from .columns import Table
 from .engine import MarketChunk
 from .market import PX
 from .stages import Stage
-from .timeframes import MIDDLE, SLOW, Timeframe
+from .timeframes import FAST, MIDDLE, SLOW, Timeframe
 
 SPEC = swings.dense_columns()
 COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC))
 FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
 NEVER = -(2**62)  # no step row seen yet
 # Step rows within which a breached level can be reclaimed: a quarter of the hourly window (15
-# minutes), half of the ten-minute one (5 minutes); the fast scales use one whole window (60 s).
-RECLAIM_ROWS = {"1m": 15, "10s": 30}
+# minutes), half of the ten-minute one (5 minutes), the whole one-minute one (60 seconds).
+RECLAIM_ROWS = {"1m": 15, "10s": 30, "1s": 60}
 
 
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
@@ -53,8 +61,9 @@ def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
     fresh = (i >= 0) & (i > gap)
     known = fresh | ((gap < 0) & bool(carry[0]))
     at = np.maximum(i, 0)
-    bid = np.where(fresh, base.values["last_bid"][at], carry[1]).astype(np.float64)
-    ask = np.where(fresh, base.values["last_ask"][at], carry[2]).astype(np.float64)
+    # in quoted prices, as `candle_1m_1s.book_spread_bps` computes the same spread
+    bid = np.where(fresh, base.values["last_bid"][at], carry[1]) / PX
+    ask = np.where(fresh, base.values["last_ask"][at], carry[2]) / PX
     if fresh[-1]:
         carry[:] = (1, base.values["last_bid"][i[-1]], base.values["last_ask"][i[-1]])
     elif gap[-1] >= 0:
@@ -182,7 +191,11 @@ def step_pivot(tf: Timeframe) -> type[StepPivotStage]:
         "TABLE": f"pivot_{tf.rows}",
         "WINDOW": RECLAIM_ROWS[tf.rows],
         "RESOLUTION": tf.rows,
-        "INPUTS": ("market", "bar_1s", f"bar_{tf.rows}", f"candle_{tf.window}", f"vol_{tf.rows}"),
+        "INPUTS": tuple(
+            dict.fromkeys(  # `bar_1s` once on the one-second timeframe
+                ("market", "bar_1s", f"bar_{tf.rows}", f"candle_{tf.window}", f"vol_{tf.rows}")
+            )
+        ),
     }
     return type(f"StepPivot_{tf.rows}", (StepPivotStage,), attrs)
 
@@ -202,4 +215,6 @@ PivotMinuteStage = step_pivot(SLOW)
 SCALES = tuple(scale(PivotMinuteStage, k) for k in MULTIPLIERS)  # the slow scales
 PivotMiddleStage = step_pivot(MIDDLE)
 MIDDLE_SCALES = tuple(scale(PivotMiddleStage, k) for k in MULTIPLIERS)
-BY_TIMEFRAME = {SLOW.name: SCALES, MIDDLE.name: MIDDLE_SCALES}
+PivotSecondStage = step_pivot(FAST)
+FAST_SCALES = tuple(scale(PivotSecondStage, k) for k in MULTIPLIERS)
+BY_TIMEFRAME = {FAST.name: FAST_SCALES, MIDDLE.name: MIDDLE_SCALES, SLOW.name: SCALES}

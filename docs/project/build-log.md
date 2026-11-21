@@ -6,6 +6,65 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## One set of stages for every timeframe (November 20, 2026)
+
+Build-order item 5, asked for by Paul: `1m@1s` should not be managed by its own logic. Its
+window, statistics, volatility, and swing stages are now the classes that build `10m@10s`
+and `1h@1m` (`stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`,
+`stage_step_pivot.py`), and `stage_candle_1m_1s.py`, `stage_vol_1s.py`, and
+`stage_pivot_1s.py` are gone. Only the one-second rows stay a module of their own
+(`stage_bar_1s.py`): they are made from the trades, and every longer step is merged from them.
+
+**What changed for the stored rows** (migration `0009_one_set_of_stages`)
+
+- `stats_1m_1s` is new: the window statistics every timeframe has, 16 features, 70,731,900
+  rows. Realized volatility (`rv_bps`, `rv_atr`, `rv_returns`) moved to it from `vol_1s`,
+  where the other timeframes keep it; the engine's feature names are the same
+  (`1m@1s.rv_bps`). The engine has 639 features (625 before).
+- The fast swing scales read the spread from the step rows' last bid and ask, as the other
+  scales do, instead of `candle_1m_1s.book_spread_bps`. It is the same quantity: on a week
+  of stored SI rows the two agreed on all 414,000 rows. The shared code now computes it
+  with the arithmetic the fast scales used.
+- What still differs between timeframes is declared on the timeframe, not copied: the
+  session features and the latest observation are stored on `1m@1s` only, the fast swing
+  rows are stored sparsely, and each timeframe has its reclaim window and label horizon.
+- The stored-row rule names its step (`STORED_ROWS` v3), so a shorter merged step would
+  mark the sparse rows stale (a review finding on #95).
+
+**Checks**
+
+- **In memory, old code against new:** on a synthetic two-session world with closures, gaps,
+  and quiet minutes, all 3,058 column hashes of every stage are identical, whole sessions and
+  uneven groups of seconds alike, and realized volatility is identical in its new table.
+- **The whole year** (`research ingest run GC SI --rebuild --workers 8`, run 7, 53 minutes;
+  216 fingerprints, per table and contract, taken before and after):
+  - identical: `candle_1m_1s`, `vol_1s` (the columns it kept), realized volatility (old
+    `vol_1s` columns against `stats_1m_1s`), `pivot_1s`, `pivot_label_1s`, every ten-second
+    and minute step, window, statistics, and volatility table. **The fast timeframe did not
+    change by one bit**, so the benchmark and the replay recorded on the fast labels stand
+    as they are;
+  - changed, with the same row counts: the middle and slow swing rows, their labels, and
+    their events. Measured by building three weeks of SIZ6 with the old and the new code:
+    only `theta_bps`, `progress`, and `displacement` (and `theta` and `overshoot` of events)
+    differ, by at most 4.4 parts in 10 trillion, where the spread floor sets the threshold.
+    No swing, event, class, age, level, or label outcome differs. It is the rounding of the
+    spread's arithmetic, which the middle and slow scales now share with the fast ones.
+- `ingest plan GC SI` reports every contract `current`.
+- **Engine:** `research verify` on the example GC day: all 639 features and all 18 trades
+  identical, whole session against second by second, at 7.6 ms per market second while the
+  disk cleanup ran beside it (7.0 ms with 625 features). The example backtest gives the same
+  18 trades and result as before.
+- Tests: strategy-core 157, backtest-runner 63; `ruff` passes.
+
+**Disk.** The rebuild rewrote the one-second tables in place and left the old rows as dead
+space: the database grew from 141 GB to 252 GB and the disk fell to 40 GB free.
+`VACUUM FULL` per partition gave the space back: the database is 146 GB, with 146 GB of
+disk free, and its fingerprint is unchanged.
+
+Evidence: `~/unify.hash-before.txt`, `hash-after.txt`, `hash-diff.txt`, `ingest.json` and
+`.log`, `verify.json`, and `~/fingerprint-old-machine.txt` (from `scripts/db-fingerprint.sh`,
+to compare with the database rebuilt on the new machine).
+
 ## The middle timeframe `10m@10s` (November 20, 2026)
 
 Build-order item 4. `10m@10s` is a window of 60 rows of ten seconds, between `1m@1s` and

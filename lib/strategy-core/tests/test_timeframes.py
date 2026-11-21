@@ -34,7 +34,7 @@ OBSERVED, MISSING = 2, 0
 def test_a_step_divides_a_minute():
     assert (MIDDLE.seconds, MIDDLE.per_minute, MIDDLE.window_seconds) == (10, 6, 600)
     assert (SLOW.seconds, SLOW.per_minute, SLOW.window_seconds) == (60, 1, 3600)
-    for seconds in (1, 8, 7, 120):  # one second is the base case; 8 would straddle sessions
+    for seconds in (0, 8, 7, 120):  # 8 would straddle sessions
         with pytest.raises(ValueError):
             Timeframe("x", seconds, "x", "x", "x")
 

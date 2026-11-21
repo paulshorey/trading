@@ -11,8 +11,8 @@ from strategy_core.indicators import FEATURES
 from strategy_core.market import HOUR, NS, PX, Trades
 from strategy_core.pipeline import Pipeline, PipelineRows
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
-from strategy_core.stage_candle_1m_1s import COLUMNS as CANDLE_COLUMNS
-from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS
+from strategy_core.stage_step_candle import FAST_COLUMNS as CANDLE_COLUMNS
+from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as FEATURE_COLUMNS
 from strategy_core.state import from_bytes, same_state, to_bytes
 from strategy_core.synthetic import random_trades
 from strategy_core.windows import COMPLETE

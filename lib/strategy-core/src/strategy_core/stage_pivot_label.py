@@ -20,16 +20,19 @@ from . import pivot_labels, swings
 from .bars import MISSING
 from .columns import Table
 from .engine import MarketChunk
-from .market import MINUTE
-from .stage_pivot_1m import SCALES as SLOW_SCALES
+from .market import SECOND
 from .stage_pivot_1s import SCALES as FAST_SCALES
+from .stage_step_pivot import MIDDLE_SCALES
+from .stage_step_pivot import SCALES as SLOW_SCALES
 from .stages import Stage
 from .swings import HIGH, LOW, NONE
 
 LABEL_TIER = 9  # above every tier of inputs: labels read them and nothing reads labels
 Q_STAGES = (0.25, 0.5)  # progress that makes a candidate
 REVERSAL, INVALIDATION = 1.0, 0.25  # barriers, in thetas from and beyond the extreme
-HORIZON = {"1s": 300, "1m": 240}  # rows of the scale's stream after the decision row
+# Rows of the scale's stream after the decision row: 5 minutes fast, 40 minutes middle, 4 hours
+# slow (docs/project/pivot-label-spec.md).
+HORIZON = {"1s": 300, "10s": 240, "1m": 240}
 COLUMNS = (*pivot_labels.KEY_COLUMNS, *pivot_labels.LABEL_COLUMNS)
 
 
@@ -55,7 +58,8 @@ class PivotLabelStage(Stage):
 
     def __init__(self, context):
         super().__init__(context)
-        self.width = 1 if self.RESOLUTION == "1s" else 60  # seconds per row of the stream
+        tf = getattr(self.SCALE, "TF", None)  # a merged timeframe; the fast scales have none
+        self.width = tf.seconds if tf else 1  # seconds per row of the stream
         rows = HORIZON[self.RESOLUTION]
         self.labeler = pivot_labels.Labeler(self.Q, REVERSAL, INVALIDATION, rows, rows)
         self.warm = False  # of the last chunk with rows of the scale; not state
@@ -87,7 +91,7 @@ class PivotLabelStage(Stage):
         rows = {
             "missing": bars.status == MISSING,
             "pub": (second + (w - 1)) // w,
-            "end": -(-bars.end // (w * MINUTE // 60)) * (w * MINUTE // 60),
+            "end": -(-bars.end // (w * SECOND)) * (w * SECOND),
             "emit": second % w == 0,
             # sessions are the calendar's intervals, which end on whole minutes
             "last": self.context.calendar.close_after(bars.end) == bars.end,
@@ -146,4 +150,5 @@ def label(scale: type[Stage], q: float) -> type[PivotLabelStage]:
 
 
 SLOW_LABELS = tuple(label(s, q) for s in SLOW_SCALES for q in Q_STAGES)
+MIDDLE_LABELS = tuple(label(s, q) for s in MIDDLE_SCALES for q in Q_STAGES)
 FAST_LABELS = tuple(label(s, q) for s in FAST_SCALES for q in Q_STAGES)

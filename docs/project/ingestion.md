@@ -3,22 +3,22 @@
 Status (November 16, 2026, PR D): the six swing scales were added to the stored GC and SI
 contracts in 17 min 55 s (`add`; 212,195,700 `pivot_1s` rows at 316 bytes each with the
 index, 64 GB; the database is 168 GB), and every confirmed pivot equals an independent
-replay of the trades ([results](handoff.md#pr-d-results-swings)).
+replay of the trades ([results](build-log.md#pr-d-results-swings)).
 
 Status (November 16, 2026): GC and SI were rebuilt from the MBP-1 files in one run on a
 reset database: 12 contracts, 858 contract-sessions (2025-11-10 to 2026-11-06), 70,731,900
 rows per second table, 24 min 48 s with 8 workers, 101 GB. The trade rows equal the
 TBBO-built ones on every day both have
-([results](handoff.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
+([results](build-log.md#rebuilt-from-mbp-1-november-16-2026)). The run history below (November
 3–5) was measured on the TBBO-built rows and still describes the design and its costs.
 
 Status (November 4, 2026): GC and SI are stored in local database `trading` by the stage
 pipeline with a 40-session lead, rebuilt on the baseline schema
-([results](handoff.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
-([results](handoff.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
-hourly window statistics ([results](handoff.md#pr-b2-results-hourly-statistics)), run 5 the
-minute volatility ([results](handoff.md#pr-c1-results-minute-volatility)), and run 6 the second
-volatility ([results](handoff.md#pr-c2-results-second-volatility)). Metrics follow the [trade-metrics reference](trade-metrics-reference.md);
+([results](build-log.md#baseline-rebuild-gc-and-si)); run 3 added the minute stages
+([results](build-log.md#pr-b1-results-minute-stages), [measurements](#measured)), run 4 the
+hourly window statistics ([results](build-log.md#pr-b2-results-hourly-statistics)), run 5 the
+minute volatility ([results](build-log.md#pr-c1-results-minute-volatility)), and run 6 the second
+volatility ([results](build-log.md#pr-c2-results-second-volatility)). Metrics follow the [trade-metrics reference](trade-metrics-reference.md);
 [differences](#differences-from-the-handoff) are listed below.
 
 The `research ingest` command reads the trade records of Databento MBP-1 files and stores, for every contract
@@ -35,7 +35,7 @@ stage has its own table, version, and per-session checkpoint:
 | `market.stats_1h_1m` (tier 1)  | minute `m`                      | 16 statistics of the same window: realized volatility, minute-return moments, path, session levels, price-flow correlation |
 | `market.vol_1s` (tier 1)       | second `o`                      | 28 volatility features of the `1m@1s` window: as `vol_1m`, plus realized volatility from its one-second returns            |
 | `market.vol_1m` (tier 1)       | minute `m`                      | 26 volatility features of the same window: ATR horizons, bullish/bearish and adverse ATR, extremes, time-of-day, daily ATR |
-| `market.pivot_1s` (tier 2)     | second `o` and fast scale       | 30 swing features per scale (0.5, 1, 2 × the `1m@1s` ATR): the open leg, the latest confirmed high and low, trend          |
+| `market.pivot_1s` (tier 2)     | stored second `o` and fast scale | 30 swing features per scale (0.5, 1, 2 × the `1m@1s` ATR): the open leg, the latest confirmed high and low, trend ([which seconds](#fast-swing-rows-are-stored-where-they-are-read)) |
 | `market.pivot_1m` (tier 2)     | minute `m` and slow scale       | The same 30 features per scale (0.5, 1, 2 × the `1h@1m` ATR), published at each minute's end                               |
 | `market.pivot_event`           | swing event                     | Confirmed highs and lows, breaches, and reclaims of every scale, with the row of the trade that produced them              |
 
@@ -57,6 +57,45 @@ with its rows, session by session, and carry the builder that wrote them. A scal
 are fixed under its name (a changed scale needs a new name), and a scale no stage defines any
 more is marked retired and left out of the continuous views, never deleted by the planner
 ([what is stored](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)).
+
+### Fast swing rows are stored where they are read
+
+Decided November 19, 2026; the first rule widened on November 20 for the middle timeframe.
+The fast swing scales are computed for every second, in ingestion as in backtests and live
+sessions, but `market.pivot_1s` stores a row only for:
+
+- the last second of every step row of a longer timeframe (`slot_ordinal % 10 = 0`: every
+  ten-second row's end, which includes every minute's), so a decision on a slower timeframe
+  finds the fast scales at its own row;
+- every row of a fast label: a candidate's decision row, or the confirmation row of a swing
+  that never had a candidate;
+- every second in which a fast scale emitted an event.
+
+All three scales keep the same seconds, so a candidate finds every scale at its own row.
+Any other second is recomputed by the engine from the DBN files; `market.pivot_event` still
+holds every confirmed swing, breach, and reclaim.
+
+Applied to `trading` on November 19, 2026: `TRUNCATE market.pivot_1s`, then
+`research ingest run GC SI --rebuild --workers 8` (run 4: the three fast scales, their
+events, and their six label variants for 12 contracts and 858 contract-sessions, in
+5 min 21 s). Each scale now holds 4,762,271 rows, 6.7% of the 70,731,900 seconds, and the
+table takes 4.5 GB where it took 64 GB. The database went from 169 GB to 110 GB. The label
+rows (5,029,757) and events (2,403,082) are the same counts as before; no label row, fast
+event row, or minute end lacks a swing row; the three scales hold one key set; and a fresh
+`ingest plan GC SI` reports every contract `current`
+(`~/ingest-gc-si-sparse.log` and `.json`).
+
+The rule is `pipeline.stored_rows`, and its name (`pipeline.STORED_ROWS`) is part of each
+fast scale's builder identity: changing it makes them `stale`. Because label rows are among
+the kept seconds, ingestion writes the fast scales again whenever it writes a fast label,
+and their labels with them, in the same transaction per session. A scale's builder
+therefore identifies its values, and the kept seconds follow from that builder together
+with the fast labels' builders of the same session, all recorded in `market.stage_slice`.
+The label builders are not folded into the scale's identity: a label's identity already
+contains its scale's, and a new label variant would then make every fast scale `stale`
+where today it is simply added. A stage that needs swing state at other seconds must either
+read it in memory, as stages do, or extend the rule. The slow scales (`pivot_1m`) store
+every minute.
 
 Rows are stored per contract. Each product also reads as **one permanent series**,
 `product = 'GC'`, through the views `market.continuous_bar_1s`, `continuous_bar_1m`,
@@ -237,39 +276,39 @@ contracts (`add`, 8 workers): 858 contract-sessions in 3.5 minutes, computing ev
 writing only the label tables, 5,029,757 rows in `pivot_label_1s` and 197,721 in
 `pivot_label_1m`, 1.3 GB including indexes. A label table has one row per candidate, not per
 slot: about 2,100 rows per contract-session for the smallest fast scale at the 25% stage and
-5 for the largest slow scale at 50% ([checks](handoff.md#pr-f-results-labels-and-benchmark)).
+5 for the largest slow scale at 50% ([checks](build-log.md#pr-f-results-labels-and-benchmark)).
 
 Run 6 (November 4, 2026, PR C2) added `vol_1s` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 5 min 47 s, computing every stage and writing only the new
 table, 71,559,900 rows in 24.05 GB including indexes, plus 159 MB of checkpoints. Every row equals
-an independent recomputation from the stored rows ([checks](handoff.md#pr-c2-results-second-volatility)).
+an independent recomputation from the stored rows ([checks](build-log.md#pr-c2-results-second-volatility)).
 In live sessions the stage adds about 0.08 ms per second (`research verify`).
 
 Run 5 (November 4, 2026, PR C1) added `vol_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
 new table, 1,192,665 rows in 0.42 GB including indexes, plus 156 MB of checkpoints (the
 time-of-day buffer). Every complete window equals an independent recomputation from the stored
-rows ([checks](handoff.md#pr-c1-results-minute-volatility)). The stage sets the required lead:
+rows ([checks](build-log.md#pr-c1-results-minute-volatility)). The stage sets the required lead:
 37 typical sessions (the daily percentile), inside the 40-session lead.
 
 Run 4 (November 4, 2026, PR B2) added `stats_1h_1m` to the stored GC and SI contracts (`add`,
 8 workers): 868 contract-sessions in 1 min 55 s, computing every stage and writing only the
 new table, 1,192,665 rows in 0.35 GB including indexes. Every complete window equals an
-independent recomputation from the stored rows ([checks](handoff.md#pr-b2-results-hourly-statistics)).
+independent recomputation from the stored rows ([checks](build-log.md#pr-b2-results-hourly-statistics)).
 
 Run 3 (November 4, 2026, PR B1) added the minute stages to the stored GC and SI contracts
 (`add`, 8 workers): 868 contract-sessions in 2 min 29 s, about 1.4 s of wall time per
 session per worker, computing every stage and writing only `bar_1m` and `candle_1h_1m`.
 They hold 1,192,665 rows each (596,235 GC and 596,430 SI minutes) and use 0.62 GB and
 1.05 GB including indexes. Every minute equals the second rows at ordinal `60m`
-([checks](handoff.md#pr-b1-results-minute-stages)).
+([checks](build-log.md#pr-b1-results-minute-stages)).
 
 The baseline rebuild completed November 4, 2026: 12 contracts, 868 contract-sessions,
 71,559,900 rows per table, and 257/257 front sessions per product. The initial 8-worker
 run took 14 min 47 s and ended `partial` after a stalled COPY connection was terminated;
 a 1-worker retry built only SIU6's remaining 84 sessions in 3 min 29 s and ended `done`.
 A fresh plan is entirely `current`; exact replay, warm-up, roll, and NULL checks passed
-([results and evidence](handoff.md#baseline-rebuild-gc-and-si)). Fresh partitions use
+([results and evidence](build-log.md#baseline-rebuild-gc-and-si)). Fresh partitions use
 21.28 GB for `bar_1s` and 61.79 GB for `candle_1m_1s`,
 83.07 GB total including indexes (decimal); no `VACUUM FULL` was needed.
 
@@ -278,7 +317,7 @@ contracts and 868 contract-sessions, 71,559,900 rows per table, in 1,423.9 s (23
 about 1.6 s of wall time per contract-session per worker including deletes of the replaced
 rows. Compute alone is about 0.4 s per GC session for both stages. After compaction,
 `bar_1s` is 20.11 GB and `candle_1m_1s` 60.73 GB including indexes, 80.84 GB total
-([details](handoff.md#rebuild-with-stages-gc-and-si)).
+([details](build-log.md#rebuild-with-stages-gc-and-si)).
 
 Run #1 (November 3, 2026, one builder, 5-session lead) stored 46,503,000 rows per table in
 11 min 2 s with 8 workers, using 57.65 GB including indexes; its rows were replaced by run #2
@@ -298,7 +337,7 @@ If the rerun builds sessions, require `status: done`; a successful no-op instead
 `run_id: null`, empty `results`, and no `status` field. In either case, finish with a fresh
 plan reporting every contract `current`. An uncommitted session rolls back if its connection
 is closed; completed sessions remain readable. A stalled
-COPY was recovered this way during the [baseline rebuild](handoff.md#baseline-rebuild-gc-and-si);
+COPY was recovered this way during the [baseline rebuild](build-log.md#baseline-rebuild-gc-and-si);
 bounded transfer timeouts and a nonzero exit for incomplete runs remain reliability work.
 
 ## Row rules
@@ -342,7 +381,7 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   low or at the high came first (0: the same trade). They show what the high and low cannot,
   such as 99, 105, 100 falling 5 in a second that closes up, and merge exactly into windows
   with the high and low.
-- **Minutes** (`bar_1m`) merge their 60 second rows by these rules (`stage_bar_1m.combine_metrics`
+- **Minutes** (`bar_1m`) merge their 60 second rows by these rules (`stage_step_bar.combine_metrics`
   applies the window rules within each minute), so a minute equals the `1m@1s` window that
   ends at ordinal `60m`, field by field. A minute with any missing second is missing
   (`status` 0) and stores only its keys and status. `session_cvd` is the value at the
@@ -537,8 +576,8 @@ stored stages.
 ## Next
 
 1. **Structure signals** and other new inputs for the reversal question
-   ([roadmap](roadmap.md#next)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
-   detector once disk allows.
+   ([roadmap](roadmap.md#build-order)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
+   detector.
 2. Let backtests read stored rows when the builder matches the run: the values are already
    equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

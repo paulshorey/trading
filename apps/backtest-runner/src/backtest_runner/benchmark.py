@@ -4,9 +4,8 @@
     uv run research benchmark models GC SI      # B: logistic regression against boosted trees
     uv run research benchmark context GC SI     # B again, with inputs from outside the row
 
-Both read stored rows of front-contract sessions in the development period and store nothing.
-Trade dates from `HOLDOUT` on are refused: the newest data stays untouched until a later,
-predeclared evaluation.
+All three commands read development-period front-contract rows and store nothing. Trade dates
+from `HOLDOUT` on are reserved for a later, predeclared pivot-model evaluation.
 
 A. Reference swings are defined in hindsight from the base rows, without any detector. Each
    detector gives alarms (kind, the row at which it is known, the row it claims as the extreme),
@@ -24,9 +23,9 @@ import psycopg
 from numba import njit
 from psycopg import sql
 from strategy_core.pipeline import StageFeatures
-from strategy_core.stage_pivot_1m import SCALES as SLOW_SCALES
 from strategy_core.stage_pivot_1s import SCALES as FAST_SCALES
 from strategy_core.stage_pivot_label import FAST_LABELS, INVALIDATION, REVERSAL, SLOW_LABELS
+from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
 
 from . import db, store
 
@@ -535,7 +534,8 @@ def context_sources(scale, ids) -> list[tuple]:
     out += [("scales", "", s.NAME, slow, ids[slow, s.VARIANT], "minute") for s in SLOW_SCALES]
     out += [("hour", "", t, t, None, "minute") for t in CONTEXT_HOUR]
     out += [("pair", "partner:", t, t, None, "partner") for t in STREAMS["fast"]["features"]]
-    out.append(("pair", "partner:", scale.NAME, fast, ids[fast, scale.VARIANT], "partner"))
+    # the partner's swing rows are stored at its own decision rows and at minute ends only
+    out.append(("pair", "partner:", scale.NAME, fast, ids[fast, scale.VARIANT], "partner_minute"))
     return out
 
 
@@ -549,6 +549,10 @@ CONTEXT_JOIN = {
     # the same second of the partner's front contract; the calendars are identical
     "partner": "{a}.contract_id = pf.contract_id AND {a}.slot_ordinal = l.slot_ordinal "
     "AND {a}.end_ns = l.end_ns",
+    # the last second of the latest completed minute of the partner's front contract
+    "partner_minute": "{a}.contract_id = pf.contract_id "
+    "AND {a}.slot_ordinal = (l.slot_ordinal / 60) * 60 "
+    "AND {a}.end_ns <= l.end_ns AND {a}.end_ns > l.end_ns - {reach}",
 }
 
 
@@ -635,8 +639,8 @@ def load_candidates(conn, products, label, stream, start, end, ids, context=Fals
              AND l.outcome = 0"""
     ).format(sql.Identifier("market", label.TABLE), per=sql.Literal(per))
     needed = [*((t, 0) for t in spec["features"]), (pivot, scale_id), (label.TABLE, label_id)]
-    own = [(t, v or 0) for _, _, _, t, v, how in extra if how != "partner"]
-    partner = [(t, v or 0) for _, _, _, t, v, how in extra if how == "partner"]
+    own = [(t, v or 0) for _, _, _, t, v, how in extra if not how.startswith("partner")]
+    partner = [(t, v or 0) for _, _, _, t, v, how in extra if how.startswith("partner")]
     parts, sessions, dates, resolved = [], {}, [], 0
     for k, product in enumerate(products):
         found = front_sessions(conn, product, start, end, [*needed, *own])
@@ -674,8 +678,22 @@ def log_loss(y, p):
 def scores(y, p) -> dict:
     from sklearn.metrics import average_precision_score, roc_auc_score
 
+    # Fixed probability bands, including a forecast of exactly one in the last band.
+    bands = np.clip((p * 10).astype(int), 0, 9)
+    count = np.bincount(bands, minlength=10)
+    predicted = np.bincount(bands, weights=p, minlength=10)
+    observed = np.bincount(bands, weights=y, minlength=10)
     both = 0 < y.sum() < len(y)
     return {
+        "reliability": [
+            {
+                "lower": int(i) / 10,
+                "rows": int(count[i]),
+                "mean_probability": round(float(predicted[i] / count[i]), 5),
+                "reversal_rate": round(float(observed[i] / count[i]), 5),
+            }
+            for i in np.flatnonzero(count)
+        ],
         "log_loss": round(float(log_loss(y, p).mean()), 5),
         "brier": round(float(((p - y) ** 2).mean()), 5),
         "roc_auc": round(float(roc_auc_score(y, p)), 4) if both else None,
@@ -684,7 +702,7 @@ def scores(y, p) -> dict:
 
 
 def interval(delta, groups, rng) -> list[float]:
-    """95% interval of the mean of `delta` from resampling whole sessions (`groups`)."""
+    """95% interval for mean candidate loss difference, resampling whole trade dates."""
     _, index = np.unique(groups, return_inverse=True)
     sums = np.bincount(index, weights=delta)
     counts = np.bincount(index)
@@ -755,9 +773,16 @@ def evaluate(frame: dict, provisional: bool) -> dict:
     y = (outcome == 1).astype(np.float64)
     null = (disp + INVALIDATION) / (REVERSAL + INVALIDATION)  # as frozen; the loss clips itself
 
-    def fit(columns):
+    def logistic_probability(train_x, train_y, test_x):
+        scaler = StandardScaler().fit(train_x)
+        model = LogisticRegression(C=1.0, max_iter=500).fit(scaler.transform(train_x), train_y)
+        return model.predict_proba(scaler.transform(test_x))[:, 1]
+
+    def fit(columns, *, displacement_baseline=False):
         """Both models on these feature columns: the same rows and training sample each call."""
         pred = {m: np.full(len(data), np.nan) for m in ("prior", "logistic", "boosted")}
+        if displacement_baseline:
+            pred["displacement"] = np.full(len(data), np.nan)
         rng = np.random.default_rng(SEED)
         skipped = []
         for month, train, test in blocks:
@@ -779,9 +804,11 @@ def evaluate(frame: dict, provisional: bool) -> dict:
                 xt = x[tr][:, columns].astype(np.float64)
                 xs = x[te][:, columns].astype(np.float64)
                 pred["prior"][te] = y[tr].mean()
-                scaler = StandardScaler().fit(xt)
-                logistic = LogisticRegression(C=1.0, max_iter=500).fit(scaler.transform(xt), y[tr])
-                pred["logistic"][te] = logistic.predict_proba(scaler.transform(xs))[:, 1]
+                pred["logistic"][te] = logistic_probability(xt, y[tr], xs)
+                if displacement_baseline:
+                    pred["displacement"][te] = logistic_probability(
+                        disp[tr, None], y[tr], disp[te, None]
+                    )
                 boosted = HistGradientBoostingClassifier(
                     max_iter=300,
                     learning_rate=0.05,
@@ -796,7 +823,7 @@ def evaluate(frame: dict, provisional: bool) -> dict:
 
     if "sets" in frame:
         return report | compare_sets(frame, fit, used, y, null, product, day)
-    pred, skipped = fit(used)
+    pred, skipped = fit(used, displacement_baseline=True)
     report["skipped_folds"] = skipped
     scored = np.isfinite(pred["boosted"])
     report["rows_scored"] = int(scored.sum())
@@ -812,18 +839,20 @@ def evaluate(frame: dict, provisional: bool) -> dict:
         entry = {
             "rows": int(rows.sum()),
             "sessions": len(np.unique(product[rows] * 100_000 + day[rows])),
+            "trade_dates": len(np.unique(day[rows])),
             "reversal_rate": round(float(yy.mean()), 4),
-        } | {m: scores(yy, pred[m][rows]) for m in ("random_walk", "prior", "logistic", "boosted")}
+        } | {m: scores(yy, pred[m][rows]) for m in pred}
         loss = {m: log_loss(yy, pred[m][rows]) for m in pred}
-        session = product[rows] * 100_000 + day[rows]
         entry["log_loss_gain"] = {  # positive: the first is better
             f"{a}_over_{b}": {
                 "mean": round(float((loss[b] - loss[a]).mean()), 5),
-                "interval_95": interval(loss[b] - loss[a], session, np.random.default_rng(SEED)),
+                "interval_95": interval(loss[b] - loss[a], day[rows], np.random.default_rng(SEED)),
             }
             for a, b in (
                 ("boosted", "random_walk"),
                 ("logistic", "random_walk"),
+                ("boosted", "displacement"),
+                ("logistic", "displacement"),
                 ("boosted", "logistic"),
                 ("boosted", "prior"),
             )
@@ -858,6 +887,7 @@ def compare_sets(frame, fit, used, y, null, product, day) -> dict:
         entry = {
             "rows": int(rows.sum()),
             "sessions": len(np.unique(session)),
+            "trade_dates": len(np.unique(day[rows])),
             "reversal_rate": round(float(yy.mean()), 4),
             "random_walk": scores(yy, null[rows]),
             "prior": scores(yy, pred["base"]["prior"][rows]),
@@ -871,7 +901,7 @@ def compare_sets(frame, fit, used, y, null, product, day) -> dict:
                 delta = log_loss(yy, pred["base"][m][rows]) - log_loss(yy, pred[name][m][rows])
                 entry[name]["log_loss_gain_over_base"][m] = {
                     "mean": round(float(delta.mean()), 5),
-                    "interval_95": interval(delta, session, np.random.default_rng(SEED)),
+                    "interval_95": interval(delta, day[rows], np.random.default_rng(SEED)),
                 }
         out["results"][group] = entry
     return out

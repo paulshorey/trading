@@ -1,20 +1,76 @@
 # Project: Trading research
 
-Build a backtesting and trading bot development platform for futures (crypto may follow).
-Developers configure, troubleshoot, and test custom metrics, strategies, and ML
-models trained on those metrics. Historical research comes first; paper and live
-trading will reuse strategy logic with a UI for monitoring and human overrides.
+Read this page, then the [handoff](docs/project/handoff.md): where the work stands and what
+to do next. The [roadmap](docs/project/roadmap.md) is the map and the build order.
 
-Prototype with CME futures GC (gold) and SI (silver); one year of MBP-1 for GC, SI, PL,
-ES, YM, and RTY is in `data/databento/mbp-1/` (NQ is not downloaded yet). Compute and store
+## Goal
+
+Train a machine-learning model that makes the trading decisions, first in backtests and
+then live, for futures (crypto may follow). The model does not read raw prices. It reads
+layers of pre-processed signals, built to remove noise and keep what predicts, on several
+timeframes at once.
+
+The central signal: on a faster and a slower timeframe, how likely is it that price has
+recently reversed and is now continuing? When both say "reversed up, continuing up", that is
+a buy; the mirror is a sell. The model combines this with other signals, above all
+divergences between price and RSI and between price and volume flow (CVD).
+
+## The process (required order)
+
+Each step is one or more passes over the timeline, and a pass reads only passes that ran
+before it. Every step runs on every timeframe with the same code in backtests and live
+sessions. A timeframe `W@S` is a window of 60 rows of step `S`, recomputed at every step:
+`1m@1s` (fast), `10m@10s` (middle), and `1h@1m` (slow) exist today, and more may
+follow. A step divides a minute, so rows never straddle a session close. Write a stage
+once, for any timeframe. The state of each step is in the
+[roadmap](docs/project/roadmap.md#the-process-and-where-it-stands).
+
+1. **Base rows.** From the raw MBP-1 records, one row per second: OHLCV, CVD, and every
+   other number the trades and the book give (the book between trades is not read yet).
+   Later steps add metrics and occasional signal events to these rows.
+2. **Sliding windows.** A minute candle is always the last 60 seconds and an hour candle the
+   last 60 minutes, recomputed at every step: a `1m@1s` row every second and a `1h@1m` row
+   every minute, even when the window reaches into the previous session or week.
+3. **Indicators, then indicators of indicators.** RSI, EMA, ATR and the like on the windows;
+   then the same tools applied to those series (RSI of RSI, EMA of RSI, trends of CVD), so
+   the analysis covers derivatives of price and not only price.
+4. **Reversal and continuation probabilities.** For the price path, and for derived series
+   such as CVD and RSI: the probability that the current move will continue or reverse, and
+   that it has just reversed or continued. Pivots are found by rule first; trained models
+   then produce the probabilities, and their out-of-sample predictions are stored as inputs
+   for the next steps.
+5. **Structure and divergence.** Higher lows, lower highs, and divergences between the
+   pivots of price and those of RSI and of volume flow, within and across timeframes. It
+   has two passes: the first uses only the pivots and is an input to the models of step 4;
+   the second adds their probabilities.
+6. **The decision model.** Trained on everything above; its inference makes the backtest
+   and live decisions. It is judged by one portfolio's results after costs. A first version
+   is trained early, on what exists, as the yardstick: an input earns its place when the
+   decision model is better after costs with it than without it.
+
+Each part has a role ([structure](docs/project/roadmap.md#how-the-analysis-is-structured)):
+steps 1 to 3 describe the **state** of the market; pivots and structure raise **events**, the
+moments worth a decision; models give **forecasts**; step 6 makes **decisions**. An event
+names a side, on the middle timeframe; the slow one sets direction and the size of the
+bracket; the fast one times the entry. The decision model learns whether to take the trade
+an event proposes. Trades are intraday and flat before each close.
+
+Do not skip a step because an early experiment on it was flat. Record the result, then
+build the next input the process names and test again
+([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+
+## Data and scope
+
+GC (gold) and SI (silver) are the proof of concept: one year of MBP-1 for each is in
+`data/databento/mbp-1/`, and five more years will be added. Other products (ES, NQ, YM,
+RTY, PL) come later, so build everything for any number of products and pairs. Compute and store
 everything per contract, so products can be added; each product also reads as one permanent series
 (`market.continuous_*`) that takes every session's rows from its front contract. Never
-merge trades or prices of different delivery months. Metrics are built in layers, each
-reading only the ones below it (`docs/project/roadmap.md`): trade flow, indicators and
-volatility, swing structure, model predictions, and the final model, for one product and
-for pairs that move together (GC with SI, ES with NQ). Strategies predict only the next few
-minutes: a `1h@1m` bias disqualifies a direction, and `1m@1s` features time entries in
-the allowed direction. Market data is Databento MBP-1 only, under the same rules for
+merge trades or prices of different delivery months. Products that move together (GC with
+SI, ES with NQ) are also read as pairs. The faster timeframe times an entry; the slower one
+sets the direction and the size of the move traded, so that the move is large against the
+spread and commission. Market data is Databento MBP-1 only (the one other input is a table
+of scheduled news release times), under the same rules for
 every product: every trade and every change to the best bid and ask, one price level deep
 (see `docs/project/engine.md#data-limits-mbp-1`). Trades build the rows and metrics;
 simulated orders fill at the book the exchange showed when they arrive. Validate trades
@@ -84,6 +140,25 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 
 ## Research principles
 
+- Start an ML experiment by specifying the decision row, prediction horizon, eligibility,
+  target, simple baseline and success criterion. Record results for every predeclared variant.
+  Use the development dates in [the pivot spec](docs/project/pivot-label-spec.md) for examples
+  and pivot research. September 1, 2026 onward is reserved for final pivot-model evaluation.
+- A provisional HL/LH is visible at the decision row. Barrier resolution, subsequent
+  confirmed structure and after-cost trade outcomes are different labels. Keep timeouts,
+  unknown observations and session ends identifiable. Any learned probability passed into
+  a later model must come from an earlier purged training fold and carry its model version.
+- State the horizon of a test and what a trade costs there. The spread is about a third of
+  a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
+  hourly one ([measured](docs/project/roadmap.md#review-of-november-20-2026)).
+- State how many independent trade dates a result rests on. Rows that share a window or a
+  day are not independent; one year cannot settle an hourly question.
+- Where the order is free, add different information (the book, net flow, the partner
+  product, time of day) before another transform of the price path.
+- Report every policy result for buys and sells apart, and by product. A year in which a
+  product trended makes one side look skilled.
+- Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
+  one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
 - Report data gaps and unavailable inputs; do not invent observations or order flow.
 - Compute features and decisions using only information available at that time.
@@ -121,23 +196,17 @@ If something goes wrong, stop the affected operation and report the relevant fin
 data, and logs. Redact secrets and private content.
 When unsure, research before deciding: search the web for current techniques and best practices.
 
+# Improve your instructions
+
+Before you finish, note where you struggled and which instructions, tools, or skills
+were missing or wrong, and fix them: this file and the project docs for this project,
+`~/.agents` for every project. Without access to `~/.agents`, as a cloud agent or
+reviewer, suggest the fixes in your reply instead.
+
 # Next steps
 
 Consider what was recently done, what is in progress, and how it serves the goal.
 Decide and recommend what to do next.
 
-# Improve your instructions
-
-Before you finish, look back at how the work went: where you struggled, which
-troubleshooting took longest, and which instructions, tools, or skills were missing,
-wrong, or unclear. Fix what would help the next agent. Put project lessons in this
-file or the project's docs, and lessons for every project in the shared skills at
-`~/.agents/skills/` (linked at `~/.claude/skills/`); `~/.agents/AGENTS.md` explains
-how to save those. Keep each edit short and specific, tell the user what you changed,
-and propose larger changes instead of making them. If you cannot reach `~/.agents`,
-for example as a cloud agent or a read-only reviewer, suggest the improvements in your
-reply instead of editing files.
-
-# Goal: Develop reproducible strategies from historical research through live trading
-
-# Read the handoff and documentation: `docs/project/handoff.md`
+The goal is a trained model that makes the trading decisions, from historical research
+through live trading. Each task should name the step of the process it advances.

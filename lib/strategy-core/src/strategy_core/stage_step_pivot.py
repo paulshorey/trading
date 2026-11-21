@@ -1,21 +1,22 @@
-"""Stages `pivot_1m` (tier 2): the slow swing scales, one row per scheduled-open minute and scale.
+"""Stages `pivot_<rows>` (tier 2): the swing scales of a merged timeframe (`timeframes.py`), one
+row per scheduled-open step row and scale. `pivot_1m` holds the slow scales of `1h@1m`.
 
-Each scale is its own stage (a variant: `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`) writing to the
-shared table `market.pivot_1m` under its `variant_id`, like the fast scales of `pivot_1s`.
+Each scale is its own stage (a variant: `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`) writing to
+its timeframe's shared table under its `variant_id`, like the fast scales of `pivot_1s`.
 
-A slow scale replays the same released trades as a fast one; only its threshold and its
-publication differ. `theta = max(K x ATR, FLOOR x spread)` uses the `1h@1m` ATR(14)
-(`candle_1h_1m.atr_bps`) and the last sampled book spread, both **as of the latest minute
-completed before the trade's own minute**, with that minute's ATR in price units
-(`vol_1m.atr_price`) as the frozen ATR. The spread is carried from the minute rows
-(`bar_1m.last_bid`, `last_ask`: the last trade in the minute with a usable book), never across a
-missing minute, so the minute branch reads nothing from the second branch but `bar_1s`'s rows.
+Such a scale replays the same released trades as a fast one; only its threshold and its
+publication differ. `theta = max(K x ATR, FLOOR x spread)` uses the timeframe's ATR(14)
+(`candle_<window>.atr_bps`) and the last sampled book spread, both **as of the latest step row
+completed before the trade's own row**, with that row's ATR in price units
+(`vol_<rows>.atr_price`) as the frozen ATR. The spread is carried from the step rows
+(`last_bid`, `last_ask`: the last trade in the row with a usable book), never across a missing
+row, so the branch reads nothing from the second branch but `bar_1s`'s rows.
 
-State is published once per minute, after the minute's last second; a confirmation or breach
-inside a minute appears on that minute's row and never earlier. Second rows read it through an
-as-of join (`pipeline.StageFeatures`). A missing second ends the segment at once and keeps the
-scale idle for the rest of its minute; the next minutes then wait for the hourly ATR.
-Ages count minute rows x 60: scheduled-open seconds.
+State is published once per step row, after its last second; a confirmation or breach inside a
+row appears on that row and never earlier. Second rows read it through an as-of join
+(`pipeline.StageFeatures`). A missing second ends the segment at once and keeps the scale idle
+for the rest of its row; the next rows then wait for the ATR.
+Ages count step rows x their seconds: scheduled-open seconds.
 """
 
 from typing import Any, ClassVar
@@ -26,16 +27,17 @@ from . import swings, warmup
 from .bars import MISSING
 from .columns import Table
 from .engine import MarketChunk
-from .market import MINUTE, PX, SECOND
+from .market import PX
 from .stages import Stage
-from .windows import BIAS
+from .timeframes import MIDDLE, SLOW, Timeframe
 
 SPEC = swings.dense_columns()
 COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC))
 FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
-WIDTH = MINUTE // SECOND  # seconds per published row
-PERIOD_SECONDS = BIAS.period // SECOND  # scheduled-open seconds per same-phase ATR period
-NEVER = -(2**62)  # no minute row seen yet
+NEVER = -(2**62)  # no step row seen yet
+# Step rows within which a breached level can be reclaimed: a quarter of the hourly window (15
+# minutes), half of the ten-minute one (5 minutes); the fast scales use one whole window (60 s).
+RECLAIM_ROWS = {"1m": 15, "10s": 30}
 
 
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
@@ -62,22 +64,22 @@ def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
     return np.where(known & np.isfinite(spread), spread, np.nan)
 
 
-class PivotMinuteStage(Stage):
-    TABLE: ClassVar[str] = "pivot_1m"  # the table every slow scale writes to
+class StepPivotStage(Stage):
+    TF: ClassVar[Timeframe]  # set by `step_pivot`, with TABLE, RESOLUTION, and INPUTS
+    TABLE: ClassVar[str]  # the table every scale of the timeframe writes to
     EVENTS: ClassVar[str] = "pivot_event"  # the table its events go to
     EVENT_COLUMNS = swings.EVENT_COLUMNS
     VARIANT: ClassVar[str]  # the scale's name in `market.variant`
     K: ClassVar[float]  # threshold, in ATRs
     FLOOR: ClassVar[float] = 2.0  # and at least this many spreads
-    WINDOW: ClassVar[int] = 15  # minute rows within which a breached level can be reclaimed
+    WINDOW: ClassVar[int]  # step rows within which a breached level can be reclaimed
     TIER = 2
-    RESOLUTION = "1m"
-    INPUTS = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")
     MODULES = (
         "stages",
         "columns",
-        "stage_pivot_1m",
+        "stage_step_pivot",
         "swings",
+        "timeframes",
         "bars",
         "market",
         "windows",
@@ -89,7 +91,7 @@ class PivotMinuteStage(Stage):
 
     def __init__(self, context):
         super().__init__(context)
-        self.detector = swings.Detector(swings.PRICE, self.WINDOW, WIDTH)
+        self.detector = swings.Detector(swings.PRICE, self.WINDOW, self.TF.seconds)
         self.carry = np.full(2, np.nan)  # the latest minute row's theta and ATR
         self.book = np.zeros(3, np.int64)  # the last usable book: has, bid, ask
         self.last_minute = NEVER  # its index counter
@@ -98,13 +100,13 @@ class PivotMinuteStage(Stage):
     def settings(self) -> dict[str, Any]:
         return {
             "variant": self.VARIANT,
-            "stream": "slow",
+            "stream": self.TF.stream,
             "source": "price",
             "multiplier": self.K,
-            "normalizer": "candle_1h_1m.atr_bps",
+            "normalizer": f"candle_{self.TF.window}.atr_bps",
             "atr_period": self.context.features.atr_period,
-            "atr_snapshot": "vol_1m.atr_price",
-            "spread": "bar_1m.last_bid, last_ask",
+            "atr_snapshot": f"vol_{self.TF.rows}.atr_price",
+            "spread": f"bar_{self.TF.rows}.last_bid, last_ask",
             "spread_floor": self.FLOOR,
             "reclaim_window_rows": self.WINDOW,
         }
@@ -112,7 +114,7 @@ class PivotMinuteStage(Stage):
     def warmup(self) -> int:
         """The threshold's hourly ATR(14), in scheduled-open seconds. The structure itself has no
         finite warm-up (`warm`)."""
-        return warmup.wilder(self.context.features.atr_period) * PERIOD_SECONDS
+        return warmup.wilder(self.context.features.atr_period) * self.TF.window_seconds
 
     def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
         bars = products["bars"]
@@ -125,20 +127,24 @@ class PivotMinuteStage(Stage):
                 self.context.close_delay,
             )  # fmt: skip
             return swings.dense_table(SPEC, none, none, np.zeros((0, swings.NO)))
+        tf = self.TF
+        width, step = tf.seconds, tf.step
         tables = products["tables"]
-        base, candle, vol = tables["bar_1m"], tables["candle_1h_1m"], tables["vol_1m"]
+        base, candle, vol = (
+            tables[f"bar_{tf.rows}"], tables[f"candle_{tf.window}"], tables[f"vol_{tf.rows}"]
+        )  # fmt: skip
         minute_end = base.values["end_ns"]
         if not (
             np.array_equal(candle.values["end_ns"], minute_end)
             and np.array_equal(vol.values["end_ns"], minute_end)
         ):
-            raise AssertionError("pivot_1m rows must align with bar_1m, candle_1h_1m, and vol_1m")
+            raise AssertionError(f"{self.NAME} rows must align with its step rows, candle, and vol")
         second = products["ordinal"]
-        minute = (second + (WIDTH - 1)) // WIDTH  # the minute each second belongs to
-        emit = second % WIDTH == 0  # a minute is published after its last second
+        minute = (second + (width - 1)) // width  # the step row each second belongs to
+        emit = second % width == 0  # a step row is published after its last second
         done = base.values["slot_ordinal"]
         if not np.array_equal(minute[emit], done):
-            raise AssertionError("pivot_1m must publish exactly the minutes bar_1m completed")
+            raise AssertionError(f"{self.NAME} must publish exactly the step rows completed")
         # Threshold inputs of every minute row known so far: the carried one, then this chunk's
         known = np.r_[self.last_minute, done]
         theta, atr = self.carry[:1], self.carry[1:]
@@ -164,18 +170,36 @@ class PivotMinuteStage(Stage):
         out, ev_i, ev_f = self.detector.advance(obs, rows)
         if len(out):
             self.warm = swings.is_warm(out)
-        ends = -(-bars.end[ev_i[:, swings.E_ROW]] // MINUTE) * MINUTE  # each event's minute end
+        ends = -(-bars.end[ev_i[:, swings.E_ROW]] // step) * step  # each event's step row end
         events[self.NAME] = swings.event_table(ev_i, ev_f, ends, self.context.close_delay)
         return swings.dense_table(SPEC, done, minute_end, out)
 
 
-def scale(name: str, k: float) -> type[PivotMinuteStage]:
-    return type(
-        f"PivotMinute_{name}",
-        (PivotMinuteStage,),
-        {"NAME": f"{PivotMinuteStage.TABLE}:{name}", "VARIANT": name, "K": k},
-    )
+def step_pivot(tf: Timeframe) -> type[StepPivotStage]:
+    """The base class of timeframe `tf`'s swing scales."""
+    attrs = {
+        "TF": tf,
+        "TABLE": f"pivot_{tf.rows}",
+        "WINDOW": RECLAIM_ROWS[tf.rows],
+        "RESOLUTION": tf.rows,
+        "INPUTS": ("market", "bar_1s", f"bar_{tf.rows}", f"candle_{tf.window}", f"vol_{tf.rows}"),
+    }
+    return type(f"StepPivot_{tf.rows}", (StepPivotStage,), attrs)
+
+
+def scale(base: type[StepPivotStage], k: float) -> type[StepPivotStage]:
+    """One scale of a timeframe: `<stream>_atr_<k>`, a stage of its own."""
+    name = f"{base.TF.stream}_atr_{k:g}".replace(".", "p")
+    attrs = {"NAME": f"{base.TABLE}:{name}", "VARIANT": name, "K": k}
+    return type(f"{base.__name__}_{name}", (base,), attrs)
 
 
 # Paul's decision of November 3, 2026: 0.5, 1, and 2 ATRs (plan-1h-and-pivots.md, section 6).
-SCALES = (scale("slow_atr_0p5", 0.5), scale("slow_atr_1", 1.0), scale("slow_atr_2", 2.0))
+MULTIPLIERS = (0.5, 1.0, 2.0)
+
+
+PivotMinuteStage = step_pivot(SLOW)
+SCALES = tuple(scale(PivotMinuteStage, k) for k in MULTIPLIERS)  # the slow scales
+PivotMiddleStage = step_pivot(MIDDLE)
+MIDDLE_SCALES = tuple(scale(PivotMiddleStage, k) for k in MULTIPLIERS)
+BY_TIMEFRAME = {SLOW.name: SCALES, MIDDLE.name: MIDDLE_SCALES}

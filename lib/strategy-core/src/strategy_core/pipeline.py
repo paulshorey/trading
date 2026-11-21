@@ -13,6 +13,11 @@ backtests, rehearsals, and stored rows compute every feature with the same code.
 
 This module only composes stages; it computes nothing itself, so it is not part of any stage's
 identity. Tests prove that stored rows equal its output in any chunking.
+
+It also names which rows of a stage are stored (`stored`). Most stages store every row. The
+fast swing scales are computed for every second but stored only where something reads them;
+the rule's name (`STORED_ROWS`) is part of their builder identity, so changing the rule
+rebuilds them.
 """
 
 from dataclasses import dataclass, field
@@ -25,36 +30,59 @@ from .columns import Table
 from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
-from .stage_bar_1m import MinuteBarStage
 from .stage_bar_1s import BarStage
-from .stage_candle_1h_1m import HourCandleStage
 from .stage_candle_1m_1s import CandleStage
-from .stage_pivot_1m import SCALES as SLOW_SCALES
 from .stage_pivot_1s import SCALES as FAST_SCALES
-from .stage_pivot_label import FAST_LABELS, SLOW_LABELS
-from .stage_stats_1h_1m import HourStatsStage
-from .stage_vol_1m import VolMinuteStage
+from .stage_pivot_label import FAST_LABELS, MIDDLE_LABELS, SLOW_LABELS
+from .stage_step_bar import MinuteBarStage, step_bar
+from .stage_step_candle import HourCandleStage, step_candle
+from .stage_step_pivot import BY_TIMEFRAME as STEP_SCALES
+from .stage_step_stats import HourStatsStage, step_stats
+from .stage_step_vol import VolMinuteStage, step_vol
 from .stage_vol_1s import VolSecondStage
 from .stages import Stage, StageContext
 from .state import export_state, import_state
+from .timeframes import MIDDLE, SLOW, Timeframe
 
-# In dependency (tier) order; the two resolutions are independent branches.
+# The merged timeframes whose stages are registered and stored, slowest last. Adding one adds
+# stages; it changes no other stage's identity.
+MERGED: tuple[Timeframe, ...] = (MIDDLE, SLOW)
+
+# The stages of each merged timeframe (`timeframes.MERGED`): step rows, window, statistics,
+# volatility. `1h@1m` keeps the classes its modules export.
+STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
+    tf.name: (MinuteBarStage, HourCandleStage, HourStatsStage, VolMinuteStage)
+    if tf == SLOW
+    else (step_bar(tf), step_candle(tf), step_stats(tf), step_vol(tf))
+    for tf in MERGED
+}
+STEP_LABELS = {SLOW.name: SLOW_LABELS, MIDDLE.name: MIDDLE_LABELS}
+
+# In dependency (tier) order; the timeframes are independent branches above `bar_1s`.
 STAGES: tuple[type[Stage], ...] = (
     BarStage,
-    MinuteBarStage,
+    *(STEP_STAGES[tf.name][0] for tf in MERGED),
     CandleStage,
-    HourCandleStage,
-    HourStatsStage,
-    VolMinuteStage,
+    *(s for tf in MERGED for s in STEP_STAGES[tf.name][1:]),
     VolSecondStage,
-    *SLOW_SCALES,
+    *(s for tf in MERGED for s in STEP_SCALES[tf.name]),
     *FAST_SCALES,
-    *SLOW_LABELS,  # labels look into the future: stored, but never read by a stage or the engine
+    # labels look into the future: stored, but never read by a stage or the engine
+    *(s for tf in MERGED for s in STEP_LABELS[tf.name]),
     *FAST_LABELS,
 )
 BY_NAME = {s.NAME: s for s in STAGES}
 # What a backtest or live session computes: every stage but the labels.
 FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
+
+
+# Stages computed for every row but stored only at `stored_ordinals` (docs/project/ingestion.md).
+SPARSE = frozenset(s.NAME for s in FAST_SCALES)
+SPARSE_LABELS = frozenset(s.NAME for s in FAST_LABELS)  # their rows are the decision rows
+STORED_ROWS = "label_rows+events+step_ends:v2"
+# Every merged timeframe's step rows end on a multiple of the shortest step (steps divide a
+# minute), so keeping those seconds lets any slower row read the fast scales as of its own end.
+STEP_ROWS = min(tf.seconds for tf in MERGED)
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
@@ -84,6 +112,31 @@ class PipelineRows:
 
     def __len__(self) -> int:
         return len(next(iter(self.tables.values())))
+
+
+def stored_ordinals(rows: PipelineRows) -> np.ndarray:
+    """The seconds of this chunk at which the sparse stages keep a row, besides the last second
+    of every step row: every row of a fast label (a candidate's decision row, or the
+    confirmation row of a swing that never had one) and every row in which a fast scale emitted
+    an event. All
+    sparse stages keep the same seconds, so any scale can be joined to any other there."""
+    parts = [rows.tables[name].values["slot_ordinal"] for name in sorted(SPARSE_LABELS)]
+    parts += [rows.products["events"][name].values["slot_ordinal"] for name in sorted(SPARSE)]
+    return np.unique(np.concatenate(parts).astype(np.int64))
+
+
+def stored_rows(name: str, rows: PipelineRows) -> Table:
+    """The rows of stage `name` that storage keeps: all of them, or for a sparse stage those at
+    `stored_ordinals` and at the last second of every step row. Values are never changed."""
+    table = rows.tables[name]
+    if name not in SPARSE:
+        return table
+    ordinal = table.values["slot_ordinal"]
+    keep = (ordinal % STEP_ROWS == 0) | np.isin(ordinal, stored_ordinals(rows))
+    return Table(
+        {k: v[keep] for k, v in table.values.items()},
+        {k: v[keep] for k, v in table.nulls.items()},
+    )
 
 
 class Pipeline:
@@ -116,25 +169,42 @@ class Pipeline:
 class StageFeatures:
     """Feature rows at every scheduled-open second from the stage graph: the `1m@1s` features of
     the window ending then (`candle_1m_1s` and `vol_1s`, one row each per second, joined row by
-    row) and the `1h@1m` features of the latest completed minute (`candle_1h_1m`, `stats_1h_1m`,
-    and `vol_1m`, one row each per minute), with that minute's age, `1h@1m.age_s`. Swing scales
-    join the same way under their own names: the fast ones row by row as
-    `1m@1s.<scale>.<feature>`, the slow ones as of the latest completed minute as
-    `1h@1m.<scale>.<feature>`. `context` holds the price-unit values execution needs (the latest
-    close and the `1m@1s` ATR from `vol_1s`), never inputs to signals or models."""
+    row) and, for every merged timeframe (`10m@10s`, `1h@1m`), the features of its latest
+    completed step row (its candle, statistics, and volatility stages, one row each per step
+    row), with that row's age, `<timeframe>.age_s`. Swing scales join the same way under their
+    own names: the fast ones row by row as `1m@1s.<scale>.<feature>`, the others as of the
+    latest completed step row as `<timeframe>.<scale>.<feature>`. `context` holds the price-unit
+    values execution needs (the latest close and the `1m@1s` ATR from `vol_1s`), never inputs
+    to signals or models."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
     # rows per second, joined row by row
     SECONDLY = (FAST, "vol_1s", *(s.NAME for s in FAST_SCALES))
-    # rows per completed minute, joined as of each second
-    HOURLY = (BIAS, "stats_1h_1m", "vol_1m", *(s.NAME for s in SLOW_SCALES))
+    # rows per completed step row of each merged timeframe, joined as of each second; the
+    # first stage of each is its candle
+    STEPWISE: ClassVar[dict[str, tuple[str, ...]]] = {
+        tf.name: (
+            *(s.NAME for s in STEP_STAGES[tf.name][1:]),
+            *(s.NAME for s in STEP_SCALES[tf.name]),
+        )
+        for tf in MERGED
+    }
+    HOURLY = STEPWISE[SLOW.name]
     PREFIX: ClassVar[dict[str, str]] = {
         **{name: "1m@1s" for name in (FAST, "vol_1s")},
-        **{name: "1h@1m" for name in (BIAS, "stats_1h_1m", "vol_1m")},
         **{s.NAME: f"1m@1s.{s.VARIANT}" for s in FAST_SCALES},
-        **{s.NAME: f"1h@1m.{s.VARIANT}" for s in SLOW_SCALES},
+        **{s.NAME: tf.name for tf in MERGED for s in STEP_STAGES[tf.name][1:]},
+        **{s.NAME: f"{tf.name}.{s.VARIANT}" for tf in MERGED for s in STEP_SCALES[tf.name]},
     }
-    AGE = FeatureSpec("1h@1m.age_s", Unit.SECONDS, "Seconds since the bias candle completed")
+    AGES: ClassVar[dict[str, FeatureSpec]] = {
+        tf.name: FeatureSpec(
+            f"{tf.name}.age_s",
+            Unit.SECONDS,
+            f"Seconds since the latest {tf.name} step row completed",
+        )
+        for tf in MERGED
+    }
+    AGE = AGES[SLOW.name]
 
     def __init__(
         self,
@@ -151,8 +221,9 @@ class StageFeatures:
             config=config,
             stages=FEATURE_STAGES,
         )
-        self.last_bias: dict[str, np.ndarray] = {}  # the latest minute's values, one row each
-        self.last_bias_end = np.zeros(0, np.int64)
+        # per merged timeframe: the latest step row's values (one row each) and its end
+        self.last: dict[str, dict[str, np.ndarray]] = {name: {} for name in self.STEPWISE}
+        self.last_end = {name: np.zeros(0, np.int64) for name in self.STEPWISE}
 
     @staticmethod
     def names(stage: str) -> list[str]:
@@ -167,24 +238,30 @@ class StageFeatures:
             out[n] = table.values[n] if null is None else np.where(null, np.nan, table.values[n])
         return out
 
+    @classmethod
+    def stages(cls) -> tuple[str, ...]:
+        """Every stage the engine reads, in feature order."""
+        return (*cls.SECONDLY, *(name for group in cls.STEPWISE.values() for name in group))
+
     def specs(self) -> list[FeatureSpec]:
-        out = [
-            FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
-            for name in (*self.SECONDLY, *self.HOURLY)
-            for c in BY_NAME[name].COLUMNS
-            if c.unit
-        ]
-        return [*out, self.AGE]
+        def of(names: tuple[str, ...]) -> list[FeatureSpec]:
+            return [
+                FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
+                for name in names
+                for c in BY_NAME[name].COLUMNS
+                if c.unit
+            ]
+
+        out = of(self.SECONDLY)
+        for timeframe, group in self.STEPWISE.items():  # each timeframe's features, then its age
+            out += [*of(group), self.AGES[timeframe]]
+        return out
 
     @classmethod
     def sources(cls) -> dict[str, str]:
-        """The stage each feature comes from, by name (the bias age from the bias candle)."""
-        out = {
-            f"{cls.PREFIX[name]}.{n}": name
-            for name in (*cls.SECONDLY, *cls.HOURLY)
-            for n in cls.names(name)
-        }
-        return out | {cls.AGE.name: cls.BIAS}
+        """The stage each feature comes from, by name (a timeframe's age from its candle)."""
+        out = {f"{cls.PREFIX[name]}.{n}": name for name in cls.stages() for n in cls.names(name)}
+        return out | {cls.AGES[tf].name: group[0] for tf, group in cls.STEPWISE.items()}
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
@@ -196,32 +273,42 @@ class StageFeatures:
                 raise AssertionError(f"{stage} rows must align with {self.FAST}")
             prefix = self.PREFIX[stage]
             features |= {f"{prefix}.{n}": v for n, v in self.read(table, stage).items()}
-        bias_end = rows.tables[self.BIAS].values["end_ns"]
-        minute_end = np.r_[self.last_bias_end, bias_end]
+        for timeframe, group in self.STEPWISE.items():
+            features |= self.as_of(timeframe, group, rows, ends)
+        candles = rows.products["candles"]
+        return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr(rows)})
+
+    def as_of(
+        self, timeframe: str, group: tuple[str, ...], rows: PipelineRows, ends: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        """One merged timeframe's features at every second: those of its latest step row
+        completed at or before the second, and that row's age. The step row ending at T
+        completes with the second ending at T, so its age is then zero."""
+        step_end = rows.tables[group[0]].values["end_ns"]
+        row_end = np.r_[self.last_end[timeframe], step_end]
+        last = self.last[timeframe]
         values: dict[str, np.ndarray] = {}
-        for stage in self.HOURLY:
+        for stage in group:
             table = rows.tables[stage]
-            if not np.array_equal(table.values["end_ns"], bias_end):
-                raise AssertionError(f"{stage} rows must align with {self.BIAS}")
+            if not np.array_equal(table.values["end_ns"], step_end):
+                raise AssertionError(f"{stage} rows must align with {group[0]}")
             prefix = self.PREFIX[stage]
             for n, v in self.read(table, stage).items():
-                values[f"{prefix}.{n}"] = np.r_[self.last_bias.get(f"{prefix}.{n}", []), v]
-        # As-of join: the latest minute completed at or before each second. The minute ending at
-        # T completes with the second ending at T, so its age is then zero.
-        i = np.searchsorted(minute_end, ends, side="right") - 1
+                values[f"{prefix}.{n}"] = np.r_[last.get(f"{prefix}.{n}", []), v]
+        i = np.searchsorted(row_end, ends, side="right") - 1
         known = i >= 0
         safe = np.maximum(i, 0)
         nan = np.full(len(ends), np.nan)
+        out = {}
         for n, v in values.items():
-            features[n] = np.where(known, v[safe], np.nan) if len(v) else nan.copy()
-        features[self.AGE.name] = (
-            np.where(known, (ends - minute_end[safe]) / NS, np.nan) if len(minute_end) else nan
+            out[n] = np.where(known, v[safe], np.nan) if len(v) else nan.copy()
+        out[self.AGES[timeframe].name] = (
+            np.where(known, (ends - row_end[safe]) / NS, np.nan) if len(row_end) else nan
         )
-        if len(minute_end):
-            self.last_bias = {n: v[-1:] for n, v in values.items()}
-            self.last_bias_end = minute_end[-1:]
-        candles = rows.products["candles"]
-        return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr(rows)})
+        if len(row_end):
+            self.last[timeframe] = {n: v[-1:] for n, v in values.items()}
+            self.last_end[timeframe] = row_end[-1:]
+        return out
 
     @staticmethod
     def atr(rows: PipelineRows) -> np.ndarray:

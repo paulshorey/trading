@@ -15,11 +15,11 @@ from strategy_core.engine import MarketChunk, split_by_second
 from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import MINUTE, NS, PX
 from strategy_core.pipeline import STAGES, Pipeline, StageFeatures
-from strategy_core.stage_pivot_1m import SCALES as SLOW
-from strategy_core.stage_pivot_1m import PivotMinuteStage
-from strategy_core.stage_pivot_1m import scale as slow_scale
 from strategy_core.stage_pivot_1s import COLUMNS, FEATURE_COLUMNS, PivotSecondStage
 from strategy_core.stage_pivot_1s import SCALES as FAST
+from strategy_core.stage_step_pivot import SCALES as SLOW
+from strategy_core.stage_step_pivot import PivotMinuteStage
+from strategy_core.stage_step_pivot import scale as slow_scale
 from strategy_core.state import from_bytes, to_bytes
 from strategy_core.swings import (
     ACTIVE,
@@ -360,7 +360,7 @@ def test_processing_row_by_row_resumes_exactly():
 # The stored stages ---------------------------------------------------------------------------
 
 # Ten short sessions hold few swings of an hourly ATR, so two finer slow scales join the tests.
-FINE = (slow_scale("slow_atr_0p1", 0.1), slow_scale("slow_atr_0p2", 0.2))
+FINE = (slow_scale(PivotMinuteStage, 0.1), slow_scale(PivotMinuteStage, 0.2))
 BRANCH = (*(s for s in STAGES if s.NAME != "stats_1h_1m"), *FINE)
 
 

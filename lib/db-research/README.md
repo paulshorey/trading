@@ -8,7 +8,7 @@ per-product continuous views; and the stage records, variants, and column regist
 ([ingestion](../../docs/project/ingestion.md), [feature pipeline](../../docs/project/feature-pipeline.md)).
 It replaced migrations 0001–0004, folded on November 4, 2026; the local `trading` database,
 which applied those, was rebuilt on it from the DBN files on November 4 with Paul's
-authorization ([results](../../docs/project/handoff.md#baseline-rebuild-gc-and-si)). Later changes are new
+authorization ([results](../../docs/project/build-log.md#baseline-rebuild-gc-and-si)). Later changes are new
 numbered files: `0002_minute_rows` adds the minute stages' tables `market.bar_1m` and
 `market.candle_1h_1m` and their continuous views (PR B1); `0003_hour_stats` adds
 `market.stats_1h_1m`, the hourly window statistics, and its view (PR B2); `0004_minute_volatility`

@@ -8,12 +8,12 @@ from strategy_core.engine import MarketChunk
 from strategy_core.features import FeatureConfig
 from strategy_core.market import HOUR, NS
 from strategy_core.pipeline import STAGES, Pipeline, check_graph
-from strategy_core.stage_bar_1m import MinuteBarStage
 from strategy_core.stage_bar_1s import BarStage
-from strategy_core.stage_candle_1h_1m import HourCandleStage
 from strategy_core.stage_candle_1m_1s import FEATURE_COLUMNS, CandleStage
-from strategy_core.stage_stats_1h_1m import HourStatsStage
-from strategy_core.stage_vol_1m import VolMinuteStage
+from strategy_core.stage_step_bar import MinuteBarStage
+from strategy_core.stage_step_candle import HourCandleStage
+from strategy_core.stage_step_stats import HourStatsStage
+from strategy_core.stage_step_vol import VolMinuteStage
 from strategy_core.stage_vol_1s import VolSecondStage
 from strategy_core.stages import StageContext
 from strategy_core.synthetic import random_trades
@@ -52,13 +52,20 @@ def test_the_graph_reads_only_earlier_stages():
     check_graph()
     assert [s.NAME for s in STAGES if not getattr(s, "LABEL", False)] == [
         "bar_1s",
+        "bar_10s",
         "bar_1m",
         "candle_1m_1s",
+        "candle_10m_10s",
+        "stats_10m_10s",
+        "vol_10s",
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
         "vol_1s",
-        "pivot_1m:slow_atr_0p5",  # each swing scale is a stage of its own (a variant)
+        "pivot_10s:mid_atr_0p5",
+        "pivot_10s:mid_atr_1",
+        "pivot_10s:mid_atr_2",
+        "pivot_1m:slow_atr_0p5",
         "pivot_1m:slow_atr_1",
         "pivot_1m:slow_atr_2",
         "pivot_1s:fast_atr_0p5",

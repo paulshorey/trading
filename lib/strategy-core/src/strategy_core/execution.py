@@ -57,6 +57,7 @@ class ExecutionConfig:
     order_latency_ms: float = 50.0  # decision to exchange arrival
     limit_fill: str = "through"
     depth_penalty_ticks: int = 1
+    adverse_ticks: int = 0  # extra ticks every marketable order pays: a stress test, not a model
     cooldown_s: float = 10.0
     flat_before_close_s: int = 300
 
@@ -77,8 +78,9 @@ class ExecutionConfig:
                 raise ValueError(f"{name} must be a nonnegative number")
         if self.close_delay_ms >= 1000:
             raise ValueError("close_delay_ms must be under one second")
-        if type(self.depth_penalty_ticks) is not int or self.depth_penalty_ticks < 0:
-            raise ValueError("depth_penalty_ticks must be a nonnegative integer")
+        for name in ("depth_penalty_ticks", "adverse_ticks"):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 0:
+                raise ValueError(f"{name} must be a nonnegative integer")
         if type(self.flat_before_close_s) is not int or self.flat_before_close_s < 0:
             raise ValueError("flat_before_close_s must be a nonnegative integer")
 
@@ -350,7 +352,7 @@ class Simulator:
         if contracts > shown:
             flags.append("beyond_displayed_size")
             price += side * self.config.depth_penalty_ticks * self.product.tick_size
-        return price
+        return price + side * self.config.adverse_ticks * self.product.tick_size
 
     def fill(self, view: ExecView, pos: Position) -> tuple[str, int]:
         """Fill a pending entry at the book its order meets. Returns `WAIT` until the view

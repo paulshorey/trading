@@ -160,7 +160,7 @@ Made during review, before the benchmark read any outcome of the full data:
 
 **Why.** The first benchmark found that the decision row's own features rank early
 candidates no better than the position of price alone
-([results](handoff.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
+([results](build-log.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
 stored, this experiment asks whether information the candidate's own row does not hold
 helps: the other swing scales, the hourly window, and the paired product. It reads stored
 rows only and stores nothing (`research benchmark context GC SI`).
@@ -199,4 +199,55 @@ A set that helps is a reason to store its signals as a stage and to build the mo
 a set that does not is reported as it is, and its inputs are not tuned afterwards.
 
 **Result (November 17, after the runs):** the rule is not met for any set
-([results](handoff.md#context-input-results-november-17-2026)).
+([results](build-log.md#context-input-results-november-17-2026)).
+
+## Partner swing inputs (changed November 19, 2026)
+
+The `pair` set read the partner product's swing row of the label's scale at the candidate's
+own second. Fast swing rows are now stored at each product's own decision rows, event rows,
+and minute ends ([rule](ingestion.md#fast-swing-rows-are-stored-where-they-are-read)), so
+`research benchmark context` reads the partner's swing row at the last second of its latest
+completed minute, as it reads the slow scales. The partner's `candle_1m_1s` and `vol_1s`
+rows are still read at the same second. The November 17 result used the same-second rows and
+is not rerun; a rerun would differ in this one input.
+
+## Probability audit (November 18, 2026)
+
+The November 17 development results are already known. This follow-up is a diagnostic on
+the same data. The two primary fast labels remain `fast_atr_1_q25` and `fast_atr_1_q50`.
+
+- In `benchmark models`, fit a logistic baseline to decision-time displacement alone.
+  Use the same highs/lows, training sample, standardization, folds and scored rows as the
+  full logistic model. Compare both full models with this baseline by paired log loss.
+  This compares alternative forecasts on the same rows. A separate incremental test
+  would give both models the exact displacement and add indicators to just one.
+- Both model commands report reliability in fixed probability bands of width 0.1. Each
+  occupied band shows its count, mean forecast and observed reversal rate. The binary
+  target groups invalidations and timeouts together. Its complement includes both.
+- For pooled log-loss intervals, resample whole trade dates, carrying GC and SI together.
+  Report both product-session and distinct trade-date counts. Point estimates still
+  weight each scored candidate equally. The November 17 intervals used product-sessions
+  as independent draws. These descriptive intervals do not adjust for testing multiple
+  variants or for dependence across dates.
+
+The September 1 cutoff applies to pivot-model selection and benchmarking. Historical
+engineering runs include September execution results. Use the development period for
+examples and parity checks, and record any prior exposure when reporting a final test.
+
+## Middle scales (added November 20, 2026, before any label was computed)
+
+The middle timeframe `10m@10s` has three swing scales, `mid_atr_0p5`, `mid_atr_1`, and
+`mid_atr_2`, with the threshold rule of the other scales (`max(K × ATR, 2 × spread)`, the ATR
+being the `10m@10s` ATR(14) as of the ten-second row completed before the trade's own). Their
+labels use the parameters of the table above unchanged, with these values for the stream:
+
+| Parameter | Value | Meaning |
+| --- | --- | --- |
+| Row | 10 scheduled-open seconds | A candidate is found at a ten-second row's close |
+| Horizon `K` | 240 rows | 40 minutes after the decision row, four windows, as the slow scales' 240 minutes are four hourly windows. Paul agreed on November 20 |
+| Survival deadline | 240 rows | Equal to the horizon, as for the other scales |
+| Reclaim window (detector) | 30 rows | 5 minutes, half a window: between the fast scales' 60 seconds and the slow scales' 15 minutes |
+
+Label variants: `mid_atr_0p5_q25`, `mid_atr_0p5_q50`, `mid_atr_1_q25`, `mid_atr_1_q50`,
+`mid_atr_2_q25`, `mid_atr_2_q50`, stored in `market.pivot_label_10s`. No benchmark or replay
+of them is specified here; each gets its own section before it is run.

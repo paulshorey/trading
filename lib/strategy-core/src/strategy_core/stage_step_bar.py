@@ -1,28 +1,30 @@
-"""Stage `bar_1m` (tier 0): each scheduled-open minute's own exact statistics, merged from its 60
-second rows (`bar_1s`).
+"""Stages `bar_<rows>` (tier 0): each scheduled-open step row's own exact statistics, merged
+from its one-second rows (`bar_1s`). One class, one stage per timeframe (`timeframes.py`):
+`bar_1m` holds the minutes of `1h@1m`.
 
-One row per scheduled-open minute, keyed by its index counter `slot_ordinal` = m, which holds
-the seconds with ordinals 60m - 59 ... 60m: calendar boundaries are whole minutes, so a minute's
-ordinal is its last second's ordinal / 60 (asserted for every minute). OHLCV, VWAP numerator,
-and the running-delta extremes come from `bars.combine`, floats added oldest first; the metric
-fields of `metrics.FIELDS` merge by `combine_metrics`, which applies `MetricWindow`'s rules
-within each minute. A minute therefore equals the rolling `1m@1s` window that ends with it.
+One row per scheduled-open step of `S` seconds, keyed by its index counter `slot_ordinal` = k,
+which holds the seconds with ordinals S k - (S - 1) ... S k: calendar boundaries are whole
+minutes and `S` divides a minute, so a row's ordinal is its last second's ordinal / S (asserted
+for every row). OHLCV, VWAP numerator, and the running-delta extremes come from `bars.combine`,
+floats added oldest first; the metric fields of `metrics.FIELDS` merge by `combine_metrics`,
+which applies `MetricWindow`'s rules within each row. A minute therefore equals the rolling
+`1m@1s` window that ends with it.
 
-A minute with any missing second is missing: its row stores only its keys and status, and it
+A row with any missing second is missing: it stores only its keys and status, and it
 contributes nothing to later windows (its in-memory values are zero, as a stored NULL reads).
 
-Beyond the second fields, a minute stores what its OHLC cannot rebuild: `observed_seconds`
-(seconds with trades, for the hourly `active_ratio`), `session_cvd` at its last second, and the
+Beyond the second fields, a row stores what its OHLC cannot rebuild: `observed_seconds`
+(seconds with trades, for the window's `active_ratio`), `session_cvd` at its last second, and the
 one-second returns behind realized volatility: `ret2_sum`, the sum of squared log returns
-between consecutive observed second closes inside the minute, their count `ret_count`, and
+between consecutive observed second closes inside the row, their count `ret_count`, and
 `first_close`, the first observed second's close (`close` is the last one), so a window can add
-the return that bridges two minutes.
+the return that bridges two rows.
 
-Live sessions feed one second at a time, so an unfinished minute's seconds wait in the
-checkpoint state (`pending*`) until its last second arrives.
+Live sessions feed one second at a time, so an unfinished row's seconds wait in the checkpoint
+state (`pending*`) until its last second arrives.
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 from numba import njit
@@ -30,13 +32,13 @@ from numba import njit
 from .bars import MISSING, OBSERVED, BaseBars, combine, segment_sum
 from .columns import BIGINT, DOUBLE, INTEGER, SMALLINT, Column, Table
 from .engine import MarketChunk
-from .market import MINUTE, SECOND
+from .market import SECOND
 from .metrics import DRAWDOWN, DRAWUP, FIELDS, FIRST, MAX, MIN, ORDER, SUM
 from .stage_bar_1s import FIELD_OF_COLUMN, OBSERVED_ONLY, RENAME, _metric_columns
 from .stages import Stage
+from .timeframes import SLOW, Timeframe
 
 BIG = np.iinfo(np.int64).max
-SECONDS = MINUTE // SECOND
 PRICE = "Databento fixed-point price (1e-9)"
 
 
@@ -161,74 +163,85 @@ def empty_table(columns: tuple[Column, ...], nullable) -> Table:
     return Table(values, {name: np.zeros(0, bool) for name in nullable})
 
 
-COLUMNS: tuple[Column, ...] = (
-    Column(
-        "slot_ordinal",
-        BIGINT,
-        "Index counter: +1 per scheduled-open minute; minute m holds seconds 60m - 59 ... 60m",
-    ),
-    Column("end_ns", BIGINT, "Minute end, UTC ns; the minute is [end - 60 s, end)"),
-    Column("status", SMALLINT, "0 missing (a second without data coverage), 1 no trades, 2 trades"),
-    Column("open", BIGINT, f"First trade price, {PRICE}; NULL without trades"),
-    Column("high", BIGINT, f"Highest trade price, {PRICE}"),
-    Column("low", BIGINT, f"Lowest trade price, {PRICE}"),
-    Column("close", BIGINT, f"Last trade price, {PRICE}"),
-    Column("high_at_ns", BIGINT, "Assignment time of the first trade at the high"),
-    Column("low_at_ns", BIGINT, "Assignment time of the first trade at the low"),
-    Column("pv", DOUBLE, "Sum of quoted price x size, the VWAP numerator (seconds added in order)"),
-    Column("volume", INTEGER, "Contracts traded; NULL when missing"),
-    Column("buy_volume", INTEGER, "Buyer-aggressor volume"),
-    Column("sell_volume", INTEGER, "Seller-aggressor volume (unknown side = rest)"),
-    Column("trades", INTEGER, "Trade records"),
-    Column("delta_high", INTEGER, "Highest running buy - sell volume from the minute start (>= 0)"),
-    Column("delta_low", INTEGER, "Lowest running buy - sell volume from the minute start (<= 0)"),
-    Column(
-        "session_cvd",
-        BIGINT,
-        "Buy - sell volume from the session open through the minute's last second; NULL after "
-        "missing data",
-    ),
-    Column("observed_seconds", SMALLINT, "Seconds with trades"),
-    Column(
-        "first_close",
-        BIGINT,
-        f"Close of the first second with trades, {PRICE}; with the previous minute's close it "
-        "bridges one-second returns across minutes",
-    ),
-    Column(
-        "ret2_sum",
-        DOUBLE,
-        "Sum of squared log returns between consecutive observed second closes in the minute",
-    ),
-    Column("ret_count", SMALLINT, "Returns in ret2_sum (consecutive observed seconds)"),
-    *_metric_columns(),
-)
+def columns(tf: Timeframe) -> tuple[Column, ...]:
+    s = tf.seconds
+    return (
+        Column(
+            "slot_ordinal",
+            BIGINT,
+            f"Index counter: +1 per scheduled-open row of {s} s; row k holds seconds "
+            f"{s}k - {s - 1} ... {s}k",
+        ),
+        Column("end_ns", BIGINT, f"Row end, UTC ns; the row is [end - {s} s, end)"),
+        Column(
+            "status", SMALLINT, "0 missing (a second without data coverage), 1 no trades, 2 trades"
+        ),
+        Column("open", BIGINT, f"First trade price, {PRICE}; NULL without trades"),
+        Column("high", BIGINT, f"Highest trade price, {PRICE}"),
+        Column("low", BIGINT, f"Lowest trade price, {PRICE}"),
+        Column("close", BIGINT, f"Last trade price, {PRICE}"),
+        Column("high_at_ns", BIGINT, "Assignment time of the first trade at the high"),
+        Column("low_at_ns", BIGINT, "Assignment time of the first trade at the low"),
+        Column(
+            "pv", DOUBLE, "Sum of quoted price x size, the VWAP numerator (seconds added in order)"
+        ),
+        Column("volume", INTEGER, "Contracts traded; NULL when missing"),
+        Column("buy_volume", INTEGER, "Buyer-aggressor volume"),
+        Column("sell_volume", INTEGER, "Seller-aggressor volume (unknown side = rest)"),
+        Column("trades", INTEGER, "Trade records"),
+        Column(
+            "delta_high", INTEGER, "Highest running buy - sell volume from the row start (>= 0)"
+        ),
+        Column("delta_low", INTEGER, "Lowest running buy - sell volume from the row start (<= 0)"),
+        Column(
+            "session_cvd",
+            BIGINT,
+            "Buy - sell volume from the session open through the row's last second; NULL after "
+            "missing data",
+        ),
+        Column("observed_seconds", SMALLINT, "Seconds with trades"),
+        Column(
+            "first_close",
+            BIGINT,
+            f"Close of the first second with trades, {PRICE}; with the previous row's close it "
+            "bridges one-second returns across rows",
+        ),
+        Column(
+            "ret2_sum",
+            DOUBLE,
+            "Sum of squared log returns between consecutive observed second closes in the row",
+        ),
+        Column("ret_count", SMALLINT, "Returns in ret2_sum (consecutive observed seconds)"),
+        *_metric_columns(),
+    )
+
+
+COLUMNS = columns(SLOW)  # names, types, and order are the same for every timeframe
 OBSERVED_COLUMNS = OBSERVED_ONLY | {"first_close"}
 ALWAYS = frozenset({"slot_ordinal", "end_ns", "status"})  # never NULL
 NULLABLE = tuple(c.name for c in COLUMNS if c.name not in ALWAYS)
 
 
-class MinuteBarStage(Stage):
-    NAME = "bar_1m"
+class StepBarStage(Stage):
+    TF: ClassVar[Timeframe]  # set by `step_bar`, with NAME, RESOLUTION, and COLUMNS
     TIER = 0
-    RESOLUTION = "1m"
     INPUTS = ("bar_1s",)
     MODULES = (
         "stages",
         "columns",
-        "stage_bar_1m",
+        "stage_step_bar",
         "stage_bar_1s",
+        "timeframes",
         "bars",
         "market",
         "metrics",
         "state",
     )
-    COLUMNS = COLUMNS
     STATE = ("pending", "pending_metrics", "pending_seconds")
 
     def __init__(self, context):
         super().__init__(context)
-        self.pending = BaseBars.empty(SECOND)  # seconds of the unfinished minute
+        self.pending = BaseBars.empty(SECOND)  # seconds of the unfinished row
         self.pending_metrics = {f.name: np.zeros(0, f.dtype) for f in FIELDS}
         self.pending_seconds = {
             "ordinal": np.zeros(0, np.int64),
@@ -245,16 +258,18 @@ class MinuteBarStage(Stage):
             "cvd": np.r_[self.pending_seconds["cvd"], session["cvd"]],
             "cvd_ok": np.r_[self.pending_seconds["cvd_ok"], session["complete"]],
         }
-        group_end = -(-bars.end // MINUTE) * MINUTE
-        last = np.flatnonzero(bars.end == group_end)  # a minute is finished by its last second
+        step = self.TF.step
+        frame = self.TF.frame(products)
+        group_end = -(-bars.end // step) * step
+        last = np.flatnonzero(bars.end == group_end)  # a row is finished by its last second
         cut = int(last[-1]) + 1 if len(last) else 0
-        if not cut:  # most one-second chunks finish no minute
+        if not cut:  # most one-second chunks finish no row
             self.pending, self.pending_metrics, self.pending_seconds = bars, metrics, seconds
-            empty = self.minutes(bars.take(slice(0, 0)), {}, {}, group_end[:0])
-            products.update(
-                minutes=empty["bars"],
-                minute_metrics=empty["metrics"],
-                minute_ordinal=empty["ordinal"],
+            empty = self.merge(bars.take(slice(0, 0)), {}, {}, group_end[:0])
+            frame.update(
+                bars=empty["bars"],
+                metrics=empty["metrics"],
+                ordinal=empty["ordinal"],
                 observed_seconds=empty["observed_seconds"],
             )
             return empty_table(COLUMNS, NULLABLE)
@@ -262,32 +277,33 @@ class MinuteBarStage(Stage):
         self.pending_metrics = {k: v[cut:].copy() for k, v in metrics.items()}
         self.pending_seconds = {k: v[cut:].copy() for k, v in seconds.items()}
         done = bars.take(slice(0, cut))
-        rows = self.minutes(
+        rows = self.merge(
             done,
             {k: v[:cut] for k, v in metrics.items()},
             {k: v[:cut] for k, v in seconds.items()},
             group_end[:cut],
         )
-        products.update(
-            minutes=rows["bars"],
-            minute_metrics=rows["metrics"],
-            minute_ordinal=rows["ordinal"],
+        frame.update(
+            bars=rows["bars"],
+            metrics=rows["metrics"],
+            ordinal=rows["ordinal"],
             observed_seconds=rows["observed_seconds"],
         )
         return self.table(rows)
 
-    def minutes(
+    def merge(
         self,
         b: BaseBars,
         metrics: dict[str, np.ndarray],
         seconds: dict[str, np.ndarray],
         keys: np.ndarray,
     ) -> dict[str, Any]:
-        """Finished minutes from their seconds (`keys`: each second's minute end)."""
+        """Finished rows from their seconds (`keys`: each second's row end)."""
+        step = self.TF.step
         if not len(b):
             empty = np.zeros(0, np.int64)
             return {
-                "bars": BaseBars.empty(MINUTE),
+                "bars": BaseBars.empty(step),
                 "metrics": combine_metrics(b, metrics, empty),
                 "ordinal": empty,
                 "observed_seconds": empty,
@@ -297,12 +313,13 @@ class MinuteBarStage(Stage):
                 "cvd": empty,
                 "cvd_ok": np.zeros(0, bool),
             }
-        minutes = combine(b, keys, MINUTE)  # missing unless all 60 seconds are covered
+        minutes = combine(b, keys, step)  # missing unless all its seconds are covered
         starts = np.flatnonzero(np.r_[True, keys[1:] != keys[:-1]])
         count = np.r_[starts[1:], len(b)] - starts
-        ordinal = self.context.calendar.slot_ordinals(minutes.end, MINUTE)
-        if not np.array_equal(-(-seconds["ordinal"] // SECONDS), np.repeat(ordinal, count)):
-            raise AssertionError("Minute ordinals must equal second ordinals / 60")
+        ordinal = self.context.calendar.slot_ordinals(minutes.end, step)
+        width = self.TF.seconds
+        if not np.array_equal(-(-seconds["ordinal"] // width), np.repeat(ordinal, count)):
+            raise AssertionError(f"{self.NAME} ordinals must equal second ordinals / {width}")
         values = combine_metrics(b, metrics, starts)
         obs = b.status == OBSERVED
         has, prev = previous_observed(b.status, starts, count)
@@ -318,11 +335,11 @@ class MinuteBarStage(Stage):
             "first_close": np.where(first < BIG, b.close[np.minimum(first, len(b) - 1)], 0),
             "ret2_sum": segment_sum(ret * ret, starts, count),
             "ret_count": np.add.reduceat(ok.astype(np.int64), starts),
-            "cvd": seconds["cvd"][starts + count - 1],  # at each minute's last second
+            "cvd": seconds["cvd"][starts + count - 1],  # at each row's last second
             "cvd_ok": seconds["cvd_ok"][starts + count - 1],
         }
         missing = minutes.status == MISSING
-        if missing.any():  # unknown: nothing of a missing minute reaches a window
+        if missing.any():  # unknown: nothing of a missing row reaches a window
             for name in BaseBars.ARRAYS[2:]:
                 getattr(minutes, name)[missing] = 0
             for v in values.values():
@@ -375,3 +392,12 @@ class MinuteBarStage(Stage):
 
     def warmup(self) -> int:
         return 0
+
+
+def step_bar(tf: Timeframe) -> type[StepBarStage]:
+    """The step-row stage of timeframe `tf`."""
+    attrs = {"TF": tf, "NAME": f"bar_{tf.rows}", "RESOLUTION": tf.rows, "COLUMNS": columns(tf)}
+    return type(f"StepBar_{tf.rows}", (StepBarStage,), attrs)
+
+
+MinuteBarStage = step_bar(SLOW)

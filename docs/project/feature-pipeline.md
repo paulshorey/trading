@@ -79,7 +79,7 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | -------------- | ---- | -------------------------------------------------------------------------------------------------------------------- |
 | `bar_1s`       | 0    | `market` (trades, coverage), calendar                                                                                |
 | `book_1s`      | 0    | `market` (book events, coverage), calendar; planned                                                                  |
-| `bar_1m`       | 0    | `bar_1s`                                                                                                             |
+| `bar_10s`, `bar_1m` | 0 | `bar_1s`: the step rows of `10m@10s` and `1h@1m`, one class ([timeframes](#stages)) |
 | `candle_1m_1s` | 1    | `bar_1s`                                                                                                             |
 | `candle_1h_1m` | 1    | `bar_1m`                                                                                                             |
 | `stats_1h_1m`  | 1    | `bar_1m`, `candle_1h_1m` (its status, ATR, and path fields: a declared edge within tier 1)                           |
@@ -91,12 +91,31 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series); planned                                                                             |
 | `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
 | `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
-| `pivot_label_1s`, `pivot_label_1m` | — | `market`, `bar_1s`, and one swing scale each: twelve label stages ([spec](pivot-label-spec.md)) |
+| `pivot_label_1s`, `pivot_label_10s`, `pivot_label_1m` | — | `market`, `bar_1s`, and one swing scale each: eighteen label stages ([spec](pivot-label-spec.md)) |
+
+Every `1h@1m` row of this table has a `10m@10s` twin with the same inputs one timeframe down:
+`candle_10m_10s`, `stats_10m_10s`, `vol_10s`, and `pivot_10s`.
 
 The two resolutions are independent branches below tier 3: nothing at second resolution
 feeds a minute stage except `bar_1s` (through `bar_1m`, and directly for the slow swing
 scales, which replay the trades second by second), so changing a second-resolution
 indicator never rebuilds the minute branch.
+
+**Timeframes are a parameter** (`strategy_core/timeframes.py`). A timeframe `W@S` whose step
+is longer than a second is a `Timeframe` value (its name, its step in seconds, and the labels
+of its tables), and each kind of stage is one class built for it: `stage_step_bar.py` (step
+rows merged from `bar_1s`), `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`,
+and `stage_step_pivot.py`. `bar_1m`, `candle_1h_1m`, `stats_1h_1m`, `vol_1m`, and the slow swing
+scales are the instances for `1h@1m`, and `bar_10s`, `candle_10m_10s`, `stats_10m_10s`,
+`vol_10s`, and the scales `mid_atr_*` in `pivot_10s` those for `10m@10s`, with the same
+columns. `pipeline.MERGED` lists the timeframes that are registered and stored; adding one
+adds stages and changes no other stage's identity. A step divides a minute, so step rows nest in minutes and never straddle
+a session boundary. The one-second timeframe `1m@1s` is the base case with modules of its own
+(`stage_bar_1s`, `stage_candle_1m_1s`, `stage_vol_1s`, `stage_pivot_1s`): its rows come from
+the trades, and it shares the calculation modules (`windows`, `indicators`, `volatility`,
+`swings`). A stage passes in-memory values to later stages of its timeframe through
+`Timeframe.frame(products)`: `bars`, `metrics`, `ordinal`, `observed_seconds`, `candles`, and
+`window`. A new stage for steps 3 to 5 is written once against that frame.
 
 **Variants are stages** (implemented in PR D). Each swing scale is a stage class of its own
 (`pivot_1s:fast_atr_1`, …) that writes to its resolution's shared table under its
@@ -146,7 +165,7 @@ table. Everything else is designed to change.
 
 | Property                   | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Row grid                   | One row per scheduled-open slot and contract, keyed `(contract_id, slot_ordinal, end_ns)`; monthly partitions on `end_ns`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Row grid                   | One row per scheduled-open slot and contract, keyed `(contract_id, slot_ordinal, end_ns)`; monthly partitions on `end_ns`. Sparse layers are computed on the same grid but may store only the rows that are read: the fast swing scales do ([rule](ingestion.md#fast-swing-rows-are-stored-where-they-are-read))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | One table per stage        | Each stage owns its tables and replaces a session's rows (and events) in one transaction; for a stage with variants, the replacement covers only the variant being built, `(stage, variant, session)`, so other variants' rows and events are untouched                                                                                                                                                                                                                                                                                                                                                                        |
 | Variants are rows          | A family computed over a parameter grid whose members are never combined inside the stage (pivot scales, including their threshold normalizers) adds `variant_id` to the key, with parameters in a registry table. A new variant adds rows, not columns: no migration, and existing variants stay current. Values that are combined with each other, such as ATR(5), ATR(14), ATR(50) and their ratios, are columns of one stage; a new one is a column (a migration). Combinations across variants live in a summary with a declared variant set                                                                              |
 | Column registry            | `market.column_registry` lists every stored column with its **role**: `feature` (a normalized `Unit`; a model input), `context` (raw prices, volumes, and other data in source units; never a model input), or `key` (ordinals, times, IDs). Each also has its stage, SQL type, description, status (active, deprecated), and when it was first registered; the stage registry gives its tier and resolution. Units are required only for features; `key` is the index counter and row end time. It is generated from the code registry, a test keeps it equal to the schema, and ML extraction selects only `feature` columns |
@@ -238,8 +257,7 @@ make each change rebuild only what depends on it.
 
 - **Live latency.** Every tier must finish within the 100 ms close delay each second.
   Measure the full graph per second in PR A and again after each new tier.
-- **Storage growth.** GC+SI second rows are 57.65 GB today. Pivots and the volatility and
-  signal tiers may roughly double that. Disk is not a constraint (decision 5), but measure
-  query and ML-extraction speed as tables grow.
+- **Storage growth.** GC and SI take 110 GB for one year (November 20, 2026). Sparse layers
+  store only the rows that are read. Measure query and ML-extraction speed as tables grow.
 - **Tier-0 additions.** These rebuild everything. PR A therefore adds the per-second fields
   already known to be needed (price-path drawdown and drawup, and the order of each second's high and low; [plan section 7](plan-1h-and-pivots.md#7-volatility-tier-atr-family)).

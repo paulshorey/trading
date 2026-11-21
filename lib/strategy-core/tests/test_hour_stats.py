@@ -12,11 +12,11 @@ from strategy_core.execution import ExecutionConfig
 from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import HOUR, MINUTE, NS, PX
 from strategy_core.pipeline import Pipeline, StageFeatures
-from strategy_core.stage_bar_1m import MinuteBarStage
 from strategy_core.stage_bar_1s import BarStage
-from strategy_core.stage_candle_1h_1m import FEATURE_COLUMNS as CANDLE_FEATURES
-from strategy_core.stage_candle_1h_1m import HourCandleStage
-from strategy_core.stage_stats_1h_1m import (
+from strategy_core.stage_step_bar import MinuteBarStage
+from strategy_core.stage_step_candle import FEATURE_COLUMNS as CANDLE_FEATURES
+from strategy_core.stage_step_candle import HourCandleStage
+from strategy_core.stage_step_stats import (
     COLUMNS,
     FEATURE_COLUMNS,
     MIN_RETURNS,

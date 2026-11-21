@@ -1,4 +1,7 @@
-"""Stage `stats_1h_1m` (tier 1): statistics of the rolling `1h@1m` window that are not window
+"""Stages `stats_<window>` (tier 1), one class and one stage per timeframe (`timeframes.py`),
+described here for `stats_1h_1m`, whose step rows are minutes.
+
+Statistics of the rolling `1h@1m` window that are not window
 sums of second statistics (docs/project/plan-1h-and-pivots.md, section 5.4), one row per
 scheduled-open minute, next to `candle_1h_1m`'s row for the same window.
 
@@ -35,7 +38,7 @@ gives identical bits. The window's previous 59 minutes and the session values ca
 calls and checkpoints.
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 from numba import njit
@@ -45,17 +48,16 @@ from .bars import MISSING, OBSERVED, BaseBars
 from .columns import BIGINT, DOUBLE, SMALLINT, Column, Table
 from .engine import MarketChunk
 from .features import Unit  # unit labels of the registry; they do not change stored values
-from .market import MINUTE, PX, SECOND, SessionCalendar
-from .stage_bar_1m import empty_table
+from .market import PX, SECOND, SessionCalendar
+from .stage_step_bar import empty_table
 from .stages import Stage
-from .windows import BIAS, COMPLETE
+from .timeframes import SLOTS, SLOW, Timeframe
+from .windows import COMPLETE
 
 PRICE = "Databento fixed-point price (1e-9)"
-WIDTH = BIAS.slots  # minutes per window
-SECONDS = MINUTE // SECOND  # seconds per minute
-WINDOW_SECONDS = WIDTH * SECONDS
-VR_PERIOD = 5  # minutes per horizon of the variance ratio
-MIN_RETURNS = 2 * VR_PERIOD  # minute returns the return statistics need
+WIDTH = SLOTS  # step rows per window
+VR_PERIOD = 5  # step rows per horizon of the variance ratio
+MIN_RETURNS = 2 * VR_PERIOD  # step returns the return statistics need
 DAY_SECONDS = 86_400  # no exchange session is longer: one whole previous session fits in it
 BIG = np.iinfo(np.int64).max
 
@@ -70,18 +72,22 @@ FEATURES: tuple[tuple[str, Unit, str], ...] = (
     (
         "ret_std_bps",
         Unit.BPS,
-        "Population standard deviation of the window's minute log returns (closes carried "
-        "through minutes without trades)",
+        "Population standard deviation of the window's step-row log returns (closes carried "
+        "through rows without trades); the rows are minutes on 1h@1m",
     ),
-    ("ret_skew", Unit.RATIO, "Skewness of the window's minute returns"),
-    ("ret_autocorr", Unit.RATIO, "Lag-1 autocorrelation of the window's minute returns"),
+    ("ret_skew", Unit.RATIO, "Skewness of the window's step-row returns"),
+    ("ret_autocorr", Unit.RATIO, "Lag-1 autocorrelation of the window's step-row returns"),
     (
         "vr_5",
         Unit.RATIO,
-        "Lo-MacKinlay variance ratio of overlapping 5-minute to 1-minute returns: above 1 "
+        "Lo-MacKinlay variance ratio of overlapping 5-row to 1-row returns: above 1 "
         "trending, below 1 mean-reverting",
     ),
-    ("up_minute_ratio", Unit.RATIO, "Minutes whose close rose / minutes whose close changed"),
+    (
+        "up_minute_ratio",
+        Unit.RATIO,
+        "Step rows whose close rose / step rows whose close changed (minutes on 1h@1m)",
+    ),
     ("drawdown_atr", Unit.ATR, "Largest drop from a trade to a later trade in the window, in ATRs"),
     ("drawup_atr", Unit.ATR, "Largest rise from a trade to a later trade in the window, in ATRs"),
     (
@@ -101,8 +107,8 @@ FEATURES: tuple[tuple[str, Unit, str], ...] = (
     (
         "cvd_close_corr",
         Unit.RATIO,
-        "Correlation of the minute closes with the cumulative buy - sell volume of the window's "
-        "minutes",
+        "Correlation of the step-row closes with the cumulative buy - sell volume of the "
+        "window's rows",
     ),
 )
 COLUMNS: tuple[Column, ...] = (
@@ -114,7 +120,9 @@ COLUMNS: tuple[Column, ...] = (
         SMALLINT,
         "One-second returns in rv_bps (pairs of consecutive observed second closes)",
     ),
-    Column("minute_returns", SMALLINT, "Minute returns in the return statistics"),
+    Column(
+        "minute_returns", SMALLINT, "Step-row returns in the return statistics (minutes on 1h@1m)"
+    ),
     Column(
         "session_vwap",
         DOUBLE,
@@ -146,16 +154,17 @@ TAIL = {  # per-minute inputs the window keeps for its next 59 rows
 @njit(cache=True)
 def window_stats(
     status, close, high, low, high_at, low_at, end, first_close, ret2, ret_n, net, first_row,
-    width, period, min_returns, rv2, rv_n, n_ret, std, skew, autocorr, vr, up, corr, high_pos,
-    low_pos, last_close,
+    width, period, min_returns, step, rv2, rv_n, n_ret, std, skew, autocorr, vr, up, corr,
+    high_pos, low_pos, last_close,
 ):  # fmt: skip
     """Statistics of the windows ending at rows `first_row ...`, each over its `width` rows,
     oldest to newest. Only observed rows hold prices; returns start at the window's first
-    observed row. NaN where undefined."""
+    observed row. `step` is one row in nanoseconds. NaN where undefined."""
     rets = np.empty(width)
     xs = np.empty(width)
     ys = np.empty(width)
-    last_index = width * (MINUTE // SECOND) - 1
+    per_row = step // SECOND  # seconds per row
+    last_index = width * per_row - 1
     for i in range(rv2.shape[0]):
         r = first_row + i
         lo = r - width + 1
@@ -210,10 +219,10 @@ def window_stats(
         std[i] = skew[i] = autocorr[i] = vr[i] = up[i] = corr[i] = np.nan
         high_pos[i] = low_pos[i] = np.nan
         if hi_j >= 0:
-            s = (high_at[hi_j] - (end[hi_j] - MINUTE)) // SECOND
-            high_pos[i] = ((hi_j - lo) * (MINUTE // SECOND) + s) / last_index
-            s = (low_at[lo_j] - (end[lo_j] - MINUTE)) // SECOND
-            low_pos[i] = ((lo_j - lo) * (MINUTE // SECOND) + s) / last_index
+            s = (high_at[hi_j] - (end[hi_j] - step)) // SECOND
+            high_pos[i] = ((hi_j - lo) * per_row + s) / last_index
+            s = (low_at[lo_j] - (end[lo_j] - step)) // SECOND
+            low_pos[i] = ((lo_j - lo) * per_row + s) / last_index
         if k >= min_returns:
             total = 0.0
             for t in range(k):
@@ -287,8 +296,8 @@ class SessionLevels:
         "prior_complete",
     )
 
-    def __init__(self, calendar: SessionCalendar):
-        self.calendar = calendar
+    def __init__(self, calendar: SessionCalendar, step: int):
+        self.calendar, self.step = calendar, step  # one row, in nanoseconds
         self.interval, self.pv, self.volume, self.complete = -1, 0.0, 0, False
         self.high, self.low, self.close = 0, 0, 0
         self.prior_interval, self.prior_complete = -1, False
@@ -296,7 +305,7 @@ class SessionLevels:
 
     def update(self, minutes: BaseBars, ok: np.ndarray) -> dict[str, np.ndarray]:
         m, cal = len(minutes), self.calendar
-        iv = np.searchsorted(cal.opens, minutes.end - MINUTE, side="right") - 1
+        iv = np.searchsorted(cal.opens, minutes.end - self.step, side="right") - 1
         out = {
             "vwap": np.full(m, np.nan),
             "prior": np.zeros(m, bool),
@@ -317,7 +326,7 @@ class SessionLevels:
                 self.interval, self.pv, self.volume = int(iv[a]), 0.0, 0
                 self.high, self.low, self.close = 0, 0, 0
                 # seen from its open: the first minute starts at the interval's open
-                self.complete = bool(minutes.end[a] - MINUTE == cal.opens[iv[a]])
+                self.complete = bool(minutes.end[a] - self.step == cal.opens[iv[a]])
             g = slice(a, b)
             pv = np.cumsum(np.r_[self.pv, minutes.pv[g]])[1:]  # added in order, as one series
             volume = self.volume + np.cumsum(minutes.volume[g])
@@ -340,49 +349,48 @@ class SessionLevels:
         return out
 
 
-class HourStatsStage(Stage):
-    NAME = "stats_1h_1m"
+class StepStatsStage(Stage):
+    TF: ClassVar[Timeframe]  # set by `step_stats`, with NAME, RESOLUTION, and INPUTS
     TIER = 1
-    RESOLUTION = "1m"
-    INPUTS = ("bar_1m", "candle_1h_1m")
     MODULES = (
         "stages",
         "columns",
-        "stage_stats_1h_1m",
-        "stage_bar_1m",
+        "stage_step_stats",
+        "stage_step_bar",
+        "timeframes",
         "bars",
         "market",
         "windows",
         "warmup",
         "state",
     )
-    COLUMNS = COLUMNS
     STATE = ("tail", "session")
 
     def __init__(self, context):
         super().__init__(context)
         self.tail = {k: np.zeros(0, t) for k, t in TAIL.items()}
-        self.session = SessionLevels(context.calendar)
+        self.session = SessionLevels(context.calendar, self.TF.step)
 
     def settings(self) -> dict[str, Any]:
-        return {"window": BIAS.name, "vr_period": VR_PERIOD, "min_returns": MIN_RETURNS}
+        return {"window": self.TF.name, "vr_period": VR_PERIOD, "min_returns": MIN_RETURNS}
 
     def warmup(self) -> int:
         """The hourly ATR that normalizes price distances (Wilder, in hourly periods), and one
         whole previous session; the window's own values need only its 60 minutes."""
         atr = warmup.wilder(self.context.features.atr_period)
-        return max(atr * WINDOW_SECONDS, DAY_SECONDS)
+        return max(atr * self.TF.window_seconds, DAY_SECONDS)
 
     def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
-        minutes = products["minutes"]
-        if not len(minutes):  # most one-second chunks finish no minute; nothing changes
+        frame = self.TF.frame(products)
+        minutes = frame["bars"]
+        if not len(minutes):  # most one-second chunks finish no step row; nothing changes
             return empty_table(COLUMNS, NULLABLE)
-        base, candle = products["tables"]["bar_1m"], products["tables"]["candle_1h_1m"]
+        base, candle = (products["tables"][name] for name in self.INPUTS)
         if not (
             np.array_equal(base.values["end_ns"], minutes.end)
             and np.array_equal(candle.values["end_ns"], minutes.end)
         ):
-            raise AssertionError("stats_1h_1m rows must align with bar_1m and candle_1h_1m")
+            raise AssertionError(f"{self.NAME} rows must align with its step rows and candle")
         b = base.values
         cur = {
             "status": minutes.status.astype(np.int8),
@@ -412,13 +420,13 @@ class HourStatsStage(Stage):
         window_stats(
             x["status"], x["close"], x["high"], x["low"], x["high_at"], x["low_at"], x["end"],
             x["first_close"], x["ret2"], x["ret_n"], x["net"], total - m, WIDTH, VR_PERIOD,
-            MIN_RETURNS, out["rv2"], counts["rv_n"], counts["n_ret"], out["std"], out["skew"],
-            out["autocorr"], out["vr"], out["up"], out["corr"], out["high_pos"], out["low_pos"],
-            counts["last_close"],
+            MIN_RETURNS, self.TF.step, out["rv2"], counts["rv_n"], counts["n_ret"], out["std"],
+            out["skew"], out["autocorr"], out["vr"], out["up"], out["corr"], out["high_pos"],
+            out["low_pos"], counts["last_close"],
         )  # fmt: skip
         self.tail = {k: v[total - (WIDTH - 1) :].copy() for k, v in x.items()}
         levels = self.session.update(minutes, ~base.nulls["session_cvd"])
-        return self.table(minutes, candle, products["hour_window"], out, counts, levels)
+        return self.table(minutes, candle, frame["window"], out, counts, levels)
 
     @staticmethod
     def table(minutes, candle, window, out, counts, levels) -> Table:
@@ -482,3 +490,18 @@ class HourStatsStage(Stage):
             nulls[name] = ~np.isfinite(values)
             v[name] = values  # NaN behind NULL, as in the candle tables
         return Table(v, {k: nulls[k] for k in NULLABLE})
+
+
+def step_stats(tf: Timeframe) -> type[StepStatsStage]:
+    """The window-statistics stage of timeframe `tf`."""
+    attrs = {
+        "TF": tf,
+        "NAME": f"stats_{tf.window}",
+        "RESOLUTION": tf.rows,
+        "INPUTS": (f"bar_{tf.rows}", f"candle_{tf.window}"),
+        "COLUMNS": COLUMNS,
+    }
+    return type(f"StepStats_{tf.window}", (StepStatsStage,), attrs)
+
+
+HourStatsStage = step_stats(SLOW)

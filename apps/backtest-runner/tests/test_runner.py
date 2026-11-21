@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import numpy as np
 import pytest
-from backtest_runner import catalog, server, service
+from backtest_runner import benchmark, catalog, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import Day, HistoricalSource, instrument_id, to_book, to_trades
@@ -519,8 +519,14 @@ def test_run_spec_validation():
 SAMPLE = Path(__file__).resolve().parents[1] / "examples/gc-day.json"
 SAMPLE_DAYS = [
     catalog.ROOT / f"data/databento/mbp-1/GC--2025-11-08--2026-11-07/glbx-mdp3-{day}.mbp-1.dbn.zst"
-    for day in ("20260914", "20260915")
+    for day in ("20260830", "20260831")
 ]
+
+
+@pytest.mark.parametrize("path", sorted(SAMPLE.parent.glob("*.json")), ids=lambda p: p.stem)
+def test_run_examples_use_development_dates(path):
+    spec = service.RunSpec.parse(json.loads(path.read_text()))
+    benchmark.check_period(spec.start, spec.end)
 
 
 @pytest.mark.skipif(
@@ -530,7 +536,7 @@ def test_one_downloaded_day_end_to_end_is_deterministic():
     spec = json.loads(SAMPLE.read_text())
     first, again = service.backtest(spec, save=False), service.backtest(spec, save=False)
     assert first["id"] == again["id"] and first["trades"] == again["trades"]
-    q = first["quality"]["2026-09-15 GCZ6"]
+    q = first["quality"][f"{spec['start']} {spec['contract']}"]
     assert first["performance"]["seconds_processed"] == 23 * 3600
     assert q["missing_slots"] == 0 and q["raw_receive_order_violations"] == 0
     assert q["raw_book_events"] > 10 * q["raw_trades"]  # most records are book changes

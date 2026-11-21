@@ -539,7 +539,8 @@ def test_labels_are_never_inputs():
     assert not any(c.unit for c in COLUMNS)  # no label column is a feature
     assert [s.NAME for s in STAGES if getattr(s, "LABEL", False)] == [
         f"pivot_label_{r}:{scale}_q{q}"
-        for r, scales in (("1m", ("slow_atr_0p5", "slow_atr_1", "slow_atr_2")),
+        for r, scales in (("10s", ("mid_atr_0p5", "mid_atr_1", "mid_atr_2")),
+                          ("1m", ("slow_atr_0p5", "slow_atr_1", "slow_atr_2")),
                           ("1s", ("fast_atr_0p5", "fast_atr_1", "fast_atr_2")))
         for scale in scales
         for q in (25, 50)
@@ -547,7 +548,7 @@ def test_labels_are_never_inputs():
     assert all(issubclass(s, PivotLabelStage) for s in (*SLOW_LABELS, *FAST_LABELS))
     assert FAST_LABELS[0].INPUTS == ("market", "bar_1s", "pivot_1s:fast_atr_0p5")
     # the engine computes every stage but the labels
-    assert [s.NAME for s in FEATURE_STAGES] == [s.NAME for s in STAGES[:13]]
+    assert [s.NAME for s in FEATURE_STAGES] == [s.NAME for s in STAGES[:20]]
     features = StageFeatures(calendar((0, 1)), feed_latency=0, close_delay=0)
     assert set(features.pipeline.stages) == {s.NAME for s in FEATURE_STAGES}
     assert not any("label" in name for name in StageFeatures.sources())

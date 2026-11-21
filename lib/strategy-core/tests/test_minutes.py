@@ -15,11 +15,11 @@ from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import HOUR, MINUTE, NS, PX, Trades
 from strategy_core.metrics import FIELDS
 from strategy_core.pipeline import Pipeline
-from strategy_core.stage_bar_1m import COLUMNS as MINUTE_COLUMNS
-from strategy_core.stage_bar_1m import MinuteBarStage
 from strategy_core.stage_bar_1s import RENAME, BarStage
-from strategy_core.stage_candle_1h_1m import COLUMNS as HOUR_COLUMNS
-from strategy_core.stage_candle_1h_1m import FEATURE_COLUMNS, HourCandleStage
+from strategy_core.stage_step_bar import COLUMNS as MINUTE_COLUMNS
+from strategy_core.stage_step_bar import MinuteBarStage
+from strategy_core.stage_step_candle import COLUMNS as HOUR_COLUMNS
+from strategy_core.stage_step_candle import FEATURE_COLUMNS, HourCandleStage
 from strategy_core.stages import StageContext
 from strategy_core.state import from_bytes, to_bytes
 from strategy_core.synthetic import random_trades
@@ -310,7 +310,7 @@ def test_complete_hourly_windows_never_bridge_across_a_missing_minute():
     chunk = MarketChunk("X", T0, T0 + 3 * HOUR, trades(rows), cov)
     out = builder(cal, MINUTE_BRANCH).process(chunk)
     m, h = out.tables["bar_1m"].values, out.tables["candle_1h_1m"].values
-    win = out.products["hour_window"]
+    win = out.products["frames"]["1h@1m"]["window"]
     assert m["status"][30] == MISSING and m["status"][31] == NO_TRADES
     complete = h["status"] == COMPLETE
     assert complete.sum() == 90 and h["slot_ordinal"][complete].min() == 91  # past the gap

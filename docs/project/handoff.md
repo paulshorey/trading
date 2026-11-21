@@ -200,9 +200,9 @@ These are fundamental; changing any of them changes every stored value.
 
 | Area     | State |
 | -------- | ----- |
-| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); the after-cost replay and its agreement rules (#90, #91); **the timeframe as a parameter and the middle timeframe `10m@10s`** (#94 and the PR after it) |
+| Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); the after-cost replay and its agreement rules (#90, #91); **the timeframe as a parameter and the middle timeframe `10m@10s`** (#94, #95); **one set of stages for every timeframe** (the PR after them) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC and SI in `data/databento/mbp-1/` (27 GB), checksums and full decode verified; PL, ES, YM, and RTY were verified too and removed on November 20 (Paul keeps the files in cloud storage); NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 141 GB: `0001_baseline` through `0008_middle_timeframe` applied; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
+| Database | PostgreSQL 18 database `trading`, 146 GB: `0001_baseline` through `0009_one_set_of_stages` applied; the one-second statistics (`stats_1m_1s`, 70,731,900 rows) added November 20; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
 | Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; no rule or model tested so far beats staying flat after costs |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -288,11 +288,6 @@ slow swings, as the fast candidates were.
 
 **7. Base changes, in one rebuild.**
 
-- *One-second feature tables stored where they are read*
-  ([decision 25](roadmap.md#decisions-of-november-20-2026)). `pipeline.SPARSE` and
-  `stored_rows` already do this for the fast swings; extend the rule to `candle_1m_1s`,
-  `stats_1m_1s`, and `vol_1s`. `bar_1s` stays complete. Check what reads those tables at
-  other seconds first (`benchmark.py`'s context joins read minute ends, which are kept).
 - *The ATR floor.* The normalizer of `*_atr` features is floored at the spread, as the swing
   threshold is. It changes stored values only where the ATR has collapsed; measure how many
   rows change and record it.
@@ -346,6 +341,11 @@ For Paul. His decisions of November 20 are in the
   fix what can silently corrupt stored values or the series; refuse loudly for unusual
   setups (as for split-day downloads); decline hypotheticals with a test that shows why.
   Prefer rebuilding a contract (cheap: minutes) over more incremental-repair logic.
+- **A rebuild in place leaves its old rows behind as dead space.** The unification rebuild
+  took the database from 141 GB to 252 GB for 146 GB of live rows, and the disk to 40 GB
+  free. `VACUUM FULL` on each partition of the rewritten tables gives the space back (one
+  partition at a time needs only that partition's size). Before a large `--rebuild`, check
+  that free space covers the tables it rewrites, or build into a fresh database.
 - Any edit to a file in a stage's identity (its `MODULES`, such as `bars.py`, `metrics.py`,
   `windows.py`, `window_metrics.py`, `kernels.py`, `indicators.py`, `features.py`, `market.py`,
   `stages.py`, `columns.py`, `state.py`, `warmup.py`, or `codec.py`) makes that stage and

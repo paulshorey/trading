@@ -367,15 +367,25 @@ Paul's, after the review. The numbers continue the list above.
     classes that build `10m@10s` and `1h@1m`; only the one-second rows themselves are made
     differently, from the trades. Nothing is kept twice for the sake of an option: the fast
     swings read the spread where the other scales do.
-25. **The new machine has 4 TB** (Paul, November 20), enough for every second of six years of
-    GC and SI. It is not enough for seven products stored that way: a product-year takes
-    about 80 GB, three fifths of it the one-second window, statistics, and volatility
-    tables, so seven products over six years need about 3.3 TB of rows beside about 0.9 TB
-    of files. So the one-second feature tables are stored as the fast swings are, only where
-    something reads them (every ten-second row's end, every decision row, every event row);
-    `bar_1s` stays complete and the engine still computes every second. That is about 37 GB
-    a product-year, 1.6 TB for seven products over six years. It is built with the other
-    base changes ([build order](#build-order), item 7), before the long history.
+25. **The new machine has 4 TB** (Paul, November 20). Estimated from this year's sizes, a
+    product-year takes about 73 GB of rows stored for every second (146 GB for GC and SI),
+    two thirds of it the one-second window, statistics, and volatility tables:
+
+    | Six years of | Files | Rows, every second | Rows, one-second values where read |
+    | --- | ---: | ---: | ---: |
+    | GC and SI | 0.16 TB | 0.9 TB | 0.4 TB |
+    | GC, SI, ES, NQ | 0.75 TB | 1.8 TB | 0.8 TB |
+    | All seven products | 0.9 TB | 3.1 TB | 1.4 TB |
+
+    So every second is stored for GC and SI, and ES with NQ still fit beside them. Seven
+    products, with their files and room to rebuild, do not. When that is wanted there are two remedies, neither built now: keep the
+    download files on an external drive (they are read start to finish, only during a
+    build), and store the one-second window, statistics, and volatility rows only where
+    something reads them (every ten-second row's end, every decision and event row), as the
+    fast swings are. `bar_1s` would stay complete, and the engine computes every second
+    either way: storage is a saved copy for research, never what a backtest or a live
+    session reads. The database itself belongs on the internal drive: a drive that
+    disconnects under a running PostgreSQL can damage its tables.
 
 ## How results are judged on six years
 
@@ -428,7 +438,6 @@ done. Items 7 to 9 change base rows, so they come before the long history is ing
    where an edge can both pay and be measured. Its result orders the event families of
    item 11.
 7. **Base changes, in one rebuild.**
-   - *One-second feature tables stored where they are read* (decision 25).
    - *The ATR normalizer floored at the spread* (decision 23).
    - *A rolling net-flow series* that does not reset at the session open (not
      `session_cvd`) and is NULL while its window holds rows without data coverage.
@@ -459,7 +468,8 @@ done. Items 7 to 9 change base rows, so they come before the long history is ing
 14. **Stored model stages** for the targets that passed decision 5 and that improve the
     yardstick model, then the second structure pass on their probabilities. A model that
     reads another model is stored only on the six-year history.
-15. **More products**: ES with NQ, YM, RTY, PL.
+15. **More products**: ES with NQ first; YM, RTY, and PL need one of the storage remedies of
+    decision 25.
 16. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout. Then
     paper trading on the live feed, and live trading after it.
 

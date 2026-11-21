@@ -13,8 +13,6 @@ the [build log](build-log.md).
       `benchmark.py` the timeframe, then the replay with the slow bracket, market and
       resting-limit entries, the daily loss cap, and the micro-cost stress.
 - [ ] **Base changes, in one rebuild** (item 7):
-  - [ ] one-second feature tables stored where they are read
-        ([decision 25](roadmap.md#decisions-of-november-20-2026));
   - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
         ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
         [decision 23](roadmap.md#decisions-of-november-20-2026));
@@ -37,7 +35,8 @@ the [build log](build-log.md).
 - [ ] **The four targets** and their benchmark (item 13): turn (stored), continue,
       direction, and the size of the coming move.
 - [ ] **Stored model stages**, then the second structure pass (item 14).
-- [ ] **More products** (item 15): ES with NQ, YM, RTY, PL.
+- [ ] **More products** (item 15): ES with NQ; YM, RTY, and PL need a storage remedy first
+      ([decision 25](roadmap.md#decisions-of-november-20-2026)).
 - [ ] **The decision model and the final holdout** (item 16). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 

@@ -57,7 +57,8 @@ The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cor
   machine, nor are the other evidence files of the first one (`~/*.hash-*.txt`,
   `~/replay-gc-si.json`). The new fingerprint is `~/fingerprint-new.txt` (576 lines: per
   table, contract, and variant). Whether the two processors give bit-identical floats is
-  therefore still not shown.
+  therefore not shown, and will not be: Paul decided the same day that this build is the
+  starting point, so `~/fingerprint-new.txt` is the baseline for later rebuilds.
 - **What stands in for it, in part:** `research replay GC SI` on the rebuilt database gives
   2,783,418 candidates and reproduces every number of the two tables recorded on November 19
   ([replay](replay.md#results-november-19-2026)): the eligible counts, R to four digits,

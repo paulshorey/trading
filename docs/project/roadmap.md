@@ -387,6 +387,21 @@ Paul's, after the review. The numbers continue the list above.
     session reads. The database itself belongs on the internal drive: a drive that
     disconnects under a running PostgreSQL can damage its tables.
 
+## Decisions of November 23, 2026
+
+Paul's, after the rebuild on the new machine and the middle replay.
+
+26. **The new machine's build is the starting point.** Nothing is compared with the first
+    machine's database any more; `~/fingerprint-new.txt` is the baseline for later rebuilds.
+27. **Costs confirmed.** Micro commission is $1.25 a contract a side (the broker will be
+    TradeStation), and an entry is ineligible when the spread is more than a quarter of the
+    stop distance.
+28. **Limit entries are preferred, and they are short.** Market entries pay too much spread.
+    A limit entry lasts a few seconds, not the 2,400 s of the first middle replay. An order
+    that short cannot rest at the candidate's extreme, which is away from the market at the
+    decision, so its price is set from the book at the decision. The price rule and the
+    wait are frozen in a spec before the next replay.
+
 ## How results are judged on six years
 
 Frozen November 20, 2026, before the older years arrive, so that no split is chosen after

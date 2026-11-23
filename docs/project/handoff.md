@@ -48,10 +48,11 @@ an event and learns whether to take the trade.
 changes, the book, and the news table, all before the six-year history is built in item 10
 ([how](#next-steps)). Items 1 to 6 are done.
 
-**One thing is owed from the first machine:** `fingerprint-old-machine.txt` was not copied.
-Until it is compared with `~/fingerprint-new.txt`, the two databases are known to be equal
-in row counts and in everything the fast replay reads, not bit for bit
-([what was checked](build-log.md#the-new-machine-november-23-2026)).
+**This machine is the starting point** (Paul, November 23). Nothing more is needed from the
+first one: `fingerprint-old-machine.txt` was not copied and will not be compared. The
+databases are known to be equal in row counts and in everything the fast replay reads
+([what was checked](build-log.md#the-new-machine-november-23-2026)); `~/fingerprint-new.txt`
+is the baseline that later rebuilds are compared with.
 
 **The state of this machine** (November 23): lint and tests pass,
 `ingest plan GC SI` reports every contract `current`, and the database (151 GB) holds one year of GC

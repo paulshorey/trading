@@ -9,9 +9,9 @@ the [build log](build-log.md).
 
 - [x] **Set up the new machine** and rebuild the database there: done November 23
       ([what was found](build-log.md#the-new-machine-november-23-2026)).
-- [ ] **Compare the fingerprints of the two machines**: `fingerprint-old-machine.txt` was not
-      among the files copied. When Paul brings it from the first machine,
-      `diff ~/fingerprint-old-machine.txt ~/fingerprint-new.txt` and record the result.
+- [ ] **A short-lived limit entry** ([decision 28](roadmap.md#decisions-of-november-23-2026)):
+      spec first in [replay.md](replay.md), then the run. It replaces the 2,400 s limit at the
+      candidate's extreme as the limit entry of later replays.
 - [x] **Replay the middle timeframe's candidates** (item 6): done November 23
       ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)).
 - [ ] **Base changes, in one rebuild** (item 7):

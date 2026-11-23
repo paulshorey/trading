@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from helpers import T0, calendar, coverage, quotes, trades
+from helpers import T0, TICK, calendar, coverage, quotes, trades
 from strategy_core.engine import Engine, MarketChunk, session_view, split_by_second
 from strategy_core.execution import (
     CANCELLED,
@@ -17,6 +17,7 @@ from strategy_core.features import FeatureConfig, FeatureFrame
 from strategy_core.labels import (
     CandidateSummary,
     attempt,
+    attempt_limit,
     candidate_outcomes,
     iter_candidate_outcomes,
     summarize_candidates,
@@ -27,6 +28,7 @@ from strategy_core.market import (
     HOUR,
     NS,
     PRODUCTS,
+    PX,
     UNDEF_PRICE,
     UNDEF_SIZE,
     BookEvents,
@@ -583,3 +585,50 @@ def test_a_session_view_is_the_view_the_engine_builds_for_the_session():
     for view in (result.view, alone):
         rows = candidate_outcomes(sim, "GCZ6", result.frame, result.signals, view)
         assert rows == engine.finish()["trades"] and len(rows) == 1
+
+
+def test_a_resting_limit_entry_fills_at_its_price_when_a_trade_goes_through_it():
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    rows = [
+        (T0 + 60_120_000_000, 1999.5, 1, 1),  # through the price, before the order arrives
+        (T0 + 70 * S, 1999.8, 1, 1),  # at the price: no queue position, so no fill
+        (T0 + 80 * S, 1999.7, 1, 1),  # through it: filled at the limit price
+        (T0 + 90 * S, 2000.4, 1, 1),  # through the target, 0.5 above the fill
+    ]
+    view = exec_view(trades(rows), quotes([ENTRY]))
+    limit = round(1999.8 * PX)
+
+    def state(expire_s, config=CFG, px=limit, direction=1, signal_s=60, atr=0.5, data=view):
+        s = Simulator(GC, config, sim.bracket, CAL)
+        pos = s.order(direction, "GCZ6", T0 + signal_s * S, atr, {}, data)
+        return attempt_limit(s, data, pos, px, T0 + expire_s * S), pos
+
+    (closed, trade, known), pos = state(200)
+    assert closed == "closed" and trade["exit_reason"] == "target"
+    assert (pos.entry_px, pos.entry_ns, pos.entry_known_ns) == (
+        limit, T0 + 80 * S, T0 + 81_100_000_000,
+    )  # fmt: skip
+    assert trade["pnl_ticks"] == pytest.approx(5) and known == int(trade["exit_known_ns"])
+    # never filled before its expiry: known when that second closes, and no trade
+    assert state(75)[0] == ("expired", None, T0 + 76_100_000_000)
+    assert state(60)[0] == ("expired", None, T0 + 61_100_000_000)  # expired when it arrives
+    touch = ExecutionConfig(**{**CFG.__dict__, "limit_fill": "touch"})
+    assert state(200, touch)[1].entry_ns == T0 + 70 * S
+    # a book already through the price fills on arrival, at the book and never worse
+    (closed, trade, _), pos = state(200, px=round(2000.3 * PX))
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.1 * PX), ARRIVAL)
+    worse = ExecutionConfig(**{**CFG.__dict__, "adverse_ticks": 5})
+    assert state(200, worse, px=round(2000.3 * PX))[1].entry_px == round(2000.3 * PX)
+    # a sell rests above the market: the trade at 2000.4 goes through 2000.3
+    (closed, trade, _), pos = state(200, px=round(2000.3 * PX), direction=-1)
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.3 * PX), T0 + 90 * S)
+    # the trade that fills the order never triggers its exits: a stop one tick below the price
+    (closed, trade, _), pos = state(200, atr=0.01)
+    assert pos.stop_px == limit - TICK and trade["exit_reason"] == "target"
+    # no usable book when it arrives: unknown; the data ends while it rests: unknown
+    short = exec_view(trades(rows[:2]), quotes([ENTRY]), end=T0 + 75 * S)
+    assert state(200, data=short)[0] == ("pending", None, 0)
+    assert state(74, data=short)[0][0] == "expired"
+    none = exec_view(trades(rows), quotes([(T0 + 1 * S, None, 2000.1)]))
+    assert state(200, data=none)[0] == ("entry_no_book", None, T0 + 61_100_000_000)
+    assert state(200, signal_s=3300)[0] == ("late", None, T0 + 3300 * S)

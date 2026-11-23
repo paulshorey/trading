@@ -23,8 +23,14 @@ import psycopg
 from numba import njit
 from psycopg import sql
 from strategy_core.pipeline import StageFeatures
-from strategy_core.stage_pivot_label import FAST_LABELS, INVALIDATION, REVERSAL, SLOW_LABELS
-from strategy_core.stage_step_pivot import FAST_SCALES
+from strategy_core.stage_pivot_label import (
+    FAST_LABELS,
+    INVALIDATION,
+    MIDDLE_LABELS,
+    REVERSAL,
+    SLOW_LABELS,
+)
+from strategy_core.stage_step_pivot import FAST_SCALES, MIDDLE_SCALES
 from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
 
 from . import db, store
@@ -47,6 +53,16 @@ STREAMS = {
         "scales": FAST_SCALES,
         "features": ("candle_1m_1s", "vol_1s"),
         "labels": FAST_LABELS,
+    },
+    # the middle timeframe: models only. No detector task is frozen for it
+    # (pivot-label-spec.md), so `detectors` passes over a stream without `tasks`.
+    "mid": {
+        "base": "bar_10s",
+        "candle": "candle_10m_10s",
+        "seconds": 10,
+        "scales": MIDDLE_SCALES,
+        "features": ("candle_10m_10s", "vol_10s"),
+        "labels": MIDDLE_LABELS,
     },
     "slow": {
         "base": "bar_1m",
@@ -421,6 +437,8 @@ def detectors(products: list[str], start: date = DEV_START, end: date = DEV_END,
     with db.connect(url) as conn:
         ids = variant_ids(conn)
         for stream, spec in STREAMS.items():
+            if "tasks" not in spec:
+                continue
             per, window, tol = spec["seconds"], spec["window"], spec["tolerance"]
             table = store.STAGE_TABLE[spec["scales"][0].NAME]
             scales = {s.VARIANT: ids[table, s.VARIANT] for s in spec["scales"]}

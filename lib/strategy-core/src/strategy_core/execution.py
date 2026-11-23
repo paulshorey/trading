@@ -18,6 +18,8 @@ Timing model (see docs/project/engine.md):
   lookup at the trade's time already reads it. Where none follows, the book did not visibly
   change (the trade met hidden or spread-implied liquidity), and the earlier book stands.
 - Time and session exits are market orders sent at the deadline.
+- An entry is a market order (`fill`). A resting limit entry (`rest`) is for replays of would-be
+  trades: the engine's strategies send market entries only.
 - Reactions (cooldown, the hold timer) start when the engine learns of a fill: when the
   fill's second closes, never the earlier exchange time.
 
@@ -105,7 +107,7 @@ class ExecutionConfig:
         return self.flat_before_close_s * NS
 
 
-FILLED, WAIT, CANCELLED = "filled", "wait", "cancelled"
+FILLED, WAIT, CANCELLED, EXPIRED = "filled", "wait", "cancelled", "expired"
 
 
 def slot_end(time: int) -> int:
@@ -367,6 +369,11 @@ class Simulator:
         px = self.price(view.book.at(at), pos.direction, pos.contracts, pos.flags)
         if px is None:
             return CANCELLED, known
+        self.opened(pos, px, at, known)
+        return FILLED, known
+
+    def opened(self, pos: Position, px: int, at: int, known: int) -> None:
+        """Record an entry fill at `px` and fix the bracket and the timed exit from it."""
         tick = self.product.tick_size
         pos.entry_px, pos.entry_ns, pos.entry_known_ns = px, at, known
         target = max(round(self.bracket.target_atr * pos.atr * 1e9 / tick), 1) * tick
@@ -378,7 +385,54 @@ class Simulator:
         pos.timed_reason = "time" if timer <= pos.force_exit_ns else "session_close"
         pos.exit_arrival_ns = deadline + self.config.order_latency
         pos.best_px = pos.worst_px = pos.last_px = pos.entry_px
-        return FILLED, known
+
+    def rest(
+        self, view: ExecView, pos: Position, limit_px: int, expire_ns: int
+    ) -> tuple[str, int, int]:
+        """Fill a pending entry as a limit order at `limit_px`, resting from its arrival until
+        `expire_ns` (or the forced-exit time, if earlier). Returns the status, when the engine
+        learns the outcome, and the index of the first trade after the fill (for `advance`).
+
+        - `CANCELLED`: the order arrives at or after the forced-exit time, or meets no usable
+          book (whether it would have rested correctly is then unknown).
+        - `EXPIRED`: it arrived after its expiry, or no trade filled it before then.
+        - `FILLED`: the book it meets is already at or through its price, so it fills on
+          arrival as a marketable order, never worse than its price; or a later trade prints
+          through its price (`limit_fill="through"`) or at it (`"touch"`), and it fills at its
+          price at that trade's event time. There is no queue position.
+        - `WAIT`: the view ends before the outcome is known."""
+        at, d = pos.arrival_ns, pos.direction
+        expire = min(expire_ns, pos.force_exit_ns)
+        if view.end <= at:
+            return WAIT, 0, 0
+        if at >= pos.force_exit_ns:
+            return CANCELLED, pos.force_exit_ns, 0
+        delay = self.config.close_delay
+        if at >= expire:
+            return EXPIRED, slot_end(at) + delay, 0
+        quote = view.book.at(at)
+        if quote is None or not quote.usable:
+            return CANCELLED, slot_end(at) + delay, 0
+        j = int(np.searchsorted(view.ts_max, at, side="left"))
+        if (quote.ask <= limit_px) if d > 0 else (quote.bid >= limit_px):
+            px = self.price(quote, d, pos.contracts, pos.flags)
+            px = min(px, limit_px) if d > 0 else max(px, limit_px)
+            self.opened(pos, px, at, slot_end(at) + delay)
+            return FILLED, pos.entry_known_ns, j
+        lim = j + int(np.searchsorted(view.known[j:], slot_end(expire) + delay, side="right"))
+        prices, when = view.t.price[j:lim], view.t.ts_event[j:lim]
+        live = (when >= at) & (when < expire)
+        if self.config.limit_fill == "through":
+            hit = live & (prices < limit_px if d > 0 else prices > limit_px)
+        else:
+            hit = live & (prices <= limit_px if d > 0 else prices >= limit_px)
+        if hit.any():
+            k = j + int(np.argmax(hit))
+            self.opened(pos, limit_px, int(view.t.ts_event[k]), int(view.known[k]))
+            return FILLED, pos.entry_known_ns, k + 1
+        if view.end <= expire:
+            return WAIT, 0, 0
+        return EXPIRED, slot_end(expire) + delay, 0
 
     def advance(self, view: ExecView, j: int, pos: Position) -> tuple[int, dict | None]:
         """Scan trades from j for the position's exit. Returns (next index, closed trade or None

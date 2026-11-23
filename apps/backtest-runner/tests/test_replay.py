@@ -11,6 +11,7 @@ from strategy_core.synthetic import random_book, random_trades
 
 T0 = 1_767_571_200 * NS  # 2026-01-05 00:00 UTC
 STATE = {name: k for k, name in enumerate(replay.STATES)}
+FAST, MID = replay.SPECS["fast"], replay.SPECS["mid"]
 BASE = date(2000, 1, 1)
 
 
@@ -20,14 +21,14 @@ def test_the_portfolio_takes_the_next_order_after_the_last_outcome_is_known():
     known = np.array([35, 99, 31, 45, 70, 0]) * s  # exits, or when a cancel is learned
     state = np.array([STATE[n] for n in ("closed", "closed", "closed", "entry_no_book",
                                          "exit_no_book", "pending")])  # fmt: skip
-    held, cancelled, placed = replay.portfolio(decision, known, state, cooldown=0)
+    held, cancelled, placed, _ = replay.portfolio(decision, known, state, cooldown=0)
     # 20 and 30 are decided while the first is open; 40 is cancelled; 50 is held; 60 is decided
     # before 50 exits
     assert held.tolist() == [0, 4] and (cancelled, placed) == (1, 3)
     # a cooldown to 55 s passes over 40 and 50; the order at 60 never arrives
-    held, cancelled, placed = replay.portfolio(decision, known, state, cooldown=20 * s)
+    held, cancelled, placed, _ = replay.portfolio(decision, known, state, cooldown=20 * s)
     assert held.tolist() == [0] and (cancelled, placed) == (1, 2)
-    assert replay.portfolio(decision[:0], known[:0], state[:0], 0)[1:] == (0, 0)
+    assert replay.portfolio(decision[:0], known[:0], state[:0], 0)[1:3] == (0, 0)
 
 
 def test_a_session_is_replayed_under_every_bracket_with_the_engines_simulator():
@@ -53,10 +54,10 @@ def test_a_session_is_replayed_under_every_bracket_with_the_engines_simulator():
             [8, 0, 2, 1, np.nan, 0.0, price, 20.0, price],  # an ATR of zero sizes nothing
         ]
     )
-    out = replay.simulate(product, cal, "GCZ6", chunk, view, end, rows)
+    out = replay.simulate(FAST, product, cal, "GCZ6", chunk, view, end, rows)
     assert out["why"].tolist() == [0, 0, replay.NO_ATR, replay.NO_ROOM, replay.NO_ATR]
     assert out["state:slow:base"][2:].tolist() == [-1, -1, -1]  # never simulated
-    for name, (_, bracket) in replay.BRACKETS.items():
+    for name, (_, bracket) in FAST.brackets.items():
         atr = rows[0, 5 if name == "fast" else 7] / 1e4 * price / 1e9
         assert out[f"stop:{name}"][0] == max(
             round(bracket.stop_atr * atr * 1e9 / product.tick_size), 1
@@ -78,7 +79,7 @@ def test_a_session_is_replayed_under_every_bracket_with_the_engines_simulator():
     cut = MarketChunk(
         "GCZ6", T0, T0 + 6 * HOUR, t, np.array([[T0, T0 + 1000 * NS]]), "s", True, chunk.book
     )
-    out = replay.simulate(product, cal, "GCZ6", cut, view, end, rows)
+    out = replay.simulate(FAST, product, cal, "GCZ6", cut, view, end, rows)
     assert replay.STATES[out["state:slow:base"][0]] == "uncovered"
 
 
@@ -116,7 +117,7 @@ def frame(seed=0, days=140, per_day=60):
             part[f"slow:{replay.SLOW_SCALES[0]}:leg"] = np.where(
                 rng.random(n) < 0.2, 0, told
             ).astype(np.int8)
-            for name in replay.BRACKETS:
+            for name in FAST.brackets:
                 stop = np.full(n, 40.0 if name == "slow" else 5.0)
                 part[f"stop:{name}"] = stop
                 for mode in replay.EXECUTIONS:
@@ -161,7 +162,7 @@ def test_the_two_values_of_a_candidate_are_kept_apart():
 
 def test_the_displacement_rule_is_fitted_before_each_month_and_compared_on_the_same_candidates():
     f = frame()
-    out = replay.report(f, 3, False)
+    out = replay.report(f, FAST, 3, False)
     assert (
         out["candidates"] == 2 * 140 * 60
         and out["eligible"] + sum(out["ineligible"].values()) == out["candidates"]
@@ -200,12 +201,12 @@ def test_the_displacement_rule_is_fitted_before_each_month_and_compared_on_the_s
     # the fast bracket has no edge to find: whatever the fit, taking candidates loses
     fast = out["brackets"]["fast"]["base"]["test_months"]["per_candidate"]["take_all"]["all"]
     assert fast["avg_r_net"] < fast["avg_r_before_commission"] < 0
-    assert replay.report(f, 3, True)["candidates"] < out["candidates"]
+    assert replay.report(f, FAST, 3, True)["candidates"] < out["candidates"]
 
 
 def test_a_month_without_enough_history_is_not_scored():
     f = frame(days=5)  # under 500 known values a product
-    out = replay.report(f, 3, False)["brackets"]["slow"]
+    out = replay.report(f, FAST, 3, False)["brackets"]["slow"]
     assert all("skipped" in x for x in out["displacement_rule_fits"])
     assert out["base"]["test_months"]["per_candidate"] == {"take_all": {}, "displacement_rule": {}}
     assert out["base"]["test_months"]["portfolio"]["take_all"]["fills"] == 0
@@ -259,7 +260,7 @@ def test_the_slow_direction_is_read_at_the_latest_completed_minute():
 
 def test_agreement_splits_the_same_candidates_and_never_fits():
     f = frame()
-    out = replay.report(f, 3, False)["brackets"]
+    out = replay.report(f, FAST, 3, False)["brackets"]
     assert "agreement" not in out["fast"]["base"]
     first, other = replay.SLOW_SCALES[0], replay.SLOW_SCALES[1]
     for mode in replay.EXECUTIONS:
@@ -282,6 +283,153 @@ def test_agreement_splits_the_same_candidates_and_never_fits():
         assert abs(noise["avg_r_before_commission"]) < 0.1
     # with, against and neither cover every eligible candidate
     base = out["slow"]["base"]["agreement"][first]["leg"]
-    eligible = replay.report(f, 3, False)["eligible"]
+    eligible = replay.report(f, FAST, 3, False)["eligible"]
     taken = sum(base[k]["development_period"]["all"]["candidates"] for k in ("with", "against"))
     assert 0.7 * eligible < taken < 0.9 * eligible
+
+
+def test_the_daily_loss_cap_refuses_orders_that_could_pass_it_and_stops_the_session():
+    s = NS
+    decision = np.array([10, 20, 30, 40, 50, 60]) * s
+    known = decision + 5 * s
+    state = np.full(6, STATE["closed"])
+    day = np.array([1, 1, 1, 1, 2, 2])
+    usd = np.array([-200.0, -200.0, 500.0, -50.0, -10.0, 30.0])
+    risk = np.array([150.0, 150.0, 150.0, 150.0, 500.0, 150.0])
+    held, cancelled, placed, cap = replay.portfolio(decision, known, state, 0, day, usd, risk, 400)
+    # 200 lost and 150 at risk is inside 400; at 400 lost the date is over; on the next date a
+    # stop of 500 alone is outside the cap, and the order after it is taken
+    assert held.tolist() == [0, 1, 5] and (cancelled, placed) == (0, 3)
+    assert cap == {"refused_orders": 3, "sessions_bound": 2}
+    free = replay.portfolio(decision, known, state, 0, day, usd, risk, None)
+    assert free[0].tolist() == [0, 1, 2, 3, 4, 5] and free[3]["refused_orders"] == 0
+    # a winning date is never bound: losses are the date's net result when it is negative
+    wins = replay.portfolio(decision, known, state, 0, day, np.abs(usd), risk, 400)
+    assert wins[0].tolist() == [0, 1, 2, 3, 5]
+    f = frame()
+    m = f.money("slow", "base")
+    rows = f.a["why"] == replay.ELIGIBLE
+    dates = np.unique(f.a["day"])
+    capped, free = (f.ledger(rows, m, "base", dates, cap) for cap in (1_500.0, None))
+    assert free["loss_cap"] is None and capped["loss_cap"]["refused_orders"] > 0
+    assert capped["fills"] < free["fills"]
+    assert capped["skipped_while_occupied"] == (
+        capped["candidates_taken"] - capped["orders"] - capped["loss_cap"]["refused_orders"]
+    )
+    assert sum(x["fills"] for x in capped["by_side"].values()) == capped["fills"]
+    assert capped["daily"]["fallback"].min() > -1_500 - 1_000 - 5  # the cap, one stop, commission
+
+
+def test_micro_costs_are_the_same_ticks_at_the_micro_contracts_value_and_commission():
+    f = frame()
+    full, micro = f.money("slow", "base"), f.money("slow", "base", "micro")
+    closed = full["closed"]
+    assert (micro["state"] == full["state"]).all()
+    assert micro["r"][closed] == pytest.approx(full["r"][closed])  # R is before commission
+    gc = closed & (f.a["product"] == 0)
+    assert micro["risk_usd"][gc] == pytest.approx(40) and micro["risk_usd"][
+        closed & ~gc
+    ] == pytest.approx(200)
+    assert micro["usd"][gc] == pytest.approx(micro["r"][gc] * 40 - 2.5)
+    assert (micro["cost_r"][closed] > full["cost_r"][closed]).all()  # a larger share of risk
+
+
+def test_buys_and_sells_are_reported_apart_for_every_product():
+    f = frame()
+    m = f.money("slow", "base")
+    stats = f.candidate_stats(f.a["why"] == replay.ELIGIBLE, m)
+    assert set(stats) == {a + b for a in ("all", "GC", "SI") for b in ("", ":buys", ":sells")}
+    for name in ("all", "GC", "SI"):
+        assert stats[name]["candidates"] == sum(
+            stats[f"{name}:{side}"]["candidates"] for side in ("buys", "sells")
+        )
+    # an order that expired unfilled is known and worth zero, like one that arrived too late
+    state = f.a["state:slow:base"].copy()
+    f.a["state:slow:base"][state == STATE["late"]] = STATE["expired"]
+    again = f.money("slow", "base")
+    assert (again["value_usd"][state == STATE["late"]] == 0).all()
+    assert (again["known"] == m["known"]).all()
+
+
+def test_the_middle_replay_adds_a_limit_entry_and_trades_only_a_market_it_can_trust():
+    product = PRODUCTS["GC"]
+    cal = SessionCalendar("test", np.array([T0], np.int64), np.array([T0 + 6 * HOUR], np.int64))
+    t = random_trades(T0, T0 + 6 * HOUR, seed=3, rate=2)
+    chunk = MarketChunk(
+        "GCZ6", T0, T0 + 6 * HOUR, t, np.array([[T0, T0 + 6 * HOUR]]), "s", True,
+        random_book(t, seed=5),
+    )  # fmt: skip
+    view = session_view(chunk, cal, replay.EXECUTIONS["base"])
+    assert [c[0] for c in MID.cells] == ["slow", "slow+limit"] and MID.hold_s == 10_860
+    price = float(t.price[0])
+    seconds = np.array([600, 900, 1200, 700, 3 * 3600 - 300])
+    end = T0 + seconds * NS
+    rows = np.array(
+        [
+            # variant, end (unused), kind, prov, displacement, own ATR bps and close, slow
+            [7, 0, 1, 1, 0.3, 2.0, price, 20.0, price],
+            [7, 0, 2, 0, 0.4, 2.0, price, 20.0, price],
+            [8, 0, 2, 1, 0.5, np.nan, np.nan, 20.0, price],  # its own ATR sizes nothing here
+            [8, 0, 2, 1, 0.6, 2.0, price, 1e-6, price],  # a stop of one tick: the spread is wide
+            [8, 0, 2, 1, 0.6, 2.0, price, 20.0, price],  # the 3 h hold does not fit before 6 h
+        ]
+    )
+    # each candidate's extreme: a high above the market and a low below it
+    at = [int(np.searchsorted(t.ts_event, e)) for e in end]
+    level = np.array([int(t.price[a]) for a in at]) + np.array([3, -3, -3, -3, -3]) * 100_000_000
+    out = replay.simulate(MID, product, cal, "GCZ6", chunk, view, end, rows, level)
+    assert out["why"].tolist() == [0, 0, 0, replay.WIDE, replay.NO_ROOM]
+    assert (out["stop:slow"] == out["stop:slow+limit"]).all()
+    bracket = MID.brackets["slow"][1]
+    atr = 20.0 / 1e4 * price / 1e9
+    force_exit = T0 + 6 * HOUR - replay.EXECUTIONS["base"].flat_before_close
+    for mode, config in replay.EXECUTIONS.items():
+        sim = Simulator(product, config, bracket, cal)
+        for i, direction in ((0, -1), (1, 1), (2, 1)):
+            pos = sim.order(direction, "GCZ6", int(end[i]), atr, {}, view)
+            expire = min(pos.arrival_ns + 2_400 * NS, force_exit - 10_860 * NS)
+            state, trade, known = labels.attempt_limit(sim, view, pos, int(level[i]), expire)
+            assert replay.STATES[out[f"state:slow+limit:{mode}"][i]] == state
+            assert out[f"known:slow+limit:{mode}"][i] == known
+            if trade is not None:
+                assert out[f"ticks:slow+limit:{mode}"][i] == trade["pnl_ticks"]
+                assert pos.entry_px == level[i] or pos.entry_ns == pos.arrival_ns
+            market = sim.order(direction, "GCZ6", int(end[i]), atr, {}, view)
+            assert (
+                replay.STATES[out[f"state:slow:{mode}"][i]] == labels.attempt(sim, view, market)[0]
+            )
+    states = {replay.STATES[k] for k in out["state:slow+limit:base"][:3]}
+    assert states <= {"closed", "expired"} and "closed" in states
+    # a limit so far away that nothing reaches it expires: known, no trade
+    far = level + np.array([1, -1, -1, -1, -1]) * 10**13
+    out = replay.simulate(MID, product, cal, "GCZ6", chunk, view, end, rows, far)
+    assert [replay.STATES[k] for k in out["state:slow+limit:base"][:3]] == ["expired"] * 3
+    assert (out["known:slow+limit:base"][:3] > end[:3] + 2_400 * NS).all()
+    # coverage that ends while an order rests makes it unknown, filled or not
+    cut = MarketChunk(
+        "GCZ6", T0, T0 + 6 * HOUR, t, np.array([[T0, T0 + 1000 * NS]]), "s", True, chunk.book
+    )
+    out = replay.simulate(MID, product, cal, "GCZ6", cut, view, end, rows, far)
+    assert [replay.STATES[k] for k in out["state:slow+limit:base"][:3]] == ["uncovered"] * 3
+    # a flagged session trades nothing; a session without a book at the decision neither
+    out = replay.simulate(MID, product, cal, "GCZ6", chunk, view, end, rows, level, flagged=True)
+    assert out["why"].tolist() == [replay.FLAGGED] * 4 + [replay.NO_ROOM]
+    empty = MarketChunk(
+        "GCZ6", T0, T0 + 6 * HOUR, t, chunk.coverage, "s", True, chunk.book.take(np.arange(0))
+    )
+    blind = session_view(empty, cal, replay.EXECUTIONS["base"])
+    out = replay.simulate(MID, product, cal, "GCZ6", empty, blind, end, rows, level)
+    assert out["why"].tolist() == [replay.NO_BOOK] * 4 + [replay.NO_ROOM]
+    # the fast replay keeps its eligibility: only the ATRs and the room
+    out = replay.simulate(FAST, product, cal, "GCZ6", chunk, view, end, rows, flagged=True)
+    assert out["why"].tolist() == [0, 0, replay.NO_ATR, 0, replay.NO_ROOM]
+
+
+def test_the_candidate_query_reads_the_latest_completed_minute_of_its_timeframe():
+    assert "pivot_label_1s" in replay.query(FAST) and "l.slot_ordinal / 60 " in replay.query(FAST)
+    mid = replay.query(MID)
+    assert "pivot_label_10s" in mid and "candle_10m_10s" in mid and "l.slot_ordinal / 6 " in mid
+    with pytest.raises(ValueError, match="Unknown replay"):
+        replay.run(["GC"], timeframe="slow")
+    with pytest.raises(ValueError, match="Unknown mid label"):
+        replay.run(["GC"], names=["fast_atr_1_q25"], timeframe="mid")

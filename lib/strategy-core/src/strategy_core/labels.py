@@ -12,6 +12,7 @@ from collections.abc import Iterable, Iterator
 import numpy as np
 
 from .execution import CANCELLED, WAIT, ExecView, Position, Simulator
+from .execution import EXPIRED as ORDER_EXPIRED
 from .features import FeatureFrame
 
 UNFILLED, CENSORED = "unfilled", "censored"
@@ -23,6 +24,7 @@ ENTRY_NO_BOOK = "entry_no_book"  # the order met no usable book: whether it trad
 EXIT_NO_BOOK = "exit_no_book"  # the exit was priced without a book, at a fallback price
 PENDING = "pending"  # the data ended before the order arrived
 STATES = (CLOSED, LATE, ENTRY_NO_BOOK, EXIT_NO_BOOK, PENDING, CENSORED)
+EXPIRED = "expired"  # a resting limit entry was never filled: known, and no trade
 
 
 def attempt(sim: Simulator, view: ExecView, pos: Position) -> tuple[str, dict | None, int]:
@@ -35,6 +37,25 @@ def attempt(sim: Simulator, view: ExecView, pos: Position) -> tuple[str, dict | 
     if status == CANCELLED:
         return (LATE if pos.arrival_ns >= pos.force_exit_ns else ENTRY_NO_BOOK), None, known
     _, trade = sim.advance(view, 0, pos)
+    if trade is None:
+        return CENSORED, None, 0
+    state = EXIT_NO_BOOK if "no_book" in trade["flags"] else CLOSED
+    return state, trade, int(trade["exit_known_ns"])
+
+
+def attempt_limit(
+    sim: Simulator, view: ExecView, pos: Position, limit_px: int, expire_ns: int
+) -> tuple[str, dict | None, int]:
+    """`attempt` with the entry as a limit order resting at `limit_px` until `expire_ns`
+    (`Simulator.rest`). An order that is never filled is `EXPIRED`: known, and no trade."""
+    status, known, j = sim.rest(view, pos, limit_px, expire_ns)
+    if status == WAIT:
+        return PENDING, None, 0
+    if status == ORDER_EXPIRED:
+        return EXPIRED, None, known
+    if status == CANCELLED:
+        return (LATE if pos.arrival_ns >= pos.force_exit_ns else ENTRY_NO_BOOK), None, known
+    _, trade = sim.advance(view, j, pos)
     if trade is None:
         return CENSORED, None, 0
     state = EXIT_NO_BOOK if "no_book" in trade["flags"] else CLOSED

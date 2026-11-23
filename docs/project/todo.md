@@ -7,11 +7,13 @@ the [build log](build-log.md).
 
 ## Now: the build order
 
-- [ ] **Set up the new machine** and rebuild the database there
-      ([steps](handoff.md#moving-to-the-new-machine)).
-- [ ] **Replay the middle timeframe's candidates** (item 6): give `replay.py` and
-      `benchmark.py` the timeframe, then the replay with the slow bracket, market and
-      resting-limit entries, the daily loss cap, and the micro-cost stress.
+- [x] **Set up the new machine** and rebuild the database there: done November 23
+      ([what was found](build-log.md#the-new-machine-november-23-2026)).
+- [ ] **Compare the fingerprints of the two machines**: `fingerprint-old-machine.txt` was not
+      among the files copied. When Paul brings it from the first machine,
+      `diff ~/fingerprint-old-machine.txt ~/fingerprint-new.txt` and record the result.
+- [x] **Replay the middle timeframe's candidates** (item 6): done November 23
+      ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)).
 - [ ] **Base changes, in one rebuild** (item 7):
   - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
         ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);

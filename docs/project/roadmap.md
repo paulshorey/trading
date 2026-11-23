@@ -416,7 +416,7 @@ seeing a result. It applies to every model and policy from the yardstick on.
 
 ## Build order
 
-Approved November 20, 2026, and revised the same day for the new machine. Items 1 to 5 are
+Approved November 20, 2026, and revised the same day for the new machine. Items 1 to 6 are
 done. Items 7 to 9 change base rows, so they come before the long history is ingested.
 
 1. **After-cost replay** on the stored fast candidates: done November 19 (`research replay`,
@@ -430,12 +430,15 @@ done. Items 7 to 9 change base rows, so they come before the long history is ing
 5. **One set of stages for every timeframe** (decision 24): done November 20
    ([what was built](build-log.md#one-set-of-stages-for-every-timeframe-november-20-2026)).
    A stage of steps 3 to 5 is written once, against a timeframe's frame of in-memory values.
-6. **Replay the middle timeframe's candidates.** Give `replay.py` and `benchmark.py` the
-   timeframe (they read the fast candidates and the slow scales by name), then replay the
-   middle candidates with the slow bracket, a market entry and a resting-limit entry, the
-   daily loss cap, and the micro-cost stress: taken alone, and when the slow timeframe
-   agrees. It needs no rebuild and no new data, and it is the first test of the timeframe
-   where an edge can both pay and be measured. Its result orders the event families of
+6. **Replay the middle timeframe's candidates**: done November 23
+   (`research replay GC SI --timeframe mid`,
+   [spec](replay.md#the-middle-timeframes-candidates-spec-frozen-november-23-2026-before-its-run)
+   and [results](replay.md#results-for-the-middle-timeframe-november-23-2026)). Taken at the
+   market a middle candidate loses about one spread; a limit resting at its extreme gets a
+   better price and still loses; no agreement rule passed. The one pattern that repeated is
+   that entering against the `slow_atr_1` trend is worse than entering with it, so the
+   pullback that holds across timeframes is the first family to build after the failed
+   break in item 12, and the daily loss cap's effect on the product mix is a question for
    item 11.
 7. **Base changes, in one rebuild.**
    - *The ATR normalizer floored at the spread* (decision 23).

@@ -239,3 +239,80 @@ be worse than the market entry's, not better.
 
 **Not run:** a bracket sized by the middle timeframe's own ATR, other multiples or waits, a
 limit at any other price, and the sliding-clock control.
+
+## Results for the middle timeframe (November 23, 2026)
+
+GC and SI, January 2 to August 31, 2026: 171 warm front sessions each, 473,731 candidates over
+the six label variants, about 4 minutes with 6 workers. Evidence: `~/replay-mid-gc-si.json`
+and `.log` on the new Mac. **No group passed**: of the 240 policy cells, none has a value of
+attempting with its 95% interval above zero in both halves, under either execution setting.
+Staying flat remains the rule to beat.
+
+**Every candidate taken, whole period** (per attempt, base execution, full costs; R before
+commission; the limit's value counts an unfilled order as zero):
+
+| Label | Eligible | Market: R | Market: R, stressed | Spread in R | Market: net $ (95%) | Limit: filled | Limit: R per fill | Limit: net $ (95%) | Market: net $, micro |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: |
+| `mid_atr_0p5_q25` | 184,953 | -0.027 | -0.037 | 0.029 | -83 (-111 to -53) | 89% | -0.022 | -57 (-84 to -31) | -15 |
+| `mid_atr_0p5_q50` | 113,083 | -0.029 | -0.039 | 0.030 | -93 (-123 to -62) | 82% | -0.021 | -56 (-87 to -24) | -17 |
+| `mid_atr_1_q25` | 61,833 | -0.030 | -0.041 | 0.031 | -94 (-140 to -48) | 82% | -0.026 | -64 (-121 to -6) | -18 |
+| `mid_atr_1_q50` | 34,684 | -0.032 | -0.042 | 0.031 | -106 (-149 to -67) | 69% | -0.024 | -46 (-99 to +6) | -20 |
+| `mid_atr_2_q25` | 17,602 | -0.038 | -0.048 | 0.032 | -128 (-235 to -24) | 70% | -0.034 | -66 (-154 to +27) | -24 |
+| `mid_atr_2_q50` | 9,171 | -0.039 | -0.052 | 0.032 | -154 (-232 to -82) | 46% | -0.037 | -77 (-163 to +3) | -30 |
+
+What this shows:
+
+1. **A middle candidate taken at the market loses about one spread**, as a fast one did:
+   -0.027 to -0.039 R against a spread of 0.029 to 0.032 R, with a win rate of 45%.
+   Every interval is below zero. The prediction written before
+   the run held.
+2. **The limit entry gets a better price and the same result.** It fills 0.06 to 0.40 R
+   better than the mid-price at the decision, and its fills still lose 0.021 to 0.037 R each:
+   the price comes back through the candidate's extreme mostly when the candidate is failing.
+   Per attempt it loses less ($46 to $77 against $83 to $154), partly because 11% to 54% of
+   the orders never fill. No interval is above zero. This also held as predicted.
+3. **No agreement rule passed, and the patterns of the fast replay repeat.** The
+   `slow_atr_2` `fresh` groups earned $510 to $722 an attempt from January to April and lost
+   $71 to $110 from May to August (`mid_atr_0p5_q25` and `mid_atr_1_q25`, both entries).
+   Entering with the `slow_atr_1` trend was better than entering against it in 22 of the 24
+   cells in the first half (by $20 to $184) and in all 24 in the second (by $36 to $242). The
+   `with` group itself stays near zero: four of the 216 `with` cells have a positive mean in
+   both halves and both executions, three of them this rule on the limit entry, at $2 to $44
+   an attempt and with intervals that include zero. These are the same dates and the same
+   slow trend as the fast replay, so this repeats that lead and does not confirm it.
+4. **Buys did worse than sells, and the difference is not resolved.** Over the period a buy
+   at a candidate low lost $182 to $271 an attempt at the market and a sell at a candidate
+   high was between -$33 and +$13, for GC and for SI and in each half. The intervals by side
+   are about ±$200 and most include zero, because all the buys of a trade date win or lose
+   together. A falling market would explain it from May to August (the front contracts ended
+   about 3% and 9% lower) but not from January to April, when both ended higher. It is
+   recorded as an observation; results stay split by side so that a policy cannot hide in it.
+5. **The daily loss cap decides what the take-all portfolio is.** Taking every candidate, the
+   cap bound in 71 to 81 of the 84 and 87 trade dates of each half and refused most orders
+   (of the 93,321 candidates of `mid_atr_0p5_q25` in the first half, 240 became orders, 64,144
+   were refused by the cap, and the rest arrived while a position was open). The portfolio
+   made 115 to 415 trades in a half, and its net result ranged from -$73,815 to +$88,240 with
+   daily intervals that include zero in 44 of 48 cells; three of the other four are losses,
+   and the one gain (`mid_atr_0p5_q50`, limit entry, January to April) was +$8,370 with an
+   interval around zero in the second half. From January to April almost every fill was GC (230
+   against 10 for SI in the first row): the SI stop, one hourly ATR, was too large a share of
+   $3,000 once anything had been lost. The cap as decided therefore also sets the product mix;
+   a stop sized by risk in dollars, or a cap per product, would not. This is a question for
+   the decision model's sizing (item 11), not changed here.
+6. **Micro costs change the scale, not the sign.** Commission is 0.8% of risk on the micros
+   against 0.2% on the full-size contracts; every label's value of attempting stays below
+   zero with its interval (-$15 to -$30 an attempt).
+7. **The displacement rule again mostly stays flat** (0 to 5,097 candidates taken of tens of
+   thousands), and where it trades the result is noise: -$47,205 to +$57,340.
+8. **What was left out is counted.** Of 208,376 `mid_atr_0p5_q25` candidates: 18,085 where
+   the hold did not fit the session, 5,085 in the five flagged sessions of each product, 226
+   with a spread above a quarter of the stop, 22 without a usable book, 5 without an ATR.
+   Among the eligible, 613 exits (0.3%) were priced without a book and one entry met none.
+
+What it does not show: anything about a candidate chosen by the book, net flow, divergences,
+or a model. With 171 trade dates the interval of a group's mean is ±$30 to ±$100 an attempt
+for the large groups and ±$200 by side, against a cost near $80.
+
+**Check of the unchanged fast replay.** `research replay GC SI` was rerun the same day with
+this code on the rebuilt database (`~/replay-fast-new-machine.json`): 2,783,418 candidates,
+and every number of the two tables of November 19 above is reproduced exactly.

@@ -1,7 +1,7 @@
 # Handoff
 
-Updated November 20, 2026, at the end of the work on the first development machine. The next
-session starts on a new machine. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal,
+Updated November 23, 2026, on the new development machine, after its database was rebuilt and
+build-order item 6 was run. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal,
 the six-step process, and the rules. This page says where the work stands and how to
 continue. The [roadmap](roadmap.md) is the map of what is computed and in what order,
 [todo.md](todo.md) lists the tasks, and the [build log](build-log.md) records what was
@@ -16,6 +16,12 @@ The experiments so far say three things:
 - Acting on a fast swing candidate has no edge: it loses about one spread at a one-minute
   bracket and at an hourly one, and no rule on the slow swings changes that
   ([replay](replay.md)). Staying flat is the rule every later input set must beat.
+- Acting on a middle (`10m@10s`) candidate has none either: at the market it loses about one
+  spread, a limit resting at the candidate's extreme gets a better price and still loses,
+  and no agreement rule passed
+  ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)). One pattern
+  repeated from the fast replay: entering against the `slow_atr_1` trend is worse than
+  entering with it.
 - Models on the stored price and swing features do not tell which early reversals complete
   better than the distance price has already moved
   ([benchmark](build-log.md#pr-f-results-labels-and-benchmark)). That tested one target on
@@ -38,14 +44,17 @@ for judging a result that were written before the data that will test them
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next tasks**, in order ([build order](roadmap.md#build-order)): set up the new machine
-and rebuild the database there ([steps](#moving-to-the-new-machine)); then item 6, the
-replay of the middle timeframe's candidates, which needs no rebuild and no new data; then
-items 7 to 9, the base changes, the book, and the news table, all before the six-year
-history is built in item 10 ([how](#next-steps)). Items 1 to 5 are done.
+**The next tasks**, in order ([build order](roadmap.md#build-order)): items 7 to 9, the base
+changes, the book, and the news table, all before the six-year history is built in item 10
+([how](#next-steps)). Items 1 to 6 are done.
 
-**The state of the first machine** (November 20): `main` is clean, lint and tests pass,
-`ingest plan GC SI` reports every contract `current`, and the database holds one year of GC
+**One thing is owed from the first machine:** `fingerprint-old-machine.txt` was not copied.
+Until it is compared with `~/fingerprint-new.txt`, the two databases are known to be equal
+in row counts and in everything the fast replay reads, not bit for bit
+([what was checked](build-log.md#the-new-machine-november-23-2026)).
+
+**The state of this machine** (November 23): lint and tests pass,
+`ingest plan GC SI` reports every contract `current`, and the database (151 GB) holds one year of GC
 and SI on three timeframes. One year of MBP-1 for GC and SI is in `data/databento/mbp-1/`
 (27 GB). They are the proof of concept: Paul keeps the files of PL, ES, YM, and RTY in cloud
 storage, and they return, with NQ and five more years of GC and SI, on the new machine.
@@ -202,7 +211,7 @@ These are fundamental; changing any of them changes every stored value.
 | -------- | ----- |
 | Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); the after-cost replay and its agreement rules (#90, #91); **the timeframe as a parameter and the middle timeframe `10m@10s`** (#94, #95); **one set of stages for every timeframe** (the PR after them) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC and SI in `data/databento/mbp-1/` (27 GB), checksums and full decode verified; PL, ES, YM, and RTY were verified too and removed on November 20 (Paul keeps the files in cloud storage); NQ not downloaded; TBBO files deleted |
-| Database | PostgreSQL 18 database `trading`, 146 GB: `0001_baseline` through `0009_one_set_of_stages` applied; the one-second statistics (`stats_1m_1s`, 70,731,900 rows) added November 20; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry lists the 1,866 MBP-1 files |
+| Database | Rebuilt on the new machine on November 23 (151 GB, same row counts). As it stood on the first machine: PostgreSQL 18 database `trading`, 146 GB: `0001_baseline` through `0009_one_set_of_stages` applied; the one-second statistics (`stats_1m_1s`, 70,731,900 rows) added November 20; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry listed the 1,866 MBP-1 files there; the new one lists the 622 of GC and SI |
 | Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; no rule or model tested so far beats staying flat after costs |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
@@ -237,13 +246,17 @@ from the DBN files by the code, in under an hour for the year held.
 3. **Build the database:**
 
    ```sh
-   createdb trading
+   psql -d postgres -c "CREATE ROLE trading LOGIN CREATEDB"   # the role the code connects as
+   psql -d postgres -c "CREATE DATABASE trading OWNER trading"
    uv run research catalog --verify      # every file against its checksum
    uv run research db migrate            # 0001 to 0009
    uv run research db register
    caffeinate -i uv run research ingest run GC SI 2> ~/ingest-new-machine.log
    uv run research ingest plan GC SI     # every contract `current`
    ```
+
+   Apply the bulk-load server settings first ([storage](../../lib/db-research/README.md#local-setup)):
+   a new PostgreSQL has none of them.
 
 4. **Prove it is the same database.** `scripts/db-fingerprint.sh > ~/fingerprint-new.txt`,
    then `diff` it with `fingerprint-old-machine.txt` from the first machine (among the
@@ -269,6 +282,10 @@ The order is the roadmap's [build order](roadmap.md#build-order). Items 1 to 5 a
 the replay, sparse swing storage, the timeframe as a parameter, the middle timeframe, and
 one set of stages for every timeframe
 ([what was built](build-log.md#one-set-of-stages-for-every-timeframe-november-20-2026)).
+Item 6, the replay of the middle timeframe's candidates, is done too
+([what was built](build-log.md#replay-of-the-middle-timeframes-candidates-november-23-2026)):
+`replay.py` reads its settings from a `Spec` per timeframe, and a new replay is a new `Spec`
+with its section in [replay.md](replay.md), written before the run.
 
 **How a timeframe is built now.** `pipeline.TIMEFRAMES` lists the stored timeframes. Each
 is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stages come from
@@ -277,15 +294,6 @@ is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stage
 reclaim window and label horizon, and a migration that copies the tables (`0008` is the
 pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
-
-**6. Replay the middle timeframe's candidates.** `benchmark.py` and `replay.py` read the
-fast candidates and the slow scales by name (`row = ordinal // 60`, `FAST_LABELS`,
-`SLOW_SCALES`). Give them the timeframe of the candidates and of the bracket. Then, with
-the spec written first in [replay.md](replay.md): middle candidates (`pivot_label_10s`),
-the slow bracket, a market entry and a limit entry resting at the candidate's level, the
-daily loss cap ([decision 19](roadmap.md#decisions-of-november-20-2026)), the micro-cost
-stress, and results for buys and sells apart. Run it alone and split by agreement with the
-slow swings, as the fast candidates were.
 
 **7. Base changes, in one rebuild.**
 

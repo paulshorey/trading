@@ -6,6 +6,73 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Replay of the middle timeframe's candidates (November 23, 2026)
+
+Build-order item 6: step 4's candidates judged by step 6's measure. The spec was committed
+before any code read an outcome, and the result is in
+[replay.md](replay.md#results-for-the-middle-timeframe-november-23-2026): no group passed.
+
+**What was built**
+
+- `replay.py` takes its settings from a `Spec`: the timeframe of the candidates, the label
+  variants, the brackets, the entry orders, the cost models, and whether the trusted-market
+  eligibility ([decision 23](roadmap.md#decisions-of-november-20-2026)) and the daily loss cap
+  ([decision 19](roadmap.md#decisions-of-november-20-2026)) apply. `fast` is the replay of
+  November 19 with nothing changed; `mid` is new (`--timeframe mid`). Another timeframe is
+  another `Spec`.
+- `Simulator.rest` and `labels.attempt_limit` (`strategy-core`): an entry as a limit order
+  resting at a price until an expiry. It fills on arrival when the book is already at or
+  through its price, else at its price when a trade prints through it. The engine's
+  strategies still send market entries only; this is for would-be trades.
+- `portfolio` applies the daily loss cap and counts the orders it refused and the sessions
+  in which it bound. Results are also given at micro costs, for buys and sells apart, and as
+  one portfolio in each half of the period for policies that fit nothing.
+- `benchmark.py` has the middle stream (`STREAMS["mid"]`), so `research benchmark models`
+  accepts the `mid_*` labels. No middle benchmark was run, and no detector task is defined
+  for the middle scales.
+
+**Checks**
+
+- The fast replay rerun with the new code reproduces the tables of November 19 exactly
+  (see below), so the refactor changed nothing it should not.
+- Tests: strategy-core 158, backtest-runner 68; `ruff` passes. `execution.py` and `labels.py`
+  are in no stage's identity: `ingest plan GC SI` still reports every contract `current`.
+
+## The new machine (November 23, 2026)
+
+The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cores, 64 GB,
+4 TB), following [the handoff](handoff.md#moving-to-the-new-machine).
+
+- `research catalog --verify`: 622 files, 29.19 GB, no checksum failure, 12 files `degraded`.
+- Migrations `0001` to `0009` applied; 622 files registered. (The old registry listed 1,866:
+  it also held the four products whose files were removed.)
+- `research ingest run GC SI`, run 1, 8 workers: 12 contracts, 858 contract-sessions,
+  70,731,900 second rows, no failure; `ingest plan GC SI` reports all 12 contracts `current`.
+  The database is 151 GB. Log: `~/ingest-new-machine.log`, result `~/ingest-new-machine.json`.
+- **Row counts equal the old machine's** in every table that this log records: 70,731,900 in
+  the second tables, 7,073,190 in the ten-second tables, 21,219,570 `pivot_10s`, 31,095,900
+  `pivot_1s`, 3,536,595 `pivot_1m`, 2,787,648 events (2,403,082 and 384,566), and 5,029,757,
+  915,075, and 197,721 label rows.
+- **The fingerprints could not be compared.** `~/fingerprint-old-machine.txt` is not on this
+  machine, nor are the other evidence files of the first one (`~/*.hash-*.txt`,
+  `~/replay-gc-si.json`). The new fingerprint is `~/fingerprint-new.txt` (576 lines: per
+  table, contract, and variant). Whether the two processors give bit-identical floats is
+  therefore still not shown.
+- **What stands in for it, in part:** `research replay GC SI` on the rebuilt database gives
+  2,783,418 candidates and reproduces every number of the two tables recorded on November 19
+  ([replay](replay.md#results-november-19-2026)): the eligible counts, R to four digits,
+  intervals, portfolio fills, net dollars, and drawdowns. Those depend on the fast labels,
+  both ATRs, the slow swings, and every trade and book record of 342 sessions, so those are
+  equal to the precision that changes a tick or a fill. It does not cover the middle
+  timeframe, the statistics and volatility tables, or last-bit differences that change no
+  outcome.
+- `pnpm lint`, `pnpm test`, `pnpm build`, and `research verify` on the example GC day pass.
+
+Two steps of the handoff were wrong and are corrected there: the database needs the role
+`trading` (`createdb trading` alone gives a database the code cannot open), and a new
+PostgreSQL has none of the bulk-load settings; they were applied as the
+[storage page](../../lib/db-research/README.md#local-setup) lists them.
+
 ## One set of stages for every timeframe (November 20, 2026)
 
 Build-order item 5, asked for by Paul: `1m@1s` should not be managed by its own logic. Its

@@ -243,10 +243,6 @@ code, in under an hour for the year held. Done for this machine on November 23
 New downloads (five more years of GC and SI, later other products): add each job folder
 unchanged, then `catalog --verify` and `ingest run`.
 
-A branch from another session, `docs/first-executable-pivot-model` (worktree
-`~/git/trading-wt-review-87`), holds unmerged commits about a pivot model. That design is
-withdrawn; Paul decides whether the branch and worktree are deleted.
-
 ## Next steps
 
 The order is the roadmap's [build order](roadmap.md#build-order). Items 1 to 6 are done, and
@@ -275,7 +271,7 @@ and `Engine.execute` ignores it while a position is open. To build, in `strategi
   one second at a time are still identical, and the UI still shows its trades.
 
 **8. The first decision model** follows its [spec](yardstick-spec.md). Paul is still
-reviewing the spec: confirm the label and the closing rules with him before building Part A.
+reviewing the label: confirm it with him before building Part A.
 Store runs and their variants in PostgreSQL (`research.*`) first, so every variant is counted.
 
 **9. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
@@ -306,17 +302,14 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 For Paul. His decisions are in the [roadmap](roadmap.md#decisions).
 
-1. **The first decision model's spec** ([spec](yardstick-spec.md)): the label, and which
-   closing rule is the main one. The spec proposes closing when the forecast no longer
-   favours the position, with "close only on the opposite signal" and "never close early"
-   run beside it.
+1. **The first decision model's label** ([spec](yardstick-spec.md)): Paul asked for it to be
+   explained before he confirms it. The closing rules are decided (decision 37).
 2. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
    its rows also stay out of indicator history is still open.
 3. **The live contract** (full-size or micro), which sets the cost model. Until it is
    chosen, results are reported at both.
 4. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
    is a percentage (decision 36); a drawdown limit is not set.
-5. **The branch `docs/first-executable-pivot-model`** and its worktree: delete or keep.
 
 ## Things to know
 

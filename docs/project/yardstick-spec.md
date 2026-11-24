@@ -1,8 +1,9 @@
 # The first decision model: spec
 
-**Proposed November 23, 2026 and revised the same day for Paul's decisions 35 and 36.
-Nothing is built and nothing has been run.** Whatever Paul changes is changed here before
-any outcome is read. It is build-order item 8 of the [roadmap](roadmap.md#build-order) and
+**Proposed November 23, 2026 and revised the same day for Paul's decisions 35 to 37.
+Nothing is built and nothing has been run.** Paul has confirmed the closing rules and the
+build order; the label waits for his confirmation. Whatever he changes is changed here
+before any outcome is read. It is build-order item 8 of the [roadmap](roadmap.md#build-order) and
 step 6 of the process; Part B needs the engine of item 7.
 
 ## In plain words
@@ -10,8 +11,8 @@ step 6 of the process; Part B needs the engine of item 7.
 The first version of the one trained model. At every `10m@10s` row it forecasts one number:
 how far price will go from here over the next hours, counted in the trade's own risk, up
 (positive) or down (negative). A rule turns the forecast into buy, sell, or nothing by
-comparing it with what a trade costs, and the position follows: a sell while long closes the
-long. It will probably do nothing almost always and earn nothing, because its inputs are the
+comparing it with what a trade costs. By default a position is held to its stop, target,
+or time limit; two rules that close it earlier, when the forecast turns, are run beside that. It will probably do nothing almost always and earn nothing, because its inputs are the
 ones that have shown nothing so far. Its job is to be the measuring stick: every later input
 is judged by whether this model forecasts better with it, on the same rows.
 
@@ -44,9 +45,9 @@ It runs in the engine of [build-order item 7](roadmap.md#build-order).
 | Position and decisions | The position is long, flat, or short. At every eligible decision row the policy decides buy, sell, or nothing, and the position moves one step ([decision 35](roadmap.md#decisions)). A sell while long closes the long with a market order and cancels its orders; a sell at a later row, while flat, opens a short. Buys mirror this |
 | Cost `c` | The round trip's cost in R at the row: the spread plus both commissions, over the stop distance |
 | Opening | While flat: buy if the forecast is above `c`, sell if it is below `-c`. A position is opened only when the move forecast is larger than what the trade costs |
+| Closing, rule `hold` | No closing decision. The default and the headline result ([decision 37](roadmap.md#decisions)): the simple, traditional trade, and exactly the one the label describes |
 | Closing, rule `turn` | While long: sell when the forecast is at or below 0 (mirror for a short). The cost of closing is paid sooner or later by every position, so it is no reason to stay in one that the forecast no longer favours. Reopening needs the forecast beyond `c` again, so a forecast hovering near zero cannot trade in and out |
 | Closing, rule `opposite` | While long: sell only when the forecast is below `-c`, the level that would open a short. The position rides through weak forecasts and leaves on a clear turn |
-| Closing, rule `hold` | No closing decision: the control, which is the labelled trade |
 | Protection, under every rule | A stop one R against the entry, a target one R in favour, a 3-hour limit, and the session's forced exit. They never block a decision: a closing decision acts whatever they say |
 | Entry `cross` | A market order |
 | Entry `passive` | A limit order at the best bid for a buy (best ask for a sell) of the book it meets, cancelled after 5 seconds ([decision 28](roadmap.md#decisions)). Unfilled, the next decision row decides again. The threshold stays `c` for both entries, so they are compared on the same decisions |
@@ -62,10 +63,10 @@ That is three closing rules and two entries: six policy cells, each under two ex
 
 - **Skill:** the mean daily rank correlation of `trees` is above zero with its interval,
   pooled, and its mean is above zero for each product.
-- **A policy:** net R per trade date above zero with its interval on the test months, under
+- **A policy** (the `hold` rule is the headline): net R per trade date above zero with its interval on the test months, under
   both executions, with a mean at or above zero for each product, for buys, for sells, and
   at micro costs.
-- **A closing rule** is better than `hold` when the difference in net R per trade date,
+- **`turn` or `opposite`** is better than `hold` when the difference in net R per trade date,
   paired by date on the same openings, has its interval above zero.
 - **An input added later** earns its place when the skill with it is above the skill without
   it, the difference paired by trade date with its interval above zero. The policy result
@@ -90,8 +91,8 @@ Each is a variant of its own, written into this page before it is run.
   [Plessen and Bemporad](https://arxiv.org/abs/1709.07527)). It is the position rule of
   decision 35 with perfect foresight, so a model trained on it learns when to step, not only
   where price goes. The stated cost sets how large a move must be to count. This is the
-  first variant after the yardstick, because a position that follows decisions is no longer
-  the trade the label above describes.
+  first variant after the yardstick: under `turn` and `opposite` a position follows decisions
+  and is no longer the trade the label above describes.
 - **Moving the stop to the entry price** once price has moved 0.5 or 1 R in favour (Paul's
   question of November 23). It gives up no money on paper, but for a price with no drift it
   changes which trades lose, not what they earn on average, and it is often hit by ordinary

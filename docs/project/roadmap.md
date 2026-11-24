@@ -54,11 +54,11 @@ Three timeframes, each with one job:
 **A decision is a step, and the position follows the market** ([decision 35](#decisions)).
 At each decision row the model's forecast becomes buy, sell, or nothing. The position is
 long, flat, or short, and a decision moves it one step: a buy opens a long when flat and
-closes a short when short; a sell is the mirror. So a position is never held against a
-model that has turned: the opposite decision closes it at the market and cancels its
-orders, whatever the bracket says. The bracket stays as protection for what the model cannot
-see in time: a stop for a sudden move between decision rows or a gap in the data, a time
-limit, and the flat-before-close rule. Trades are intraday.
+closes a short when short; a sell is the mirror. A closing decision exits at the market and
+cancels the position's orders, whatever the bracket says. The bracket is a stop, a target, a
+time limit, and the flat-before-close rule. Whether a policy closes on decisions at all is a
+setting: the default holds a position to its bracket, and two rules that close early run
+beside it ([decision 37](#decisions)). Trades are intraday.
 
 **Risk is a share of the account** ([decision 36](#decisions)): each trade risks a set
 percentage between its entry and its stop, and a day stops after a set percentage is lost.
@@ -263,14 +263,20 @@ and 34 (replaced by 35), 19 (replaced by 36).
     to take one; the decision model weighs it.
 35. **A decision is a step in position** (Paul, November 23). The position is long, flat, or
     short. A decision is buy, sell, or nothing, and moves the position one step: a sell
-    while long closes the long, and a later sell opens a short. The opposite decision always
-    closes a position, at the market, and cancels its orders, whatever its bracket says: no
-    position is held in a market the model has turned against. The bracket remains as
-    protection. Built into the engine before anything is judged by it.
+    while long closes the long, and a later sell opens a short. A closing decision exits at
+    the market and cancels the position's orders, whatever its bracket says. Built into the
+    engine before anything is judged by it.
 36. **Risk and the daily limit are percentages of the account**, not dollars (Paul,
     November 23). The risk of a trade between entry and stop, the loss that ends a day, and
     the account size are variables of a run; the position is sized from them. The first
     values are 0.5% a trade and 2% a day, to be changed freely.
+
+37. **Closing rules** (Paul, November 23). The engine can always close on a decision
+    (decision 35); when a policy does so is a setting. The default and the headline result is
+    `hold`: a position leaves only by its stop, target, time limit, or the session's forced
+    exit, the simple and traditional way. `turn` (close when the forecast no longer favours
+    the position) and `opposite` (close on a clear signal the other way) run beside it on the
+    same openings, to see what closing early adds.
 
 **Open, to be tested and not decided:** moving the stop to the entry price once price has
 moved a set number of ATRs in favour ([named in the spec](yardstick-spec.md#named-now-run-later)).

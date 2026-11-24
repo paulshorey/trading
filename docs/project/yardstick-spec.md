@@ -319,6 +319,13 @@ before. The unshrunk models are unchanged by the review's corrections to the tar
 the stored rows: `trees` 0.051 (-0.027 to 0.126) with a squared error 12% above `flat`'s,
 `trees_coarse` 0.027 (-0.051 to 0.107) and 10% above.
 
+**One row a session fewer** (run 9, `~/yardstick-review2.json`). The row exactly one hour
+before the forced exit was eligible here, while the engine opens nothing with an hour or
+less left; eligibility now needs more than an hour. 432,185 eligible rows, from 432,513.
+All four slopes are again zero in every month. `trees` 0.044 (-0.030 to 0.116), 12% above
+`flat`; `trees_coarse` 0.029 (-0.049 to 0.111), 10% above; `ridge` 0.031 (-0.044 to 0.107).
+The horizon map was not rerun, and the policy was not replayed: every forecast is zero.
+
 ## What has to be built
 
 1. The label (`strategy-core`, beside `labels.py`), with tests.

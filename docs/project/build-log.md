@@ -35,7 +35,9 @@ and the four were merged together.
   engine opens nothing more until that session's close; the dataset's cache key also holds
   each source file's condition and the part of the day it covers; a backtest's warm-up
   leaves out a partly downloaded session only when it lies outside the stored period (one
-  between whole sessions is stored, as missing rows, and is replayed).
+  between whole sessions is stored, as missing rows, and is replayed). The cache key holds
+  every builder of the selected contracts' rows, not one digest a stage. A policy result is
+  also given with each exit priced without a book charged one further stop distance.
 
 **Build and checks**
 
@@ -48,6 +50,9 @@ and the four were merged together.
   is the front one.
 - The decision model, rebuilt from its rows (run 7) and its policy (run 8): unchanged, the
   same 432,513 targets with the same barrier counts, every slope zero, no position opened.
+  Run 9, after the row exactly an hour before the forced exit stopped being eligible (the
+  engine opens nothing then): 432,185 rows, every slope zero, `trees` 0.044 (-0.030 to
+  0.116).
 - Tests: strategy-core 160, backtest-runner 61. New: a limit resting through missing data;
   queue credit by aggressor side; delayed prints at both ends of a target's interval; a
   cache key that changes with a target version or a source file; forward blocks with a

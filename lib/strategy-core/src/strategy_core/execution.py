@@ -17,9 +17,16 @@ Timing model (see docs/project/engine.md):
   later record says so. Most trades are followed by that record at the same event time, so a
   lookup at the trade's time already reads it. Where none follows, the book did not visibly
   change (the trade met hidden or spread-implied liquidity), and the earlier book stands.
-- Time and session exits are market orders sent at the deadline.
-- An entry is a market order (`fill`). A resting limit entry (`rest`) is for replays of would-be
-  trades: the engine's strategies send market entries only.
+- Time and session exits are market orders sent at the deadline. A closing decision
+  (`close`) is the same order sent when the decision is made; until it arrives the stop and
+  the target can still fill.
+- An entry is a market order (`fill`) or a resting limit (`rest`): at the best bid or ask of
+  the book it meets, or at a given price, cancelled when it expires. A limit at the touch
+  joins the back of the displayed size, which only trades at its price reduce
+  (`passive_fill="queue"`); MBP-1 shows no queue, so `"through"` is the strict bound.
+- With `Bracket.breakeven_atr`, the stop moves to the entry price once a trade has printed
+  that far in favour: the engine learns of the trade when its second closes and the amended
+  order arrives `order_latency` later; the stop is at the entry price from then on.
 - Reactions (cooldown, the hold timer) start when the engine learns of a fill: when the
   fill's second closes, never the earlier exchange time.
 
@@ -45,7 +52,7 @@ from .market import (
     SessionCalendar,
     Trades,
 )
-from .strategies import Bracket
+from .strategies import Bracket, Entry
 
 MS = 1_000_000
 
@@ -58,16 +65,31 @@ class ExecutionConfig:
     close_delay_ms: float = 100.0  # wait after each second for late trades, then decide
     order_latency_ms: float = 50.0  # decision to exchange arrival
     limit_fill: str = "through"
+    passive_fill: str = "queue"  # a limit entry at the touch: "queue" or "through"
     depth_penalty_ticks: int = 1
     adverse_ticks: int = 0  # extra ticks every marketable order pays: a stress test, not a model
     cooldown_s: float = 10.0
     flat_before_close_s: int = 300
+    # Risk as a share of the account (roadmap decision 36). With an account size, a position is
+    # sized so that its stop risks `risk_pct` of it (whole contracts, rounded down; a signal
+    # whose one contract risks more is not traded), and no position is opened in a session
+    # once `daily_loss_pct` of it has been lost there. Without one, every trade is `contracts`.
+    account_usd: float | None = None
+    risk_pct: float = 0.5
+    daily_loss_pct: float = 2.0
 
     def __post_init__(self):
         if type(self.contracts) is not int or not 1 <= self.contracts <= 100:
             raise ValueError("contracts must be an integer from 1 to 100")
         if self.limit_fill not in ("through", "touch"):
             raise ValueError('limit_fill must be "through" or "touch"')
+        if self.passive_fill not in ("queue", "through"):
+            raise ValueError('passive_fill must be "queue" or "through"')
+        if self.account_usd is not None and not 0 < self.account_usd <= 1e12:
+            raise ValueError("account_usd must be positive, or None")
+        for name in ("risk_pct", "daily_loss_pct"):
+            if not 0 < getattr(self, name) <= 100:
+                raise ValueError(f"{name} must be in (0, 100]")
         for name in (
             "commission_per_contract",
             "feed_latency_ms",
@@ -108,6 +130,14 @@ class ExecutionConfig:
 
 
 FILLED, WAIT, CANCELLED, EXPIRED = "filled", "wait", "cancelled", "expired"
+
+
+def bracket_atr(context: dict, bracket: Bracket) -> np.ndarray:
+    """The ATR in price units that sizes `bracket`, from a feature frame's context."""
+    key = f"atr:{bracket.atr}"
+    if key not in context and bracket.atr == "1m@1s":
+        key = "atr"
+    return context[key]
 
 
 def slot_end(time: int) -> int:
@@ -305,13 +335,42 @@ class Position:
     worst_px: int = 0
     last_px: int = 0  # latest trade price after the entry, or the entry price
     flags: list[str] = field(default_factory=list)
+    # a limit entry: its price (0: the touch of the book it meets), when it is cancelled, and,
+    # once it has reached the exchange at the touch, the size that must still trade at its
+    # price before it is filled: what was displayed ahead of it, and its own (0: not tracked)
+    limit_px: int = 0
+    expire_ns: int = 0
+    resting: bool = False
+    queue: int = 0
+    stop_at_entry_ns: int = 0  # from when the stop is at the entry price (0: it has not moved)
 
 
 class Simulator:
     def __init__(
-        self, product: Product, config: ExecutionConfig, bracket: Bracket, calendar: SessionCalendar
+        self,
+        product: Product,
+        config: ExecutionConfig,
+        bracket: Bracket,
+        calendar: SessionCalendar,
+        entry: Entry | None = None,
     ):
         self.product, self.config, self.bracket, self.calendar = product, config, bracket, calendar
+        self.entry = entry or Entry()
+
+    def stop_ticks(self, atr: float | np.ndarray) -> float | np.ndarray:
+        """The entry-to-stop distance of an order with this ATR, in ticks (at least one)."""
+        return np.maximum(np.round(self.bracket.stop_atr * atr * 1e9 / self.product.tick_size), 1)
+
+    def size(self, atr: np.ndarray) -> np.ndarray:
+        """Contracts of an order with each ATR: the configured number, or with an account size
+        as many whole contracts as keep the stop's risk within `risk_pct` of it (0: none)."""
+        c = self.config
+        if c.account_usd is None:
+            return np.full(len(atr), c.contracts, np.int64)
+        risk = self.stop_ticks(atr) * self.product.tick_value  # dollars a contract
+        with np.errstate(invalid="ignore"):
+            n = np.floor(c.account_usd * c.risk_pct / 100 / risk)
+        return np.where(np.isfinite(n), np.minimum(n, 100), 0).astype(np.int64)
 
     def order(
         self,
@@ -321,13 +380,14 @@ class Simulator:
         atr: float,
         features: dict,
         view: ExecView,
+        contracts: int | None = None,
     ) -> Position:
         c = self.config
         decision = signal_end + c.close_delay
         close = int(self.calendar.close_after(np.array([signal_end]))[0])
         pos = Position(
             direction,
-            c.contracts,
+            c.contracts if contracts is None else contracts,
             contract,
             signal_end,
             decision,
@@ -339,7 +399,24 @@ class Simulator:
         seen = view.book.known(signal_end)
         if seen is not None and seen.usable:
             pos.decision_bid, pos.decision_ask = seen.bid, seen.ask
+        if self.entry.kind == "passive":
+            pos.expire_ns = pos.arrival_ns + round(self.entry.wait_s * NS)
         return pos
+
+    def enter(self, view: ExecView, pos: Position) -> tuple[str, int, int]:
+        """Work a pending entry as its order kind says. Returns the status, when the engine
+        learns the outcome, and the index of the first trade after a fill (for `advance`)."""
+        if pos.expire_ns:
+            return self.rest(view, pos)
+        status, known = self.fill(view, pos)
+        return status, known, 0
+
+    def close(self, pos: Position, decision_ns: int) -> None:
+        """A closing decision made at `decision_ns`: a market order that reaches the exchange
+        `order_latency` later, unless the position's timed exit is due sooner."""
+        due = decision_ns + self.config.order_latency
+        if due < pos.exit_arrival_ns:
+            pos.exit_arrival_ns, pos.timed_reason = due, "decision"
 
     def price(self, quote: Quote | None, side: int, contracts: int, flags: list[str]) -> int | None:
         """Price a marketable order of `side` (+1 buy, -1 sell) against `quote`, or None when
@@ -380,56 +457,72 @@ class Simulator:
         stop = max(round(self.bracket.stop_atr * pos.atr * 1e9 / tick), 1) * tick
         pos.target_px = pos.entry_px + pos.direction * target
         pos.stop_px = pos.entry_px - pos.direction * stop
-        timer = pos.entry_known_ns + self.bracket.max_hold_s * NS
+        hold = self.bracket.max_hold_s
+        timer = pos.force_exit_ns + 1 if hold is None else pos.entry_known_ns + hold * NS
         deadline = min(timer, pos.force_exit_ns)
         pos.timed_reason = "time" if timer <= pos.force_exit_ns else "session_close"
         pos.exit_arrival_ns = deadline + self.config.order_latency
         pos.best_px = pos.worst_px = pos.last_px = pos.entry_px
 
-    def rest(
-        self, view: ExecView, pos: Position, limit_px: int, expire_ns: int
-    ) -> tuple[str, int, int]:
-        """Fill a pending entry as a limit order at `limit_px`, resting from its arrival until
-        `expire_ns` (or the forced-exit time, if earlier). Returns the status, when the engine
-        learns the outcome, and the index of the first trade after the fill (for `advance`).
+    def rest(self, view: ExecView, pos: Position) -> tuple[str, int, int]:
+        """Work a pending limit entry: at `pos.limit_px`, or at the touch of the book it meets
+        (the best bid for a buy, the best ask for a sell) when that is 0, until `pos.expire_ns`
+        or the forced-exit time. It can be called chunk by chunk: what the order needs from
+        earlier chunks is kept on the position. Returns the status, when the engine learns the
+        outcome, and the index of the first trade after a fill (for `advance`).
 
         - `CANCELLED`: the order arrives at or after the forced-exit time, or meets no usable
           book (whether it would have rested correctly is then unknown).
-        - `EXPIRED`: it arrived after its expiry, or no trade filled it before then.
-        - `FILLED`: the book it meets is already at or through its price, so it fills on
-          arrival as a marketable order, never worse than its price; or a later trade prints
-          through its price (`limit_fill="through"`) or at it (`"touch"`), and it fills at its
-          price at that trade's event time. There is no queue position.
+        - `EXPIRED`: it arrived after its expiry, or nothing filled it before then.
+        - `FILLED`: a given price that the book is already at or through fills on arrival as a
+          marketable order, never worse than its price. Otherwise a later trade through its
+          price fills it at its price, at that trade's event time (`limit_fill="touch"`: also a
+          trade at it). An order at the touch with `passive_fill="queue"` also fills when the
+          size displayed ahead of it on arrival, and its own, has traded at its price.
         - `WAIT`: the view ends before the outcome is known."""
-        at, d = pos.arrival_ns, pos.direction
-        expire = min(expire_ns, pos.force_exit_ns)
-        if view.end <= at:
-            return WAIT, 0, 0
-        if at >= pos.force_exit_ns:
-            return CANCELLED, pos.force_exit_ns, 0
-        delay = self.config.close_delay
-        if at >= expire:
-            return EXPIRED, slot_end(at) + delay, 0
-        quote = view.book.at(at)
-        if quote is None or not quote.usable:
-            return CANCELLED, slot_end(at) + delay, 0
+        at, d, delay = pos.arrival_ns, pos.direction, self.config.close_delay
+        expire = min(pos.expire_ns, pos.force_exit_ns)
         j = int(np.searchsorted(view.ts_max, at, side="left"))
-        if (quote.ask <= limit_px) if d > 0 else (quote.bid >= limit_px):
-            px = self.price(quote, d, pos.contracts, pos.flags)
-            px = min(px, limit_px) if d > 0 else max(px, limit_px)
-            self.opened(pos, px, at, slot_end(at) + delay)
-            return FILLED, pos.entry_known_ns, j
+        if not pos.resting:  # the order reaches the exchange in this view, or later
+            if view.end <= at:
+                return WAIT, 0, 0
+            if at >= pos.force_exit_ns:
+                return CANCELLED, pos.force_exit_ns, 0
+            if at >= expire:
+                return EXPIRED, slot_end(at) + delay, 0
+            quote = view.book.at(at)
+            if quote is None or not quote.usable:
+                return CANCELLED, slot_end(at) + delay, 0
+            if not pos.limit_px:  # join the touch, behind what is displayed there
+                pos.limit_px = quote.bid if d > 0 else quote.ask
+                shown = quote.bid_size if d > 0 else quote.ask_size
+                if self.config.passive_fill == "queue" and shown < UNDEF_SIZE:
+                    pos.queue = int(shown) + pos.contracts
+            elif (quote.ask <= pos.limit_px) if d > 0 else (quote.bid >= pos.limit_px):
+                px = self.price(quote, d, pos.contracts, pos.flags)
+                px = min(px, pos.limit_px) if d > 0 else max(px, pos.limit_px)
+                self.opened(pos, px, at, slot_end(at) + delay)
+                return FILLED, pos.entry_known_ns, j
+            pos.resting = True
+        limit = pos.limit_px
         lim = j + int(np.searchsorted(view.known[j:], slot_end(expire) + delay, side="right"))
         prices, when = view.t.price[j:lim], view.t.ts_event[j:lim]
         live = (when >= at) & (when < expire)
         if self.config.limit_fill == "through":
-            hit = live & (prices < limit_px if d > 0 else prices > limit_px)
+            hit = live & (prices < limit if d > 0 else prices > limit)
         else:
-            hit = live & (prices <= limit_px if d > 0 else prices >= limit_px)
+            hit = live & (prices <= limit if d > 0 else prices >= limit)
+        traded = 0
+        if pos.queue:  # trades at its price work through the size ahead, then its own
+            at_price = live & (prices == limit)
+            done = np.cumsum(np.where(at_price, view.t.size[j:lim], 0))
+            hit |= at_price & (done >= pos.queue)
+            traded = int(done[-1]) if len(done) else 0
         if hit.any():
             k = j + int(np.argmax(hit))
-            self.opened(pos, limit_px, int(view.t.ts_event[k]), int(view.known[k]))
+            self.opened(pos, limit, int(view.t.ts_event[k]), int(view.known[k]))
             return FILLED, pos.entry_known_ns, k + 1
+        pos.queue -= traded  # still above zero: the order was not filled
         if view.end <= expire:
             return WAIT, 0, 0
         return EXPIRED, slot_end(expire) + delay, 0
@@ -449,12 +542,13 @@ class Simulator:
         live = (when >= pos.entry_ns) & (when < due)
         long = pos.direction > 0
         through = self.config.limit_fill == "through"
+        stop = self.stop_levels(view, j, lim, pos, live)
         if long:
             hit_t = live & (prices > pos.target_px if through else prices >= pos.target_px)
-            hit_s = live & (prices <= pos.stop_px)
+            hit_s = live & (prices <= stop)
         else:
             hit_t = live & (prices < pos.target_px if through else prices <= pos.target_px)
-            hit_s = live & (prices >= pos.stop_px)
+            hit_s = live & (prices >= stop)
         kt = int(np.argmax(hit_t)) if hit_t.any() else len(prices)
         ks = int(np.argmax(hit_s)) if hit_s.any() else len(prices)
         k = min(kt, ks)
@@ -462,6 +556,8 @@ class Simulator:
         flags = list(pos.flags)
         if k < len(prices):
             at, known = int(t.ts_event[j + k]), int(view.known[j + k])
+            if pos.stop_at_entry_ns and at >= pos.stop_at_entry_ns:
+                flags.append("stop_at_entry")
             if kt < ks:
                 return j + k + 1, self.record(pos, at, known, pos.target_px, "target", flags)
             # The stop-market order meets the book its trigger left: the last record of the
@@ -478,11 +574,35 @@ class Simulator:
             return j + k + 1, self.record(pos, at, known, px, "stop", flags)
         if view.end <= due:
             return n, None
+        if pos.stop_at_entry_ns and due >= pos.stop_at_entry_ns:
+            flags.append("stop_at_entry")
         px = self.price(view.book.at(due), -pos.direction, pos.contracts, flags)
         if px is None:
             flags.append("no_book")
             px = pos.last_px
         return lim, self.record(pos, due, slot_end(due) + delay, px, pos.timed_reason, flags)
+
+    def stop_levels(
+        self, view: ExecView, j: int, lim: int, pos: Position, live: np.ndarray
+    ) -> np.ndarray | int:
+        """The stop each trade of `view.t[j:lim]` is judged against: the position's stop, or
+        the entry price from the time a break-even amendment took effect. The first live trade
+        that far in favour sets that time, when the engine has learned of it and its amended
+        order has arrived; the position remembers it across chunks."""
+        k = self.bracket.breakeven_atr
+        if k is None:
+            return pos.stop_px
+        prices, when = view.t.price[j:lim], view.t.ts_event[j:lim]
+        if not pos.stop_at_entry_ns:
+            tick = self.product.tick_size
+            move = max(round(k * pos.atr * 1e9 / tick), 1) * tick
+            far = live & ((prices - pos.entry_px) * pos.direction >= move)
+            if far.any():
+                first = j + int(np.argmax(far))
+                pos.stop_at_entry_ns = int(view.known[first]) + self.config.order_latency
+        if not pos.stop_at_entry_ns:
+            return pos.stop_px
+        return np.where(when >= pos.stop_at_entry_ns, pos.entry_px, pos.stop_px)
 
     def excursion(self, pos: Position, prices: np.ndarray) -> None:
         if len(prices):

@@ -44,9 +44,11 @@ def test_stage_names_follow_the_timeframe():
     assert names == [
         "bar_10s", "candle_10m_10s", "stats_10m_10s", "vol_10s",
         "pivot_10s:mid_atr_0p5", "pivot_10s:mid_atr_1", "pivot_10s:mid_atr_2",
+        "pivot_10s:mid_atr_3",
     ]  # fmt: skip
     assert [s.NAME for s in SLOW_SCALES] == [
         "pivot_1m:slow_atr_0p5", "pivot_1m:slow_atr_1", "pivot_1m:slow_atr_2",
+        "pivot_1m:slow_atr_3",
     ]  # fmt: skip
     assert {s.RESOLUTION for s in MIDDLE_STAGES} == {"10s"}
     assert MIDDLE_STAGES[3].INPUTS == ("bar_10s", "candle_10m_10s")

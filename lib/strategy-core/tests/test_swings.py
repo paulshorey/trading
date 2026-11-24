@@ -505,7 +505,7 @@ def test_fast_pivots_equal_a_plain_python_reference(days, whole, stage):
         )
     )
     assert got == want
-    assert len(want) > (150 if stage.K < 2 else 40)
+    assert len(want) > (150 if stage.K < 2 else 40 if stage.K < 3 else 20)
     # events carry their row: its end, its availability, and the trade's time inside it
     np.testing.assert_array_equal(ev["end_ns"], ends[ev["slot_ordinal"] - first])
     np.testing.assert_array_equal(ev["available_ns"], ev["end_ns"] + CONFIG.close_delay)
@@ -582,7 +582,7 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
         )
     )
     assert got == [(k, int(minute[a]), level, int(minute[b])) for k, a, level, b in want]
-    assert len(want) > {0.1: 60, 0.2: 25, 0.5: 8, 1.0: 3, 2.0: 0}[stage.K]
+    assert len(want) > {0.1: 60, 0.2: 25, 0.5: 8, 1.0: 3, 2.0: 0, 3.0: -1}[stage.K]
     # a confirmation inside a minute is published with that minute's row, never earlier
     rows_, rn = join(whole, stage.NAME)
     np.testing.assert_array_equal(rows_["slot_ordinal"], candle["slot_ordinal"])
@@ -750,9 +750,10 @@ def test_warmup_covers_the_threshold_inputs_and_warm_reports_the_structure(days,
     atr = warmup.wilder(SMALL.atr_period)
     assert FAST[0](ctx).warmup() == atr * 60
     assert SLOW[0](ctx).warmup() == atr * 3600
-    assert {s.K for s in FAST} == {s.K for s in SLOW} == {0.5, 1.0, 2.0}
+    assert {s.K for s in FAST} == {s.K for s in SLOW} == {0.5, 1.0, 2.0, 3.0}
     assert [s.VARIANT for s in (*FAST, *SLOW)] == [
-        "fast_atr_0p5", "fast_atr_1", "fast_atr_2", "slow_atr_0p5", "slow_atr_1", "slow_atr_2",
+        "fast_atr_0p5", "fast_atr_1", "fast_atr_2", "fast_atr_3",
+        "slow_atr_0p5", "slow_atr_1", "slow_atr_2", "slow_atr_3",
     ]  # fmt: skip
     settings = FAST[1](ctx).settings()
     assert (settings["multiplier"], settings["spread_floor"], settings["reclaim_window_rows"]) == (
@@ -769,3 +770,34 @@ def test_warmup_covers_the_threshold_inputs_and_warm_reports_the_structure(days,
     assert warm == [False, True, True, True, True, False, True, True, True, True]  # 6th: the gap
     missing = join(whole, "bar_1s")[0]["status"] == MISSING
     assert missing.sum() == 40
+
+
+def test_the_structure_code_combines_the_trend_with_the_break_of_the_last_high_or_low():
+    from strategy_core.columns import Table
+    from strategy_core.stage_step_pivot import STRUCTURE, with_structure
+
+    n = 7
+    trend = np.array([1, 1, 1, 0, -1, -1, 0])
+    up_age = np.array([5, 0, 0, 0, 3, 0, 9])
+    down_age = np.array([0, 0, 7, 0, 0, 2, 4])
+    table = Table(
+        {
+            "end_ns": np.arange(n),
+            "trend": trend,
+            "break_up_age_s": up_age,
+            "break_down_age_s": down_age,
+        },
+        {
+            "trend": np.array([False] * 6 + [True]),
+            "break_up_age_s": up_age == 0,
+            "break_down_age_s": down_age == 0,
+        },
+    )
+    out = with_structure(table)
+    # up and extending, up and inside, up with its low broken, mixed and inside, down with its
+    # high broken, down and extending; the last row's trend is unknown
+    assert out.values["structure"].tolist() == [8, 7, 6, 4, 2, 0, 0]
+    assert out.nulls["structure"].tolist() == [False] * 6 + [True]
+    both = Table(table.values, table.nulls | {"trend": np.zeros(n, bool)})
+    assert with_structure(both).values["structure"][6] == 3  # both broken: the low more recently
+    assert STRUCTURE.role == "feature" and len(with_structure(table)) == n

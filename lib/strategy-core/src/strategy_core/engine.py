@@ -4,6 +4,10 @@ The engine consumes `MarketChunk`s: a session's trades and book events at once i
 backtest, or one second's as they arrive in a live or rehearsal session. Both paths run the same
 code and must produce identical features, decisions, and fills; tests and the
 `research verify` command check this. A run is one portfolio: one position at a time.
+
+A strategy decides at every second (strategies.py). While flat, its signal opens a position;
+while one is open, its closing decision exits at the market and cancels the bracket orders.
+The position therefore moves one step per decision: long, flat, or short.
 """
 
 from dataclasses import asdict, dataclass, field
@@ -13,6 +17,7 @@ import numpy as np
 from .bars import AggregationReport, aggregate, assignment_ns
 from .execution import (
     CANCELLED,
+    EXPIRED,
     WAIT,
     BookView,
     ExecutionConfig,
@@ -20,10 +25,11 @@ from .execution import (
     Position,
     Quote,
     Simulator,
+    bracket_atr,
 )
 from .features import FeatureConfig, FeatureFrame
-from .market import SECOND, BookEvents, Product, SessionCalendar, Trades
-from .strategies import Strategy
+from .market import NS, SECOND, BookEvents, Product, SessionCalendar, Trades
+from .strategies import Entry, Strategy
 
 
 @dataclass(frozen=True)
@@ -66,7 +72,8 @@ class Engine:
         self.product, self.calendar, self.strategy = product, calendar, strategy
         self.config = execution or ExecutionConfig()
         self.feature_config = features or FeatureConfig()
-        self.sim = Simulator(product, self.config, strategy.bracket, calendar)
+        self.entry = getattr(strategy, "entry", None) or Entry()
+        self.sim = Simulator(product, self.config, strategy.bracket, calendar, self.entry)
         self.contract = ""
         self.pipeline = self.features()
         self.pending: Position | None = None
@@ -78,7 +85,12 @@ class Engine:
         self.quote: Quote | None = None  # the book they left
         self.trades: list[dict] = []
         self.cancelled = 0
+        self.expired = 0  # limit entries that nothing filled
+        self.unsized = 0  # signals whose one contract risks more than the account allows
         self.signals = 0
+        self.session_pnl: dict[int, float] = {}  # by session close: its closed trades, in USD
+        self.limited: list[int] = []  # sessions stopped by the daily loss limit
+        self.blocked_until = 0  # no position is opened before this time
         self.reports: dict[str, AggregationReport] = {}
         self.contracts: list[str] = []
 
@@ -97,12 +109,20 @@ class Engine:
         )
         self.reports.setdefault(chunk.session, AggregationReport()).add(agg.report)
         frame = self.pipeline.update(chunk)
-        signals = np.zeros(len(frame), np.int8)
-        if chunk.tradable and len(frame):
+        n = len(frame)
+        signals, contracts = np.zeros(n, np.int8), np.zeros(n, np.int64)
+        closes = np.zeros(n, bool), np.zeros(n, bool)
+        if chunk.tradable and n:
             signals = self.strategy.signals(frame.features).astype(np.int8)
             close = self.calendar.close_after(frame.end)
-            signals[(close - frame.end) <= c.flat_before_close] = 0
-            signals[~np.isfinite(frame.context["atr"])] = 0
+            signals[(close - frame.end) <= c.flat_before_close + self.entry.cutoff_s * NS] = 0
+            atr = bracket_atr(frame.context, self.strategy.bracket)
+            signals[~np.isfinite(atr)] = 0
+            contracts = self.sim.size(atr)
+            self.unsized += int(np.count_nonzero(signals[contracts == 0]))
+            signals[contracts == 0] = 0
+            if hasattr(self.strategy, "closes"):
+                closes = self.strategy.closes(frame.features)
         self.signals += int(np.count_nonzero(signals))
         view = ExecView.from_aggregation(
             chunk.trades,
@@ -115,7 +135,7 @@ class Engine:
         )
         if view.n:
             self.ts_floor = int(view.ts_max[-1])
-        closed = self.execute(view, frame, signals)
+        closed = self.execute(view, frame, signals, contracts, closes)
         if view.book.n:
             book = view.book
             self.book_floor, self.book_recv = int(book.ts_max[-1]), book.recv_max
@@ -132,34 +152,54 @@ class Engine:
             return BookView.empty()
         return book_view(chunk, ends, self.config, self.quote, self.book_floor, self.book_recv)
 
-    def execute(self, view: ExecView, frame: FeatureFrame, signals: np.ndarray) -> list[dict]:
+    def execute(
+        self,
+        view: ExecView,
+        frame: FeatureFrame,
+        signals: np.ndarray,
+        contracts: np.ndarray,
+        closes: tuple[np.ndarray, np.ndarray],
+    ) -> list[dict]:
         closed: list[dict] = []
         candidates = np.flatnonzero(signals)
-        decisions = frame.end[candidates] + self.config.close_delay
+        decided = frame.end + self.config.close_delay  # when each row's decision is made
+        decisions = decided[candidates]
         j = 0
         while True:
             if self.pending is not None:
-                status, known = self.sim.fill(view, self.pending)
+                status, known, after = self.sim.enter(view, self.pending)
                 if status == WAIT:
                     break
-                if status == CANCELLED:  # at the forced-exit time, or no book to fill at
-                    self.cancelled += 1
+                if status in (CANCELLED, EXPIRED):
+                    # at the forced-exit time, no book to fill at, or a limit nothing filled
+                    self.cancelled += status == CANCELLED
+                    self.expired += status == EXPIRED
                     self.now = max(self.now, known)
                     self.pending = None
                     continue
                 self.position, self.pending = self.pending, None
+                j = max(j, after)
                 continue
             if self.position is not None:
-                j, trade = self.sim.advance(view, j, self.position)
+                pos = self.position
+                # The first closing decision made once the engine knows of the position: a
+                # market order, unless the bracket fills before it arrives.
+                wanted = closes[0] if pos.direction > 0 else closes[1]
+                first = np.flatnonzero(wanted & (decided >= pos.entry_known_ns))
+                if len(first):
+                    self.sim.close(pos, int(decided[first[0]]))
+                j, trade = self.sim.advance(view, j, pos)
                 if trade is None:
                     break
                 closed.append(trade)
                 self.position = None
                 self.now = int(trade["exit_known_ns"])
                 self.cooldown_until = self.now + self.config.cooldown
+                self.settle(trade, pos)
                 continue
             # Flat: the next signal decided strictly after the latest known state.
-            ci = int(np.searchsorted(decisions, max(self.now, self.cooldown_until), "right"))
+            after = max(self.now, self.cooldown_until, self.blocked_until)
+            ci = int(np.searchsorted(decisions, after, "right"))
             if ci >= len(candidates):
                 break
             i = int(candidates[ci])
@@ -167,13 +207,27 @@ class Engine:
                 int(signals[i]),
                 self.contract,
                 int(frame.end[i]),
-                float(frame.context["atr"][i]),
+                float(bracket_atr(frame.context, self.strategy.bracket)[i]),
                 frame.row(i),
                 view,
+                int(contracts[i]),
             )
             self.now = self.pending.decision_ns
         self.trades.extend(closed)
         return closed
+
+    def settle(self, trade: dict, pos: Position) -> None:
+        """Add a closed trade to its session's result, and stop opening positions for the rest
+        of the session once the daily loss limit is reached (with an account size)."""
+        c = self.config
+        if c.account_usd is None:
+            return
+        close = pos.force_exit_ns + c.flat_before_close  # the session's close names it
+        total = self.session_pnl.get(close, 0.0) + trade["pnl_usd"]
+        self.session_pnl[close] = total
+        if -total >= c.account_usd * c.daily_loss_pct / 100 and close not in self.limited:
+            self.limited.append(close)
+            self.blocked_until = max(self.blocked_until, close)
 
     def switch_contract(self, contract: str) -> None:
         """Contracts roll at a session open; features restart on the new contract's history."""
@@ -208,8 +262,16 @@ class Engine:
 
     def finish(self) -> dict:
         self.abandon("end_of_data")
+        summary = summarize(self.trades, self.signals, self.cancelled)
+        summary |= {
+            "expired_orders": self.expired,
+            "unsized_signals": self.unsized,
+            "sessions_at_daily_limit": len(self.limited),
+        }
+        if self.config.account_usd is not None:
+            summary["net_pct"] = 100 * summary["net_usd"] / self.config.account_usd
         return {
-            "summary": summarize(self.trades, self.signals, self.cancelled),
+            "summary": summary,
             "trades": self.trades,
             "equity": equity_curve(self.trades),
             "quality": {k: asdict(v) for k, v in self.reports.items()},
@@ -294,6 +356,7 @@ def summarize(trades: list[dict], signals: int, cancelled: int) -> dict:
         "commission_usd": float(sum(t["commission_usd"] for t in trades)),
         "avg_ticks": float(ticks.mean()) if len(ticks) else None,
         "avg_r": float(r.mean()) if len(r) else None,
+        "net_r": float(r.sum()),
         "profit_factor": float(wins / losses) if losses > 0 else None,
         "max_drawdown_usd": drawdown,
         "avg_hold_s": float(np.mean([t["hold_s"] for t in trades])) if trades else None,

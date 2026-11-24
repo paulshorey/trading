@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -46,6 +47,19 @@ def main() -> None:
         action="store_true",
         help="Replace contracts stored by other code or settings, or missing earlier sessions",
     )
+    p = sub.add_parser(
+        "yardstick",
+        help="The first decision model's forecast and horizon map (docs/project/yardstick-spec.md)",
+        description="Builds the decision dataset from stored rows and the DBN files, fits the "
+        "walk-forward forecast of the move ahead, and reports its skill. The run is recorded "
+        "in research.run; models go to data/models/.",
+    )
+    p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
+    p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
+    p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
+    p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
+    p.add_argument("--rebuild", action="store_true", help="Build the dataset again")
+    p.add_argument("--no-horizons", action="store_true", help="Skip the horizon map")
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
@@ -99,6 +113,18 @@ def main() -> None:
                     result = ingest.summarize(ingest.plan(args.products, **options))
                 else:
                     result = ingest.run(args.products, workers=args.workers, **options)
+        elif args.command == "yardstick":
+            from . import periods, yardstick
+
+            result = yardstick.run(
+                args.products,
+                args.start or periods.DEV_START,
+                args.end or periods.DEV_END,
+                args.workers,
+                log=lambda line: print(line, file=sys.stderr, flush=True),
+                rebuild=args.rebuild,
+                horizons=not args.no_horizons,
+            )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)
             result = {k: run[k] for k in ("id", "summary", "candidates", "performance")}

@@ -1130,7 +1130,7 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     [plan] = ingest.plan(["GC"], data=first, **options)
     every = (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES)
     variants = {s.NAME: plan["variants"][s.NAME] for s in every}
-    assert len(set(variants.values())) == 9 and all(variants.values())
+    assert len(set(variants.values())) == 12 and all(variants.values())
     scales = (*SLOW_SCALES, *FAST_SCALES)  # checked row by row below; the middle ones as slow
     assert all(plan["variants"][n] == 0 for n in plan["variants"] if n not in variants)
     dates = [date(2026, 9, 2), date(2026, 9, 3)]

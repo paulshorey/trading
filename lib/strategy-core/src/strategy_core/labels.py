@@ -11,7 +11,7 @@ from collections.abc import Iterable, Iterator
 
 import numpy as np
 
-from .execution import CANCELLED, WAIT, ExecView, Position, Simulator
+from .execution import CANCELLED, WAIT, ExecView, Position, Simulator, bracket_atr
 from .execution import EXPIRED as ORDER_EXPIRED
 from .features import FeatureFrame
 
@@ -46,9 +46,11 @@ def attempt(sim: Simulator, view: ExecView, pos: Position) -> tuple[str, dict | 
 def attempt_limit(
     sim: Simulator, view: ExecView, pos: Position, limit_px: int, expire_ns: int
 ) -> tuple[str, dict | None, int]:
-    """`attempt` with the entry as a limit order resting at `limit_px` until `expire_ns`
-    (`Simulator.rest`). An order that is never filled is `EXPIRED`: known, and no trade."""
-    status, known, j = sim.rest(view, pos, limit_px, expire_ns)
+    """`attempt` with the entry as a limit order resting at `limit_px` (0: the touch of the
+    book it meets) until `expire_ns` (`Simulator.rest`). An order that is never filled is
+    `EXPIRED`: known, and no trade."""
+    pos.limit_px, pos.expire_ns = limit_px, expire_ns
+    status, known, j = sim.rest(view, pos)
     if status == WAIT:
         return PENDING, None, 0
     if status == ORDER_EXPIRED:
@@ -75,7 +77,7 @@ def iter_candidate_outcomes(
     dropping signals. `frame`, `signals`, and `view` come from one whole-session
     `Engine.process` call."""
     for i in np.flatnonzero(signals):
-        atr = float(frame.context["atr"][i])
+        atr = float(bracket_atr(frame.context, sim.bracket)[i])
         if not np.isfinite(atr):
             continue
         pos = sim.order(int(signals[i]), contract, int(frame.end[i]), atr, frame.row(i), view)

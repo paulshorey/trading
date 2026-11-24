@@ -43,7 +43,7 @@ used only to place orders and measure P&L. See the [feature rule](#normalized-fe
 | `windows.py`                                    | Rolling candles over the last 60 rows; phase = row index mod 60                                                        |
 | `kernels.py`                                    | Per-phase RSI, ATR, change, and EMA (numba)                                                                            |
 | `features.py`                                   | Unit contract and the window features the stages compute (`StageFeatures` in `pipeline.py` assembles them)             |
-| `strategies.py`                                 | Strategy interface, bracket, `bias_pullback` baseline                                                                  |
+| `strategies.py`                                 | Strategy interface (decisions while flat and while in a position), bracket, entry order, trend gate, `bias_pullback`   |
 | `execution.py`                                  | Simulated fills against the MBP-1 book and trades                                                                      |
 | `engine.py`                                     | Chunk processing, one portfolio, live-path splitter                                                                    |
 | `labels.py`                                     | One would-be trade per signal, for ML                                                                                  |
@@ -64,21 +64,43 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
 2. **Release.** Records reach the engine one second at a time, in receive order within
    the second. A record received early for a later second waits for that second.
 3. **Decision.** Features of the second ending at `T` are computed at
-   `T + close_delay`. The bias uses the latest completed minute, with its age.
-4. **Entry.** The order reaches the exchange `order_latency` later and fills then, at the
-   best ask (buy) or bid (sell) the exchange showed at that moment: the book after the last
-   event at or before the arrival. Size beyond the displayed size at that price pays
-   `depth_penalty_ticks`. An order that meets no two-sided book is cancelled. `adverse_ticks`
-   (default 0) charges every marketable order further ticks, as a stress test.
+   `T + close_delay`, and the strategy decides then. Slower timeframes are read as of their
+   latest completed row, with its age. The position is long, flat, or short and moves one
+   step per decision: while flat, the strategy's signal opens a position; while one is open,
+   its closing decision closes it ([decision 35](roadmap.md#decisions)). A strategy that
+   makes no closing decisions leaves every position to its bracket.
+4. **Entry.** The order reaches the exchange `order_latency` later. A market entry fills
+   then, at the best ask (buy) or bid (sell) the exchange showed at that moment: the book
+   after the last event at or before the arrival. Size beyond the displayed size at that
+   price pays `depth_penalty_ticks`. An order that meets no two-sided book is cancelled.
+   `adverse_ticks` (default 0) charges every marketable order further ticks, as a stress
+   test. A passive entry (`Entry("passive")`) is a limit order at the best bid (buy) or ask
+   (sell) of the book it meets, cancelled after `wait_s`. It fills at its price when a trade
+   prints through it, or, with `passive_fill: queue` (the default), when the size displayed
+   ahead of it on arrival and its own have traded at its price. MBP-1 shows no queue: the
+   first rule is the strict bound, the second assumes every order ahead stays until it
+   trades. While an order rests, no other is sent; when it expires, the next decision
+   decides again.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
    at or beyond it triggers it, and it fills at the book that trade left (the book events
    of the same match), never better than the trigger price. Each trade counts by its own
    event time: only trades that happened after the entry fill and before a timed exit
    arrives can trigger an exit, in whatever order they were received. Time and pre-close
-   exits are market orders that fill at the book when they arrive.
-6. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
-   and the hold timer start then.
+   exits are market orders that fill at the book when they arrive. A closing decision is
+   the same market order sent at its decision time: it fills `order_latency` later whatever
+   the bracket says, unless the stop or the target fills first. A bracket may have no time
+   limit (`max_hold_s: None`), may be sized by any timeframe's ATR (`atr`), and may move its
+   stop to the entry price once a trade has printed `breakeven_atr` ATRs in favour: the
+   engine learns of that trade when its second closes, and the amended stop is in force
+   `order_latency` after that.
+6. **Size and the daily limit.** With `account_usd`, each position is as many whole
+   contracts as keep its stop's risk within `risk_pct` of the account; a signal whose one
+   contract risks more is not traded and is counted. Once a session's closed trades have
+   lost `daily_loss_pct` of the account, no position is opened until the next session
+   ([decision 36](roadmap.md#decisions)). Without an account size every trade is `contracts`.
+7. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
+   and the hold timer start then, and a closing decision can act from then on.
 
 Every book lookup is bounded by the second of its own time: it uses the events released by
 the close of that second and nothing released later. A late record therefore never rewrites

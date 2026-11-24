@@ -33,19 +33,41 @@ import numpy as np
 
 from . import swings, warmup
 from .bars import MISSING
-from .columns import Table
+from .columns import SMALLINT, Column, Table
 from .engine import MarketChunk
+from .features import Unit
 from .market import PX
 from .stages import Stage
 from .timeframes import FAST, MIDDLE, SLOW, Timeframe
 
 SPEC = swings.dense_columns()
-COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC))
+# Trend and breaks in one code (roadmap decision 32), from the row's own columns.
+STRUCTURE = Column(
+    "structure",
+    SMALLINT,
+    "3 x (trend + 1) + (break + 1), 0..8: trend as above; break is 1 once price has exceeded "
+    "the latest confirmed high, -1 once it has gone below the latest confirmed low, 0 while "
+    "both hold (the more recent break when neither does). 8 up and extending, 7 up and "
+    "inside, 6 up with its low broken, 5..3 mixed, 2 down with its high broken, 1 down and "
+    "inside, 0 down and extending; NULL until trend is known",
+    Unit.RATIO.value,
+)
+COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC), STRUCTURE)
 FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
 NEVER = -(2**62)  # no step row seen yet
 # Step rows within which a breached level can be reclaimed: a quarter of the hourly window (15
 # minutes), half of the ten-minute one (5 minutes), the whole one-minute one (60 seconds).
 RECLAIM_ROWS = {"1m": 15, "10s": 30, "1s": 60}
+
+
+def with_structure(table: Table) -> Table:
+    """The published rows with the `structure` code computed from their own columns."""
+    v, null = table.values, table.nulls
+    up, down = ~null["break_up_age_s"], ~null["break_down_age_s"]
+    newer_up = v["break_up_age_s"] <= v["break_down_age_s"]
+    broke = np.where(up & down, np.where(newer_up, 1, -1), up.astype(np.int64) - down)
+    code = np.where(null["trend"], 0, 3 * (v["trend"] + 1) + broke + 1).astype(np.int64)
+    return Table(v | {STRUCTURE.name: code}, null | {STRUCTURE.name: null["trend"].copy()})
 
 
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
@@ -135,7 +157,7 @@ class StepPivotStage(Stage):
                 np.zeros((0, swings.NEI), np.int64), np.zeros((0, swings.NEF)), none,
                 self.context.close_delay,
             )  # fmt: skip
-            return swings.dense_table(SPEC, none, none, np.zeros((0, swings.NO)))
+            return with_structure(swings.dense_table(SPEC, none, none, np.zeros((0, swings.NO))))
         tf = self.TF
         width, step = tf.seconds, tf.step
         tables = products["tables"]
@@ -181,7 +203,7 @@ class StepPivotStage(Stage):
             self.warm = swings.is_warm(out)
         ends = -(-bars.end[ev_i[:, swings.E_ROW]] // step) * step  # each event's step row end
         events[self.NAME] = swings.event_table(ev_i, ev_f, ends, self.context.close_delay)
-        return swings.dense_table(SPEC, done, minute_end, out)
+        return with_structure(swings.dense_table(SPEC, done, minute_end, out))
 
 
 def step_pivot(tf: Timeframe) -> type[StepPivotStage]:
@@ -207,8 +229,9 @@ def scale(base: type[StepPivotStage], k: float) -> type[StepPivotStage]:
     return type(f"{base.__name__}_{name}", (base,), attrs)
 
 
-# Paul's decision of November 3, 2026: 0.5, 1, and 2 ATRs (plan-1h-and-pivots.md, section 6).
-MULTIPLIERS = (0.5, 1.0, 2.0)
+# Paul's decisions: 0.5, 1, and 2 ATRs (November 3, 2026), and 3 ATRs as the swing the trend
+# gate reads (roadmap decisions 30 and 38, November 23 and 24).
+MULTIPLIERS = (0.5, 1.0, 2.0, 3.0)
 
 
 PivotMinuteStage = step_pivot(SLOW)

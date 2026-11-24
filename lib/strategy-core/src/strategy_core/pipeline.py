@@ -161,8 +161,9 @@ class StageFeatures:
     row), with that row's age, `<timeframe>.age_s`. Swing scales join the same way under their
     own names: the fast ones row by row as `1m@1s.<scale>.<feature>`, the others as of the
     latest completed step row as `<timeframe>.<scale>.<feature>`. `context` holds the price-unit
-    values execution needs (the latest close and the `1m@1s` ATR from `vol_1s`), never inputs
-    to signals or models."""
+    values execution needs, never inputs to signals or models: the latest close, and each
+    timeframe's ATR as `atr:<timeframe>` (`atr` is the `1m@1s` one), from its volatility
+    stage, as of the same row as its features."""
 
     FAST, BIAS = "candle_1m_1s", "candle_1h_1m"
     # rows per second, joined row by row: the one-second timeframe's
@@ -193,6 +194,7 @@ class StageFeatures:
         for tf in MERGED
     }
     AGE = AGES[SLOW.name]
+    ATR = "#atr_price"  # a timeframe's ATR while it is carried with its features: context
 
     def __init__(
         self,
@@ -261,10 +263,14 @@ class StageFeatures:
                 raise AssertionError(f"{stage} rows must align with {self.FAST}")
             prefix = self.PREFIX[stage]
             features |= {f"{prefix}.{n}": v for n, v in self.read(table, stage).items()}
+        fast = self.atr(rows.tables["vol_1s"])
+        context = {"atr": fast, f"atr:{FAST_TF.name}": fast}
         for timeframe, group in self.STEPWISE.items():
-            features |= self.as_of(timeframe, group, rows, ends)
+            found = self.as_of(timeframe, group, rows, ends)
+            context[f"atr:{timeframe}"] = found.pop(self.ATR)
+            features |= found
         candles = FAST_TF.frame(rows.products)["candles"]
-        return FeatureFrame(ends, features, {"close": candles.close, "atr": self.atr(rows)})
+        return FeatureFrame(ends, features, {"close": candles.close} | context)
 
     def as_of(
         self, timeframe: str, group: tuple[str, ...], rows: PipelineRows, ends: np.ndarray
@@ -283,6 +289,8 @@ class StageFeatures:
             prefix = self.PREFIX[stage]
             for n, v in self.read(table, stage).items():
                 values[f"{prefix}.{n}"] = np.r_[last.get(f"{prefix}.{n}", []), v]
+            if "atr_price" in table.values:  # the timeframe's volatility stage
+                values[self.ATR] = np.r_[last.get(self.ATR, []), self.atr(table)]
         i = np.searchsorted(row_end, ends, side="right") - 1
         known = i >= 0
         safe = np.maximum(i, 0)
@@ -299,10 +307,9 @@ class StageFeatures:
         return out
 
     @staticmethod
-    def atr(rows: PipelineRows) -> np.ndarray:
-        """The `1m@1s` ATR in price units, which sizes brackets: `vol_1s.atr_price`, NaN where it
-        is NULL (the same ATR the candle stage normalizes `atr_bps` with, bit for bit)."""
-        table = rows.tables["vol_1s"]
+    def atr(table: Table) -> np.ndarray:
+        """A volatility stage's ATR in price units, which sizes brackets: `atr_price`, NaN where
+        it is NULL (the same ATR its candle stage normalizes `atr_bps` with, bit for bit)."""
         atr = table.values["atr_price"]
         null = table.nulls.get("atr_price")
         return atr if null is None else np.where(null, np.nan, atr)

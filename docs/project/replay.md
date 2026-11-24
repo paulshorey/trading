@@ -193,7 +193,7 @@ attempt, and no conclusion (first run: `~/replay-agreement-gc-si.json`).
 
 So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
 It remains to be tested inside the decision model (build-order item 8), with the slow
-trend among their inputs.
+trend among its inputs.
 
 ## The middle timeframe's candidates (spec frozen November 23, 2026, before its run)
 

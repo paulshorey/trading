@@ -86,7 +86,7 @@ is one stored table with its own version.
 | 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
 | 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_flow_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of net flow; agreement and divergence against price |
-| 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | The engine makes position decisions. A first model is fitted walk-forward and replayed in the engine as the yardstick: it has no skill at the bracket's horizon ([results](yardstick-spec.md#results-november-24-2026)) | Inputs that give it skill; a forecast that is not overconfident; one portfolio across products |
+| 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | The engine makes position decisions. A first model is fitted walk-forward and replayed in the engine as the yardstick: it has no skill at the bracket's horizon ([results](yardstick-spec.md#results-november-24-2026)) | Inputs that give it skill; one portfolio across products; the swing mode |
 
 Base rows and indicator stages hold one row per scheduled slot and contract. Swing rows of
 the fast timeframe and all events are sparse: stored where something reads them.
@@ -113,7 +113,8 @@ flat ([build log](build-log.md), [record of the replays](../archive/replay.md)):
 first time whether the inputs predict what price does next:
 
 - **Over the bracket (hours): no.** The forecast's correlation with what happened is 0.05
-  with an interval that includes zero, and its policy loses in every cell.
+  with an interval that includes zero, and its policy lost in every cell. Shrunk by what
+  holds on held-out training dates, the forecast is zero: the yardstick stays flat.
 - **One minute ahead: a little, from every kind of input but the clock**, about 0.015, down
   to 0.01 at five minutes and nothing at fifteen. Too small to trade at the market; its use
   is in timing an entry.
@@ -226,7 +227,8 @@ and 34 (replaced by 35), 19 (replaced by 36).
     evaluation period added to `periods.check_period` before the run. Afterwards they are
     development data, walked forward by year. September 1, 2026 onward stays the final
     holdout, and paper trading is the test after it.
-14. **Intraday first.** Positions are flat before each close.
+14. **Intraday first.** Positions are flat before each close. Holding across days comes as a
+    switch beside it ([decision 40](#decisions)).
 15. **Scheduled news is an input:** a table of release times known in advance gives every
     row its time to the next release and since the last one. Results are also reported
     without the minutes around a release.
@@ -305,6 +307,12 @@ and 34 (replaced by 35), 19 (replaced by 36).
     hours (1 ATR: 82%, 1.9 hours; 2 ATRs: 57%, 5.2 hours; 3 ATRs: 36%, 7.6 hours). Larger
     than 2 and most trades would simply end at the close. The multiple is a variable.
 
+40. **Two modes, one switch** (Paul, November 24). The system trains and trades either way:
+    *intraday*, every position closed before the day's close, or *swing*, positions held
+    across the daily break and across days. The switch sets both the target a model is
+    trained on and what the engine does at a close, so a model is always replayed in the mode
+    it was trained for. Intraday stays the mode results are judged in first.
+
 **Open, to be tested and not decided:** moving the stop to the entry price once price has
 moved a set number of ATRs in favour ([named in the spec](yardstick-spec.md#named-now-run-later)).
 
@@ -350,22 +358,32 @@ swing scale at 3 ATR and a structure code per scale. (9) The first decision mode
 a small one a minute ahead, every policy cell a loss. What each built and found is in the
 [build log](build-log.md).
 
-10. **Base changes, in one rebuild** (step 1). A rolling net-flow series that does not reset
-    at the session open; the ATR normalizer floored at the spread; the `source.py` change in
-    the [to-do list](todo.md#housekeeping).
+10. **Base changes, in one rebuild** (step 1). A net-flow series over each timeframe's
+    window, which does not start again at the day's open: today's running total
+    (`session_cvd`) begins at zero after every daily break, so its level says how long the
+    day has run as much as who is trading, and a swing of it cannot cross a break. Both
+    stay stored. Also the ATR normalizer floored at the spread, and the `source.py` change
+    in the [to-do list](todo.md#housekeeping).
 11. **The second pass: swings and structure of RSI and of net flow** (step 5), on every
     timeframe, with the swing code that price uses and a threshold in each series' own
     units, frozen in a spec first. Then the agreement codes against price.
-12. **Six years of GC and SI**, when the files are here. A build is a few hours, so it does
+12. **The swing mode** (step 6; [decision 40](#decisions)). In the engine: a position may
+    stay open through a close; a stop is then judged by the first trades after the reopen,
+    which is where a gap is paid; a position is closed before its contract stops being the
+    front one, since prices of different delivery months are never joined; the daily limit
+    counts open risk carried in. In the dataset: the target follows price to the stop or the
+    target across sessions, up to a stated number of them. A session-long timeframe gives
+    the view of several days that such a trade needs.
+13. **Six years of GC and SI**, when the files are here. A build is a few hours, so it does
     not wait for the items after it; they rebuild what they change.
-13. **The book between trades** (`book_1s`, step 1), judged at the one-minute horizon and by
+14. **The book between trades** (`book_1s`, step 1), judged at the one-minute horizon and by
     the quality of entries, and **the scheduled-news table**.
-14. **ES**, as the first product that does not move with the metals, with one-second values
+15. **ES**, as the first product that does not move with the metals, with one-second values
     stored where they are read.
-15. **More inputs, each judged by the decision model:** a session-long timeframe, structure
-    across timeframes in one code, the [pair stage](pair-design.md), indicators of
-    indicators last. And the variants the spec names.
-16. **The final evaluation** of the decision model on the holdout, once. Then paper trading
+16. **More inputs, each judged by the decision model:** structure across timeframes in one
+    code, the [pair stage](pair-design.md), indicators of indicators last. And the variants
+    the spec names.
+17. **The final evaluation** of the decision model on the holdout, once. Then paper trading
     on the live feed, and live trading after it.
 
 ### How a policy is evaluated

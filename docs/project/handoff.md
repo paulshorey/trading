@@ -16,8 +16,8 @@ fitted walk-forward and replayed in that engine
 ([state of each step](roadmap.md#the-process-and-where-it-stands)). Step 5, the swings of RSI
 and net flow and their agreement with price, is not built.
 
-**No edge has been found.** The first model has no skill over the hours a trade lasts, and
-its policy loses in every cell. It does find a small predictability one minute ahead, from
+**No edge has been found.** The first model has no skill over the hours a trade lasts; once
+its forecast is shrunk to what holds outside the sessions it was fitted on, it stays flat. It does find a small predictability one minute ahead, from
 flow, the book at trades, price, and volatility, gone by fifteen minutes
 ([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat.
 
@@ -29,8 +29,8 @@ of the account.
 
 **The next tasks** ([build order](roadmap.md#build-order)): item 10, the base changes (a
 net-flow series that does not reset, the ATR floor); item 11, the second pass on RSI and net
-flow; then six years of data. Before judging any new input with the model, fix its
-overconfidence ([how](#next-steps)).
+flow; item 12, the swing mode ([decision 40](roadmap.md#decisions)); then six years of
+data ([how](#next-steps)).
 
 **The state of this machine** (November 24): lint and tests pass, `ingest plan GC SI`
 reports every contract `current`, and the database (about 165 GB) holds one year of GC and
@@ -258,15 +258,12 @@ is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stage
 reclaim window, and a migration that copies the tables (`0008` is the pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**The model's forecast is overconfident, and that comes first.** Its forecasts range from
--0.95 to +0.76 R where it knows almost nothing, so its squared error is worse than a forecast
-of zero and its rule opens a position on 95% of rows
-([results](yardstick-spec.md#results-november-24-2026)). Rows of one training session share
-almost all of their target, so 500 rows a leaf does not stop a tree from fitting single
-sessions. Write the variant into the spec before running it: fewer rows a session or leaf
-sizes counted in sessions, and a forecast shrunk toward zero on training data. Until the
-forecast is no worse than `flat`, a new input cannot be judged by the policy, only by the
-pooled correlation.
+**The yardstick is `trees_coarse_shrunk`, and today it is flat.** The first model forecast
+boldly and wrongly; its forecast is now multiplied by the slope that holds on held-out
+blocks of training dates, which is zero in every month, so it opens no position
+([results](yardstick-spec.md#results-of-the-variant-november-24-2026)). A new input is
+judged in three steps: a slope above zero, skill on the test months (the pooled
+correlation), then what the policy earns.
 
 **How an experiment on the model runs.** `research yardstick GC SI` builds or reads the
 dataset (`data/research/`, keyed by the stored rows' builders, so a rebuild makes a new one),
@@ -280,7 +277,7 @@ swings of RSI and net flow: measure each series' row-to-row noise and freeze a t
 above it first ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)). The
 swing stage already takes the 3 ATR scale and writes `structure`.
 
-**The one-minute finding points at entries.** The book between trades (item 13) is judged
+**The one-minute finding points at entries.** The book between trades (item 14) is judged
 there: does it raise the one-minute skill, and does a rule that uses it get better fills
 than resting blindly at the touch.
 

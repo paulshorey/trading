@@ -262,6 +262,32 @@ skill, only to stop the forecast claiming it.
 beyond the cost on few rows, and the policy opens few positions or none. `coarse` alone
 narrows the forecasts but leaves them too wide.
 
+### Results of the variant (November 24, 2026)
+
+Runs 4 (the forecast) and 5 (the policy) in `research.run`; `~/yardstick-calibrated.json`
+and `~/policy-calibrated.json`. **The slope is zero in all four months, for both kinds of
+trees.** The yardstick now forecasts zero, opens no position in any of the sixteen replays,
+and equals staying flat.
+
+| Model | Pooled rank correlation | Squared error against `flat` | Forecast, 1st to 99th percentile |
+| --- | --- | --- | --- |
+| `trees` | 0.052 (-0.026 to 0.129) | 12% higher | -0.95 to +0.76 R |
+| `trees_coarse` | 0.040 (-0.040 to 0.119) | 9% higher | -0.75 to +0.62 R |
+| `trees_shrunk` | none: a constant | equal | 0 |
+| `trees_coarse_shrunk` (the yardstick) | none: a constant | equal | 0 |
+
+1. **The shrink does its job, and more bluntly than expected.** The spec expected a slope of
+   a tenth or less; it is zero. Checked before clipping on the first and last month's
+   training rows: -0.04 and -0.06, and from -0.38 to +0.52 on single blocks. What the trees
+   learn in one stretch of dates does not carry to another, even inside the training data.
+2. **Larger leaves alone are not enough.** `coarse` narrows the forecasts a little and its
+   error is still 9% above `flat`'s, with an interval above zero.
+3. **The yardstick is now honest.** It says nothing where it knows nothing, so it stays flat
+   and loses nothing, where the first version lost 31 R trading noise. From here an input
+   shows itself first as a slope above zero on held-out training dates, then as skill on the
+   test months, and only then as trades.
+4. **Nothing here touches the one-minute finding**, which was measured on other targets.
+
 ## What has to be built
 
 1. The label (`strategy-core`, beside `labels.py`), with tests.

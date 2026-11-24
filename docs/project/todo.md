@@ -17,8 +17,9 @@ the [build log](build-log.md).
 - [x] **The engine makes position decisions** (item 7), **the 3 ATR scale and the structure
       code** (item 8), and **the first decision model** (item 9): done November 24
       ([results](yardstick-spec.md#results-november-24-2026)).
-- [ ] **Make the forecast no worse than `flat`**: fewer rows a session or leaf sizes counted
-      in sessions, and shrinkage fitted on training data; spec first.
+- [x] **Make the forecast no worse than `flat`** (November 24): the slope on held-out
+      training dates is zero, so the yardstick stays flat
+      ([results](yardstick-spec.md#results-of-the-variant-november-24-2026)).
 - [ ] **Base changes, in one rebuild** (item 10): a rolling net-flow series without session
       resets; the ATR normalizer floored at the spread
       ([finding](build-log.md#pr-d-results-swings)); the `source.py` change under
@@ -26,11 +27,13 @@ the [build log](build-log.md).
 - [ ] **Swings and structure of RSI and of net flow**, and their agreement with price
       (item 11): measure each series' row-to-row noise and freeze its threshold first
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
-- [ ] **Six years of GC and SI** (item 12).
-- [ ] **`book_1s`** and **the scheduled-news table** (item 13).
-- [ ] **ES** (item 14), with one-second values stored where they are read.
-- [ ] **More inputs and the named variants** (item 15).
-- [ ] **The final evaluation on the holdout** (item 16). September 1, 2026 onward is
+- [ ] **The swing mode** (item 12): positions held across the daily break and across days,
+      as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).
+- [ ] **Six years of GC and SI** (item 13).
+- [ ] **`book_1s`** and **the scheduled-news table** (item 14).
+- [ ] **ES** (item 15), with one-second values stored where they are read.
+- [ ] **More inputs and the named variants** (item 16).
+- [ ] **The final evaluation on the holdout** (item 17). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 
 ## Also open

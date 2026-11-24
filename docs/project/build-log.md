@@ -6,6 +6,25 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## A forecast that is no worse than flat (November 24, 2026)
+
+The first decision model forecast boldly and wrongly, so its policy traded noise. Fixed as a
+variant written into the spec before it ran
+([spec and results](yardstick-spec.md#a-forecast-that-is-no-worse-than-flat-variant-frozen-november-24-2026-before-its-run)).
+
+- `yardstick.shrink`: the forecast is multiplied by a slope fitted on the training rows, from
+  forecasts made for each of four blocks of training dates by a model fitted on the others.
+  `yardstick.fit_coarse`: leaves of at least ten trade dates' worth of rows. The yardstick is
+  `trees_coarse_shrunk`; the policy reads the slope with the model.
+- **Result:** the slope is zero in all four months (-0.04 and -0.06 before clipping, where
+  checked). The yardstick forecasts zero, the policy opens no position in any of its sixteen
+  replays, and the result equals staying flat. `coarse` alone leaves the error 9% above
+  `flat`'s.
+- Runs 4 and 5 in `research.run`; 32 minutes for the forecast, 7 for the policy.
+- Tests: a synthetic case where trees learn each session's outcome from a feature that
+  names the session, forecast boldly, and are shrunk to nearly nothing; and one where a real
+  signal keeps its size.
+
 ## The first decision model (November 24, 2026)
 
 Build-order item 9, step 6 of the process. The [spec](yardstick-spec.md) holds the settings

@@ -486,7 +486,7 @@ def test_fast_pivots_equal_a_plain_python_reference(days, whole, stage):
     vol, vn = join(whole, "vol_1s")
     np.testing.assert_array_equal(candle["end_ns"], ends)
     atr_bps, spread = nan_null(candle, cn, "atr_bps"), nan_null(candle, cn, "book_spread_bps")
-    atr = nan_null(vol, vn, "atr_price")
+    atr = nan_null(vol, vn, "norm_atr_price")
     now = np.where(np.isnan(atr_bps) | np.isnan(spread), np.nan,
                    np.maximum(stage.K * atr_bps, 2.0 * spread))  # fmt: skip
     theta, snapshot = np.r_[np.nan, now[:-1]], np.r_[np.nan, atr[:-1]]
@@ -561,7 +561,7 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
     atr_bps = nan_null(candle, cn, "atr_bps")
     now = np.where(np.isnan(atr_bps) | np.isnan(spread), np.nan,
                    np.maximum(stage.K * atr_bps, 2.0 * spread))  # fmt: skip
-    atr = nan_null(vol, vn, "atr_price")
+    atr = nan_null(vol, vn, "norm_atr_price")
     before = minute - 1 - first  # the minute completed before each second's own
     theta = np.where(before >= 0, now[np.maximum(before, 0)], np.nan)
     snapshot = np.where(before >= 0, atr[np.maximum(before, 0)], np.nan)
@@ -604,6 +604,49 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
     assert rows_["state"][gap - 1] == ACTIVE and (rows_["state"][gap : gap + 60] == IDLE).all()
     assert rows_["state"][gap + 61] > IDLE
     assert rows_["segment"][gap + 61] == rows_["segment"][gap - 1] + 1
+
+
+def test_a_market_that_stopped_moving_keeps_its_detector_ready():
+    """Fifteen minutes at one price, then a move. The ATR decays to exactly zero, so the
+    normalizing ATR is the spread: the volatility row gives it in price units, `spread_atr` is
+    one, and the detector holds an open segment through the flat stretch, so the flat price is
+    the first swing low and it is measured in a positive ATR."""
+    cal = calendar((0, 1))
+    flat = 900
+    rows = [(T0 + k * S + S // 2, 100.0, 1, 1) for k in range(flat)]  # book 99.9 / 100.1
+    path = [100.0 + 0.1 * min(j, 40 - j) for j in range(41)] * 3
+    rows += [
+        (T0 + (flat + j) * S + S // 2, px, 1, 1, 1_000, px - 0.1, px + 0.1)
+        for j, px in enumerate(path)
+    ]
+    cover = np.array([[T0, int(cal.closes[0])]], np.int64)
+    chunk = MarketChunk("X", int(cal.opens[0]), int(cal.closes[0]), trades(rows), cover)
+    out = [builder(cal).process(chunk)]
+    candle, _ = join(out, "candle_1m_1s")
+    vol, vn = join(out, "vol_1s")
+    still = slice(600, flat)  # warm, and every window is flat
+    assert (candle["atr_bps"][still] == 0).all() and (vol["atr_price"][still] == 0).all()
+    np.testing.assert_allclose(candle["norm_atr_bps"][still], 20.0, rtol=1e-12)  # the spread
+    np.testing.assert_allclose(vol["norm_atr_price"][still], 0.2, rtol=1e-12)
+    np.testing.assert_allclose(vol["spread_atr"][still], 1.0, rtol=1e-12)
+    assert not vn["spread_atr"][still].any() and not vn["norm_atr_price"][still].any()
+    moving = slice(flat + 10, flat + 100)  # the ATR is back above the spread: bit for bit
+    assert (candle["atr_bps"][moving] > candle["norm_atr_bps"][moving] * (1 - 1e-12)).any()
+    above = np.flatnonzero(candle["atr_bps"] >= candle["norm_atr_bps"])
+    assert len(above) and (vol["norm_atr_price"][above] == vol["atr_price"][above]).all()
+    for stage in FAST:
+        state, _ = join(out, stage.NAME)
+        assert (state["state"][still] == SEEKING).all()  # ready: a segment is open
+        ev, _ = events_of(out, stage.NAME)
+        pivot = ev["kind"] <= LOW
+        assert pivot.any() and (ev["atr"][pivot] > 0).all()
+        first = int(np.flatnonzero(pivot)[0])
+        # the flat price is the first low, confirmed by the move up from it, and measured in
+        # the spread: the detector was following price before the move began
+        assert ev["kind"][first] == LOW and ev["level"][first] == round(100.0 * PX)
+        at = int(ev["ext_ordinal"][first] - candle["slot_ordinal"][0])
+        assert at < flat and vol["atr_price"][at - 1] == 0
+        assert ev["atr"][first] == vol["norm_atr_price"][at - 1] * PX
 
 
 def test_identical_in_any_chunking_and_from_checkpoints(days, whole):

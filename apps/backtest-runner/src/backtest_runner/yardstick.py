@@ -48,7 +48,7 @@ TREES = {
 RIDGE_ALPHA = 100.0
 COARSE_DATES = 10  # `coarse`: a leaf holds at least this many trade dates' worth of rows
 SHRINK_BLOCKS = 4  # `shrunk`: blocks of training dates forecast by the others
-YARDSTICK = "trees_coarse_shrunk"  # the model the policy of Part B is replayed with
+YARDSTICK = "trees_coarse_calibrated"  # the model the policy of Part B is replayed with
 MIN_ROWS = 30  # rows a trade date and product need for a rank correlation
 THRESHOLDS = (0.5, 1.0, 2.0, 4.0)  # of the round trip's cost: 1 is the rule, the rest sensitivity
 GATE = ("1m@1s.fast_atr_3.trend", "10m@10s.mid_atr_3.trend", "1h@1m.slow_atr_3.trend")
@@ -198,10 +198,11 @@ def fit_ridge(x: np.ndarray, y: np.ndarray, day: np.ndarray):
 
 
 class Shrunk:
-    """A model whose forecast is multiplied by a slope fitted on its training rows."""
+    """A model whose forecast is multiplied by a slope fitted on its training rows. `slopes`
+    holds the slope under each way of fitting it, for the record."""
 
-    def __init__(self, model, slope: float):
-        self.model, self.slope = model, slope
+    def __init__(self, model, slope: float, slopes: dict[str, float] | None = None):
+        self.model, self.slope, self.slopes = model, slope, slopes or {}
 
     def raw(self, x: np.ndarray) -> np.ndarray:
         return self.model.predict(x)
@@ -210,35 +211,84 @@ class Shrunk:
         return self.slope * self.model.predict(x)
 
 
-def blocks(day: np.ndarray, count: int = SHRINK_BLOCKS) -> list[tuple[np.ndarray, np.ndarray]]:
+def blocks(
+    day: np.ndarray, count: int = SHRINK_BLOCKS, forward: bool = False
+) -> list[tuple[np.ndarray, np.ndarray]]:
     """The training dates cut into `count` blocks in time order: for each, the rows to fit on
-    (every other block, less the one date next to the block on each side) and the block's."""
+    and the block's rows. A full date is always left out between the two.
+
+    - `forward`: a block is forecast from earlier dates only, as it would have been on its own
+      dates. The first block has no history and is not forecast.
+    - otherwise: from every other block, earlier and later (the variant first run)."""
     dates = np.unique(day)
     out = []
     for part in np.array_split(np.arange(len(dates)), count):
         if not len(part):
             continue
         inside = np.isin(day, dates[part])
-        near = dates[np.clip([part[0] - 1, part[-1] + 1], 0, len(dates) - 1)]
-        out.append((~inside & ~np.isin(day, near), inside))
+        if forward:
+            train = day < dates[part[0] - 1] if part[0] >= 2 else np.zeros(len(day), bool)
+        else:
+            near = dates[np.clip([part[0] - 1, part[-1] + 1], 0, len(dates) - 1)]
+            train = ~inside & ~np.isin(day, near)
+        if train.any():
+            out.append((train, inside))
     return out
 
 
-def shrink(fit):
-    """`fit` with its forecast multiplied by how much of it holds outside the sessions it was
-    fitted on: the least-squares slope, through zero, of the target on forecasts made for each
-    block of training dates by a model fitted on the other blocks. Between 0 (the flat
-    forecast) and 1."""
+def held_out(fit, x, y, day, forward: bool) -> np.ndarray:
+    """A forecast for each training row from a model that was not fitted on its block (NaN for
+    a block without one)."""
+    outside = np.full(len(y), np.nan)
+    for train, block in blocks(day, forward=forward):
+        if forward:  # a full date lies between the fit and its forecast
+            last, first = day[train].max(), day[block].min()
+            if not ((day > last) & (day < first)).any():
+                raise AssertionError("a full date must lie between the fit and its forecast")
+        outside[block] = fit(x[train], y[train], day[train]).predict(x[block])
+    return outside
+
+
+def slope_of(outside: np.ndarray, y: np.ndarray, day: np.ndarray, by_date: bool) -> float:
+    """The least-squares slope, through zero, of the target on held-out forecasts, between 0
+    (the flat forecast) and 1. `by_date`: each trade date counts once, as in the score the
+    slope serves (the mean excess squared error per trade date); otherwise each row does, so a
+    date with twice the rows counts twice."""
+    known = np.isfinite(outside)
+    if not known.any():
+        return 0.0
+    f, t, d = outside[known], y[known], day[known]
+    if by_date:
+        cross, square = float(daily(f * t, d).sum()), float(daily(f * f, d).sum())
+    else:
+        cross, square = float((f * t).sum()), float((f * f).sum())
+    return float(np.clip(cross / square, 0.0, 1.0)) if square > 0 else 0.0
+
+
+CALIBRATIONS = {  # name: (forward, by date); the first is the one the yardstick uses
+    "forward_by_date": (True, True),
+    "forward_by_row": (True, False),
+    "two_sided_by_date": (False, True),
+    "two_sided_by_row": (False, False),  # the variant first run
+}
+
+
+def shrink(fit, calibration: str = "forward_by_date", every: bool = False):
+    """`fit` with its forecast multiplied by how much of it holds on training dates it was not
+    fitted on (`held_out`, `slope_of`), under the named calibration. `every`: also fit the
+    slope under every other calibration, kept in `slopes` for the record."""
 
     def fitted(x: np.ndarray, y: np.ndarray, day: np.ndarray) -> Shrunk:
-        outside = np.full(len(y), np.nan)
-        for train, block in blocks(day):
-            if train.any() and block.any():
-                outside[block] = fit(x[train], y[train], day[train]).predict(x[block])
-        known = np.isfinite(outside)
-        square = float((outside[known] ** 2).sum())
-        slope = float((outside[known] * y[known]).sum()) / square if square > 0 else 0.0
-        return Shrunk(fit(x, y, day), float(np.clip(slope, 0.0, 1.0)))
+        wanted = CALIBRATIONS if every else {calibration: CALIBRATIONS[calibration]}
+        outside = {
+            forward: held_out(fit, x, y, day, forward)
+            for forward in {f for f, _ in wanted.values()}
+        }
+        slopes = {
+            name: slope_of(outside[forward], y, day, by_date)
+            for name, (forward, by_date) in wanted.items()
+        }
+        return Shrunk(fit(x, y, day), slopes[calibration], slopes)
 
     return fitted
 
@@ -450,6 +500,7 @@ def settings() -> dict:
         "ridge_alpha": RIDGE_ALPHA,
         "coarse_leaf_trade_dates": COARSE_DATES,
         "shrink_blocks": SHRINK_BLOCKS,
+        "calibration": "forward_by_date",
         "yardstick": YARDSTICK,
         "min_rows_for_a_correlation": MIN_ROWS,
         "resamples": RESAMPLES,
@@ -516,29 +567,37 @@ def run(
     forecast, _ = walk_forward(x, y, day, usable, fit_ridge)
     report("ridge", forecast)
     log(f"ridge: fitted, {time.time() - started:,.0f} s")
+    forecast, _ = walk_forward(x, y, day, usable, fit_trees)
+    report("trees", forecast)
+    log(f"trees: fitted, {time.time() - started:,.0f} s")
+    # one fit of the coarse trees serves them as they are and under every calibration: a
+    # calibration only multiplies the forecast
+    calibrated, fitted = walk_forward(
+        x, y, day, usable, shrink(fit_coarse, "forward_by_date", every=True), keep=True
+    )
+    raw = np.full(len(y), np.nan)
+    first_run = np.full(len(y), np.nan)
+    for month, _, test in folds(day):
+        test = test & usable
+        if month in fitted and test.any():
+            kept = fitted[month]
+            raw[test] = kept["model"].raw(x[test][:, kept["columns"]])
+            first_run[test] = kept["model"].slopes["two_sided_by_row"] * raw[test]
+    report("trees_coarse", raw)
+    report("trees_coarse_shrunk", first_run)  # as first run: two-sided blocks, each row once
+    report(YARDSTICK, calibrated)
+    out["models"][YARDSTICK]["slopes_by_month"] = {
+        f"2026-{month:02d}": {k: round(v, 5) for k, v in kept["model"].slopes.items()}
+        for month, kept in fitted.items()
+    }
+    log(f"trees_coarse: fitted, {time.time() - started:,.0f} s")
     folder = MODELS / f"run-{run_id}"
-    for name, fit in (("trees", fit_trees), ("trees_coarse", fit_coarse)):
-        # one fit serves the model as it is and shrunk: the slope multiplies its forecast
-        shrunk, fitted = walk_forward(x, y, day, usable, shrink(fit), keep=True)
-        raw = np.full(len(y), np.nan)
-        for month, _, test in folds(day):
-            test = test & usable
-            if month in fitted and test.any():
-                raw[test] = fitted[month]["model"].raw(x[test][:, fitted[month]["columns"]])
-        report(name, raw)
-        report(f"{name}_shrunk", shrunk)
-        out["models"][f"{name}_shrunk"]["slope_by_month"] = {
-            f"2026-{month:02d}": round(kept["model"].slope, 5) for month, kept in fitted.items()
-        }
-        log(f"{name}: fitted, {time.time() - started:,.0f} s")
-        if f"{name}_shrunk" == YARDSTICK:
-            folder.mkdir(parents=True, exist_ok=True)
-            for month, kept in fitted.items():
-                joblib.dump(
-                    kept | {"names": names, "settings": settings()},
-                    folder / f"2026-{month:02d}.joblib",
-                )
-            out["models"][YARDSTICK]["artifacts"] = str(folder.relative_to(ROOT))
+    folder.mkdir(parents=True, exist_ok=True)
+    for month, kept in fitted.items():
+        joblib.dump(
+            kept | {"names": names, "settings": settings()}, folder / f"2026-{month:02d}.joblib"
+        )
+    out["models"][YARDSTICK]["artifacts"] = str(folder.relative_to(ROOT))
     if horizons:
         out["horizon_map"] = horizon_map(data, usable, log)
     out["elapsed_s"] = round(time.time() - started, 1)

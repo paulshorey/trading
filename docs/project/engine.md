@@ -79,8 +79,14 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
    prints through it, or, with `passive_fill: queue` (the default), when the size displayed
    ahead of it on arrival and its own have traded at its price. MBP-1 shows no queue: the
    first rule is the strict bound, the second assumes every order ahead stays until it
-   trades. While an order rests, no other is sent; when it expires, the next decision
-   decides again.
+   trades. Only volume from the aggressor that would hit the order counts toward the queue
+   (sells for a resting buy, buys for a resting sell): a trade with no stated side does not.
+   A limit whose price the book is already at or through when it arrives fills then, at
+   the book, when the whole order fills within its price; an order larger than the size
+   displayed there, or one the book has not reached, rests. If data coverage breaks while an order rests and before it fills, its outcome is
+   unknown: a fill in the gap would be invisible, so it is counted
+   (`orders_with_unknown_outcome`) and never treated as an expiry. While an order rests, no
+   other is sent; when it expires, the next decision decides again.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade
    at or beyond it triggers it, and it fills at the book that trade left (the book events

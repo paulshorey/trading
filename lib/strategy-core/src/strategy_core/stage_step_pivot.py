@@ -11,9 +11,11 @@ publication differ. A running extreme is confirmed by a reversal of
 `theta = max(K x ATR, FLOOR x spread)` in basis points. It uses the timeframe's ATR(14)
 (`candle_<window>.atr_bps`) and the last sampled book spread, both **as of the latest step row
 completed before the trade's own row** (on `1m@1s`, the previous second: the row of the extreme
-would include trades after it), with that row's ATR in price units (`vol_<rows>.atr_price`) as
-the frozen ATR. The spread is carried from the step rows (`last_bid`, `last_ask`: the last trade
-in the row with a usable book), never across a missing row.
+would include trades after it), with that row's normalizing ATR in price units
+(`vol_<rows>.norm_atr_price`: the ATR, or the spread where that is larger, so it is positive in
+a market that has stopped moving) as the frozen ATR. The spread is carried from the step rows
+(`last_bid`, `last_ask`: the last trade in the row with a usable book), never across a missing
+row.
 
 State is published once per step row, after its last second; a confirmation or breach inside a
 row appears on that row and never earlier. Faster rows read it through an as-of join
@@ -127,7 +129,7 @@ class StepPivotStage(Stage):
             "multiplier": self.K,
             "normalizer": f"candle_{self.TF.window}.atr_bps",
             "atr_period": self.context.features.atr_period,
-            "atr_snapshot": f"vol_{self.TF.rows}.atr_price",
+            "atr_snapshot": f"vol_{self.TF.rows}.norm_atr_price",
             "spread": f"bar_{self.TF.rows}.last_bid, last_ask",
             "spread_floor": self.FLOOR,
             "reclaim_window_rows": self.WINDOW,
@@ -174,11 +176,9 @@ class StepPivotStage(Stage):
             spread = minute_spread(base, self.book)
             now = np.maximum(self.K * swings.as_float(candle, "atr_bps"), self.FLOOR * spread)
             theta = np.r_[theta, now]
-            # the frozen ATR that swing values are measured in: floored at the spread
-            raw, norm = swings.as_float(candle, "atr_bps"), swings.as_float(candle, "norm_atr_bps")
-            with np.errstate(divide="ignore", invalid="ignore"):
-                factor = np.where(np.isfinite(norm) & (raw > 0) & (norm > raw), norm / raw, 1.0)
-            atr = np.r_[atr, swings.as_float(vol, "atr_price") * PX * factor]
+            # the frozen ATR that swing values are measured in: floored at the spread, so it
+            # is positive even where the ATR itself has decayed to exactly zero
+            atr = np.r_[atr, swings.as_float(vol, "norm_atr_price") * PX]
             self.carry = np.array([theta[-1], atr[-1]])
             self.last_minute = int(done[-1])
         at = np.searchsorted(known, minute - 1)  # the minute completed just before its own

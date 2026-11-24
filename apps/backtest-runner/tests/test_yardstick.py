@@ -279,7 +279,10 @@ def test_shrinking_stops_a_forecast_claiming_what_it_does_not_know():
     y = np.clip(level + rng.normal(0, 0.3, len(day)), -1, 1)
     train = day < day.min() + 90
     bold = yardstick.fit_trees(x[train], y[train], day[train])
-    careful = yardstick.shrink(yardstick.fit_trees)(x[train], y[train], day[train])
+    careful = yardstick.shrink(yardstick.fit_trees, every=True)(x[train], y[train], day[train])
+    assert set(careful.slopes) == set(yardstick.CALIBRATIONS) and all(
+        0 <= v < 0.2 for v in careful.slopes.values()
+    )
     test_x, test_y = x[~train], y[~train]
     assert np.abs(bold.predict(test_x)).mean() > 0.3  # sure of itself
     assert ((bold.predict(test_x) - test_y) ** 2).mean() > (test_y**2).mean()  # and wrong
@@ -319,3 +322,51 @@ def test_a_stored_dataset_is_named_by_everything_that_determines_its_rows(monkey
         assert dataset.cache_key(*args, inputs) != key, (module.__name__, name)
         monkeypatch.undo()
     assert dataset.cache_key(*args, inputs) == key
+
+
+def test_the_calibration_forecasts_a_block_from_earlier_dates_only():
+    """PR #100 review: a slope fitted on forecasts that used later dates could not have been
+    made on its own dates."""
+    day = np.repeat(days(date(2026, 1, 5), 20), 3)
+    first = (date(2026, 1, 5) - BASE).days
+    cut = yardstick.blocks(day, 4, forward=True)
+    spans = [
+        (np.unique(day[train] - first).tolist(), np.unique(day[inside] - first).tolist())
+        for train, inside in cut
+    ]
+    # the first block has no history; each later one is fitted on the dates before it, less one
+    assert spans == [
+        ([0, 1, 2, 3], [5, 6, 7, 8, 9]),
+        ([0, 1, 2, 3, 4, 5, 6, 7, 8], [10, 11, 12, 13, 14]),
+        ([*range(14)], [15, 16, 17, 18, 19]),
+    ]
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(len(day), 2)).astype(np.float32)
+    y = np.clip(0.5 * x[:, 0] + rng.normal(0, 0.2, len(day)), -1, 1)
+
+    class Recorder:
+        def __init__(self):
+            self.seen = []
+
+        def __call__(self, x, y, d):
+            self.seen.append((int(d.min() - first), int(d.max() - first)))
+            return yardstick.fit_ridge(x, y, d)
+
+    record = Recorder()
+    forward = yardstick.held_out(record, x, y, day, forward=True)
+    assert record.seen == [(0, 3), (0, 8), (0, 13)]
+    assert np.isnan(forward[day - first < 5]).all() and np.isfinite(forward[day - first >= 5]).all()
+    both = yardstick.held_out(yardstick.fit_ridge, x, y, day, forward=False)
+    assert np.isfinite(both).all()  # the first variant also forecast the first block, from later
+
+
+def test_the_slope_weighs_each_trade_date_once_or_each_row_once():
+    """PR #100 review: the score averages over trade dates, so the slope that serves it does
+    too. A date with many rows pulls the row-weighted slope toward itself."""
+    day = np.r_[np.full(10, 1), np.full(90, 2)]
+    forecast = np.ones(100)
+    y = np.r_[np.full(10, 0.8), np.full(90, 0.2)]  # the forecast holds on the short date
+    assert yardstick.slope_of(forecast, y, day, by_date=True) == pytest.approx(0.5)
+    assert yardstick.slope_of(forecast, y, day, by_date=False) == pytest.approx(0.26)
+    assert yardstick.slope_of(-forecast, y, day, by_date=True) == 0.0  # never below zero
+    assert yardstick.slope_of(np.full(100, np.nan), y, day, by_date=True) == 0.0

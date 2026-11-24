@@ -152,6 +152,12 @@ COLUMNS: tuple[Column, ...] = (
     Column("status", SMALLINT, "As candle_1h_1m: 0 complete, 1 empty, 2 gap, 3 warmup"),
     Column("atr_price", DOUBLE, "ATR(14) in quoted price units, for stops; never a model input"),
     Column(
+        "norm_atr_price",
+        DOUBLE,
+        "The ATR that normalizes, in quoted price units: atr_price, or the last sampled book "
+        "spread where that is larger (candle norm_atr_bps); never a model input",
+    ),
+    Column(
         "atr_usd",
         DOUBLE,
         "ATR(14) in US dollars per contract (tick value / tick size), for sizing; never a model "
@@ -345,11 +351,15 @@ class StepVolStage(Stage):
                 "tr_atr": in_atr(k["tr"]),
                 "parkinson_bps": parkinson(c.high, c.low) * 1e4,
                 "gk_bps": garman_klass(c.open, c.high, c.low, c.close) * 1e4,
-                "spread_atr": candle.values["spread_bps"] / atr_bps,
+                "spread_atr": candle.values["spread_bps"] / norm_bps,
             }
             usd = usd_per_price(chunk.contract)
             context = {"atr_price": np.where(priced, atr, np.nan)}
             context["atr_usd"] = context["atr_price"] * usd
+            # where the floor binds, the spread in price units; elsewhere the ATR, bit for bit
+            raw_bps = np.where(candle.nulls["atr_bps"], np.nan, candle.values["atr_bps"])
+            binds = np.isfinite(norm_bps) & (norm_bps > raw_bps)
+            context["norm_atr_price"] = np.where(binds, norm_bps * px / 1e4, context["atr_price"])
         v: dict[str, np.ndarray] = {
             "slot_ordinal": candle.values["slot_ordinal"],
             "end_ns": minutes.end,

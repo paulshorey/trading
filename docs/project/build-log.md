@@ -6,6 +6,49 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Review fixes to the four open PRs (November 24, 2026)
+
+Paul reviewed PRs #98 to #101 and found defects in each. All are fixed on the top of the stack
+and the four were merged together.
+
+- **The resting limit** (`execution.py`). A break in data coverage while an order rests,
+  before a fill is seen, gives an unknown outcome, counted as `orders_with_unknown_outcome`
+  and never read as an expiry. Only volume from the aggressor that would hit the order
+  counts toward the queue ahead of it. A limit that is marketable on arrival fills then only
+  when the whole order fills within its price; otherwise it rests. A trade received before
+  a late fill can still exit the position.
+- **The target** (`targets.py`, version 2). A trade counts by its own event time, from the
+  decision on and before the forced exit; one received later but stamped earlier no longer
+  settles a target before its decision. A session with no trades settles at the closing
+  mid-price.
+- **The dataset cache** (`dataset.py`, version 2). Its key holds the target and dataset
+  versions, the settings, and each selected session's contract and source files, so a
+  corrected target or file cannot load old rows.
+- **The calibration slope** (`yardstick.py`): fitted forward in time and weighted by date
+  ([spec](yardstick-spec.md#the-slope-fitted-forward-in-time-changed-after-the-run-november-24-2026)).
+- **The ATR floor.** `spread_atr` divided by the bare ATR; it now divides by the floored
+  one. The swing stages froze `atr_price` times a factor, which is zero where the ATR is
+  exactly zero, so a market that had stopped moving left its detector idle. They now freeze
+  `vol_*.norm_atr_price`, the ATR or the spread where that is larger.
+- Label stages stay out of the features the engine computes (`pipeline.py`).
+
+**Build and checks**
+
+- Migrations `0014_norm_atr_price` and `0015_swing_atr_snapshot` (the swing variants'
+  registered source of the frozen ATR), applied. `research ingest run GC SI --rebuild`
+  rewrote the volatility and swing tables; `ingest plan GC SI`: all 12 contracts `current`.
+- Read back on front sessions (`continuous_vol_1s`, 42.4 million rows): the floor binds on
+  975,927, the count recorded below; `norm_atr_price` is never under `atr_price`; no row
+  has an ATR of exactly zero, so that fix changes only the thin sessions before a contract
+  is the front one.
+- The decision model, rebuilt from its rows (run 7) and its policy (run 8): unchanged, the
+  same 432,513 targets with the same barrier counts, every slope zero, no position opened.
+- Tests: strategy-core 159, backtest-runner 60. New: a limit resting through missing data;
+  queue credit by aggressor side; delayed prints at both ends of a target's interval; a
+  cache key that changes with a target version or a source file; forward blocks with a
+  purged date; fifteen flat minutes then a move, through the candle, volatility, and swing
+  stages.
+
 ## Base changes: a continuous CVD, the ATR floor, the roll warm-up (November 24, 2026)
 
 Build-order item 10, step 1 of the process. Three changes to base rows and to what every

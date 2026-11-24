@@ -36,7 +36,8 @@ the swing mode ([decision 40](roadmap.md#decisions)); then six years of data
 reports every contract `current`, and the database holds one year of GC and SI on three
 timeframes (288 GB with the dead space of the last rebuild; about 170 GB of rows).
 `~/fingerprint-new.txt` is the baseline that later rebuilds are compared with, taken after
-the base changes of November 24. One year of MBP-1 for
+the review fixes of November 24 (migrations to `0015`; against the baseline before them,
+only the volatility and swing tables differ). One year of MBP-1 for
 GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
 in cloud storage; they return, with NQ and five more years of GC and SI, later.
 

@@ -288,6 +288,37 @@ and equals staying flat.
    test months, and only then as trades.
 4. **Nothing here touches the one-minute finding**, which was measured on other targets.
 
+### The slope, fitted forward in time (changed after the run, November 24, 2026)
+
+A review of the run above found that its slope could not have been computed on the dates it
+was applied to: the first block of training dates was forecast by a model fitted on the
+later blocks. The yardstick's slope is now fitted the way it would be in use, and this is
+recorded as a change made after a result was seen.
+
+| Setting | Value |
+| --- | --- |
+| Blocks | The training dates in four blocks in time order. The first is never forecast. Each later block is forecast by a model fitted on the blocks before it only, less the one date next to it (the code asserts a full trade date between the last date fitted and the first forecast) |
+| Weight | Each trade date counts once: the two sums of the least-squares slope are means within a date, then summed over dates. The squared-error measure the slope serves weighs dates equally, so a date with twice the rows should not count twice |
+| The yardstick | `trees_coarse_calibrated`: `trees_coarse` times this slope |
+| Kept as recorded | `trees_coarse_shrunk`, with the first run's slope: blocks on both sides, every row counting once |
+| Reported | For each test month, all four slopes: forward or two-sided, by date or by row |
+
+**Result** (run 7, on the rows rebuilt after the review; `~/yardstick-review.json`). All
+four slopes are zero in every month, so neither the direction of the fit nor the weighting
+changes anything here, and the yardstick is still the flat forecast.
+
+| Test month | Forward, by date (the yardstick) | Forward, by row | Two-sided, by date | Two-sided, by row (first run) |
+| --- | ---: | ---: | ---: | ---: |
+| May | 0 | 0 | 0 | 0 |
+| June | 0 | 0 | 0 | 0 |
+| July | 0 | 0 | 0 | 0 |
+| August | 0 | 0 | 0 | 0 |
+
+The policy with run 7's models (run 8) opens no position in any of the sixteen replays, as
+before. The unshrunk models are unchanged by the review's corrections to the target and to
+the stored rows: `trees` 0.051 (-0.027 to 0.126) with a squared error 12% above `flat`'s,
+`trees_coarse` 0.027 (-0.051 to 0.107) and 10% above.
+
 ## What has to be built
 
 1. The label (`strategy-core`, beside `labels.py`), with tests.

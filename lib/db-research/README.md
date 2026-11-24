@@ -23,7 +23,10 @@ views (PR D); `0007_pivot_labels` adds the outcome-label tables `market.pivot_la
 (the reversal model they served was withdrawn on November 23, 2026); `0011_structure_code`
 adds the `structure` column to the swing tables; `0012_research_runs` adds `research.run`,
 one row per experiment run with its frozen settings and its result; `0013_cvd_and_atr_floor`
-adds `cvd` to the step rows and `norm_atr_bps` to the window tables.
+adds `cvd` to the step rows and `norm_atr_bps` to the window tables;
+`0014_norm_atr_price` adds `norm_atr_price` to the volatility tables, the normalizing ATR in
+price units that the swing stages freeze; `0015_swing_atr_snapshot` records that source in
+the swing variants' registered parameters.
 Runs and ML rows come next.
 
 ## Local setup

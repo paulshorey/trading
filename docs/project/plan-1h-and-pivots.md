@@ -327,7 +327,7 @@ changing the detector's code rebuilds every scale. Cross-scale summaries change 
 a new version declares a different scale set.
 
 **Implemented November 17, 2026:** the open parameters are frozen in
-[pivot-label-spec.md](pivot-label-spec.md); results are in the
+[pivot-label-spec.md](../archive/pivot-label-spec.md); results are in the
 [handoff](build-log.md#pr-f-results-labels-and-benchmark).
 
 ### 3.6 Implemented in PR D (price swings)

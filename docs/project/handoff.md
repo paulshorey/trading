@@ -1,65 +1,41 @@
 # Handoff
 
-Updated November 23, 2026, on the new development machine, after its database was rebuilt and
-build-order item 6 was run. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal,
-the six-step process, and the rules. This page says where the work stands and how to
-continue. The [roadmap](roadmap.md) is the map of what is computed and in what order,
-[todo.md](todo.md) lists the tasks, and the [build log](build-log.md) records what was
-built, how it was checked, and what every experiment found.
+Updated November 23, 2026, after the plan was rewritten around one decision model and the
+code of the withdrawn design was removed. Read [AGENTS.md](../../AGENTS.md) first: it holds
+the goal, the six-step process, and the rules. This page says where the work stands and how
+to continue. The [roadmap](roadmap.md) is the current plan, [todo.md](todo.md) lists the
+tasks, and the [build log](build-log.md) records what was built, how it was checked, and
+what every experiment found.
 
 ## Start here (next session)
 
 **Where the work stands.** Steps 1 and 2 of the process are built and verified for GC and
-SI; steps 3 to 6 are the work ([state of each step](roadmap.md#the-process-and-where-it-stands)).
-The experiments so far say three things:
+SI, step 3 has indicators on price, and step 4 has the rule-based swings at three sizes.
+Steps 5 and 6 are the work ([state of each step](roadmap.md#the-process-and-where-it-stands)).
+No edge has been found: every rule that enters at a swing candidate loses about one spread
+([what the results show](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
 
-- Acting on a fast swing candidate has no edge: it loses about one spread at a one-minute
-  bracket and at an hourly one, and no rule on the slow swings changes that
-  ([replay](replay.md)). Staying flat is the rule every later input set must beat.
-- Acting on a middle (`10m@10s`) candidate has none either: at the market it loses about one
-  spread, a limit resting at the candidate's extreme gets a better price and still loses,
-  and no agreement rule passed
-  ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)). One pattern
-  repeated from the fast replay: entering against the `slow_atr_1` trend is worse than
-  entering with it.
-- Models on the stored price and swing features do not tell which early reversals complete
-  better than the distance price has already moved
-  ([benchmark](build-log.md#pr-f-results-labels-and-benchmark)). That tested one target on
-  one timeframe, without the inputs the process names as the important ones: indicators of
-  indicators, divergences, and the book ([limits](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
-- The spread is a third of a typical one-minute move and a twentieth of an hourly one, and
-  one year holds too few independent days to judge an hourly policy
-  ([review](roadmap.md#review-of-november-20-2026)). So a middle timeframe, `10m@10s`, was
-  built, and five more years of GC and SI are coming
-  ([decisions](roadmap.md#decisions-of-november-20-2026)).
+**The plan changed on November 23** ([decisions 29 to 36](roadmap.md#decisions)). Paul
+withdrew the trained reversal model: swings and structure are computed by rule, a second
+pass does the same on RSI and net flow, and one trained model decides. Its decision is a
+step: buy, sell, or nothing, with the position long, flat, or short, so the opposite
+decision closes a position whatever its bracket says. Risk is a percentage of the account.
+The [review](roadmap.md#review-of-november-23-2026) of the same day lists what else was
+found. The label stages, the benchmark, and the candidate replay were removed
+([build log](build-log.md#the-withdrawn-design-removed-november-23-2026)).
 
-None of this has found an edge. What exists is the machinery to look for one honestly:
-three timeframes built by one set of classes, an engine that gives the same rows live and in
-backtests, labels that cannot leak, a replay that prices every trade at the book, and rules
-for judging a result that were written before the data that will test them
-([how results are judged](roadmap.md#how-results-are-judged-on-six-years)).
+**The next tasks** ([build order](roadmap.md#build-order)): item 7, the engine makes
+position decisions; item 8, the first decision model ([spec](yardstick-spec.md), which Paul
+is still reviewing: build nothing from it that he has not confirmed); then the 3 ATR scale
+and the second pass ([how](#next-steps)).
 
-**What the system is for** is in the roadmap's
-[structure](roadmap.md#how-the-analysis-is-structured): state, events, forecasts, and
-decisions; three timeframes with one job each; and a decision model that is given a side by
-an event and learns whether to take the trade.
-
-**The next tasks** ([build order](roadmap.md#build-order), proposed November 23 and waiting
-for Paul's review): the first decision model's forecast as the yardstick, the engine changes
-that let a strategy go long, short, or flat with short limit entries, then the 3 ATR scale
-and the second pass on RSI and net flow ([how](#next-steps)). Items 1 to 6 are done.
-
-**This machine is the starting point** (Paul, November 23). Nothing more is needed from the
-first one: `fingerprint-old-machine.txt` was not copied and will not be compared. The
-databases are known to be equal in row counts and in everything the fast replay reads
-([what was checked](build-log.md#the-new-machine-november-23-2026)); `~/fingerprint-new.txt`
-is the baseline that later rebuilds are compared with.
-
-**The state of this machine** (November 23): lint and tests pass,
-`ingest plan GC SI` reports every contract `current`, and the database (151 GB) holds one year of GC
-and SI on three timeframes. One year of MBP-1 for GC and SI is in `data/databento/mbp-1/`
-(27 GB). They are the proof of concept: Paul keeps the files of PL, ES, YM, and RTY in cloud
-storage, and they return, with NQ and five more years of GC and SI, on the new machine.
+**The state of this machine** (November 23): lint and tests pass, `ingest plan GC SI`
+reports every contract `current`, and the database (about 150 GB) holds one year of GC and
+SI on three timeframes. This build is the starting point: `~/fingerprint-new.txt` is the
+baseline that later rebuilds are compared with
+([how it was checked](build-log.md#the-new-machine-november-23-2026)). One year of MBP-1 for
+GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
+in cloud storage; they return, with NQ and five more years of GC and SI, later.
 
 How to work in this repository:
 
@@ -108,14 +84,14 @@ Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
                                         bar_1s, bar_10s, bar_1m (tier 0)
                                         candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1s,
                                         vol_1m (tier 1)
-                                        pivot_1s, pivot_1m, pivot_event (tier 2)
-                                        pivot_label_1s, pivot_label_1m (outcomes)
-                                        planned: pivot_rsi_*, model_* and
-                                        signal_* (E), book_1s, pair_1m
+                                        pivot_1s, pivot_10s, pivot_1m,
+                                        pivot_event (tier 2)
+                                        planned: pivot_rsi_*, pivot_flow_*,
+                                        signal_*, book_1s, pair_1m
                                       market.continuous_*                  (per product)
                                                   │
                                                   ▼
-                                      ML training (next): one model on pooled examples
+                                      The decision model (next): one model on pooled rows
 ```
 
 `apps/backtest-runner` holds the data adapters, calendars, ingestion, CLI (`research`), and
@@ -233,85 +209,86 @@ one-second returns. Each is a stage with its own version and checkpoints
 yet ([list](ingestion.md#metrics)) and can be added by rebuilding from the DBN files
 ([how](ingestion.md#adding-a-metric-or-feature)).
 
-## Moving to the new machine
+## Setting up a machine
 
-The new machine has 4 TB. Nothing in the database needs to be copied: every row is rebuilt
-from the DBN files by the code, in under an hour for the year held.
+Nothing in the database needs to be copied: every row is rebuilt from the DBN files by the
+code, in under an hour for the year held. Done for this machine on November 23
+([record](build-log.md#the-new-machine-november-23-2026)).
 
 1. **Copy** the repository folders under `~/git` (this one, `local-dev`, and the workspace
-   `AGENTS.md`), `data/databento/` (27 GB, gitignored; keep each job folder unchanged), the
-   shared agent configuration (`~/.agents`, `~/.secrets.sh`, `~/.shortcuts.sh`), and the
-   evidence files named in the [build log](build-log.md) (`~/*.hash-*.txt` and the others).
-   Agent memory lives outside the repository, in a folder named after the checkout's path.
+   `AGENTS.md`), `data/databento/` (27 GB, gitignored; keep each job folder unchanged), and
+   the shared agent configuration (`~/.agents`, `~/.secrets.sh`, `~/.shortcuts.sh`).
 2. **Install** PostgreSQL 18 (`brew install postgresql@18`, `brew services start
-   postgresql@18`), uv, and pnpm; then `pnpm deps:install` at the repository root.
+   postgresql@18`), uv, and pnpm; then `pnpm deps:install` at the repository root. Apply the
+   bulk-load server settings ([storage](../../lib/db-research/README.md#local-setup)).
 3. **Build the database:**
 
    ```sh
    psql -d postgres -c "CREATE ROLE trading LOGIN CREATEDB"   # the role the code connects as
    psql -d postgres -c "CREATE DATABASE trading OWNER trading"
    uv run research catalog --verify      # every file against its checksum
-   uv run research db migrate            # 0001 to 0009
+   uv run research db migrate
    uv run research db register
-   caffeinate -i uv run research ingest run GC SI 2> ~/ingest-new-machine.log
+   caffeinate -i uv run research ingest run GC SI 2> ~/ingest.log
    uv run research ingest plan GC SI     # every contract `current`
    ```
 
-   Apply the bulk-load server settings first ([storage](../../lib/db-research/README.md#local-setup)):
-   a new PostgreSQL has none of them.
-
-4. **Prove it is the same database.** `scripts/db-fingerprint.sh > ~/fingerprint-new.txt`,
-   then `diff` it with `fingerprint-old-machine.txt` from the first machine (among the
-   evidence files). Integer columns and row counts must match exactly. If a float column
-   differs, find out how much before going on: the two machines may have different
-   processors, and a difference in the last bits of some features would be the first
-   evidence of it. Record what is found in the build log; do not tune anything to hide it.
+4. **Compare with the baseline:** `scripts/db-fingerprint.sh > ~/fingerprint.txt` and `diff`
+   it with `~/fingerprint-new.txt`. Row counts and integer columns must match; if a float
+   column differs, find out by how much and record it before going on.
 5. **Check the rest:** `pnpm lint && pnpm test && pnpm build`, `uv run research verify
    apps/backtest-runner/examples/gc-day.json`, and the local services
    (`~/git/local-dev`, the `local-dev-services` skill).
-6. **Then the downloads Paul adds:** five more years of GC and SI, later the other
-   products. Add each job folder unchanged; do not ingest the older years before
-   the base changes of build-order item 9 are merged ([decision 13](roadmap.md#decisions-of-november-20-2026)).
 
-One thing from another session was left as it was on the first machine: the branch
-`docs/first-executable-pivot-model` (worktree `~/git/trading-wt-review-87`), which holds
-unmerged commits. Its content predates the reviews of November 19 and 20; read it before
-deciding whether anything in it is still wanted.
+New downloads (five more years of GC and SI, later other products): add each job folder
+unchanged, then `catalog --verify` and `ingest run`.
+
+A branch from another session, `docs/first-executable-pivot-model` (worktree
+`~/git/trading-wt-review-87`), holds unmerged commits about a pivot model. That design is
+withdrawn; Paul decides whether the branch and worktree are deleted.
 
 ## Next steps
 
-The order is the roadmap's [build order](roadmap.md#build-order). Items 1 to 5 are done:
-the replay, sparse swing storage, the timeframe as a parameter, the middle timeframe, and
-one set of stages for every timeframe
-([what was built](build-log.md#one-set-of-stages-for-every-timeframe-november-20-2026)).
-Item 6, the replay of the middle timeframe's candidates, is done too
-([what was built](build-log.md#replay-of-the-middle-timeframes-candidates-november-23-2026)):
-`replay.py` reads its settings from a `Spec` per timeframe, and a new replay is a new `Spec`
-with its section in [replay.md](replay.md), written before the run.
+The order is the roadmap's [build order](roadmap.md#build-order). Items 1 to 6 are done, and
+the code of the withdrawn design is removed.
 
 **How a timeframe is built now.** `pipeline.TIMEFRAMES` lists the stored timeframes. Each
 is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stages come from
 `stage_step_candle.py`, `stage_step_stats.py`, `stage_step_vol.py`, and
 `stage_step_pivot.py`. Another timeframe is a `Timeframe`, an entry in that list, its
-reclaim window and label horizon, and a migration that copies the tables (`0008` is the
-pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
+reclaim window, and a migration that copies the tables (`0008` is the pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**The plan changed on November 23.** Paul withdrew the trained reversal model
-([decisions 29 to 34](roadmap.md#decisions-of-november-23-2026)): swings and structure are
-computed by rule, a second pass does the same on RSI and net flow, and the one trained
-model names a position (long, short, or flat). A [review](roadmap.md#review-of-november-23-2026)
-the same day proposed a new order and a [spec for the first decision model](yardstick-spec.md).
-**Both are proposals: wait for Paul's review before building from them.** Three things are
-his to decide: the spec's target and policy, the order, and how the daily cap, the position
-size, and the bracket are made to fit (one hourly ATR risks more than the cap allows).
+**7. The engine makes position decisions.** Today `Strategy.signals` returns an entry signal
+and `Engine.execute` ignores it while a position is open. To build, in `strategies.py`,
+`engine.py`, and `execution.py` (none is in a stage's identity, so no stored row goes stale):
 
-In the proposed order: item 7, the forecast and the horizon map, needs no engine change.
-Item 8 changes the engine (`engine.py`, `strategies.py`, `execution.py`): none of these is in
-a stage's identity, so no stored row goes stale, but whole-session and second-by-second runs
-must still be identical (`research verify`). Item 9 adds `3.0` to
-`stage_step_pivot.MULTIPLIERS` and a structure code. Items 10 and 11 need a rebuild; a
-six-year build is a few hours, so the order is set by what is learned, not by rebuild cost.
+- a decision per row, buy, sell, or nothing, and a position that moves one step
+  ([decision 35](roadmap.md#decisions)); a closing decision exits at the market and cancels
+  the position's orders;
+- entries as market orders or limit orders that last seconds. `Simulator.rest` already fills
+  a resting limit at a price; add the back-of-queue fill rule beside the strict one;
+- the stop sized by the timeframe the strategy names, the position by a risk percentage, and
+  no new position once the day's loss limit is reached ([decision 36](roadmap.md#decisions));
+- moving the stop to the entry price as an option of the bracket, off by default;
+- a rule-based strategy that uses all of it, so `research verify` proves whole sessions and
+  one second at a time are still identical, and the UI still shows its trades.
+
+**8. The first decision model** follows its [spec](yardstick-spec.md). Paul is still
+reviewing the spec: confirm the label and the closing rules with him before building Part A.
+Store runs and their variants in PostgreSQL (`research.*`) first, so every variant is counted.
+
+**9. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
+variants) and one structure code per scale. Count the confirmed swings a year at 3 ATR on
+each timeframe and record it.
+
+**10 and 11. Base changes, then the second pass.** The rolling net-flow series, the ATR
+floor (measure how many rows change), and the `source.py` change, in one rebuild. Then the
+swings of RSI and net flow: measure each series' row-to-row noise and freeze a threshold
+above it first ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
+
+A six-year build is a few hours, so the order of the items is set by what is learned, not
+by the cost of rebuilding.
 
 Also open, in no fixed order ([todo](todo.md)): store runs and would-be trades in
 PostgreSQL (needed before item 8, so that every variant is counted); a session quality
@@ -327,16 +304,19 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 ## Open questions
 
-For Paul. His decisions of November 20 are in the
-[roadmap](roadmap.md#decisions-of-november-20-2026).
+For Paul. His decisions are in the [roadmap](roadmap.md#decisions).
 
-1. **Session quality.** Degraded sessions are included with only a report. Decision 23
-   makes a flagged session ineligible for entries; whether its rows also stay out of
-   indicator history is still open.
-2. **The live contract** (full-size or micro), which sets the cost model. Until it is
+1. **The first decision model's spec** ([spec](yardstick-spec.md)): the label, and which
+   closing rule is the main one. The spec proposes closing when the forecast no longer
+   favours the position, with "close only on the opposite signal" and "never close early"
+   run beside it.
+2. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
+   its rows also stay out of indicator history is still open.
+3. **The live contract** (full-size or micro), which sets the cost model. Until it is
    chosen, results are reported at both.
-3. **The largest loss from a peak** that would make a policy unacceptable. The daily cap is
-   set (decision 19); a drawdown limit is not.
+4. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
+   is a percentage (decision 36); a drawdown limit is not set.
+5. **The branch `docs/first-executable-pivot-model`** and its worktree: delete or keep.
 
 ## Things to know
 

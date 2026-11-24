@@ -6,18 +6,58 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## The withdrawn design removed (November 23, 2026)
+
+Paul withdrew the trained reversal model ([decision 29](roadmap.md#decisions)) and asked for
+everything that served it to be removed. The last commit that has it is `df5a907`.
+
+**Removed**
+
+- The label stages (`stage_pivot_label.py`, `pivot_labels.py`: eighteen stages) and their
+  tests. Migration `0010_remove_pivot_labels` drops `market.pivot_label_1s`, `_10s`, `_1m`,
+  their views, and their registry rows.
+- `benchmark.py` (the swing detectors against hindsight swings, and the reversal models) and
+  `replay.py` (the candidate replay), with `research benchmark` and `research replay`. Their
+  results stay recorded: [labels and benchmark](#pr-f-results-labels-and-benchmark), and the
+  [record of the replays](../archive/replay.md). Their spec is
+  [archived](../archive/pivot-label-spec.md).
+- From the documents: the roadmap was cut to the plan in force, and the model-stage rules of
+  the feature pipeline to one paragraph.
+
+**Kept on purpose**
+
+- `Simulator.rest` and `labels.attempt_limit` (a limit entry resting at a price): build-order
+  item 7 needs them in the engine.
+- `periods.py`: the development period, the test months, and the check that refuses the
+  holdout, which every experiment must call.
+- `swings.released`, which only the label stages called beside the swing stages: `swings.py`
+  is part of every swing stage's identity, so it is not edited for tidiness.
+
+**What changed in storage**
+
+- The fast swing scales no longer keep a row at each label's decision row
+  (`pipeline.STORED_ROWS` is `events+step_ends_10s:v4`), so the three `pivot_1s` stages were
+  `stale` and were rebuilt: `research ingest run GC SI --rebuild --workers 8`, run 2, 5.5
+  minutes, writing only `pivot_1s` and `pivot_event`. `pivot_1s` holds 25,699,173 rows
+  (31,095,900 before); events are unchanged at 2,787,648. `ingest plan GC SI` reports all 12
+  contracts `current`.
+- Tests: strategy-core 132, backtest-runner 45 (the removed tests were those of the removed
+  code); `ruff` passes.
+- The fingerprint baseline was taken again (`~/fingerprint-new.txt`; the one before is
+  `~/fingerprint-before-label-removal.txt`).
+
 ## Replay of the middle timeframe's candidates (November 23, 2026)
 
 Build-order item 6: step 4's candidates judged by step 6's measure. The spec was committed
 before any code read an outcome, and the result is in
-[replay.md](replay.md#results-for-the-middle-timeframe-november-23-2026): no group passed.
+[replay.md](../archive/replay.md#results-for-the-middle-timeframe-november-23-2026): no group passed.
 
 **What was built**
 
 - `replay.py` takes its settings from a `Spec`: the timeframe of the candidates, the label
   variants, the brackets, the entry orders, the cost models, and whether the trusted-market
-  eligibility ([decision 23](roadmap.md#decisions-of-november-20-2026)) and the daily loss cap
-  ([decision 19](roadmap.md#decisions-of-november-20-2026)) apply. `fast` is the replay of
+  eligibility ([decision 23](roadmap.md#decisions)) and the daily loss cap
+  ([decision 19](roadmap.md#decisions)) apply. `fast` is the replay of
   November 19 with nothing changed; `mid` is new (`--timeframe mid`). Another timeframe is
   another `Spec`.
 - `Simulator.rest` and `labels.attempt_limit` (`strategy-core`): an entry as a limit order
@@ -61,7 +101,7 @@ The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cor
   starting point, so `~/fingerprint-new.txt` is the baseline for later rebuilds.
 - **What stands in for it, in part:** `research replay GC SI` on the rebuilt database gives
   2,783,418 candidates and reproduces every number of the two tables recorded on November 19
-  ([replay](replay.md#results-november-19-2026)): the eligible counts, R to four digits,
+  ([replay](../archive/replay.md#results-november-19-2026)): the eligible counts, R to four digits,
   intervals, portfolio fills, net dollars, and drawdowns. Those depend on the fast labels,
   both ATRs, the slow swings, and every trade and book record of 342 sessions, so those are
   equal to the precision that changes a tick or a fill. It does not cover the middle
@@ -147,7 +187,7 @@ Build-order item 4. `10m@10s` is a window of 60 rows of ten seconds, between `1m
   the columns are the same, with its continuous view.
 - The engine (`pipeline.StageFeatures`) joins every merged timeframe as of each second, with
   its age (`10m@10s.age_s`): 625 features, 415 before. The `1h@1m` feature names did not change.
-- Label parameters were frozen first ([spec](pivot-label-spec.md#middle-scales-added-november-20-2026-before-any-label-was-computed)):
+- Label parameters were frozen first ([spec](../archive/pivot-label-spec.md#middle-scales-added-november-20-2026-before-any-label-was-computed)):
   a horizon of 240 rows (40 minutes) and a reclaim window of 30 rows.
 
 Decisions made here (derived, reported in the PR):
@@ -323,7 +363,7 @@ records, so the findings carry over; row counts shifted by the week the download
 ## PR F results (labels and benchmark)
 
 Built and measured November 16–17. The parameters were frozen in
-[pivot-label-spec.md](pivot-label-spec.md) before any label was computed. Evidence:
+[pivot-label-spec.md](../archive/pivot-label-spec.md) before any label was computed. Evidence:
 `~/ingest-gc-si-labels.*`.
 
 **In plain words.** The swing detector confirms a high only after price has fallen the full
@@ -423,7 +463,7 @@ sessions, as expected. This pivot-model comparison ends August 31.
 
 `research benchmark context GC SI` asks whether inputs from outside a candidate's own row
 help the reversal models. The sets, the population, and the success rule were written into
-the [spec](pivot-label-spec.md#context-inputs-added-november-17-2026-before-any-run) before
+the [spec](../archive/pivot-label-spec.md#context-inputs-added-november-17-2026-before-any-run) before
 any run. Evidence: `~/context-gc-si.a.json` and `~/context-gc-si.b.json` (and `.log`).
 
 **In plain words.** A candidate is a high that price has started to fall from. Part B gave
@@ -492,8 +532,8 @@ reached the reversal barrier. This measures calibration for that event and popul
 
 Use displacement as the comparator for the next forecast. A future test of incremental
 book or indicator value should include that same displacement in both arms. For
-profitability, use the separate [portfolio replay](roadmap.md#after-cost-replay).
-The [audit specification](pivot-label-spec.md#probability-audit-november-18-2026)
+profitability, use the separate [portfolio replay](roadmap.md#how-a-policy-is-evaluated).
+The [audit specification](../archive/pivot-label-spec.md#probability-audit-november-18-2026)
 records the development-data exposure and resampling rule. Local JSON reports are in
 `data/runs/research/2026-11-18-displacement/`.
 

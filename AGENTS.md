@@ -47,9 +47,10 @@ once, for any timeframe. The state of each step is in the
    zigzag and structure on RSI, on net volume flow (CVD), and on other indicators, then
    whether their structure agrees with price's or diverges from it, within and across
    timeframes. This is the second pass: it reads the indicators of step 3.
-6. **The decision model.** The one trained model. It reads everything above and names a
-   position: long, short, or flat (flat closes an open position and cancels its orders);
-   its inference makes the backtest and live decisions. It is
+6. **The decision model.** The one trained model. It reads everything above and decides
+   buy, sell, or nothing at each decision row. The position is long, flat, or short and moves
+   one step per decision, so the opposite decision closes an open position and cancels its
+   orders, whatever its bracket says. Its inference makes the backtest and live decisions. It is
    judged by one portfolio's results after costs. A first version is trained early, on what
    exists, as the yardstick: an input earns its place when the decision model is better
    after costs with it than without it.
@@ -59,7 +60,8 @@ steps 1 to 3 describe the **state** of the market; swings and structure describe
 price and its derivatives stand against their own recent highs and lows; step 6 makes
 **decisions**. The slow timeframe sets direction and the size of the bracket, the middle
 one is where decisions are made, and the fast one times the entry. Entries are limit orders
-that last a few seconds. Trades are intraday and flat before each close.
+that last a few seconds. The risk of a trade and the loss that ends a day are percentages of
+the account. Trades are intraday and flat before each close.
 
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
@@ -148,8 +150,8 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 
 - Start an ML experiment by specifying the decision row, prediction horizon, eligibility,
   target, simple baseline and success criterion. Record results for every predeclared variant.
-  Use the development dates in [the pivot spec](docs/project/pivot-label-spec.md) for examples
-  and pivot research. September 1, 2026 onward is reserved for final pivot-model evaluation.
+  Use the development dates in `backtest_runner/periods.py` (`check_period` refuses the
+  rest). September 1, 2026 onward is reserved for one final evaluation of the decision model.
 - A provisional HL/LH is visible at the decision row. Barrier resolution, subsequent
   confirmed structure and after-cost trade outcomes are different labels. Keep timeouts,
   unknown observations and session ends identifiable. There is one trained model, the
@@ -157,7 +159,7 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   an earlier purged training fold and carry its model version.
 - State the horizon of a test and what a trade costs there. The spread is about a third of
   a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
-  hourly one ([measured](docs/project/roadmap.md#review-of-november-20-2026)).
+  hourly one ([measured](docs/project/roadmap.md#costs-choose-the-timeframe)).
 - State how many independent trade dates a result rests on. Rows that share a window or a
   day are not independent; one year cannot settle an hourly question.
 - Where the order is free, add different information (the book, net flow, the partner
@@ -165,7 +167,7 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 - Report every policy result for buys and sells apart, and by product. A year in which a
   product trended makes one side look skilled.
 - Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
-  one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
+  one portfolio, explicit costs and latency. See [how a policy is evaluated](docs/project/roadmap.md#how-a-policy-is-evaluated).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
 - Report data gaps and unavailable inputs; do not invent observations or order flow.
 - Compute features and decisions using only information available at that time.

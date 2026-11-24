@@ -49,7 +49,7 @@ def test_warmup_follows_the_parameters():
 
 def test_the_graph_reads_only_earlier_stages():
     check_graph()
-    assert [s.NAME for s in STAGES if not getattr(s, "LABEL", False)] == [
+    assert [s.NAME for s in STAGES] == [
         "bar_1s",
         "bar_10s",
         "bar_1m",
@@ -74,7 +74,7 @@ def test_the_graph_reads_only_earlier_stages():
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
     slow = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")  # trades, and their seconds
-    inputs = [s for s in STAGES if not getattr(s, "LABEL", False)]  # labels: test_pivot_labels
+    inputs = STAGES
     assert {s.NAME: s.INPUTS for s in inputs if s.RESOLUTION == "1m"} == {
         "bar_1m": ("bar_1s",),
         "candle_1h_1m": ("bar_1m",),

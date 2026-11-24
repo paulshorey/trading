@@ -17,7 +17,10 @@ adds `market.vol_1m`, the volatility family of the hourly window, and its view (
 (PR C2); `0006_swings` adds the swing tables `market.pivot_1s` and `market.pivot_1m` (one row
 per slot and scale, keyed by `variant_id`), the event table `market.pivot_event`, and their
 views (PR D); `0007_pivot_labels` adds the outcome-label tables `market.pivot_label_1s` and
-`market.pivot_label_1m` (one row per candidate and label variant) and their views (PR F).
+`market.pivot_label_1m` (one row per candidate and label variant) and their views (PR F);
+`0008_middle_timeframe` adds the `10m@10s` tables; `0009_one_set_of_stages` adds
+`market.stats_1m_1s`; `0010_remove_pivot_labels` drops the label tables and views again
+(the reversal model they served was withdrawn on November 23, 2026).
 Runs and ML rows come next.
 
 ## Local setup

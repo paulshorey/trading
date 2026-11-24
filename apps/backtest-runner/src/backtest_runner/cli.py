@@ -46,37 +46,6 @@ def main() -> None:
         action="store_true",
         help="Replace contracts stored by other code or settings, or missing earlier sessions",
     )
-    p = sub.add_parser(
-        "benchmark",
-        help="Pivot benchmark on stored rows before the holdout (pivot-label-spec.md)",
-        description="detectors: swing detectors against hindsight reference swings. models: "
-        "logistic regression against boosted trees on the labeled candidates. Reads front "
-        "sessions of the development period; stores nothing.",
-    )
-    p.add_argument("action", choices=("detectors", "models", "context"))
-    p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
-    p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
-    p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
-    p.add_argument("--labels", nargs="*", help="models: label variants, such as fast_atr_1_q25")
-    p = sub.add_parser(
-        "replay",
-        help="After-cost replay of stored swing candidates (docs/project/replay.md)",
-        description="Simulates a would-be entry for every stored candidate of the "
-        "development period and compares take-all with the displacement rule. Reads stored "
-        "rows and the DBN files; stores nothing.",
-    )
-    p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
-    p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
-    p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
-    p.add_argument(
-        "--timeframe",
-        choices=("fast", "mid"),
-        default="fast",
-        help="Whose candidates: fast (1m@1s, the default) or mid (10m@10s, with limit entries, "
-        "the daily loss cap and micro costs)",
-    )
-    p.add_argument("--labels", nargs="*", help="Label variants, such as mid_atr_1_q25")
-    p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
@@ -130,35 +99,6 @@ def main() -> None:
                     result = ingest.summarize(ingest.plan(args.products, **options))
                 else:
                     result = ingest.run(args.products, workers=args.workers, **options)
-        elif args.command == "benchmark":
-            from . import benchmark
-
-            period = {
-                "start": args.start or benchmark.DEV_START,
-                "end": args.end or benchmark.DEV_END,
-            }
-            if args.action == "detectors":
-                result = benchmark.detectors(args.products, **period)
-            else:
-                result = benchmark.models(
-                    args.products,
-                    labels=args.labels,
-                    log=benchmark.stderr,
-                    context=args.action == "context",
-                    **period,
-                )
-        elif args.command == "replay":
-            from . import benchmark, replay
-
-            result = replay.run(
-                args.products,
-                args.start or benchmark.DEV_START,
-                args.end or benchmark.DEV_END,
-                args.labels,
-                args.workers,
-                log=benchmark.stderr,
-                timeframe=args.timeframe,
-            )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)
             result = {k: run[k] for k in ("id", "summary", "candidates", "performance")}

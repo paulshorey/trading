@@ -1,8 +1,13 @@
 # Pivot labels and benchmark: frozen specification (PR F)
 
+**Archived November 23, 2026.** This is the record of a design that was withdrawn
+([decision 29](../project/roadmap.md#decisions)): its code and tables were removed
+([build log](../project/build-log.md#the-withdrawn-design-removed-november-23-2026)). The
+commands named below no longer exist; the last commit that has them is `df5a907`.
+
 Frozen November 16, 2026, before any label was computed and before the benchmark read any
 outcome. It fixes the open parameters of
-[plan section 3.5](plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f). Changing a label
+[plan section 3.5](../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f). Changing a label
 parameter means a new label variant with a new name, never an edit; changing a benchmark
 rule means a new dated section here that says what changed and why.
 
@@ -160,7 +165,7 @@ Made during review, before the benchmark read any outcome of the full data:
 
 **Why.** The first benchmark found that the decision row's own features rank early
 candidates no better than the position of price alone
-([results](build-log.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
+([results](../project/build-log.md#pr-f-results-labels-and-benchmark)). Before any structure signal is
 stored, this experiment asks whether information the candidate's own row does not hold
 helps: the other swing scales, the hourly window, and the paired product. It reads stored
 rows only and stores nothing (`research benchmark context GC SI`).
@@ -181,7 +186,7 @@ are left out: they have too few candidates to fit.
 - **Minute rows are read as of availability:** the latest completed minute of the same
   contract, row `⌊o / 60⌋` for second `o`. It may belong to the previous session.
 - **Partner rows** (GC with SI) are matched by `slot_ordinal` and must carry the same
-  `end_ns`; the calendars are identical ([pair design](pair-design.md)). Only `feature`
+  `end_ns`; the calendars are identical ([pair design](../project/pair-design.md)). Only `feature`
   columns are read, so no price of one product meets a price of the other.
 - **One population for every set:** sessions warm for every stage of the largest set, in
   both products; part B's NULL and extreme-ATR rules applied to the largest set's columns.
@@ -199,13 +204,13 @@ A set that helps is a reason to store its signals as a stage and to build the mo
 a set that does not is reported as it is, and its inputs are not tuned afterwards.
 
 **Result (November 17, after the runs):** the rule is not met for any set
-([results](build-log.md#context-input-results-november-17-2026)).
+([results](../project/build-log.md#context-input-results-november-17-2026)).
 
 ## Partner swing inputs (changed November 19, 2026)
 
 The `pair` set read the partner product's swing row of the label's scale at the candidate's
 own second. Fast swing rows are now stored at each product's own decision rows, event rows,
-and minute ends ([rule](ingestion.md#fast-swing-rows-are-stored-where-they-are-read)), so
+and minute ends ([rule](../project/ingestion.md#fast-swing-rows-are-stored-where-they-are-read)), so
 `research benchmark context` reads the partner's swing row at the last second of its latest
 completed minute, as it reads the slow scales. The partner's `candle_1m_1s` and `vol_1s`
 rows are still read at the same second. The November 17 result used the same-second rows and

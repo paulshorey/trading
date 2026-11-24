@@ -1,9 +1,14 @@
 # After-cost replay
 
+**Archived November 23, 2026.** This is the record of a design that was withdrawn
+([decision 29](../project/roadmap.md#decisions)): its code and tables were removed
+([build log](../project/build-log.md#the-withdrawn-design-removed-november-23-2026)). The
+commands named below no longer exist; the last commit that has them is `df5a907`.
+
 `uv run research replay GC SI` answers one question before any model with new inputs is
 fitted: what does acting on the stored fast candidates earn after costs? It applies the
-[replay rules](roadmap.md#after-cost-replay) and is the yardstick every later input set is
-judged by ([decision 6](roadmap.md#design-decisions-november-19-2026)). It reads stored
+[replay rules](../project/roadmap.md#how-a-policy-is-evaluated) and is the yardstick every later input set is
+judged by ([decision 6](../project/roadmap.md#decisions)). It reads stored
 rows and the DBN files and stores nothing (`backtest_runner/replay.py`).
 
 ## What it does
@@ -70,7 +75,7 @@ its `with` group is above zero, with its 95% interval, in both parts of the peri
 both execution settings; with 18 groups per cell, one positive cell alone is expected by
 chance and counts for nothing.
 
-Not built: the [sliding-clock control](roadmap.md#after-cost-replay) (the same policy on
+Not built: the [sliding-clock control](../project/roadmap.md#how-a-policy-is-evaluated) (the same policy on
 minute boundaries). It needs candidates detected on a minute clock, which are not stored.
 
 ## Results (November 19, 2026)
@@ -135,7 +140,7 @@ What this shows:
 
 What it does not show: whether a candidate is worth taking with the book, divergences or
 indicators of indicators as inputs. Those are the next items of the
-[build order](roadmap.md#build-order), and each is judged here: an input set earns its place
+[build order](../project/roadmap.md#build-order), and each is judged here: an input set earns its place
 when a policy using it has a value of attempting above zero on the slow bracket, on the same
 candidates, under both execution settings.
 
@@ -183,7 +188,7 @@ What this shows:
 5. **Four months cannot resolve an edge of this size.** Three-hour trades overlap, so the
    test months hold about 87 independent dates; the interval of a group's mean is ±$140 to
    ±$300 an attempt, against a cost of about $80. More history
-   ([decision 9](roadmap.md#design-decisions-november-19-2026)) is what narrows it.
+   ([decision 9](../project/roadmap.md#decisions)) is what narrows it.
 
 **Correction before the merge.** The first run added the seconds since the minute row to a
 leg's age in clock time, so a candidate in the minute after a closure had the closure added and
@@ -200,7 +205,7 @@ trend among its inputs.
 Build-order item 6: step 4 of the process (candidates as events) judged by step 6's measure,
 `uv run research replay GC SI --timeframe mid`. The fast replay above is unchanged and stays
 the default, so that its settings can be rerun as they are on the older years
-([decision 13](roadmap.md#decisions-of-november-20-2026)).
+([decision 13](../project/roadmap.md#decisions)).
 
 **Question.** Is a `10m@10s` swing candidate worth acting on with the slow bracket, after
 costs: every candidate, and the candidates the slower timeframe agrees with?
@@ -217,10 +222,10 @@ the spread, about 3% of the stop. **Baseline:** staying flat, which is zero.
 | Entries | `market`: as above. `limit` (cell `slow+limit`): a limit order at the candidate's extreme (`ext_px`), sent at the decision. If the book it meets is already at or through its price, it fills there, never worse than its price. Otherwise it rests and fills at its price when a trade prints through it (strictly beyond: there is no queue model). It is cancelled 2,400 scheduled seconds after it arrives (240 middle rows, the label's horizon), or earlier at the last time a 3-hour hold still fits the session. An order that never fills is `expired`: known, no trade, value zero |
 | Executions | `base` and `stressed`, as above (the extra tick applies to marketable orders: market entries, stops, timed exits) |
 | Costs | `full`: GC and SI tick values, $2.50 a contract a side. `micro`: the same fills in ticks at the tick values of MGC ($1) and SIL ($5), and $1.25 a contract a side. The micro books are not in the data, so this is a stress, not a simulation |
-| Eligibility | As above (the slow ATR is defined and the 3-hour hold fits), and [decision 23](roadmap.md#decisions-of-november-20-2026): no file of the session is flagged (`degraded`), the engine holds a usable book at the decision, and that book's spread is at most 0.25 of the stop distance. Decided at the decision row; each reason is counted |
+| Eligibility | As above (the slow ATR is defined and the 3-hour hold fits), and [decision 23](../project/roadmap.md#decisions): no file of the session is flagged (`degraded`), the engine holds a usable book at the decision, and that book's spread is at most 0.25 of the stop distance. Decided at the decision row; each reason is counted |
 | Groups | Every candidate, and the provisional ones; each also for buys and sells apart, by product |
 | Periods | The whole development period, January to April, and May to August, each reported apart |
-| Portfolio | One position at a time across the products, one contract a trade, 10 s cooldown. A resting limit order occupies the portfolio until it fills and exits or expires. **Daily loss cap** ([decision 19](roadmap.md#decisions-of-november-20-2026)): $3,000 a trade date at full costs and $300 at micro costs. An order is placed only if the session's net loss so far plus its stop distance in dollars stays inside the cap, and none is placed once the loss has reached it. The report counts the orders refused and the sessions in which it bound. Policies that fit nothing run as one portfolio in each half of the period |
+| Portfolio | One position at a time across the products, one contract a trade, 10 s cooldown. A resting limit order occupies the portfolio until it fills and exits or expires. **Daily loss cap** ([decision 19](../project/roadmap.md#decisions)): $3,000 a trade date at full costs and $300 at micro costs. An order is placed only if the session's net loss so far plus its stop distance in dollars stays inside the cap, and none is placed once the loss has reached it. The report counts the orders refused and the sessions in which it bound. Policies that fit nothing run as one portfolio in each half of the period |
 | Agreement | The rules above (`leg`, `trend`, `fresh` on `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`, read at the latest completed minute), on both entries |
 | Displacement rule | As above, per cell, chosen at base execution and full costs |
 
@@ -230,7 +235,7 @@ both executions, and its mean is above zero for each product, for buys and for s
 micro costs. There are 6 label variants, 2 candidate groups, and 2 entries, each with take-all
 and 9 `with` groups: 240 policy cells. A few positive cells are expected by chance and count
 for nothing. This is the exposed year, so even a lead is a hypothesis for the untouched years
-([how results are judged](roadmap.md#how-results-are-judged-on-six-years)).
+([how results are judged](../project/roadmap.md#how-results-are-judged-on-six-years)).
 
 **Expected before the run:** taking every candidate at the market loses about one spread, as
 the fast candidates did; the limit entry fills only when price comes back through the
@@ -298,7 +303,7 @@ What this shows:
    against 10 for SI in the first row). Measured afterwards: the median hourly ATR was $20.50
    for GC and $0.76 for SI, so the stop risks about $2,050 on a GC contract and $3,800 on SI,
    more than the cap by itself. The cap as decided therefore also sets the product mix
-   ([review](roadmap.md#review-of-november-23-2026), point 3). This is a question for
+   ([review](../project/roadmap.md#review-of-november-23-2026), point 3). This is a question for
    the decision model's sizing (item 8), not changed here.
 6. **Micro costs change the scale, not the sign.** Commission is 0.8% of risk on the micros
    against 0.2% on the full-size contracts; every label's value of attempting stays below

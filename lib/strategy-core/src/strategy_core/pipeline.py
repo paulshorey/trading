@@ -31,7 +31,6 @@ from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
 from .stage_bar_1s import BarStage
-from .stage_pivot_label import FAST_LABELS, MIDDLE_LABELS, SLOW_LABELS
 from .stage_step_bar import MinuteBarStage, step_bar
 from .stage_step_candle import CandleStage, HourCandleStage, step_candle
 from .stage_step_pivot import BY_TIMEFRAME as STEP_SCALES
@@ -58,40 +57,33 @@ STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
     tf.name: EXPORTED.get(tf.name) or (step_bar(tf), step_candle(tf), step_stats(tf), step_vol(tf))
     for tf in TIMEFRAMES
 }
-STEP_LABELS = {FAST_TF.name: FAST_LABELS, MIDDLE.name: MIDDLE_LABELS, SLOW.name: SLOW_LABELS}
 
 # In dependency (tier) order; the timeframes are independent branches above `bar_1s`.
 STAGES: tuple[type[Stage], ...] = (
     *(STEP_STAGES[tf.name][0] for tf in TIMEFRAMES),
     *(s for tf in TIMEFRAMES for s in STEP_STAGES[tf.name][1:]),
     *(s for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]),
-    # labels look into the future: stored, but never read by a stage or the engine
-    *(s for tf in TIMEFRAMES for s in STEP_LABELS[tf.name]),
 )
 BY_NAME = {s.NAME: s for s in STAGES}
-# What a backtest or live session computes: every stage but the labels.
-FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
+# What a backtest or live session computes: every stage. A stage that looks into the future
+# (an outcome label) would be stored but left out here; none is registered today.
+FEATURE_STAGES = STAGES
 
 
 # Stages computed for every row but stored only at `stored_ordinals` (docs/project/ingestion.md).
 SPARSE = frozenset(s.NAME for s in FAST_SCALES)
-SPARSE_LABELS = frozenset(s.NAME for s in FAST_LABELS)  # their rows are the decision rows
 # Every merged timeframe's step rows end on a multiple of the shortest merged step (steps divide
 # a minute), so keeping those seconds lets any slower row read the fast scales as of its own
 # end. The step is part of the rule's name: another shortest step rebuilds the sparse stages.
 STEP_ROWS = min(tf.seconds for tf in MERGED)
-STORED_ROWS = f"label_rows+events+step_ends_{STEP_ROWS}s:v3"
+STORED_ROWS = f"events+step_ends_{STEP_ROWS}s:v4"
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
-    """Every stage reads only the source or stages before it, of no higher tier, and never a
-    label stage."""
+    """Every stage reads only the source or stages before it, of no higher tier."""
     seen: dict[str, int] = {}
-    labels = {s.NAME for s in stages if getattr(s, "LABEL", False)}
     for s in stages:
         for name in s.INPUTS:
-            if name in labels:
-                raise ValueError(f"{s.NAME} reads {name}, a label: labels are never inputs")
             if name != "market" and (name not in seen or seen[name] > s.TIER):
                 raise ValueError(f"{s.NAME} reads {name}, which is not an earlier stage")
         if s.NAME in seen:
@@ -114,12 +106,9 @@ class PipelineRows:
 
 def stored_ordinals(rows: PipelineRows) -> np.ndarray:
     """The seconds of this chunk at which the sparse stages keep a row, besides the last second
-    of every step row: every row of a fast label (a candidate's decision row, or the
-    confirmation row of a swing that never had one) and every row in which a fast scale emitted
-    an event. All
-    sparse stages keep the same seconds, so any scale can be joined to any other there."""
-    parts = [rows.tables[name].values["slot_ordinal"] for name in sorted(SPARSE_LABELS)]
-    parts += [rows.products["events"][name].values["slot_ordinal"] for name in sorted(SPARSE)]
+    of every step row: every row in which a fast scale emitted an event. All sparse stages keep
+    the same seconds, so any scale can be joined to any other there."""
+    parts = [rows.products["events"][name].values["slot_ordinal"] for name in sorted(SPARSE)]
     return np.unique(np.concatenate(parts).astype(np.int64))
 
 

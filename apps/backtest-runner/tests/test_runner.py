@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import numpy as np
 import pytest
-from backtest_runner import benchmark, catalog, server, service
+from backtest_runner import catalog, periods, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import Day, HistoricalSource, instrument_id, to_book, to_trades
@@ -526,7 +526,7 @@ SAMPLE_DAYS = [
 @pytest.mark.parametrize("path", sorted(SAMPLE.parent.glob("*.json")), ids=lambda p: p.stem)
 def test_run_examples_use_development_dates(path):
     spec = service.RunSpec.parse(json.loads(path.read_text()))
-    benchmark.check_period(spec.start, spec.end)
+    periods.check_period(spec.start, spec.end)
 
 
 @pytest.mark.skipif(

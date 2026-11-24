@@ -67,11 +67,12 @@ sessions, but `market.pivot_1s` stores a row only for:
 - the last second of every step row of a longer timeframe (`slot_ordinal % 10 = 0`: every
   ten-second row's end, which includes every minute's), so a decision on a slower timeframe
   finds the fast scales at its own row;
-- every row of a fast label: a candidate's decision row, or the confirmation row of a swing
-  that never had a candidate;
 - every second in which a fast scale emitted an event.
 
-All three scales keep the same seconds, so a candidate finds every scale at its own row.
+Until November 23, 2026 it also kept every row of a fast label; the labels were removed that
+day ([build log](build-log.md#the-withdrawn-design-removed-november-23-2026)).
+
+All the fast scales keep the same seconds, so any scale can be joined to any other there.
 Any other second is recomputed by the engine from the DBN files; `market.pivot_event` still
 holds every confirmed swing, breach, and reclaim.
 
@@ -86,14 +87,9 @@ event row, or minute end lacks a swing row; the three scales hold one key set; a
 (`~/ingest-gc-si-sparse.log` and `.json`).
 
 The rule is `pipeline.stored_rows`, and its name (`pipeline.STORED_ROWS`) is part of each
-fast scale's builder identity: changing it makes them `stale`. Because label rows are among
-the kept seconds, ingestion writes the fast scales again whenever it writes a fast label,
-and their labels with them, in the same transaction per session. A scale's builder
-therefore identifies its values, and the kept seconds follow from that builder together
-with the fast labels' builders of the same session, all recorded in `market.stage_slice`.
-The label builders are not folded into the scale's identity: a label's identity already
-contains its scale's, and a new label variant would then make every fast scale `stale`
-where today it is simply added. A stage that needs swing state at other seconds must either
+fast scale's builder identity: changing it makes them `stale`. Because every fast scale's
+events are among the kept seconds, ingestion writes all the fast scales again whenever it
+writes one, in the same transaction per session. A stage that needs swing state at other seconds must either
 read it in memory, as stages do, or extend the rule. The slow scales (`pivot_1m`) store
 every minute.
 
@@ -271,7 +267,7 @@ keeps it so. Reading stored rows instead would only be faster ([next](#next)).
 
 ## Measured
 
-The label run (November 17, 2026, PR F) added the twelve label variants to the stored GC and SI
+The label run (November 17, 2026, PR F; the labels were removed on November 23) added the twelve label variants to the stored GC and SI
 contracts (`add`, 8 workers): 858 contract-sessions in 3.5 minutes, computing every stage and
 writing only the label tables, 5,029,757 rows in `pivot_label_1s` and 197,721 in
 `pivot_label_1m`, 1.3 GB including indexes. A label table has one row per candidate, not per

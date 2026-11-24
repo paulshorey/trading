@@ -10,19 +10,19 @@ the [build log](build-log.md).
 - [x] **Set up the new machine** and rebuild the database there: done November 23
       ([what was found](build-log.md#the-new-machine-november-23-2026)).
 - [x] **Replay the middle timeframe's candidates** (item 6): done November 23
-      ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)).
-The items below follow the order proposed on November 23
-([roadmap](roadmap.md#build-order)); Paul has not approved it yet.
-
-- [ ] **Paul: review** the [yardstick spec](yardstick-spec.md), the proposed order, and the
-      open choice of cap, sizing, and bracket
-      ([review, point 3](roadmap.md#review-of-november-23-2026)).
-- [ ] **The yardstick, part A** (item 7): the label, the decision dataset, the walk-forward
-      forecast, the horizon map; runs stored in `research.*`.
-- [ ] **The engine makes position decisions** (item 8): long, short, or flat; exit on flat;
-      limit entries that last seconds with the back-of-queue fill model; the bracket's
-      timeframe named by the strategy; a stored forecast as an input. Then the yardstick,
-      part B.
+      ([results](../archive/replay.md#results-for-the-middle-timeframe-november-23-2026)).
+- [x] **Remove the withdrawn design** (November 23): the label stages and tables, the
+      benchmark, the candidate replay; the roadmap cut to the current plan
+      ([record](build-log.md#the-withdrawn-design-removed-november-23-2026)).
+- [ ] **Paul: review** the [first decision model's spec](yardstick-spec.md): the label and
+      the closing rules.
+- [ ] **The engine makes position decisions** (item 7): buy, sell, or nothing, one step at a
+      time; a closing decision exits at the market; limit entries that last seconds with the
+      back-of-queue fill rule; the stop's timeframe named by the strategy; risk and the daily
+      limit as percentages; the stop moved to the entry price as an option.
+- [ ] **The first decision model** (item 8): runs stored in `research.*`; the label, the
+      decision dataset, the walk-forward forecast, the horizon map; then the policy in the
+      engine.
 - [ ] **Structure of price** (item 9): a 3 ATR scale on every timeframe and one structure
       code per scale.
 - [ ] **Base changes, in one rebuild** (item 10): a rolling net-flow series without session
@@ -38,14 +38,12 @@ The items below follow the order proposed on November 23
 - [ ] **More inputs and the named variants** (item 15).
 - [ ] **The final evaluation on the holdout** (item 16). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
-- [ ] **After approval:** remove the label stages, `benchmark.py`, and the candidate replay
-      once part B runs in the engine; cut the roadmap to the current plan.
 
 ## Also open
 
 - [ ] **The sliding-clock control.** The same policy on completed minute boundaries and on
       every eligible second, in one portfolio, to measure what the faster clock earns
-      ([rule](roadmap.md#after-cost-replay)). Run it with the first policy that is not flat.
+      ([rule](roadmap.md#how-a-policy-is-evaluated)). Run it with the first policy that is not flat.
 - [ ] **Session quality policy.** Backtests include degraded sessions with only a report.
       Decide and implement a default: skip, or mark and exclude from ML rows. Examples are
       2025-11-28 (CME outage; NQ, YM, and RTY records flag a possibly wrong book) and the

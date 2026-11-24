@@ -606,3 +606,22 @@ def test_api_routes_and_origin_checks(api):
             urlopen(api + path)
         assert error.value.code == 404
         error.value.close()
+
+
+def test_a_warmup_keeps_the_partly_downloaded_sessions_that_storage_keeps():
+    """Storage holds every session from the first to the last fully downloaded one, a partly
+    downloaded one among them as missing rows, and nothing outside them. A warm-up replays the
+    same sessions, so its rows are the stored rows."""
+    from backtest_runner.ingest import ProductData
+
+    _, _, s = load_sessions(service.PRODUCTS["GC"], date(2026, 9, 1), date(2026, 9, 14), 0)
+    half = lambda x: (x.open + x.close) // 2  # noqa: E731
+    ranges = [
+        (half(s[1]), s[3].close),  # the second session in part, then two whole ones
+        (s[4].open, half(s[4])),  # the fifth in part, between whole ones; the sixth not at all
+        (s[6].open, s[7].close),
+    ]
+    data = ProductData(service.PRODUCTS["GC"], {}, ranges)
+    kept = service.stored_warmup(s[:8], data)
+    # only the partial session before the first whole one is left out
+    assert [x.trade_date for x in kept] == [x.trade_date for i, x in enumerate(s[:8]) if i != 1]

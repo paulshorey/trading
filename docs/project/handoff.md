@@ -259,10 +259,11 @@ is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stage
 reclaim window, and a migration that copies the tables (`0008` is the pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**The yardstick is `trees_coarse_shrunk`, and today it is flat.** The first model forecast
-boldly and wrongly; its forecast is now multiplied by the slope that holds on held-out
-blocks of training dates, which is zero in every month, so it opens no position
-([results](yardstick-spec.md#results-of-the-variant-november-24-2026)). A new input is
+**The yardstick is `trees_coarse_calibrated`, and today it is flat.** The first model
+forecast boldly and wrongly; its forecast is now multiplied by the slope that holds on later
+blocks of training dates forecast from earlier ones, which is zero in every month, so it
+opens no position
+([results](yardstick-spec.md#the-slope-fitted-forward-in-time-changed-after-the-run-november-24-2026)). A new input is
 judged in three steps: a slope above zero, skill on the test months (the pooled
 correlation), then what the policy earns.
 

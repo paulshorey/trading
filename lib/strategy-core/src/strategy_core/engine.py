@@ -198,6 +198,11 @@ class Engine:
                     self.cancelled += status == CANCELLED
                     self.expired += status == EXPIRED
                     self.unwatched += status == UNKNOWN
+                    if status == UNKNOWN:
+                        # It may have filled unseen. The portfolio is not known to be flat
+                        # until the session's forced exit, so nothing more is opened before.
+                        close = self.pending.force_exit_ns + self.config.flat_before_close
+                        self.blocked_until = max(self.blocked_until, close)
                     self.now = max(self.now, known)
                     self.pending = None
                     continue

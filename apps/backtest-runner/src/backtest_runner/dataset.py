@@ -228,12 +228,23 @@ SOURCES_QUERY = """
     WHERE s.contract_id = ANY(%s)"""
 
 
+def source_identity(held: dict) -> list:
+    """What of a stored source file decides a session's rows and its eligibility: its bytes,
+    its condition (a flagged file makes the session ineligible), and the part of the day it
+    covers."""
+    return [held["sha256"], held["condition"], list(held.get("window") or [])]
+
+
+def key(session: tuple) -> tuple:
+    return session[1], session[0]  # contract id, trade date: as `SOURCES_QUERY` returns them
+
+
 def select(conn, products: list[str], start: date, end: date) -> dict:
     """What a dataset of the period is made from: the features and their query, each
     product's warm front sessions (with whether a file of the session is flagged), and a
     fingerprint of everything those rows depend on outside this module's settings: the
-    builders of the stored rows, and each selected session with its contract and the
-    checksums of its source files."""
+    builders of the stored rows, and each selected session with its contract and its source
+    files: their checksums, conditions, and the part of the day each covers."""
     names, query, needed = plan(variant_ids(conn))
     warm, counts, sources = {}, {}, {}
     for root in products:
@@ -252,7 +263,7 @@ def select(conn, products: list[str], start: date, end: date) -> dict:
             "flagged": sum(s[7] for s in warm[root]),
         }
         sources[root] = [
-            [s[0].isoformat(), s[2], sorted(f["sha256"] for f in files.get((s[1], s[0]), []))]
+            [s[0].isoformat(), s[2], sorted(source_identity(f) for f in files.get(key(s), []))]
             for s in warm[root]
         ]
     builders = conn.execute(

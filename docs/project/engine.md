@@ -85,7 +85,8 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
    the book, when the whole order fills within its price; an order larger than the size
    displayed there, or one the book has not reached, rests. If data coverage breaks while an order rests and before it fills, its outcome is
    unknown: a fill in the gap would be invisible, so it is counted
-   (`orders_with_unknown_outcome`) and never treated as an expiry. While an order rests, no
+   (`orders_with_unknown_outcome`) and never treated as an expiry, and since the portfolio
+   is then not known to be flat, nothing more is opened until that session's close. While an order rests, no
    other is sent; when it expires, the next decision decides again.
 5. **Exit.** The target is a resting limit that fills only when a trade prints beyond
    it (`limit_fill: through`, the default). The stop is a resting stop-market: a trade

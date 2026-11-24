@@ -31,6 +31,11 @@ and the four were merged together.
   exactly zero, so a market that had stopped moving left its detector idle. They now freeze
   `vol_*.norm_atr_price`, the ATR or the spread where that is larger.
 - Label stages stay out of the features the engine computes (`pipeline.py`).
+- From the automated review of the fixes: after an order with an unknown outcome the
+  engine opens nothing more until that session's close; the dataset's cache key also holds
+  each source file's condition and the part of the day it covers; a backtest's warm-up
+  leaves out a partly downloaded session only when it lies outside the stored period (one
+  between whole sessions is stored, as missing rows, and is replayed).
 
 **Build and checks**
 
@@ -43,7 +48,7 @@ and the four were merged together.
   is the front one.
 - The decision model, rebuilt from its rows (run 7) and its policy (run 8): unchanged, the
   same 432,513 targets with the same barrier counts, every slope zero, no position opened.
-- Tests: strategy-core 159, backtest-runner 60. New: a limit resting through missing data;
+- Tests: strategy-core 160, backtest-runner 61. New: a limit resting through missing data;
   queue credit by aggressor side; delayed prints at both ends of a target's interval; a
   cache key that changes with a target version or a source file; forward blocks with a
   purged date; fifteen flat minutes then a move, through the candle, volatility, and swing

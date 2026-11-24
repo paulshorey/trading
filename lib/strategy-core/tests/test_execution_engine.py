@@ -970,3 +970,46 @@ def test_a_trade_received_before_a_late_fill_can_still_exit_the_position():
     outcome, trade, _ = attempt_limit(sim, view, pos, limit, T0 + 200 * S)
     assert pos.entry_ns == T0 + 80 * S and outcome == "closed"
     assert trade["exit_reason"] == "target" and int(trade["exit_ns"]) == T0 + 81 * S
+
+
+def test_after_an_order_with_an_unknown_outcome_nothing_more_is_opened_that_session():
+    """A limit that rested through missing data may have filled unseen, so the portfolio is
+    not known to be flat: the engine counts the order and opens nothing until the session's
+    close. The next session trades again."""
+    cal = calendar((0, 1), (2, 3))
+    features = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=80, order_latency_ms=40,
+                             cooldown_s=0, flat_before_close_s=120)  # fmt: skip
+    t = random_trades(T0, T0 + 3 * HOUR, seed=21, rate=1.5)
+    book = random_book(t, seed=22)
+    params = {
+        "trigger_rsi": 40.0, "trigger_delta": -1.0, "bias_ret_atr": 0.0, "bias_rsi": 0.0,
+        "max_bias_age_s": 4000.0, "use_bias": False,
+        "bracket": {"target_atr": 1.0, "stop_atr": 1.0, "max_hold_s": 120},
+        "entry": {"kind": "passive", "wait_s": 20.0},
+    }  # fmt: skip
+
+    def play(cover):
+        engine = Engine(GC, cal, make_strategy("bias_pullback", params), config, features)
+        for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True):
+
+            def inside(r, o=o, c=c):
+                known = r.ts_recv + config.feed_latency
+                return r.take((known >= o + config.close_delay) & (known < c + config.close_delay))
+
+            engine.process(MarketChunk("GCZ6", o, c, inside(t), cover, "test", True, inside(book)))
+        return engine.finish()
+
+    whole = play(coverage(cal))
+    assert whole["summary"]["orders_with_unknown_outcome"] == 0
+    orders = sorted(int(x["signal_end_ns"]) for x in whole["trades"])
+    first_close = int(cal.closes[0])
+    resting = next(s for s in orders if T0 + 600 * S < s < first_close - 600 * S)
+    assert [s for s in orders if resting < s < first_close]  # with data, it trades on
+    # five seconds without data, starting just after that order begins to rest
+    lost = np.array([[T0, resting + S], [resting + 6 * S, int(cal.closes[-1])]], np.int64)
+    out = play(lost)
+    assert out["summary"]["orders_with_unknown_outcome"] == 1
+    later = [int(x["signal_end_ns"]) for x in out["trades"]]
+    assert not [s for s in later if resting <= s < first_close]  # nothing more that session
+    assert [s for s in later if s < resting] and [s for s in later if s > first_close]

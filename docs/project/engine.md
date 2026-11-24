@@ -98,8 +98,13 @@ All times are UTC nanoseconds. Each configurable delay applies in every mode.
    contracts as keep its stop's risk within `risk_pct` of the account; a signal whose one
    contract risks more is not traded and is counted. Once a session's closed trades have
    lost `daily_loss_pct` of the account, no position is opened until the next session
-   ([decision 36](roadmap.md#decisions)). Without an account size every trade is `contracts`.
-7. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
+   ([decision 36](roadmap.md#decisions)). Without an account size every trade is `contracts`,
+   and `daily_loss_r` sets the same limit in R.
+7. **Costs for the decision.** Beside the features, a strategy sees `exec.spread_r` and
+   `exec.commission_r`: the spread of the book the engine holds at the row and both
+   commissions, over the stop distance. They let a rule compare a forecast with what the
+   trade costs; they are not features and never reach a model.
+8. **Reaction.** The engine learns of a fill when that fill's second closes. Cooldown
    and the hold timer start then, and a closing decision can act from then on.
 
 Every book lookup is bounded by the second of its own time: it uses the events released by

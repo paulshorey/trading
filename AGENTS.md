@@ -158,6 +158,12 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   unknown observations and session ends identifiable. There is one trained model, the
   decision model; if a model's output ever becomes another model's input, it must come from
   an earlier purged training fold and carry its model version.
+- Never rank, center, or correlate a forecast against its target within one session or trade
+  date when the target is a move inside that session: the move to a later point of the same
+  session falls as the current price rises, for any path, so such a measure rewards every
+  forecast that fades the session's move. Measure over all rows together and take the
+  interval from resampled trade dates
+  ([found](docs/project/yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
 - State the horizon of a test and what a trade costs there. The spread is about a third of
   a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
   hourly one ([measured](docs/project/roadmap.md#costs-choose-the-timeframe)).

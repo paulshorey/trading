@@ -6,6 +6,43 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## The first decision model (November 24, 2026)
+
+Build-order item 9, step 6 of the process. The [spec](yardstick-spec.md) holds the settings
+and the [results](yardstick-spec.md#results-november-24-2026): no skill at the bracket's
+horizon, a small one a minute ahead, and every policy cell a loss.
+
+**What was built**
+
+- `strategy_core/targets.py`: the move ahead in R, and the mid-price's move over fixed
+  horizons.
+- `backtest_runner/dataset.py`: the decision dataset, one row a minute, with the engine's
+  741 features read from the stored rows by the engine's names, eligibility, the cost of a
+  round trip in R, and the targets from the DBN files' trades and book. Cached under
+  `data/research/` by everything that determines it (4 minutes to build with 8 workers).
+- `backtest_runner/yardstick.py` (`research yardstick GC SI`): walk-forward `ridge` and
+  `trees`, their skill, what the opening rule would decide row by row, and the horizon map.
+  42 minutes, most of it the map's 35 fits a month.
+- `backtest_runner/policy.py` (`research policy RUN GC SI`): the model as an engine strategy
+  and the replay of the spec's eight cells under two executions. The features and the
+  forecast of a session are computed once and every cell's engine decides on them
+  (`Engine.process(chunk, frame)`): 7 minutes for 8 product-months.
+- `research.run` (migration `0012_research_runs`): each run is written with its frozen
+  settings before it reads anything, and its result when it ends. Runs 1 to 3 are there.
+
+**The first skill measure was biased, and the run caught it**
+([what happened](yardstick-spec.md#a-flaw-in-the-first-skill-measure)). A correlation taken
+within each trade date rewards any forecast that fades the session's move; a forecast of
+"minus the session's return so far" scored 0.65 on it. The measure now ranks all rows
+together. The rule is in AGENTS.md, and a test on a simulated random walk keeps it.
+
+**Checks**
+
+- The dataset's feature names and order equal the engine's (`StageFeatures.specs`).
+- `research verify` on the example GC day: identical features and 18 identical trades, as
+  before the engine changes; 8.8 ms a market second with 741 features.
+- Tests: strategy-core 152, backtest-runner 64; `ruff` passes.
+
 ## A 3 ATR swing scale and the structure code (November 24, 2026)
 
 Build-order item 8, step 4 of the process.

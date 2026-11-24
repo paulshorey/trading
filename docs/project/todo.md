@@ -14,15 +14,11 @@ the [build log](build-log.md).
 - [x] **Remove the withdrawn design** (November 23): the label stages and tables, the
       benchmark, the candidate replay; the roadmap cut to the current plan
       ([record](build-log.md#the-withdrawn-design-removed-november-23-2026)).
-- [ ] **The engine makes position decisions** (item 7): buy, sell, or nothing, one step at a
-      time; a closing decision exits at the market; limit entries that last seconds with the
-      back-of-queue fill rule; the stop's timeframe named by the strategy; risk and the daily
-      limit as percentages; the stop moved to the entry price as an option.
-- [ ] **Structure of price** (item 8): a 3 ATR scale on every timeframe and one structure
-      code per scale.
-- [ ] **The first decision model** (item 9): runs stored in `research.*`; the label, the
-      decision dataset, the walk-forward forecast, the horizon map; then the policy in the
-      engine.
+- [x] **The engine makes position decisions** (item 7), **the 3 ATR scale and the structure
+      code** (item 8), and **the first decision model** (item 9): done November 24
+      ([results](yardstick-spec.md#results-november-24-2026)).
+- [ ] **Make the forecast no worse than `flat`**: fewer rows a session or leaf sizes counted
+      in sessions, and shrinkage fitted on training data; spec first.
 - [ ] **Base changes, in one rebuild** (item 10): a rolling net-flow series without session
       resets; the ATR normalizer floored at the spread
       ([finding](build-log.md#pr-d-results-swings)); the `source.py` change under

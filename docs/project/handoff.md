@@ -1,38 +1,41 @@
 # Handoff
 
-Updated November 23, 2026, after the plan was rewritten around one decision model and the
-code of the withdrawn design was removed. Read [AGENTS.md](../../AGENTS.md) first: it holds
-the goal, the six-step process, and the rules. This page says where the work stands and how
-to continue. The [roadmap](roadmap.md) is the current plan, [todo.md](todo.md) lists the
-tasks, and the [build log](build-log.md) records what was built, how it was checked, and
-what every experiment found.
+Updated November 24, 2026, after the engine learned to make position decisions and the first
+decision model was run. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal, the
+six-step process, and the rules. This page says where the work stands and how to continue.
+The [roadmap](roadmap.md) is the current plan, [todo.md](todo.md) lists the tasks, and the
+[build log](build-log.md) records what was built, how it was checked, and what every
+experiment found.
 
 ## Start here (next session)
 
-**Where the work stands.** Steps 1 and 2 of the process are built and verified for GC and
-SI, step 3 has indicators on price, and step 4 has the rule-based swings at three sizes.
-Steps 5 and 6 are the work ([state of each step](roadmap.md#the-process-and-where-it-stands)).
-No edge has been found: every rule that enters at a swing candidate loses about one spread
-([what the results show](roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+**Where the work stands.** Every step of the process now has code that runs end to end:
+base rows, windows and indicators on three timeframes, rule-based swings at four sizes with
+a structure code, an engine that takes a decision every second, and a first decision model
+fitted walk-forward and replayed in that engine
+([state of each step](roadmap.md#the-process-and-where-it-stands)). Step 5, the swings of RSI
+and net flow and their agreement with price, is not built.
 
-**The plan changed on November 23** ([decisions 29 to 36](roadmap.md#decisions)). Paul
-withdrew the trained reversal model: swings and structure are computed by rule, a second
-pass does the same on RSI and net flow, and one trained model decides. Its decision is a
-step: buy, sell, or nothing, with the position long, flat, or short, so the opposite
-decision closes a position whatever its bracket says. Risk is a percentage of the account.
-The [review](roadmap.md#review-of-november-23-2026) of the same day lists what else was
-found. The label stages, the benchmark, and the candidate replay were removed
-([build log](build-log.md#the-withdrawn-design-removed-november-23-2026)).
+**No edge has been found.** The first model has no skill over the hours a trade lasts, and
+its policy loses in every cell. It does find a small predictability one minute ahead, from
+flow, the book at trades, price, and volatility, gone by fifteen minutes
+([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat.
 
-**The next tasks** ([build order](roadmap.md#build-order)): item 7, the engine makes
-position decisions; item 8, the 3 ATR scale and the structure code; item 9, the first
-decision model ([spec](yardstick-spec.md)); then the base changes and the second pass
-([how](#next-steps)).
+**The plan** is the roadmap's [decisions](roadmap.md#decisions) 29 to 39 (November 23 and
+24): no model predicts reversals; swings and structure are computed by rule; one model
+decides buy, sell, or nothing at every second; the slower timeframes forbid a trade against
+their trend; the bracket is 1.5 slow ATRs each way with no time limit; risk is a percentage
+of the account.
 
-**The state of this machine** (November 23): lint and tests pass, `ingest plan GC SI`
-reports every contract `current`, and the database (about 150 GB) holds one year of GC and
-SI on three timeframes. This build is the starting point: `~/fingerprint-new.txt` is the
-baseline that later rebuilds are compared with
+**The next tasks** ([build order](roadmap.md#build-order)): item 10, the base changes (a
+net-flow series that does not reset, the ATR floor); item 11, the second pass on RSI and net
+flow; then six years of data. Before judging any new input with the model, fix its
+overconfidence ([how](#next-steps)).
+
+**The state of this machine** (November 24): lint and tests pass, `ingest plan GC SI`
+reports every contract `current`, and the database (about 165 GB) holds one year of GC and
+SI on three timeframes. `~/fingerprint-new.txt` is the baseline that later rebuilds are
+compared with; it predates the 3 ATR scale, so the swing tables differ from it
 ([how it was checked](build-log.md#the-new-machine-november-23-2026)). One year of MBP-1 for
 GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
 in cloud storage; they return, with NQ and five more years of GC and SI, later.
@@ -190,7 +193,7 @@ These are fundamental; changing any of them changes every stored value.
 | Code     | Engine, windows, features, ML rows, UI, and database layer (PR #62); one-second ingestion with the continuous series (#63); stages with per-stage versions, derived lead, and carried prices (#70); minute stages and the engine on the stage graph (#74); hourly statistics (#75); minute and second volatility (#76, #77); backtests warmed for the stored lead (#80); MBP-1 as the only source, book events in the engine, fills at the book (#81); **swings of the price path, six scales as stages of their own** (#82); outcome labels as twelve stages, and the benchmark command (#83); sparse storage of the fast swing rows (#89); the after-cost replay and its agreement rules (#90, #91); **the timeframe as a parameter and the middle timeframe `10m@10s`** (#94, #95); **one set of stages for every timeframe** (the PR after them) |
 | Data     | One year of MBP-1 (2025-11-09 to 2026-11-05) for GC and SI in `data/databento/mbp-1/` (27 GB), checksums and full decode verified; PL, ES, YM, and RTY were verified too and removed on November 20 (Paul keeps the files in cloud storage); NQ not downloaded; TBBO files deleted |
 | Database | Rebuilt on the new machine on November 23 with the same row counts; the label tables were dropped the same day (`0010_remove_pivot_labels`) and `pivot_1s` rebuilt at 25,699,173 rows. About 155 GB. As it stood on the first machine, before that: PostgreSQL 18 database `trading`, 146 GB: `0001_baseline` through `0009_one_set_of_stages` applied; the one-second statistics (`stats_1m_1s`, 70,731,900 rows) added November 20; the middle timeframe built November 20 (7,073,190 rows in each ten-second table, 21,219,570 `pivot_10s` rows, 915,075 `pivot_label_10s` rows); GC and SI rows of the seven layer-0 and layer-1 stages **rebuilt from MBP-1 on November 16** (12 contracts, 858 contract-sessions, 2025-11-10 to 2026-11-06, 70,731,900 second rows per second table), and the six swing scales built the same day (since November 19 the fast scales are stored only where they are read: 14,286,813 `pivot_1s` rows; 3,536,595 `pivot_1m` rows, 2,403,082 events), and the twelve label variants on November 17 (5,029,757 `pivot_label_1s` rows, 197,721 `pivot_label_1m` rows); `ingest plan GC SI` reports every contract `current`. The file registry listed the 1,866 MBP-1 files there; the new one lists the 622 of GC and SI |
-| Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; no rule or model tested so far beats staying flat after costs |
+| Strategy | None. `bias_pullback` is an infrastructure baseline that loses money; the first decision model (`model`) has no skill; nothing tested so far beats staying flat after costs |
 | UI       | Trading web on 4400 and API on 4401 under `~/git/local-dev`; plain `pnpm dev` uses 4400 and 8001. Runs saved before November 15 (TBBO fills) are hidden: the run format is now version 3 |
 
 Stored rows ([ingestion](ingestion.md)): `market.bar_1s` holds each second's exact
@@ -255,36 +258,34 @@ is a `timeframes.Timeframe`; its window, statistics, volatility, and swing stage
 reclaim window, and a migration that copies the tables (`0008` is the pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**7. The engine makes position decisions.** Today `Strategy.signals` returns an entry signal
-and `Engine.execute` ignores it while a position is open. To build, in `strategies.py`,
-`engine.py`, and `execution.py` (none is in a stage's identity, so no stored row goes stale):
+**The model's forecast is overconfident, and that comes first.** Its forecasts range from
+-0.95 to +0.76 R where it knows almost nothing, so its squared error is worse than a forecast
+of zero and its rule opens a position on 95% of rows
+([results](yardstick-spec.md#results-november-24-2026)). Rows of one training session share
+almost all of their target, so 500 rows a leaf does not stop a tree from fitting single
+sessions. Write the variant into the spec before running it: fewer rows a session or leaf
+sizes counted in sessions, and a forecast shrunk toward zero on training data. Until the
+forecast is no worse than `flat`, a new input cannot be judged by the policy, only by the
+pooled correlation.
 
-- a decision per row, buy, sell, or nothing, and a position that moves one step
-  ([decision 35](roadmap.md#decisions)); a closing decision exits at the market and cancels
-  the position's orders;
-- entries as market orders or limit orders that last seconds. `Simulator.rest` already fills
-  a resting limit at a price; add the back-of-queue fill rule beside the strict one;
-- the stop sized by the timeframe the strategy names, the position by a risk percentage, and
-  no new position once the day's loss limit is reached ([decision 36](roadmap.md#decisions));
-- a bracket without a time limit (`Bracket.max_hold_s` is required today), and the gate that
-  forbids opening against a slower timeframe's trend ([decision 38](roadmap.md#decisions));
-- moving the stop to the entry price as an option of the bracket, off by default;
-- a rule-based strategy that uses all of it, so `research verify` proves whole sessions and
-  one second at a time are still identical, and the UI still shows its trades.
-
-**8. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
-variants) and one structure code per scale. Count the confirmed swings a year at 3 ATR on
-each timeframe and record it. The trend gate ([decision 38](roadmap.md#decisions)) reads the
-3 ATR `trend` of each timeframe.
-
-**9. The first decision model** follows its [spec](yardstick-spec.md): decisions every
-second, a bracket of 1.5 slow ATRs each way with no time limit. Store runs and their
-variants in PostgreSQL (`research.*`) first, so every variant is counted.
+**How an experiment on the model runs.** `research yardstick GC SI` builds or reads the
+dataset (`data/research/`, keyed by the stored rows' builders, so a rebuild makes a new one),
+fits, and reports; `research policy RUN GC SI` replays the policy cells with that run's
+models. Both write `research.run`. Measure skill over all rows together, never within a
+trade date ([why](yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
 
 **10 and 11. Base changes, then the second pass.** The rolling net-flow series, the ATR
 floor (measure how many rows change), and the `source.py` change, in one rebuild. Then the
 swings of RSI and net flow: measure each series' row-to-row noise and freeze a threshold
-above it first ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
+above it first ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)). The
+swing stage already takes the 3 ATR scale and writes `structure`.
+
+**The one-minute finding points at entries.** The book between trades (item 13) is judged
+there: does it raise the one-minute skill, and does a rule that uses it get better fills
+than resting blindly at the touch.
+
+**Not built in the engine:** one portfolio across products (an engine runs one product), and
+micro contracts as products of their own (micro costs are computed from the full-size fills).
 
 A six-year build is a few hours, so the order of the items is set by what is learned, not
 by the cost of rebuilding.
@@ -305,11 +306,13 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 For Paul. His decisions are in the [roadmap](roadmap.md#decisions).
 
-2. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
+1. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
    its rows also stay out of indicator history is still open.
-3. **The live contract** (full-size or micro), which sets the cost model. Until it is
-   chosen, results are reported at both.
-4. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
+2. **The live contract** (full-size or micro), which sets the cost model. Until it is
+   chosen, results are reported at both. At a stop of 1.5 slow ATRs one micro silver
+   contract risks more than 0.5% of $100,000, so the account size and the risk percentage
+   decide whether SI can be traded at all.
+3. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
    is a percentage (decision 36); a drawdown limit is not set.
 
 ## Things to know

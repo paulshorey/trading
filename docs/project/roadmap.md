@@ -86,7 +86,7 @@ is one stored table with its own version.
 | 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
 | 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_flow_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of net flow; agreement and divergence against price |
-| 6. Decision model | `labels.py`; planned `ml.*`, `research.*` | An engine with fills at the book and a losing rule-based baseline. The engine takes entry signals only | Position decisions in the engine; the model; its evaluation ([spec](yardstick-spec.md)) |
+| 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | The engine makes position decisions. A first model is fitted walk-forward and replayed in the engine as the yardstick: it has no skill at the bracket's horizon ([results](yardstick-spec.md#results-november-24-2026)) | Inputs that give it skill; a forecast that is not overconfident; one portfolio across products |
 
 Base rows and indicator stages hold one row per scheduled slot and contract. Swing rows of
 the fast timeframe and all events are sparse: stored where something reads them.
@@ -109,8 +109,16 @@ flat ([build log](build-log.md), [record of the replays](../archive/replay.md)):
   with it, by $20 to $240 an attempt, in both halves of the period and for fast and middle
   candidates alike. It removes losses and leaves a result near zero.
 
-What has not been asked: whether the inputs predict what price does next, at any horizon.
-That is the first thing the [decision model's spec](yardstick-spec.md) measures.
+**The first model** ([results](yardstick-spec.md#results-november-24-2026)) asked for the
+first time whether the inputs predict what price does next:
+
+- **Over the bracket (hours): no.** The forecast's correlation with what happened is 0.05
+  with an interval that includes zero, and its policy loses in every cell.
+- **One minute ahead: a little, from every kind of input but the clock**, about 0.015, down
+  to 0.01 at five minutes and nothing at fifteen. Too small to trade at the market; its use
+  is in timing an entry.
+- **Buys lost and sells did not**, in the candidate replays and in the model's policy alike.
+  The test months fell.
 
 ## Costs choose the timeframe
 
@@ -141,15 +149,12 @@ Asked for by Paul after the trained reversal model was withdrawn: what else in t
 the plan should not be there, and what is missing. Checked against the code and the rebuilt
 database.
 
-1. **The engine cannot make the decision the goal describes.** A strategy returns an entry
-   signal per row. The engine ignores signals while a position is open, enters with a market
-   order, and exits only by the bracket (`engine.py`, `strategies.py`). Closing a position
-   on a decision, a limit entry that lasts seconds, and a stop sized by the slow timeframe do
-   not exist there. This is the largest gap between the code and the goal, and the first
-   item of the [build order](#build-order).
-2. **Nothing has asked whether the inputs predict anything.** No model was fitted from the
-   637 features to what price did next, at any horizon. That costs days, and it tells where
-   to look ([the horizon map](yardstick-spec.md#part-a-the-forecast)).
+1. **The engine could not make the decision the goal describes** (built since: item 7). A
+   strategy returned an entry signal per row; the engine ignored signals while a position
+   was open, entered with a market order, and exited only by the bracket.
+2. **Nothing had asked whether the inputs predict anything** (asked since: item 9). No model
+   had been fitted from the features to what price did next, at any horizon
+   ([the horizon map](yardstick-spec.md#results-november-24-2026)).
 3. **A fixed-dollar cap did not fit the bracket.** The median hourly ATR from January to
    August was $20.50 an ounce for GC and $0.76 for SI: a stop of one ATR risks about $2,050
    on a GC contract and $3,800 on SI ($205 and $760 on the micros). Under a $3,000 cap an SI
@@ -332,34 +337,19 @@ seeing a result.
 
 ## Build order
 
-Rewritten November 23, 2026. Each item names the step of the process it advances.
+Rewritten November 23, 2026; items 7 to 9 were done on November 24. Each item names the step
+of the process it advances.
 
 **Done.** (1) The after-cost replay of fast candidates. (2) Sparse storage of the fast swing
 rows. (3) The timeframe as a parameter. (4) The middle timeframe `10m@10s`. (5) One set of
-stages for every timeframe. (6) The replay of the middle timeframe's candidates. What each
-built and found is in the [build log](build-log.md).
+stages for every timeframe. (6) The replay of the middle timeframe's candidates. (7) The
+engine makes position decisions: buy, sell, or nothing at every second, closing decisions,
+limit entries that last seconds, a bracket without a time limit, risk as a percentage. (8) A
+swing scale at 3 ATR and a structure code per scale. (9) The first decision model
+([results](yardstick-spec.md#results-november-24-2026)): no skill at the bracket's horizon,
+a small one a minute ahead, every policy cell a loss. What each built and found is in the
+[build log](build-log.md).
 
-7. **The engine makes position decisions** (step 6). A strategy returns buy, sell, or
-   nothing at every second, and the engine moves the position one step
-   ([decision 35](#decisions)): it opens, leaves alone, or closes at the market and cancels
-   the position's orders. Entries are market orders or limit orders that last seconds
-   ([decision 28](#decisions)), with the back-of-queue fill model beside the strict one. The
-   stop is sized by the timeframe the strategy names, the position by the risk percentage,
-   and the day ends at the daily limit ([decision 36](#decisions)). Moving the stop to the
-   entry price is an option of the bracket, off by default. Whole sessions and one second at
-   a time must still give identical results (`research verify`). It is checked with a
-   rule-based strategy; no model is needed yet. A bracket without a time limit, and the gate
-   that forbids a trade against a slower timeframe's trend, are part of it.
-8. **Structure of price** (step 4). A scale at 3 ATR on every timeframe (roughly 140
-   confirmed highs a year a product on the slow timeframe and 900 on the middle one, scaled
-   from the counts at 2 ATR), and one structure code per scale. The gate of decision 38
-   reads its `trend`, so it comes before the model.
-9. **The first decision model** (step 6; [spec](yardstick-spec.md)). Part A: the decision
-   dataset, the label, a walk-forward forecast on the features that exist, and the table of
-   what is predictable at 1, 5, 15, and 60 minutes and over the bracket from each kind of input. Part B: the
-   policy in the engine, in one portfolio after costs. It will probably show no skill and
-   place few trades. From here on, an input is judged by one question: does the model
-   forecast better with it than without it, on the same rows?
 10. **Base changes, in one rebuild** (step 1). A rolling net-flow series that does not reset
     at the session open; the ATR normalizer floored at the spread; the `source.py` change in
     the [to-do list](todo.md#housekeeping).

@@ -1,9 +1,10 @@
 # The first decision model: spec
 
-**Proposed November 23, 2026 and revised for Paul's decisions 35 to 39 (November 23 and
-24). Nothing is built and nothing has been run.** Paul has set the closing rules, the
-bracket, where decisions are made, and the trend gate. Whatever he changes is changed here
-before any outcome is read. It is build-order item 9 of the [roadmap](roadmap.md#build-order) and
+**Proposed November 23, 2026, revised for Paul's decisions 35 to 39, and run on November
+24.** The settings below were frozen before the run, with one exception that is marked: the
+skill measure was replaced after the first run showed it to be biased
+([what happened](#a-flaw-in-the-first-skill-measure)). The [results](#results-november-24-2026)
+are at the end. It is build-order item 9 of the [roadmap](roadmap.md#build-order) and
 step 6 of the process; Part B needs the engine of item 7 and the 3 ATR scale of item 8.
 
 ## In plain words
@@ -27,7 +28,7 @@ is judged by whether this model forecasts better with it, on the same rows.
 | Features | Every feature the engine holds at the row (637 today), read as the engine reads them. No price level, contract, or product identity |
 | Models | `flat`: the forecast is 0. `ridge`: linear, on features ranked and scaled on the training rows. `trees`: scikit-learn's histogram gradient boosting with fixed settings (300 trees, learning rate 0.05, 15 leaves, at least 500 rows a leaf, seed 0). Nothing is tuned |
 | Splits | Test months May to August 2026 (`periods.TEST_MONTHS`). The model that scores a month is fitted on all earlier sessions of both products except the last one before the month. On six years: by quarter, as [frozen](roadmap.md#how-results-are-judged-on-six-years) |
-| Skill | For each test trade date and product, the rank correlation between forecast and label over that date's rows; then the mean over dates with a 95% interval from resampled dates. Also the squared error against `flat`'s. Reported pooled, by product, and by month |
+| Skill | The rank correlation between forecast and label over all the test rows together, with a 95% interval from resampled trade dates. Also the squared error against `flat`'s. Reported pooled, by product, and by month. (Changed after the first run: the measure first written here took the correlation within each trade date, which is [biased](#a-flaw-in-the-first-skill-measure)) |
 
 **The horizon map** (a diagnostic, no policy). The same `trees` model is fitted to the move of
 the mid-price over the next 1, 5, 15, and 60 minutes, in ATRs, and to the label above, once on all features and
@@ -63,8 +64,8 @@ without it: eight policy cells, each under two executions.
 
 ## What counts
 
-- **Skill:** the mean daily rank correlation of `trees` is above zero with its interval,
-  pooled, and its mean is above zero for each product.
+- **Skill:** the pooled rank correlation of `trees` is above zero with its interval, and it
+  is above zero for each product.
 - **A policy** (the `hold` rule is the headline): net R per trade date above zero with its interval on the test months, under
   both executions, with a mean at or above zero for each product, for buys, for sells, and
   at micro costs.
@@ -105,6 +106,131 @@ Each is a variant of its own, written into this page before it is run.
 - **Other multiples of the slow ATR** for the bracket (1 and 2).
 - **A stricter gate** that needs every timeframe's trend to agree with the side, not only
   none against it: Paul's choice if the first gate lets too many bad trades through.
+
+## A flaw in the first skill measure
+
+Found on November 24, after the first run and before any result was reported. The spec
+first measured skill as the rank correlation between forecast and label within each trade
+date, averaged over dates. The first run gave `trees` 0.135 (95% interval 0.069 to 0.197),
+above zero for both products and in all four months: by the rule written above, skill.
+
+It is not. The label is the move from a row to a later point of the same session. Within one
+session that move falls as the current price rises, for any path: the later point is the
+same for every row, so a row at a higher price has less of the move left. A measure taken
+date by date therefore rewards any forecast that fades the session's move so far, whether or
+not it knows anything. Three checks, on the same test rows:
+
+| Forecast | Within each date (the first measure) | Over all rows (the corrected one) |
+| --- | --- | --- |
+| Minus the session's return so far (one feature, no model) | 0.646 (0.599 to 0.692) | -0.071 (-0.143 to 0.009) |
+| `trees` | 0.135 (0.069 to 0.197) | 0.052 (-0.026 to 0.129) |
+| Random numbers | -0.002 (-0.006 to 0.002) | -0.003 (-0.007 to 0.002) |
+
+A forecast with no model behind it scores five times what the model did. The model's own
+squared error was 12% above the flat forecast's, which the first measure contradicted. A
+test on a simulated random walk now keeps both numbers apart
+(`test_skill_is_not_fooled_by_a_forecast_that_fades_each_sessions_move`).
+
+The corrected measure ranks all rows together and takes its interval from resampled trade
+dates. This is a change made after seeing a result, so it is recorded as one: the first
+measure's number is kept in the report (`within_date_rank_correlation_biased`) and decides
+nothing. The rule is now in [AGENTS.md](../../AGENTS.md#research-principles).
+
+## Results (November 24, 2026)
+
+GC and SI, January 2 to August 31, 2026; test months May to August, 86 trade dates. Recorded
+as runs 1 to 3 in `research.run` (3 is the forecast with the corrected measure, 2 the
+policy). Evidence: `~/yardstick-gc-si-2.json`, `~/policy-gc-si.json`, and their logs. **The
+model has no skill at the bracket's horizon and every policy cell loses.** Staying flat
+remains the rule to beat.
+
+**Rows.** 470,100 rows, one a minute over 171 sessions a product, with 741 features. 432,513
+are eligible: 22,230 are within an hour of the forced exit, 12,850 in the five flagged
+sessions of each product, 2,442 have a spread above a quarter of R, and 65 no usable book.
+Every eligible row has a target: price reached 1.5 slow ATRs above first in 35%, below first
+in 39%, and neither before the close in 26%.
+
+**The forecast** (rank correlation over the 223,749 test rows, 95% interval):
+
+| Model | Pooled | GC | SI | Squared error against `flat` |
+| --- | --- | --- | --- | --- |
+| `ridge` | 0.029 (-0.048 to 0.106) | 0.023 | 0.035 | 30% higher |
+| `trees` | 0.052 (-0.026 to 0.129) | 0.067 (-0.030 to 0.168) | 0.039 (-0.059 to 0.140) | 12% higher |
+
+By month `trees` is -0.046, 0.027, 0.151, and 0.131: the last two have intervals above zero,
+the pooled one does not. The forecasts are far too confident: they range from -0.95 to +0.76
+R (1st to 99th percentile) where a forecast that knows this little should stay near zero,
+and their error is worse than saying nothing.
+
+**The horizon map** (the same model on the mid-price's move over each horizon; rank
+correlation, interval in brackets where it excludes zero):
+
+| Inputs | 1 minute | 5 minutes | 15 minutes | 60 minutes | The bracket |
+| --- | --- | --- | --- | --- | --- |
+| All 741 | 0.013 [0.009, 0.018] | 0.010 | 0.005 | -0.010 | 0.052 |
+| Price path (132) | 0.014 [0.010, 0.019] | 0.008 | 0.013 | 0.024 | 0.029 |
+| Volume and flow (64) | 0.016 [0.012, 0.021] | 0.009 [0.001, 0.017] | 0.007 | 0.014 | 0.000 |
+| Book at trades (53) | 0.015 [0.010, 0.019] | 0.009 [0.002, 0.017] | 0.001 | 0.002 | 0.032 |
+| Volatility (81) | 0.013 [0.007, 0.018] | 0.011 [0.001, 0.022] | 0.008 | -0.002 | -0.019 |
+| Swings and structure (372) | 0.012 [0.007, 0.016] | 0.006 | 0.000 | -0.006 | 0.011 |
+| Session and time (39) | 0.000 | -0.002 | 0.008 | 0.005 | 0.046 |
+
+**The policy** (one portfolio a product, each with the daily limit of 4 R; net R after
+commission over the four test months; base execution, with stressed beside it):
+
+| Closing rule | Entry | Gate | Trades | Net R | Net R a trade date (95%) | Buys | Sells | Net R, stressed |
+| --- | --- | --- | ---: | ---: | --- | ---: | ---: | ---: |
+| `hold` | market | on | 537 | -31.1 | -0.36 (-1.01 to +0.23) | -33.2 | +2.1 | -34.2 |
+| `hold` | passive | on | 540 | -21.4 | -0.25 (-0.89 to +0.37) | -27.3 | +6.0 | -29.0 |
+| `turn` | market | on | 2,638 | -50.4 | -0.59 (-1.11 to -0.06) | -34.9 | -15.5 | -76.6 |
+| `turn` | passive | on | 2,055 | -26.6 | -0.31 (-0.81 to +0.23) | -25.3 | -1.3 | -37.4 |
+| `opposite` | market | on | 2,007 | -28.9 | -0.34 (-0.87 to +0.21) | -24.3 | -4.6 | -47.3 |
+| `opposite` | passive | on | 1,669 | -13.5 | -0.16 (-0.67 to +0.37) | -19.5 | +6.0 | -21.1 |
+| `hold` | market | off | 881 | -19.1 | -0.22 (-0.89 to +0.49) | -19.2 | +0.1 | -30.9 |
+| `hold` | passive | off | 882 | -13.8 | -0.16 (-0.87 to +0.55) | -20.2 | +6.3 | -22.7 |
+
+What this shows:
+
+1. **No skill at the bracket's horizon.** The pooled correlation's interval includes zero for
+   both models and both products, and the squared error is worse than a forecast of zero. Two
+   good months out of four is what the rule for a lead forbids reading into.
+2. **Something is predictable one minute ahead, from every kind of input but the clock, and
+   it is gone by fifteen minutes.** A correlation of about 0.015 at one minute, down to 0.01
+   at five from flow, the book, and volatility, and nothing after. This is the first positive
+   finding of the project and it is the one the literature predicts. It is far too small to
+   trade at the market: the spread is a third of a one-minute move. Its use is in timing an
+   entry and in choosing between crossing and resting, which is where the book between
+   trades should be judged.
+3. **Every policy cell loses, and none is told apart from zero** except `turn` with market
+   orders, which is below it. The headline cell, `hold` with market orders and the gate, lost
+   31 R on 537 trades: its trades end at the target 210 times, the stop 234, and the close
+   93. The loss is larger than costs alone (about 0.02 R a trade) because the buys lost.
+4. **Buys lost and sells did not, again.** In every cell the buys lost 19 to 35 R and the
+   sells were between -16 and +6. These four months fell. A model that leans short in a
+   falling market is not skill, which is why results are read by side.
+5. **Closing early did not help.** `turn` traded five times as often as `hold` and was worse
+   by 0.23 R a trade date with market orders (0.49 under stress, interval below zero);
+   `opposite` was the same as `hold` within ±0.4 R. With no skill in the forecast there is
+   nothing for a closing rule to act on, so this says little about the rules themselves.
+6. **Resting at the touch cost less than crossing** in every pair, by 5 to 24 R over the
+   period, with 2,600 to 11,900 orders expiring unfilled. The differences are inside the
+   noise of 86 dates.
+7. **The gate left a quarter to a third of the rows open** (25% for longs, 33% for shorts)
+   and did not help: `hold` lost 31 R with it and 19 R without. Buying only when no trend
+   was down lost the most. One falling period cannot judge it.
+8. **Micro costs and a real account.** At micro costs the headline cell lost 33.5 R. For an
+   account of $100,000 risking 0.5% in whole micro contracts it lost 6.0%, and all 279 of its
+   SI trades were too large to take: one SIL contract risks more than $500 at this stop.
+
+**What the run got wrong in advance.** The spec expected the policy to open few positions.
+Its forecast was beyond the cost on 95% of the rows, because the forecasts are overconfident.
+Rows of one training session share almost all of their target, so a tree with 500 rows a
+leaf can still fit single sessions. Named for the next variant: rows a session or leaf sizes
+counted in sessions, and a forecast shrunk toward zero on training data before it is
+compared with a cost.
+
+**Not as specified.** An engine runs one product, so each product had its own portfolio and
+daily limit; the spec said one position at a time across the products.
 
 ## What has to be built
 

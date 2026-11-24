@@ -33,7 +33,7 @@ slower timeframe, with its age.
 | Role | The question it answers | What it holds | Steps |
 | --- | --- | --- | --- |
 | **State** | What is the market doing now? | Base rows, windows, indicators, volatility, the book, net flow, time to scheduled news, on every timeframe | 1 to 3 |
-| **Structure** | Where does it stand against its own recent highs and lows? | An ATR zigzag of price, then of RSI and of net flow: confirmed swings, the trend they make, the levels the current value has broken, how far the open move has come, and whether the derived series agree with price | 4 and 5 |
+| **Structure** | Where does it stand against its own recent highs and lows? | An ATR zigzag of price, then of RSI and of CVD, each with its own ATR: confirmed swings, the trend they make, the levels the current value has broken, how far the open move has come, and whether the derived series agree with price | 4 and 5 |
 | **Decisions** | What position to hold? | One trained model and the rule that turns its forecast into buy, sell, or nothing. One portfolio, after costs | 6 |
 
 Beside all three stands **evaluation**: labels, splits by time, the engine's fills, and the
@@ -85,7 +85,7 @@ is one stored table with its own version.
 | 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Built on three timeframes, with row counting and per-phase indicators; a timeframe is a parameter | A session-long window for a view of several days |
 | 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
-| 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_flow_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of net flow; agreement and divergence against price |
+| 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_cvd_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of CVD, each sized by its own ATR; codes comparing the three structures |
 | 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | The engine makes position decisions. A first model is fitted walk-forward and replayed in the engine as the yardstick: it has no skill at the bracket's horizon ([results](yardstick-spec.md#results-november-24-2026)) | Inputs that give it skill; one portfolio across products; the swing mode |
 
 Base rows and indicator stages hold one row per scheduled slot and contract. Swing rows of
@@ -313,6 +313,13 @@ and 34 (replaced by 35), 19 (replaced by 36).
     trained on and what the engine does at a close, so a model is always replayed in the mode
     it was trained for. Intraday stays the mode results are judged in first.
 
+41. **Three structures: price, RSI, and CVD, each sized by its own ATR** (Paul, November 24).
+    The same zigzag and structure code are computed on RSI and on CVD, the running total of
+    buying minus selling. Each series has its own ATR, the average range of that series over
+    its timeframe's windows: a swing of RSI is so many ATRs of RSI, never of price. The
+    model is given all three structures and what they say about each other, and it decides
+    whether they must agree; no rule requires it.
+
 **Open, to be tested and not decided:** moving the stop to the entry price once price has
 moved a set number of ATRs in favour ([named in the spec](yardstick-spec.md#named-now-run-later)).
 
@@ -358,15 +365,20 @@ swing scale at 3 ATR and a structure code per scale. (9) The first decision mode
 a small one a minute ahead, every policy cell a loss. What each built and found is in the
 [build log](build-log.md).
 
-10. **Base changes, in one rebuild** (step 1). A net-flow series over each timeframe's
-    window, which does not start again at the day's open: today's running total
-    (`session_cvd`) begins at zero after every daily break, so its level says how long the
-    day has run as much as who is trading, and a swing of it cannot cross a break. Both
-    stay stored. Also the ATR normalizer floored at the spread, and the `source.py` change
-    in the [to-do list](todo.md#housekeeping).
-11. **The second pass: swings and structure of RSI and of net flow** (step 5), on every
-    timeframe, with the swing code that price uses and a threshold in each series' own
-    units, frozen in a spec first. Then the agreement codes against price.
+10. **Base changes, in one rebuild** (step 1). A CVD that does not start again at the day's
+    open: today's running total (`session_cvd`) begins at zero after every daily break, so
+    its level says how long the day has run as much as who is trading, and a swing of it
+    cannot cross a break. The new `cvd` runs through the life of a contract; both stay
+    stored. (Net flow over a window already exists as a ratio, `delta_ratio`.) Also the ATR
+    normalizer floored at the spread, and the `source.py` change in the
+    [to-do list](todo.md#housekeeping).
+11. **The second pass: swings and structure of RSI and of CVD** (step 5;
+    [decision 41](#decisions)), on every timeframe, with the swing code that price uses.
+    Each series gets its own ATR: per phase, the Wilder average of the series' true range
+    over its window, as price's ATR is. A swing is confirmed by a multiple of that ATR, with
+    a floor above the series' row-to-row noise, frozen in a spec first. Then the codes that
+    compare the three structures: where they agree, where one diverges, and where one has
+    broken a level the others hold. They are inputs; the model decides what they are worth.
 12. **The swing mode** (step 6; [decision 40](#decisions)). In the engine: a position may
     stay open through a close; a stop is then judged by the first trades after the reopen,
     which is where a gap is paid; a position is closed before its contract stops being the

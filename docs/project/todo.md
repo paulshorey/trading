@@ -20,12 +20,13 @@ the [build log](build-log.md).
 - [x] **Make the forecast no worse than `flat`** (November 24): the slope on held-out
       training dates is zero, so the yardstick stays flat
       ([results](yardstick-spec.md#results-of-the-variant-november-24-2026)).
-- [ ] **Base changes, in one rebuild** (item 10): a rolling net-flow series without session
-      resets; the ATR normalizer floored at the spread
+- [ ] **Base changes, in one rebuild** (item 10): a CVD that runs through a contract's life
+      without session resets; the ATR normalizer floored at the spread
       ([finding](build-log.md#pr-d-results-swings)); the `source.py` change under
       [housekeeping](#housekeeping).
-- [ ] **Swings and structure of RSI and of net flow**, and their agreement with price
-      (item 11): measure each series' row-to-row noise and freeze its threshold first
+- [ ] **Swings and structure of RSI and of CVD**, each sized by its own ATR, and the codes
+      comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
+      each series' row-to-row noise and freeze its floor first
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
 - [ ] **The swing mode** (item 12): positions held across the daily break and across days,
       as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).

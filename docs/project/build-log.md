@@ -43,8 +43,9 @@ everything that served it to be removed. The last commit that has it is `df5a907
   contracts `current`.
 - Tests: strategy-core 132, backtest-runner 45 (the removed tests were those of the removed
   code); `ruff` passes.
-- The fingerprint baseline was taken again (`~/fingerprint-new.txt`; the one before is
-  `~/fingerprint-before-label-removal.txt`).
+- Nothing else changed: the 324 fingerprints of every table but `pivot_1s` equal the
+  baseline's. The baseline was taken again (`~/fingerprint-new.txt`, 360 lines; the one
+  before is `~/fingerprint-before-label-removal.txt`).
 
 ## Replay of the middle timeframe's candidates (November 23, 2026)
 

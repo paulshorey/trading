@@ -46,6 +46,9 @@ TREES = {
     "random_state": SEED,
 }
 RIDGE_ALPHA = 100.0
+COARSE_DATES = 10  # `coarse`: a leaf holds at least this many trade dates' worth of rows
+SHRINK_BLOCKS = 4  # `shrunk`: blocks of training dates forecast by the others
+YARDSTICK = "trees_coarse_shrunk"  # the model the policy of Part B is replayed with
 MIN_ROWS = 30  # rows a trade date and product need for a rank correlation
 THRESHOLDS = (0.5, 1.0, 2.0, 4.0)  # of the round trip's cost: 1 is the rule, the rest sensitivity
 GATE = ("1m@1s.fast_atr_3.trend", "10m@10s.mid_atr_3.trend", "1h@1m.slow_atr_3.trend")
@@ -168,11 +171,18 @@ def folds(day: np.ndarray) -> list[tuple[int, np.ndarray, np.ndarray]]:
     return out
 
 
-def fit_trees(x: np.ndarray, y: np.ndarray):
+def fit_trees(x: np.ndarray, y: np.ndarray, day: np.ndarray):
     return HistGradientBoostingRegressor(**TREES).fit(x, y)
 
 
-def fit_ridge(x: np.ndarray, y: np.ndarray):
+def fit_coarse(x: np.ndarray, y: np.ndarray, day: np.ndarray):
+    """`trees` whose leaves each hold at least as many rows as `COARSE_DATES` trade dates have
+    on average, so that no leaf can belong to one session."""
+    leaf = round(COARSE_DATES * len(y) / len(np.unique(day)))
+    return HistGradientBoostingRegressor(**(TREES | {"min_samples_leaf": leaf})).fit(x, y)
+
+
+def fit_ridge(x: np.ndarray, y: np.ndarray, day: np.ndarray):
     """Linear, on features ranked to a normal shape and scaled on the training rows; a missing
     value sits at the middle."""
     model = make_pipeline(
@@ -187,6 +197,52 @@ def fit_ridge(x: np.ndarray, y: np.ndarray):
         return model.fit(x, y)
 
 
+class Shrunk:
+    """A model whose forecast is multiplied by a slope fitted on its training rows."""
+
+    def __init__(self, model, slope: float):
+        self.model, self.slope = model, slope
+
+    def raw(self, x: np.ndarray) -> np.ndarray:
+        return self.model.predict(x)
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        return self.slope * self.model.predict(x)
+
+
+def blocks(day: np.ndarray, count: int = SHRINK_BLOCKS) -> list[tuple[np.ndarray, np.ndarray]]:
+    """The training dates cut into `count` blocks in time order: for each, the rows to fit on
+    (every other block, less the one date next to the block on each side) and the block's."""
+    dates = np.unique(day)
+    out = []
+    for part in np.array_split(np.arange(len(dates)), count):
+        if not len(part):
+            continue
+        inside = np.isin(day, dates[part])
+        near = dates[np.clip([part[0] - 1, part[-1] + 1], 0, len(dates) - 1)]
+        out.append((~inside & ~np.isin(day, near), inside))
+    return out
+
+
+def shrink(fit):
+    """`fit` with its forecast multiplied by how much of it holds outside the sessions it was
+    fitted on: the least-squares slope, through zero, of the target on forecasts made for each
+    block of training dates by a model fitted on the other blocks. Between 0 (the flat
+    forecast) and 1."""
+
+    def fitted(x: np.ndarray, y: np.ndarray, day: np.ndarray) -> Shrunk:
+        outside = np.full(len(y), np.nan)
+        for train, block in blocks(day):
+            if train.any() and block.any():
+                outside[block] = fit(x[train], y[train], day[train]).predict(x[block])
+        known = np.isfinite(outside)
+        square = float((outside[known] ** 2).sum())
+        slope = float((outside[known] * y[known]).sum()) / square if square > 0 else 0.0
+        return Shrunk(fit(x, y, day), float(np.clip(slope, 0.0, 1.0)))
+
+    return fitted
+
+
 def walk_forward(x, y, day, usable, fit, keep: bool = False) -> tuple[np.ndarray, dict]:
     """Out-of-sample forecasts for the usable rows of every test month (NaN elsewhere), and the
     fitted model of each month. A feature with no value in a month's training rows is left out
@@ -198,11 +254,17 @@ def walk_forward(x, y, day, usable, fit, keep: bool = False) -> tuple[np.ndarray
         if not train.any() or not test.any():
             continue
         columns = np.flatnonzero(np.isfinite(x[train]).any(axis=0))
-        model = fit(x[train][:, columns], y[train])
+        model = fit(x[train][:, columns], y[train], day[train])
         forecast[test] = model.predict(x[test][:, columns])
         if keep:
             models[month] = {"model": model, "columns": columns}
     return forecast, models
+
+
+def spread(forecast: np.ndarray) -> list[float]:
+    """The forecast at its 1st, 50th, and 99th percentile: how far it ventures from zero."""
+    known = forecast[np.isfinite(forecast)]
+    return [round(float(v), 4) for v in np.percentile(known, [1, 50, 99])] if len(known) else []
 
 
 def interval(values: np.ndarray, rng) -> list[float | None]:
@@ -386,6 +448,9 @@ def settings() -> dict:
         "test_months": [f"2026-{m:02d}" for m in TEST_MONTHS],
         "trees": TREES,
         "ridge_alpha": RIDGE_ALPHA,
+        "coarse_leaf_trade_dates": COARSE_DATES,
+        "shrink_blocks": SHRINK_BLOCKS,
+        "yardstick": YARDSTICK,
         "min_rows_for_a_correlation": MIN_ROWS,
         "resamples": RESAMPLES,
         "thresholds_x_cost": list(THRESHOLDS),
@@ -440,22 +505,40 @@ def run(
         short_ok = ~np.any([x[:, column[g]] > 0 for g in GATE], axis=0)
     flat = np.where(np.any([t for _, _, t in folds(day)], axis=0) & usable, 0.0, np.nan)
     out["models"]["flat"] = {"rows": int(np.isfinite(flat).sum())}
-    for name, fit in (("ridge", fit_ridge), ("trees", fit_trees)):
-        forecast, fitted = walk_forward(x, y, day, usable, fit, keep=name == "trees")
-        log(f"{name}: fitted, {time.time() - started:,.0f} s")
+
+    def report(name: str, forecast: np.ndarray) -> None:
         out["models"][name] = skill(forecast, y, day, product, products)
+        out["models"][name]["forecast_percentiles_1_50_99"] = spread(forecast)
         out["models"][name]["openings"] = openings(
             forecast, y, data["cost_r"], day, product, products, long_ok, short_ok
         )
-        if fitted:
-            folder = MODELS / f"run-{run_id}"
+
+    forecast, _ = walk_forward(x, y, day, usable, fit_ridge)
+    report("ridge", forecast)
+    log(f"ridge: fitted, {time.time() - started:,.0f} s")
+    folder = MODELS / f"run-{run_id}"
+    for name, fit in (("trees", fit_trees), ("trees_coarse", fit_coarse)):
+        # one fit serves the model as it is and shrunk: the slope multiplies its forecast
+        shrunk, fitted = walk_forward(x, y, day, usable, shrink(fit), keep=True)
+        raw = np.full(len(y), np.nan)
+        for month, _, test in folds(day):
+            test = test & usable
+            if month in fitted and test.any():
+                raw[test] = fitted[month]["model"].raw(x[test][:, fitted[month]["columns"]])
+        report(name, raw)
+        report(f"{name}_shrunk", shrunk)
+        out["models"][f"{name}_shrunk"]["slope_by_month"] = {
+            f"2026-{month:02d}": round(kept["model"].slope, 5) for month, kept in fitted.items()
+        }
+        log(f"{name}: fitted, {time.time() - started:,.0f} s")
+        if f"{name}_shrunk" == YARDSTICK:
             folder.mkdir(parents=True, exist_ok=True)
             for month, kept in fitted.items():
                 joblib.dump(
                     kept | {"names": names, "settings": settings()},
                     folder / f"2026-{month:02d}.joblib",
                 )
-            out["models"][name]["artifacts"] = str(folder.relative_to(ROOT))
+            out["models"][YARDSTICK]["artifacts"] = str(folder.relative_to(ROOT))
     if horizons:
         out["horizon_map"] = horizon_map(data, usable, log)
     out["elapsed_s"] = round(time.time() - started, 1)

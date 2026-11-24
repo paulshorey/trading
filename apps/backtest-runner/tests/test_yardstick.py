@@ -76,7 +76,7 @@ def test_the_walk_forward_forecast_finds_a_real_signal_and_only_scores_test_mont
     x, y, day, product = data()
     usable = np.ones(len(y), bool)
     usable[::7] = False
-    for fit in (yardstick.fit_trees, yardstick.fit_ridge):
+    for fit in (yardstick.fit_trees, yardstick.fit_ridge):  # each takes x, y, and the dates
         forecast, models = yardstick.walk_forward(x, y, day, usable, fit, keep=True)
         scored = np.isfinite(forecast)
         may = (date(2026, 5, 1) - BASE).days
@@ -249,3 +249,46 @@ def test_skill_is_not_fooled_by_a_forecast_that_fades_each_sessions_move():
     lo, hi = found["rank_correlation"]["interval_95"]
     assert lo < 0 < hi  # and is none
     assert found["squared_error_ratio_to_flat"] > 1
+
+
+def test_training_dates_are_cut_into_blocks_with_a_date_left_out_on_each_side():
+    day = np.repeat(days(date(2026, 1, 5), 8), 2)
+    cut = yardstick.blocks(day, 4)
+    first = (date(2026, 1, 5) - BASE).days
+    assert [np.unique(day[inside] - first).tolist() for _, inside in cut] == [
+        [0, 1], [2, 3], [4, 5], [6, 7],
+    ]  # fmt: skip
+    # the second block is fitted on the others, without the dates next to it
+    train, inside = cut[1]
+    assert np.unique(day[train] - first).tolist() == [0, 5, 6, 7]
+    assert not (train & inside).any()
+    assert np.unique(day[cut[0][0]] - first).tolist() == [3, 4, 5, 6, 7]
+
+
+def test_shrinking_stops_a_forecast_claiming_what_it_does_not_know():
+    """Each session has its own level in the target, and one feature that names the session.
+    Trees learn the sessions they saw and forecast boldly; outside them the forecast is
+    worthless, and the slope found on held-out blocks takes it to nearly nothing."""
+    rng = np.random.default_rng(5)
+    n_days, per = 120, 150
+    day = np.repeat(days(date(2026, 1, 5), n_days), per)
+    level = np.repeat(rng.choice([-0.8, 0.8], n_days), per)  # the session's outcome
+    tag = np.repeat(rng.normal(size=n_days), per)  # constant through a session
+    x = np.column_stack([tag, rng.normal(size=len(day))]).astype(np.float32)
+    y = np.clip(level + rng.normal(0, 0.3, len(day)), -1, 1)
+    train = day < day.min() + 90
+    bold = yardstick.fit_trees(x[train], y[train], day[train])
+    careful = yardstick.shrink(yardstick.fit_trees)(x[train], y[train], day[train])
+    test_x, test_y = x[~train], y[~train]
+    assert np.abs(bold.predict(test_x)).mean() > 0.3  # sure of itself
+    assert ((bold.predict(test_x) - test_y) ** 2).mean() > (test_y**2).mean()  # and wrong
+    assert 0 <= careful.slope < 0.2
+    assert ((careful.predict(test_x) - test_y) ** 2).mean() < 1.05 * (test_y**2).mean()
+    np.testing.assert_allclose(careful.predict(test_x), careful.slope * careful.raw(test_x))
+    # leaves as large as ten trade dates cannot hold one session
+    coarse = yardstick.fit_coarse(x[train], y[train], day[train])
+    assert np.abs(coarse.predict(test_x)).mean() < np.abs(bold.predict(test_x)).mean()
+    # a forecast that does hold keeps most of its size
+    signal = np.clip(0.5 * x[:, 1] + rng.normal(0, 0.3, len(day)), -1, 1)
+    kept = yardstick.shrink(yardstick.fit_trees)(x[train], signal[train], day[train])
+    assert kept.slope > 0.8

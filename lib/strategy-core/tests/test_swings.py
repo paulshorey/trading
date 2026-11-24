@@ -583,6 +583,8 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
     )
     assert got == [(k, int(minute[a]), level, int(minute[b])) for k, a, level, b in want]
     assert len(want) > {0.1: 60, 0.2: 25, 0.5: 8, 1.0: 3, 2.0: 0, 3.0: -1}[stage.K]
+    if not len(want):  # this small world has no slow swing of 3 ATRs: the fast scale tests it
+        return
     # a confirmation inside a minute is published with that minute's row, never earlier
     rows_, rn = join(whole, stage.NAME)
     np.testing.assert_array_equal(rows_["slot_ordinal"], candle["slot_ordinal"])

@@ -27,6 +27,11 @@ the [build log](build-log.md).
       comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
       each series' row-to-row noise and freeze its floor first
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
+      Read `cvd` by its changes only, never its level: a backtest that starts after a
+      contract's first stored session counts from zero there, so its level differs from the
+      stored one by a constant, and a missing second adds an unknown one. A segment that
+      ends at missing data and values that are differences inside it are unaffected; the
+      spec must state this and a test must shift the level and compare.
 - [ ] **The swing mode** (item 12): positions held across the daily break and across days,
       as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).
 - [ ] **Six years of GC and SI** (item 13).

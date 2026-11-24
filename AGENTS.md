@@ -62,7 +62,9 @@ price and its derivatives stand against their own recent highs and lows; step 6 
 slower timeframes give the trend and forbid a trade against it, and the slow ATR sizes the
 bracket: stop and target the same distance away, no time limit, closed before the day's
 close. Entries are limit orders that last a few seconds. The risk of a trade and the loss that ends a day are percentages of
-the account. Trades are intraday and flat before each close.
+the account. Trades are intraday and flat before each close; a second mode that holds a
+position across sessions is planned as a switch, with intraday the default
+([decision 40](docs/project/roadmap.md#decisions)).
 
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again

@@ -41,6 +41,14 @@ the [build log](build-log.md).
 - [ ] **The sliding-clock control.** The same policy on completed minute boundaries and on
       every eligible second, in one portfolio, to measure what the faster clock earns
       ([rule](roadmap.md#how-a-policy-is-evaluated)). Run it with the first policy that is not flat.
+- [ ] **One portfolio across products.** An engine runs one product, so a policy replay
+      gives each product its own position and its own daily loss limit. The rule is one
+      position at a time across the products
+      ([rule](roadmap.md#how-a-policy-is-evaluated)). Build shared portfolio and risk state
+      before the first policy that is not flat is judged on two products.
+- [ ] **The candidate summary assumes market entries.** `service.backtest` replays every
+      signal as an independent market entry; for a strategy with passive entries it is not
+      that strategy's execution. Use the limit path, or label the summary.
 - [ ] **Session quality policy.** Backtests include degraded sessions with only a report.
       Decide and implement a default: skip, or mark and exclude from ML rows. Examples are
       2025-11-28 (CME outage; NQ, YM, and RTY records flag a possibly wrong book) and the

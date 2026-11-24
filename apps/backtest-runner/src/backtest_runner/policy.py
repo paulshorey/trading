@@ -238,7 +238,8 @@ def describe(values: np.ndarray, day: np.ndarray, dates: np.ndarray) -> dict:
 
 def cell_report(parts: list[dict], key: tuple, products: list[str]) -> dict:
     """One policy cell under one execution setting, over every product and test month."""
-    rows: dict[str, list] = {k: [] for k in ("day", "side", "net", "micro", "pct", "product")}
+    names = ("day", "side", "net", "micro", "pct", "product", "flagged")
+    rows: dict[str, list] = {k: [] for k in names}
     summary = {"signal_rows": 0, "cancelled_orders": 0, "expired_orders": 0,
                "sessions_at_daily_limit": 0}  # fmt: skip
     reasons: dict[str, int] = {}
@@ -254,6 +255,7 @@ def cell_report(parts: list[dict], key: tuple, products: list[str]) -> dict:
         size = np.floor(ACCOUNT_USD * RISK_PCT / 100 / micro)  # whole micro contracts
         unsized += int((size == 0).sum())
         flagged_exits += int(cell["flagged_exit"].sum())
+        rows["flagged"].append(cell["flagged_exit"].astype(float))
         rows["day"].append(cell["day"])
         rows["side"].append(cell["side"])
         rows["net"].append(cell["r"] - 2 * 2.5 / full)
@@ -264,6 +266,9 @@ def cell_report(parts: list[dict], key: tuple, products: list[str]) -> dict:
     dates = np.unique(np.concatenate([np.asarray(p["days"], int) for p in parts]))
     out = summary | {"exit_reasons": reasons, "exits_priced_without_a_book": flagged_exits}
     out |= {"trade_dates": len(dates), "all": describe(a["net"], a["day"], dates)}
+    # an exit priced without a book has an unknown result: also given with each one charged
+    # one further stop distance (roadmap, how a policy is evaluated)
+    out["all_with_unpriced_exits_charged_1r"] = describe(a["net"] - a["flagged"], a["day"], dates)
     for label, pick in (("buys", a["side"] > 0), ("sells", a["side"] < 0)):
         out[label] = describe(a["net"][pick], a["day"][pick], dates)
     for k, name in enumerate(products):

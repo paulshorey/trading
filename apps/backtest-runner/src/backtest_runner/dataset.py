@@ -139,7 +139,7 @@ def session_rows(product, calendar, view, coverage, found, flagged: bool) -> dic
         defined = np.isfinite(atr) & (atr > 0)
     distance = np.where(defined, np.round(R_ATR * atr * PX), 1).astype(np.int64)
     why = np.where(
-        ~defined, NO_ATR, np.where(end + ENTRY_CUTOFF_S * NS <= until, ELIGIBLE, NO_ROOM)
+        ~defined, NO_ATR, np.where(end + ENTRY_CUTOFF_S * NS < until, ELIGIBLE, NO_ROOM)
     ).astype(np.int8)
     if flagged:
         why[why == ELIGIBLE] = FLAGGED
@@ -222,7 +222,7 @@ def settings() -> dict:
     }
 
 
-VERSION = 2  # of how rows, eligibility, and costs are made here: part of the cache identity
+VERSION = 3  # of how rows, eligibility, and costs are made here: part of the cache identity
 SOURCES_QUERY = """
     SELECT s.contract_id, s.trade_date, s.source_files FROM market.ingest_slice s
     WHERE s.contract_id = ANY(%s)"""
@@ -246,9 +246,10 @@ def select(conn, products: list[str], start: date, end: date) -> dict:
     builders of the stored rows, and each selected session with its contract and its source
     files: their checksums, conditions, and the part of the day each covers."""
     names, query, needed = plan(variant_ids(conn))
-    warm, counts, sources = {}, {}, {}
+    warm, counts, sources, contracts = {}, {}, {}, set()
     for root in products:
         found = front_sessions(conn, root, start, end, needed)
+        contracts |= {s[1] for s in found}
         files = {
             (cid, day): held
             for cid, day, held in conn.execute(SOURCES_QUERY, (sorted({s[1] for s in found}),))
@@ -267,10 +268,12 @@ def select(conn, products: list[str], start: date, end: date) -> dict:
             for s in warm[root]
         ]
     builders = conn.execute(
-        """SELECT s.stage || ':' || s.variant_id, max(b.sha256)
+        """SELECT s.stage || ':' || s.variant_id, array_agg(DISTINCT b.sha256 ORDER BY b.sha256)
            FROM market.stage_slice s JOIN market.builder b ON b.id = s.builder_id
-           GROUP BY 1 ORDER BY 1"""
-    ).fetchall()
+           WHERE s.contract_id = ANY(%s)
+           GROUP BY 1 ORDER BY 1""",
+        (sorted(contracts),),
+    ).fetchall()  # every builder of the selected contracts' rows, earlier sessions included
     conn.rollback()
     return {
         "names": names,

@@ -41,7 +41,7 @@ together. The rule is in AGENTS.md, and a test on a simulated random walk keeps 
 - The dataset's feature names and order equal the engine's (`StageFeatures.specs`).
 - `research verify` on the example GC day: identical features and 18 identical trades, as
   before the engine changes; 8.8 ms a market second with 741 features.
-- Tests: strategy-core 152, backtest-runner 64; `ruff` passes.
+- Tests: strategy-core 152, backtest-runner 55; `ruff` passes.
 
 ## A 3 ATR swing scale and the structure code (November 24, 2026)
 

@@ -140,6 +140,8 @@ class Engine:
             if hasattr(self.strategy, "closes"):
                 closes = self.strategy.closes(seen)
         self.signals += int(np.count_nonzero(signals))
+        if chunk.book is None and chunk.tradable and signals.any():
+            raise ValueError(f"Tradable chunk {chunk.session!r} has no book events to fill at")
         closed = self.execute(view, frame, signals, contracts, closes)
         if view.book.n:
             book = view.book

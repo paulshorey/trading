@@ -135,6 +135,7 @@ class ExecutionConfig:
 
 
 FILLED, WAIT, CANCELLED, EXPIRED = "filled", "wait", "cancelled", "expired"
+UNKNOWN = "unknown"  # data coverage ended while a limit order rested: a fill would be unseen
 
 
 def bracket_atr(context: dict, bracket: Bracket) -> np.ndarray:
@@ -375,6 +376,8 @@ class Position:
     expire_ns: int = 0
     resting: bool = False
     queue: int = 0
+    covered_to: int = 0  # a resting order has been watched, with data coverage, up to here
+    fill_record: int = -1  # in the view that filled a resting order: the trade that did
     stop_at_entry_ns: int = 0  # from when the stop is at the entry price (0: it has not moved)
 
 
@@ -512,6 +515,7 @@ class Simulator:
           price fills it at its price, at that trade's event time (`limit_fill="touch"`: also a
           trade at it). An order at the touch with `passive_fill="queue"` also fills when the
           size displayed ahead of it on arrival, and its own, has traded at its price.
+        - `UNKNOWN`: data coverage broke while it rested, before any fill that was seen.
         - `WAIT`: the view ends before the outcome is known."""
         at, d, delay = pos.arrival_ns, pos.direction, self.config.close_delay
         expire = min(pos.expire_ns, pos.force_exit_ns)
@@ -532,11 +536,16 @@ class Simulator:
                 if self.config.passive_fill == "queue" and shown < UNDEF_SIZE:
                     pos.queue = int(shown) + pos.contracts
             elif (quote.ask <= pos.limit_px) if d > 0 else (quote.bid >= pos.limit_px):
-                px = self.price(quote, d, pos.contracts, pos.flags)
-                px = min(px, pos.limit_px) if d > 0 else max(px, pos.limit_px)
-                self.opened(pos, px, at, slot_end(at) + delay)
-                return FILLED, pos.entry_known_ns, j
-            pos.resting = True
+                flags: list[str] = []
+                px = self.price(quote, d, pos.contracts, flags)
+                # Only what the book shows within the limit fills on arrival. An order larger
+                # than the displayed size, or one a stress tick pushes past its price, is not
+                # given a full fill at a price the book did not show: it rests instead.
+                if (px <= pos.limit_px) if d > 0 else (px >= pos.limit_px):
+                    pos.flags.extend(flags)
+                    self.opened(pos, px, at, slot_end(at) + delay)
+                    return FILLED, pos.entry_known_ns, j
+            pos.resting, pos.covered_to = True, at
         limit = pos.limit_px
         lim = j + int(np.searchsorted(view.known[j:], slot_end(expire) + delay, side="right"))
         prices, when = view.t.price[j:lim], view.t.ts_event[j:lim]
@@ -546,19 +555,41 @@ class Simulator:
         else:
             hit = live & (prices <= limit if d > 0 else prices >= limit)
         traded = 0
-        if pos.queue:  # trades at its price work through the size ahead, then its own
-            at_price = live & (prices == limit)
+        if pos.queue:
+            # Trades at its price work through the size ahead, then its own, when their
+            # aggressor took the side the order rests on: a seller for a resting buy. A print
+            # of unknown side, or by a buyer, is no evidence that the bids were consumed.
+            at_price = live & (prices == limit) & (view.t.side[j:lim] == -d)
             done = np.cumsum(np.where(at_price, view.t.size[j:lim], 0))
             hit |= at_price & (done >= pos.queue)
             traded = int(done[-1]) if len(done) else 0
-        if hit.any():
-            k = j + int(np.argmax(hit))
+        k = j + int(np.argmax(hit)) if hit.any() else -1
+        # The order must have been watched without a break from its arrival to its fill or
+        # expiry: a trade during missing data could have filled it unseen.
+        until = min(int(view.t.ts_event[k]) if k >= 0 else expire, view.end)
+        gap = self.uncovered(view, pos.covered_to, until)
+        if gap is not None:
+            return UNKNOWN, slot_end(gap) + delay, 0
+        pos.covered_to = max(pos.covered_to, until)
+        if k >= 0:
             self.opened(pos, limit, int(view.t.ts_event[k]), int(view.known[k]))
-            return FILLED, pos.entry_known_ns, k + 1
+            pos.fill_record = k
+            return FILLED, pos.entry_known_ns, j
         pos.queue -= traded  # still above zero: the order was not filled
         if view.end <= expire:
             return WAIT, 0, 0
         return EXPIRED, slot_end(expire) + delay, 0
+
+    @staticmethod
+    def uncovered(view: ExecView, start: int, end: int) -> int | None:
+        """Where data coverage first breaks in `[start, end)`, or None when it does not."""
+        cover = view.book.cover
+        if cover is None or end <= start:
+            return None
+        i = int(np.searchsorted(cover[:, 0], start, side="right")) - 1
+        if i < 0 or start >= cover[i, 1]:
+            return start
+        return int(cover[i, 1]) if cover[i, 1] < end else None
 
     def advance(self, view: ExecView, j: int, pos: Position) -> tuple[int, dict | None]:
         """Scan trades from j for the position's exit. Returns (next index, closed trade or None
@@ -573,6 +604,8 @@ class Simulator:
         lim = j + int(np.searchsorted(view.known[j:], slot_end(due) + delay, side="right"))
         prices, when = t.price[j:lim], t.ts_event[j:lim]
         live = (when >= pos.entry_ns) & (when < due)
+        if j <= pos.fill_record < lim:  # the trade that filled the entry cannot also exit it
+            live[pos.fill_record - j] = False
         long = pos.direction > 0
         through = self.config.limit_fill == "through"
         stop = self.stop_levels(view, j, lim, pos, live)

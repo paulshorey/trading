@@ -8,6 +8,7 @@ from strategy_core.execution import (
     CANCELLED,
     EXPIRED,
     FILLED,
+    UNKNOWN,
     WAIT,
     BookView,
     ExecutionConfig,
@@ -710,8 +711,17 @@ def test_a_resting_limit_entry_fills_at_its_price_when_a_trade_goes_through_it()
     # a book already through the price fills on arrival, at the book and never worse
     (closed, trade, _), pos = state(200, px=round(2000.3 * PX))
     assert (pos.entry_px, pos.entry_ns) == (round(2000.1 * PX), ARRIVAL)
+    # ... but only at a price the book shows within the limit: one that a stress tick, or size
+    # beyond the displayed size, pushes past its price is not filled there. It rests, and the
+    # trade through its price at 70 s fills it
     worse = ExecutionConfig(**{**CFG.__dict__, "adverse_ticks": 5})
-    assert state(200, worse, px=round(2000.3 * PX))[1].entry_px == round(2000.3 * PX)
+    _, pos = state(200, worse, px=round(2000.3 * PX))
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.3 * PX), T0 + 70 * S)
+    deep = Simulator(GC, CFG, sim.bracket, CAL)
+    large = deep.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view, contracts=9)  # 5 are displayed
+    large.limit_px, large.expire_ns = round(2000.1 * PX), T0 + 200 * S
+    assert deep.rest(view, large)[0] == FILLED and large.entry_ns == T0 + 70 * S
+    assert large.entry_px == round(2000.1 * PX) and "beyond_displayed_size" not in large.flags
     # a sell rests above the market: the trade at 2000.4 goes through 2000.3
     (closed, trade, _), pos = state(200, px=round(2000.3 * PX), direction=-1)
     assert (pos.entry_px, pos.entry_ns) == (round(2000.3 * PX), T0 + 90 * S)
@@ -768,9 +778,9 @@ def test_a_position_without_a_time_limit_is_held_to_the_forced_exit():
 def test_a_passive_entry_joins_the_touch_behind_the_displayed_size():
     entry = Entry("passive", wait_s=5.0)
     rows = [
-        (T0 + 61 * S, 2000.0, 3, 2),  # three of the five ahead trade at the bid
-        (T0 + 62 * S, 2000.0, 2, 2),  # the other two
-        (T0 + 63 * S, 2000.0, 1, 2),  # its own contract
+        (T0 + 61 * S, 2000.0, 3, -1),  # sellers hit three of the five ahead at the bid
+        (T0 + 62 * S, 2000.0, 2, -1),  # the other two
+        (T0 + 63 * S, 2000.0, 1, -1),  # its own contract
         (T0 + 90 * S, 2000.6, 1, 1),  # through the target 0.5 above
     ]
     view = exec_view(trades(rows), quotes([ENTRY]))
@@ -782,8 +792,20 @@ def test_a_passive_entry_joins_the_touch_behind_the_displayed_size():
 
     (status, known, after), pos, sim = entered()
     assert (status, pos.limit_px, pos.entry_px) == (FILLED, round(2000.0 * PX), round(2000.0 * PX))
-    assert (pos.entry_ns, known, after) == (T0 + 63 * S, T0 + 64_100_000_000, 3)
+    assert (pos.entry_ns, known, pos.fill_record) == (T0 + 63 * S, T0 + 64_100_000_000, 2)
     assert sim.advance(view, after, pos)[1]["exit_reason"] == "target"
+    # only a seller consumes bids: a print of unknown side, or a buyer's, at the bid moves no
+    # queue, however large (MBP-1 gives no evidence that it did)
+    for side in (0, 1):
+        big = exec_view(trades([(T0 + 61 * S, 2000.0, 6, side)]), quotes([ENTRY]))
+        (status, _, _), pos, _ = entered(data=big)
+        assert (status, pos.queue) == (EXPIRED, 6), side
+    sold = exec_view(trades([(T0 + 61 * S, 2000.0, 6, -1)]), quotes([ENTRY]))
+    assert entered(data=sold)[0][0] == FILLED
+    # a sell rests at the ask: buyers lift the size ahead; sellers and unknown prints do not
+    for side, status in ((1, FILLED), (-1, EXPIRED), (0, EXPIRED)):
+        lifted = exec_view(trades([(T0 + 61 * S, 2000.1, 6, side)]), quotes([ENTRY]))
+        assert entered(data=lifted, direction=-1)[0][0] == status, side
     # two contracts need one more to trade there: nothing does before the order is cancelled
     (status, known, _), pos, _ = entered(contracts=2)
     assert (status, known, pos.queue) == (EXPIRED, T0 + 66_100_000_000, 1)
@@ -888,3 +910,63 @@ def test_a_strategy_sees_what_a_trade_would_cost_in_r_at_each_row():
     stop = max(round(engine.strategy.bracket.stop_atr * atr[i] * 1e9 / GC.tick_size), 1)
     assert commission[i] == pytest.approx(2 * 2.5 / (stop * GC.tick_value))
     assert spread[i] > 0 and spread[i] * stop == pytest.approx(round(spread[i] * stop))  # ticks
+
+
+def test_a_limit_that_rests_through_missing_data_has_an_unknown_outcome():
+    """A trade during missing data could have filled the order unseen, so neither a later fill
+    nor an expiry is known. A fill seen before the gap is."""
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    limit = round(1999.8 * PX)
+    gap = np.array([[T0, T0 + 65 * S], [T0 + 70 * S, T0 + 3600 * S]])  # nothing from 65 to 70 s
+
+    def state(rows, expire_s=75, cover=gap):
+        t, book = trades(rows), quotes([ENTRY])
+        full = exec_view(t, book)
+        data = ExecView(
+            full.t, full.known, BookView(full.book.b, full.book.slot_end, coverage=cover), full.end
+        )
+        pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, data)
+        return attempt_limit(sim, data, pos, limit, T0 + expire_s * S), pos
+
+    # it arrives at 60.15 s and would expire at 75 s with no trade through its price
+    (outcome, trade, known), _ = state([(T0 + 72 * S, 1999.9, 1, -1)])
+    assert (outcome, trade, known) == ("uncovered", None, T0 + 66_100_000_000)
+    # a trade through its price after the gap proves nothing about what came first
+    assert state([(T0 + 72 * S, 1999.7, 1, -1)])[0][0] == "uncovered"
+    # one seen before the gap is a known entry
+    (outcome, trade, _), pos = state([(T0 + 62 * S, 1999.7, 1, -1), (T0 + 90 * S, 2000.4, 1, 1)])
+    assert outcome == "closed" and pos.entry_ns == T0 + 62 * S
+    # an order that expires before the gap is known not to have traded
+    assert state([(T0 + 72 * S, 1999.7, 1, -1)], expire_s=64)[0][0] == "expired"
+    whole = np.array([[T0, T0 + 3600 * S]])
+    assert state([(T0 + 72 * S, 1999.9, 1, -1)], cover=whole)[0][0] == "expired"
+    # chunk by chunk: watched to 65 s in the first chunk, unknown in the one that holds the gap
+    t, book = trades([(T0 + 72 * S, 1999.9, 1, -1)]), quotes([ENTRY])
+    first = exec_view(t.take(np.arange(0)), book, end=T0 + 64 * S)
+    first = ExecView(first.t, first.known, BookView(first.book.b, first.book.slot_end,
+                                                    coverage=gap), first.end)  # fmt: skip
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, first)
+    pos.limit_px, pos.expire_ns = limit, T0 + 75 * S
+    assert sim.rest(first, pos) == (WAIT, 0, 0) and pos.covered_to == T0 + 64 * S
+    later = exec_view(t, quotes([]), end=T0 + 80 * S)
+    later = ExecView(later.t, later.known, BookView(later.book.b, later.book.slot_end,
+                                                    coverage=gap), later.end)  # fmt: skip
+    assert sim.rest(later, pos) == (UNKNOWN, T0 + 66_100_000_000, 0)
+
+
+def test_a_trade_received_before_a_late_fill_can_still_exit_the_position():
+    """Event times can arrive out of order. The trade that fills a resting order is excluded
+    from its exits, and nothing else is: a record received earlier that happened later counts."""
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    limit = round(1999.8 * PX)
+    rows = [
+        # received first, happened at 81 s: through the target 0.5 above the fill
+        (T0 + 81 * S, 2000.4, 1, 1, 1_000),
+        # received a second and a half later, happened at 80 s: the fill, through the limit
+        (T0 + 80 * S, 1999.7, 1, -1, 1_500_000_000),
+    ]
+    view = exec_view(trades(rows), quotes([ENTRY]))
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    outcome, trade, _ = attempt_limit(sim, view, pos, limit, T0 + 200 * S)
+    assert pos.entry_ns == T0 + 80 * S and outcome == "closed"
+    assert trade["exit_reason"] == "target" and int(trade["exit_ns"]) == T0 + 81 * S

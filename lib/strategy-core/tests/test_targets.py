@@ -84,3 +84,40 @@ def test_horizon_moves_are_the_mid_price_later_in_the_given_unit():
     assert out[0].tolist() == [0.0, 0.25] and out[1, 0] == 0.25 and np.isnan(out[1, 1])
     cut = np.array([[T0, T0 + 100 * S]])
     assert np.isnan(targets.moves(view, cut, decision, until, reference, reference, (60,))).all()
+
+
+def test_a_trade_counts_by_its_own_event_time_at_both_ends_of_the_interval():
+    """Event times can arrive out of order (PR #99 review). A barrier print stamped before the
+    decision never settles its target, however late it was received; one stamped before the
+    forced exit does, even when received after a record from beyond it."""
+    dist, ref = np.array([px(1.0)]), np.array([px(2000.0)])
+    decision = np.array([T0 + 60 * S + CFG.close_delay])
+    rows = [
+        (T0 + 60_200_000_000, 2000.0, 1, 1),
+        (T0 + 60_050_000_000, 2001.5, 1, 1, 250_000_000),  # before the decision, received late
+    ]
+    view, cover = view_of(rows, BOOK)
+    assert view.t.ts_event.tolist() == [r[0] for r in rows]  # processed in that order
+    y, settled, _ = targets.move_ahead(view, cover, decision, np.array([UNTIL]), ref, dist)
+    assert y[0] != 1.0 and settled[0] == UNTIL  # the mid-price at the forced exit instead
+    rows = [
+        (UNTIL + 2 * S, 2000.0, 1, 1),  # beyond the forced exit, received first
+        (UNTIL - 2 * S, 2001.5, 1, 1, 5 * S),  # before it, received five seconds late
+    ]
+    view, cover = view_of(rows, BOOK)
+    y, settled, _ = targets.move_ahead(view, cover, decision, np.array([UNTIL]), ref, dist)
+    assert y[0] == 1.0 and settled[0] == UNTIL - 2 * S
+    at_the_end = [(UNTIL, 2001.5, 1, 1)]  # exactly at the forced exit: outside the interval
+    view, cover = view_of(at_the_end, BOOK)
+    assert targets.move_ahead(view, cover, decision, np.array([UNTIL]), ref, dist)[0][0] != 1.0
+
+
+def test_a_session_without_trades_settles_at_the_closing_mid_price():
+    view, cover = view_of([], BOOK)
+    decision = np.array([T0 + 60 * S + CFG.close_delay])
+    until, ref, dist = np.array([UNTIL]), np.array([px(2000.0)]), np.array([px(5.0)])
+    y, settled, state = targets.move_ahead(view, cover, decision, until, ref, dist)
+    assert y.tolist() == [0.08] and settled.tolist() == [UNTIL] and state[0] == targets.KNOWN
+    one_sided, cover = view_of([], [*BOOK[:2], (T0 + 3290 * S, None, 2000.5)])
+    y, _, state = targets.move_ahead(one_sided, cover, decision, until, ref, dist)
+    assert np.isnan(y[0]) and state[0] == targets.UNKNOWN_BOOK

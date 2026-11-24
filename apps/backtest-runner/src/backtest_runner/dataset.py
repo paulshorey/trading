@@ -49,11 +49,6 @@ INELIGIBLE = {
 }
 SESSIONS_PER_TASK = 4
 CACHE = ROOT / "data/research/yardstick"
-FLAGGED_QUERY = """
-    SELECT s.contract_id, s.trade_date FROM market.ingest_slice s
-    WHERE s.contract_id = ANY(%s) AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(s.source_files) f
-        WHERE f->>'condition' <> 'available')"""
 
 
 def variant_ids(conn) -> dict[str, int]:
@@ -227,6 +222,69 @@ def settings() -> dict:
     }
 
 
+VERSION = 2  # of how rows, eligibility, and costs are made here: part of the cache identity
+SOURCES_QUERY = """
+    SELECT s.contract_id, s.trade_date, s.source_files FROM market.ingest_slice s
+    WHERE s.contract_id = ANY(%s)"""
+
+
+def select(conn, products: list[str], start: date, end: date) -> dict:
+    """What a dataset of the period is made from: the features and their query, each
+    product's warm front sessions (with whether a file of the session is flagged), and a
+    fingerprint of everything those rows depend on outside this module's settings: the
+    builders of the stored rows, and each selected session with its contract and the
+    checksums of its source files."""
+    names, query, needed = plan(variant_ids(conn))
+    warm, counts, sources = {}, {}, {}
+    for root in products:
+        found = front_sessions(conn, root, start, end, needed)
+        files = {
+            (cid, day): held
+            for cid, day, held in conn.execute(SOURCES_QUERY, (sorted({s[1] for s in found}),))
+        }
+        flagged = {
+            key for key, held in files.items() if any(f["condition"] != "available" for f in held)
+        }
+        warm[root] = [(*s[:7], (s[1], s[0]) in flagged) for s in found if s[7]]
+        counts[root] = {
+            "used": len(warm[root]),
+            "not_warm": len(found) - len(warm[root]),
+            "flagged": sum(s[7] for s in warm[root]),
+        }
+        sources[root] = [
+            [s[0].isoformat(), s[2], sorted(f["sha256"] for f in files.get((s[1], s[0]), []))]
+            for s in warm[root]
+        ]
+    builders = conn.execute(
+        """SELECT s.stage || ':' || s.variant_id, max(b.sha256)
+           FROM market.stage_slice s JOIN market.builder b ON b.id = s.builder_id
+           GROUP BY 1 ORDER BY 1"""
+    ).fetchall()
+    conn.rollback()
+    return {
+        "names": names,
+        "query": query,
+        "warm": warm,
+        "sessions": counts,
+        "inputs": {"builders": [list(b) for b in builders], "sessions": sources},
+    }
+
+
+def cache_key(products, start: date, end: date, names: list[str], inputs: dict) -> str:
+    """The name of a stored dataset: everything that determines its rows. A change to the
+    targets or to this module's logic (their versions), to a setting, a feature, a builder of
+    the stored rows, the sessions selected, or a source file makes another name."""
+    identity = {
+        "versions": {"targets": targets.VERSION, "dataset": VERSION},
+        "products": list(products),
+        "period": [start.isoformat(), end.isoformat()],
+        "settings": settings(),
+        "names": names,
+        "inputs": inputs,
+    }
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def build(
     products: list[str],
     start: date = DEV_START,
@@ -234,34 +292,21 @@ def build(
     workers: int | None = None,
     url: str | None = None,
     log=lambda line: None,
+    selection: dict | None = None,
 ) -> dict:
     """The dataset of `products` over the period: one array per column, rows ordered by
     product, then time. `product` indexes `products`; `day` counts days from 2000-01-01."""
     check_period(start, end)
     products = list(dict.fromkeys(products))
-    tasks, sessions, builders = [], {}, {}
-    with db.connect(url) as conn:
-        names, query, needed = plan(variant_ids(conn))
-        for root in products:
-            found = front_sessions(conn, root, start, end, needed)
-            flagged = set(conn.execute(FLAGGED_QUERY, (sorted({s[1] for s in found}),)).fetchall())
-            warm = [(*s[:7], (s[1], s[0]) in flagged) for s in found if s[7]]
-            sessions[root] = {
-                "used": len(warm),
-                "not_warm": len(found) - len(warm),
-                "flagged": sum(s[7] for s in warm),
-            }
-            tasks += [
-                (root, warm[i : i + SESSIONS_PER_TASK], query, url)
-                for i in range(0, len(warm), SESSIONS_PER_TASK)
-            ]
-        builders = dict(
-            conn.execute(
-                """SELECT s.stage || ':' || s.variant_id, max(b.sha256)
-                   FROM market.stage_slice s JOIN market.builder b ON b.id = s.builder_id
-                   GROUP BY 1"""
-            ).fetchall()
-        )
+    if selection is None:
+        with db.connect(url) as conn:
+            selection = select(conn, products, start, end)
+    names, sessions = selection["names"], selection["sessions"]
+    tasks = [
+        (root, warm[i : i + SESSIONS_PER_TASK], selection["query"], url)
+        for root, warm in selection["warm"].items()
+        for i in range(0, len(warm), SESSIONS_PER_TASK)
+    ]
     workers = workers or max(1, min(8, (mp.cpu_count() or 2) - 2))
     started, parts, done = time.time(), [], 0
     log(
@@ -296,7 +341,8 @@ def build(
         "period": [start.isoformat(), end.isoformat()],
         "sessions": sessions,
         "settings": settings(),
-        "stored_rows": hashlib.sha256(json.dumps(builders, sort_keys=True).encode()).hexdigest(),
+        "versions": {"targets": targets.VERSION, "dataset": VERSION},
+        "cache_key": cache_key(products, start, end, names, selection["inputs"]),
     }
 
 
@@ -312,26 +358,20 @@ def cached(
     log=lambda line: None,
     rebuild: bool = False,
 ) -> dict:
-    """`build`, kept in a file named by the products, the period, the settings, the feature
-    list, and the builders of the stored rows: any change to one of them builds a new file."""
+    """`build`, kept in a file named by everything that determines its rows (`cache_key`):
+    any change to one of them builds a new file."""
     check_period(start, end)
     products = list(dict.fromkeys(products))
     with db.connect(url) as conn:
-        names, _, _ = plan(variant_ids(conn))
-        builders = conn.execute(
-            """SELECT s.stage || ':' || s.variant_id, max(b.sha256)
-               FROM market.stage_slice s JOIN market.builder b ON b.id = s.builder_id
-               GROUP BY 1 ORDER BY 1"""
-        ).fetchall()
-    identity = [products, start.isoformat(), end.isoformat(), settings(), names, builders]
-    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+        selection = select(conn, products, start, end)
+    key = cache_key(products, start, end, selection["names"], selection["inputs"])
     path = CACHE / f"dataset-{key}.npz"
     meta = path.with_suffix(".json")
     if path.exists() and meta.exists() and not rebuild:
         log(f"Dataset: reading {path.relative_to(ROOT)}")
         with np.load(path) as stored:
             return {k: stored[k] for k in ARRAYS} | json.loads(meta.read_text())
-    data = build(products, start, end, workers, url, log)
+    data = build(products, start, end, workers, url, log, selection)
     CACHE.mkdir(parents=True, exist_ok=True)
     np.savez(path, **{k: data[k] for k in ARRAYS})
     meta.write_text(json.dumps({k: v for k, v in data.items() if k not in ARRAYS}))

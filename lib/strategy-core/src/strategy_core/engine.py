@@ -18,6 +18,7 @@ from .bars import AggregationReport, aggregate, assignment_ns
 from .execution import (
     CANCELLED,
     EXPIRED,
+    UNKNOWN,
     WAIT,
     BookView,
     ExecutionConfig,
@@ -86,6 +87,7 @@ class Engine:
         self.trades: list[dict] = []
         self.cancelled = 0
         self.expired = 0  # limit entries that nothing filled
+        self.unwatched = 0  # limit entries that rested through missing data: outcome unknown
         self.unsized = 0  # signals whose one contract risks more than the account allows
         self.signals = 0
         self.session_pnl: dict[int, float] = {}  # by session close: its closed trades, in USD
@@ -190,10 +192,12 @@ class Engine:
                 status, known, after = self.sim.enter(view, self.pending)
                 if status == WAIT:
                     break
-                if status in (CANCELLED, EXPIRED):
-                    # at the forced-exit time, no book to fill at, or a limit nothing filled
+                if status in (CANCELLED, EXPIRED, UNKNOWN):
+                    # at the forced-exit time, no book to fill at, a limit nothing filled, or
+                    # one that rested through missing data
                     self.cancelled += status == CANCELLED
                     self.expired += status == EXPIRED
+                    self.unwatched += status == UNKNOWN
                     self.now = max(self.now, known)
                     self.pending = None
                     continue
@@ -233,6 +237,8 @@ class Engine:
                 int(contracts[i]),
             )
             self.now = self.pending.decision_ns
+        if self.position is not None:
+            self.position.fill_record = -1  # an index into this chunk's trades only
         self.trades.extend(closed)
         return closed
 
@@ -292,6 +298,7 @@ class Engine:
         summary = summarize(self.trades, self.signals, self.cancelled)
         summary |= {
             "expired_orders": self.expired,
+            "orders_with_unknown_outcome": self.unwatched,
             "unsized_signals": self.unsized,
             "sessions_at_daily_limit": len(self.limited),
         }

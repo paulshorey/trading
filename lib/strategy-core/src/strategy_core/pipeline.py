@@ -65,9 +65,9 @@ STAGES: tuple[type[Stage], ...] = (
     *(s for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]),
 )
 BY_NAME = {s.NAME: s for s in STAGES}
-# What a backtest or live session computes: every stage. A stage that looks into the future
-# (an outcome label) would be stored but left out here; none is registered today.
-FEATURE_STAGES = STAGES
+# What a backtest or live session computes: every stage but those that look into the future
+# (`LABEL`: an outcome label, stored and never read). None is registered today.
+FEATURE_STAGES = tuple(s for s in STAGES if not getattr(s, "LABEL", False))
 
 
 # Stages computed for every row but stored only at `stored_ordinals` (docs/project/ingestion.md).
@@ -80,10 +80,14 @@ STORED_ROWS = f"events+step_ends_{STEP_ROWS}s:v4"
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
-    """Every stage reads only the source or stages before it, of no higher tier."""
+    """Every stage reads only the source or stages before it, of no higher tier, and never a
+    label stage."""
     seen: dict[str, int] = {}
+    labels = {s.NAME for s in stages if getattr(s, "LABEL", False)}
     for s in stages:
         for name in s.INPUTS:
+            if name in labels:
+                raise ValueError(f"{s.NAME} reads {name}, a label: labels are never inputs")
             if name != "market" and (name not in seen or seen[name] > s.TIER):
                 raise ValueError(f"{s.NAME} reads {name}, which is not an earlier stage")
         if s.NAME in seen:

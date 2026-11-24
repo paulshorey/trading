@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import numpy as np
@@ -292,3 +293,29 @@ def test_shrinking_stops_a_forecast_claiming_what_it_does_not_know():
     signal = np.clip(0.5 * x[:, 1] + rng.normal(0, 0.3, len(day)), -1, 1)
     kept = yardstick.shrink(yardstick.fit_trees)(x[train], signal[train], day[train])
     assert kept.slope > 0.8
+
+
+def test_a_stored_dataset_is_named_by_everything_that_determines_its_rows(monkeypatch):
+    """PR #99 review: a corrected target, a changed source file, or another set of sessions
+    built by the same builders must not read the old file."""
+    inputs = {
+        "builders": [["bar_1s:0", "aaa"]],
+        "sessions": {"GC": [["2026-03-02", "GCJ6", ["f1", "f2"]]]},
+    }
+    args = (["GC"], date(2026, 1, 2), date(2026, 8, 31), ["1m@1s.rsi"])
+    key = dataset.cache_key(*args, inputs)
+    assert key == dataset.cache_key(*args, json.loads(json.dumps(inputs)))  # stable
+    changed = [
+        {**inputs, "builders": [["bar_1s:0", "bbb"]]},  # the stored rows were rebuilt
+        {**inputs, "sessions": {"GC": [["2026-03-02", "GCJ6", ["f1", "f3"]]]}},  # a file
+        {**inputs, "sessions": {"GC": [["2026-03-02", "GCM6", ["f1", "f2"]]]}},  # the contract
+        {**inputs, "sessions": {"GC": [*inputs["sessions"]["GC"], ["2026-03-03", "GCJ6", []]]}},
+    ]
+    assert len({key, *(dataset.cache_key(*args, c) for c in changed)}) == 5
+    assert dataset.cache_key(["GC"], *args[1:3], ["1m@1s.atr_bps"], inputs) != key
+    assert dataset.cache_key(["SI"], *args[1:], inputs) != key
+    for module, name in ((targets, "VERSION"), (dataset, "VERSION"), (dataset, "R_ATR")):
+        monkeypatch.setattr(module, name, getattr(module, name) + 1)
+        assert dataset.cache_key(*args, inputs) != key, (module.__name__, name)
+        monkeypatch.undo()
+    assert dataset.cache_key(*args, inputs) == key

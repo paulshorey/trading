@@ -13,6 +13,7 @@ import numpy as np
 
 from .execution import CANCELLED, WAIT, ExecView, Position, Simulator, bracket_atr
 from .execution import EXPIRED as ORDER_EXPIRED
+from .execution import UNKNOWN as ORDER_UNKNOWN
 from .features import FeatureFrame
 
 UNFILLED, CENSORED = "unfilled", "censored"
@@ -25,6 +26,7 @@ EXIT_NO_BOOK = "exit_no_book"  # the exit was priced without a book, at a fallba
 PENDING = "pending"  # the data ended before the order arrived
 STATES = (CLOSED, LATE, ENTRY_NO_BOOK, EXIT_NO_BOOK, PENDING, CENSORED)
 EXPIRED = "expired"  # a resting limit entry was never filled: known, and no trade
+UNCOVERED = "uncovered"  # data coverage broke while a limit entry rested: unknown
 
 
 def attempt(sim: Simulator, view: ExecView, pos: Position) -> tuple[str, dict | None, int]:
@@ -55,6 +57,8 @@ def attempt_limit(
         return PENDING, None, 0
     if status == ORDER_EXPIRED:
         return EXPIRED, None, known
+    if status == ORDER_UNKNOWN:
+        return UNCOVERED, None, known
     if status == CANCELLED:
         return (LATE if pos.arrival_ns >= pos.force_exit_ns else ENTRY_NO_BOOK), None, known
     _, trade = sim.advance(view, j, pos)

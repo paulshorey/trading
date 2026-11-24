@@ -24,14 +24,22 @@ KNOWN, UNKNOWN_BOOK, UNKNOWN_COVERAGE = 0, 1, 2  # why a row has a target, or ha
 REASONS = {UNKNOWN_BOOK: "no_usable_book_at_the_end", UNKNOWN_COVERAGE: "data_coverage_ends"}
 
 
+VERSION = 2  # of the targets' definition: part of a stored dataset's identity
+
+
 @njit(cache=True)
-def _first_passage(price, start, stop, upper, lower):
-    """For each row, the first trade in `price[start:stop]` at or beyond a barrier: +1 with its
-    index for the upper one, -1 for the lower one, else 0 and -1."""
+def _first_passage(price, when, start, decision, until, upper, lower):
+    """For each row, the first trade from index `start` on that happened in
+    `[decision, until)` and is at or beyond a barrier: +1 with its index for the upper one, -1
+    for the lower one, else 0 and -1. Each trade counts by its own event time: with event times
+    out of order, one received after the decision may have happened before it, and one
+    received after the forced exit's records may have happened before that."""
     n = len(start)
     side, at = np.zeros(n, np.int8), np.full(n, -1, np.int64)
     for i in range(n):
-        for k in range(start[i], stop[i]):
+        for k in range(start[i], len(price)):
+            if when[k] < decision[i] or when[k] >= until[i]:
+                continue
             if price[k] >= upper[i]:
                 side[i], at[i] = 1, k
                 break
@@ -62,13 +70,23 @@ def move_ahead(
     known or not (`KNOWN`, `UNKNOWN_BOOK`, `UNKNOWN_COVERAGE`); an unknown target is NaN.
 
     `view` holds the session's trades and book in the order the engine processes them. A trade
-    counts by its own event time, from the decision on and before `until`; a price exactly on
-    a barrier reaches it."""
+    counts by its own event time, from the decision on and before `until`, wherever it sits
+    in that order; a price exactly on a barrier reaches it."""
     n = len(decision)
+    # no record before this index happened at or after the decision
     start = np.searchsorted(view.ts_max, decision, side="left")
-    stop = np.searchsorted(view.ts_max, until, side="left")
-    side, at = _first_passage(view.t.price, start, stop, reference + distance, reference - distance)
-    settled = np.where(side != 0, view.t.ts_event[np.maximum(at, 0)], until) if n else until
+    side, at = _first_passage(
+        view.t.price,
+        view.t.ts_event,
+        start,
+        decision,
+        until,
+        reference + distance,
+        reference - distance,
+    )
+    settled = until.copy()
+    hit = side != 0
+    settled[hit] = view.t.ts_event[at[hit]]
     target = side.astype(np.float64)
     state = np.full(n, KNOWN, np.int8)
     for i in np.flatnonzero(side == 0):  # neither barrier: the mid-price at the forced exit

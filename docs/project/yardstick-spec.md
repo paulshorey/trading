@@ -232,6 +232,36 @@ compared with a cost.
 **Not as specified.** An engine runs one product, so each product had its own portfolio and
 daily limit; the spec said one position at a time across the products.
 
+## A forecast that is no worse than `flat` (variant frozen November 24, 2026, before its run)
+
+**The problem.** `trees` forecasts moves of -0.95 to +0.76 R while knowing almost nothing: its
+squared error is 12% above a forecast of zero, and its rule opens on 95% of rows. Until the
+forecast is at least as good as `flat`, a policy built on it trades noise, and no input can be
+judged by what the policy earns.
+
+**The suspected cause.** Rows of one session share almost all of their target, and some
+inputs are nearly constant through a session. A tree that may make a leaf of 500 rows can
+give a single session its own leaf and learn that session's outcome.
+
+**Two remedies, each fitted on training rows only**
+
+| Setting | Value |
+| --- | --- |
+| `coarse` | A leaf must hold at least as many training rows as ten trade dates have on average, so no leaf can belong to one session. Everything else as `trees` |
+| `shrunk` | The forecast is multiplied by a slope between 0 and 1. The training dates are cut into four blocks in time order; each block is forecast by a model fitted on the other three, less the one date next to the block on each side. The slope is the least-squares fit, through zero, of the target on those out-of-block forecasts: how much of a forecast's size survives outside the sessions it was fitted on. Below zero it is set to zero, which is the flat forecast |
+| Variants | `trees_coarse`, `trees_shrunk`, and `trees_coarse_shrunk`, beside `trees` as run |
+| The yardstick from here on | `trees_coarse_shrunk`. The policy of Part B is replayed with it, all eight cells, nothing else changed |
+| Not rerun | The horizon map and `ridge` |
+
+**What counts.** The variant does its job if its squared error is not above `flat`'s: the mean
+excess per trade date has an interval that includes zero or lies below it. Skill is still
+the pooled rank correlation above zero with its interval; nothing here is expected to create
+skill, only to stop the forecast claiming it.
+
+**Expected before the run.** The slope is small, a tenth or less. The shrunk forecast is then
+beyond the cost on few rows, and the policy opens few positions or none. `coarse` alone
+narrows the forecasts but leaves them too wide.
+
 ## What has to be built
 
 1. The label (`strategy-core`, beside `labels.py`), with tests.

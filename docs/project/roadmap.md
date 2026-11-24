@@ -83,8 +83,8 @@ is one stored table with its own version.
 | --- | --- | --- | --- |
 | 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`; planned `book_1s` | Built from trades | The book between trades: the data reaches the engine, no stage reads it. A net-flow series that does not reset at the session open |
 | 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Built on three timeframes, with row counting and per-phase indicators; a timeframe is a parameter | A session-long window for a view of several days |
-| 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built: 637 features | Nothing is computed on an indicator. Many of the 637 restate the same price path ([review](#review-of-november-23-2026), point 6) |
-| 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, and 2 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, and the age of each break | The 3 ATR scale; one structure code per scale |
+| 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
+| 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
 | 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_flow_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of net flow; agreement and divergence against price |
 | 6. Decision model | `labels.py`; planned `ml.*`, `research.*` | An engine with fills at the book and a losing rule-based baseline. The engine takes entry signals only | Position decisions in the engine; the model; its evaluation ([spec](yardstick-spec.md)) |
 

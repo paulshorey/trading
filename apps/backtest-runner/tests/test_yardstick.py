@@ -88,6 +88,7 @@ def test_the_walk_forward_forecast_finds_a_real_signal_and_only_scores_test_mont
         found = yardstick.skill(forecast, y, day, product, ["GC", "SI"])
         pooled = found["rank_correlation"]
         assert pooled["trade_dates"] == 61 and pooled["interval_95"][0] > 0.2
+        assert pooled["interval_95"][0] < pooled["value"] < pooled["interval_95"][1]
         assert set(found["by_product"]) == {"GC", "SI"} and set(found["by_month"]) == {
             "2026-05", "2026-06",
         }  # fmt: skip
@@ -229,3 +230,22 @@ def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():
     assert out["micro_costs"]["net_r"] == pytest.approx(-2 * 2.5 / 300 - 1 - 2.5 / 1500, abs=1e-3)
     assert out["account_100k_whole_micro_contracts"]["trades_too_large_for_the_risk"] == 1
     assert out["daily"].tolist() == pytest.approx([-2 * gc, 0.0, -1 - si])
+
+
+def test_skill_is_not_fooled_by_a_forecast_that_fades_each_sessions_move():
+    """Within one session the move to the close falls as the price so far rises, for any
+    path. A correlation taken date by date rewards a forecast of "minus the move so far" on a
+    random walk; the pooled one, which decides, does not."""
+    rng = np.random.default_rng(3)
+    n_days, per = 80, 200
+    day = np.repeat(days(date(2026, 5, 4), n_days), per)
+    steps = rng.normal(size=(n_days, per + 1))
+    path = np.cumsum(steps, axis=1)
+    so_far = path[:, :per].ravel()
+    y = np.clip((path[:, [per]] - path[:, :per]).ravel() / 30, -1, 1)  # the move to the close
+    product = np.zeros(len(day), np.int8)
+    found = yardstick.skill(-so_far, y, day, product, ["GC"])
+    assert found["within_date_rank_correlation_biased"]["mean"] > 0.5  # looks like skill
+    lo, hi = found["rank_correlation"]["interval_95"]
+    assert lo < 0 < hi  # and is none
+    assert found["squared_error_ratio_to_flat"] > 1

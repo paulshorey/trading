@@ -6,6 +6,73 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## A 3 ATR swing scale and the structure code (November 24, 2026)
+
+Build-order item 8, step 4 of the process.
+
+- **A scale at 3 ATR on every timeframe** (`fast_atr_3`, `mid_atr_3`, `slow_atr_3`): three
+  more variants of the swing stage, written to the existing tables. Confirmed highs on front
+  sessions in the year held: 139 for GC and 142 for SI on `1h@1m`, 873 and 887 on `10m@10s`,
+  9,255 and 10,971 on `1m@1s`.
+- **`structure`**, one column per scale (migration `0011_structure_code`): the trend and the
+  break of the last confirmed high or low in one code, `3 x (trend + 1) + (break + 1)`, from
+  0 (down and extending) to 8 (up and extending), NULL until the trend is known. It is
+  computed from the row's own columns (`stage_step_pivot.with_structure`). On the slow 3 ATR
+  scale of GC every one of the nine states occurs, from 12,049 minute rows (up with its low
+  broken) to 82,396 (down and inside).
+- The engine holds 741 features (637 before).
+- **Rebuild:** the swing stages' code changed, so all of them were `stale`:
+  `research ingest run GC SI --rebuild --workers 8`, run 3, 7.7 minutes, writing only the
+  swing tables and events (`pivot_1s` 34,416,676 rows, `pivot_10s` 28,292,760, `pivot_1m`
+  4,715,460, events 2,907,672). `ingest plan GC SI` reports all 12 contracts `current`. The
+  database is 165 GB.
+- Tests: the new scale equals the plain-Python reference swings on the fast timeframe; the
+  small test world has no slow swing of 3 ATRs.
+
+## The engine makes position decisions (November 24, 2026)
+
+Build-order item 7, step 6 of the process ([decisions 35 to 39](roadmap.md#decisions);
+[timing model](engine.md#timing-model)).
+
+**What was built** (`strategies.py`, `execution.py`, `engine.py`; none is in a stage's
+identity, so no stored row changed)
+
+- **A decision at every second, in two parts.** `signals` is the decision while flat (open a
+  long, open a short, nothing); `closes` is the decision while a position is open. A closing
+  decision is a market order sent at its decision time: it fills `order_latency` later
+  whatever the bracket says, unless the stop or the target fills first (`Simulator.close`).
+  The position therefore moves one step per decision.
+- **Entries.** A market order, or a limit order at the touch of the book it meets that is
+  cancelled after `wait_s` (`Entry`, `Simulator.rest`). It fills when a trade prints through
+  its price, or, with `passive_fill: queue`, when the size displayed ahead of it and its own
+  have traded at its price. The order's state is kept on the position, so a session
+  processed one second at a time fills it exactly as a whole session does.
+- **The bracket** may have no time limit (`max_hold_s: None`), may be sized by any
+  timeframe's ATR (`atr`; each timeframe's ATR is in the frame's context), and may move its
+  stop to the entry price after a move in favour (`breakeven_atr`), in force once the engine
+  has learned of that trade and its amended order has arrived.
+- **Risk.** With `account_usd`, a position is as many whole contracts as keep its stop's risk
+  within `risk_pct`; a signal whose one contract risks more is not traded and is counted. A
+  session stops opening positions once it has lost `daily_loss_pct` of the account, or
+  `daily_loss_r` R without an account size.
+- **The trend gate** (`strategies.trend_gate`): a long needs no named trend down, a short
+  none up; it never blocks a closing decision.
+- **Costs for the decision.** The strategy also sees `exec.spread_r` and `exec.commission_r`:
+  what a trade decided at that row would cost in R, from the book the engine holds. They are
+  not features and never reach a model.
+
+**Checks**
+
+- Whole sessions and one second at a time give identical features, trades, and summaries in
+  seven cases: the two old ones, closing on the opposite signal, passive entries with each
+  fill rule, a bracket without a time limit on the middle ATR with a gate and a moved stop,
+  and positions sized by risk with a daily limit.
+- Unit tests of each rule on hand-built trades and books: a closing order that the stop
+  beats while it travels; the queue ahead of a passive order carried across chunks; the stop
+  moved only after the amendment arrives; sizing; the gate.
+- Not built: one portfolio across products. An engine runs one product, so the daily limit
+  is per product.
+
 ## The withdrawn design removed (November 23, 2026)
 
 Paul withdrew the trained reversal model ([decision 29](roadmap.md#decisions)) and asked for

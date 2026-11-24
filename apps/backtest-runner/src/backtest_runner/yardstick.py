@@ -4,7 +4,8 @@
     uv run research yardstick GC SI
 
 A walk-forward forecast of the move ahead in R (`strategy_core.targets`) from the features the
-engine holds, judged by its rank correlation with what happened, per trade date. The horizon
+engine holds, judged by its rank correlation with what happened over all test rows, with an
+interval from resampled trade dates. The horizon
 map fits the same model to the mid-price's move over fixed horizons, on all features and on
 each kind of input alone, to show what is predictable, where, and from what. Every setting
 below was frozen in the spec before any outcome was read; nothing is tuned.
@@ -234,6 +235,39 @@ def rank_correlation(forecast, y, day, product) -> tuple[np.ndarray, np.ndarray,
     return np.array(out), np.array(days, int), np.array(products, int)
 
 
+def pooled_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray) -> dict:
+    """The rank correlation between forecast and target over all the rows together, with a
+    95% interval from resampled trade dates. Ranks are taken over every row at once, never
+    within a date: a target is the move from a row to a later point of the same session, so
+    within one session it falls as the current price rises whatever the forecast knows, and a
+    correlation taken date by date rewards any forecast that fades the session's move."""
+    if len(y) < MIN_ROWS or np.ptp(forecast) == 0 or np.ptp(y) == 0:
+        return {"trade_dates": len(np.unique(day)), "value": None, "interval_95": [None, None]}
+    rf, ry = rankdata(forecast), rankdata(y)
+    dates, index = np.unique(day, return_inverse=True)
+    n = np.bincount(index).astype(float)
+    sums = [np.bincount(index, weights=v) for v in (rf, ry, rf * rf, ry * ry, rf * ry)]
+
+    def corr(weight: np.ndarray) -> float:
+        count = (n * weight).sum()
+        a, b, aa, bb, ab = ((v * weight).sum() for v in sums)
+        spread = (aa - a * a / count) * (bb - b * b / count)
+        return float((ab - a * b / count) / np.sqrt(spread)) if spread > 0 else np.nan
+
+    rng = np.random.default_rng(SEED)
+    draws = np.array(
+        [
+            corr(np.bincount(rng.integers(0, len(dates), len(dates)), minlength=len(dates)))
+            for _ in range(RESAMPLES)
+        ]
+    )
+    return {
+        "trade_dates": len(dates),
+        "value": round(corr(np.ones(len(dates))), 5),
+        "interval_95": [round(float(v), 5) for v in np.nanpercentile(draws, [2.5, 97.5])],
+    }
+
+
 def summary(values: np.ndarray, day: np.ndarray) -> dict:
     """Mean of per-date values with its interval, dates weighted equally."""
     if not len(values):
@@ -247,21 +281,26 @@ def summary(values: np.ndarray, day: np.ndarray) -> dict:
 
 
 def skill(forecast, y, day, product, names: list[str]) -> dict:
-    """The forecast's skill on the rows it scored: rank correlation per trade date, pooled, by
-    product, and by month; and its squared error against a forecast of zero."""
+    """The forecast's skill on the rows it scored: its rank correlation with the target over
+    all rows, pooled, by product, and by month; and its squared error against a forecast of
+    zero. The correlation taken within each trade date is kept beside them for the record; it
+    is biased upward (`pooled_correlation`) and decides nothing."""
     rows = np.isfinite(forecast) & np.isfinite(y)
     f, t, d, p = forecast[rows], y[rows], day[rows], product[rows]
-    corr, cd, cp = rank_correlation(f, t, d, p)
-    out = {"rows": int(rows.sum()), "rank_correlation": summary(corr, cd)}
+    out = {"rows": int(rows.sum()), "rank_correlation": pooled_correlation(f, t, d)}
     out["by_product"] = {
-        name: summary(corr[cp == k], cd[cp == k]) for k, name in enumerate(names) if (cp == k).any()
+        name: pooled_correlation(f[p == k], t[p == k], d[p == k])
+        for k, name in enumerate(names)
+        if (p == k).any()
     }
     out["by_month"] = {}
     for month in TEST_MONTHS:
         lo, hi = month_days(month)
-        pick = (cd >= lo) & (cd < hi)
+        pick = (d >= lo) & (d < hi)
         if pick.any():
-            out["by_month"][f"2026-{month:02d}"] = summary(corr[pick], cd[pick])
+            out["by_month"][f"2026-{month:02d}"] = pooled_correlation(f[pick], t[pick], d[pick])
+    corr, cd, _ = rank_correlation(f, t, d, p)
+    out["within_date_rank_correlation_biased"] = summary(corr, cd)
     if len(t):
         excess = (f - t) ** 2 - t**2  # against the flat forecast, per row
         out["squared_error_minus_flat"] = summary(excess, d)

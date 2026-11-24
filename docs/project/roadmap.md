@@ -113,6 +113,9 @@ again with the model's probabilities ([decision 2](#design-decisions-november-19
 
 ### Predictions that later steps read
 
+Withdrawn on November 23, 2026 ([decision 29](#decisions-of-november-23-2026)): no model sits
+in the middle of the pipeline. The text below is kept as the record of the earlier design.
+
 The swing detector confirms a swing only after price has reversed by the full threshold, which is
 late. A model of step 4 would estimate, from the current candidate, three probabilities that sum to
 one: the reversal barrier is reached first, the invalidation barrier is reached first, or
@@ -324,7 +327,7 @@ Paul's, after the review. The numbers continue the list above.
       one spread; entering against the `slow_atr_1` trend is worse than entering with it;
       displacement alone matches the full models on the turn label.
     - *Build them once.* Every change to base rows lands before they are ingested
-      ([build order](#build-order), items 7 to 9).
+      ([build order](#build-order), item 9).
 
     Afterwards they are development data, walked forward by year. September 1, 2026 onward
     stays the final holdout, and paper trading is the test after it.
@@ -402,6 +405,31 @@ Paul's, after the rebuild on the new machine and the middle replay.
     decision, so its price is set from the book at the decision. The price rule and the
     wait are frozen in a spec before the next replay.
 
+29. **No model predicts a reversal** (Paul, November 23). It is not possible to say with
+    useful confidence that the current move is a reversal or a continuation, and a trained
+    model in the middle of every timeframe is too much complexity for what it could add. The
+    evidence here agrees: middle candidates at a quarter and at half of a 0.5 or 1 ATR
+    threshold reversed 42% to 46% and 59% to 62% of the time, where a random walk with the
+    same barriers gives 40% and 60% (fewer at 2 ATR, where many run out of time), and no
+    model beat the distance already moved
+    ([benchmark](build-log.md#pr-f-results-labels-and-benchmark)). Decisions 2 to 5 and 17,
+    the model stages, the four targets, and the second structure pass on probabilities are
+    withdrawn. There is one trained model, the decision model.
+30. **Swings are an ATR zigzag at about 3 ATR**, confirmed when price has moved the
+    threshold away from the extreme and never changed afterwards. The existing scales (0.5,
+    1, and 2 ATR) stay, since they are built and cost nothing to keep; the model reads all of
+    them.
+31. **The confidence of an unconfirmed swing is arithmetic, not a model:** the pullback so
+    far divided by the threshold (2 of 3 ATR: 67%; 2.5 of 3: 83%). This is the stored
+    `progress`.
+32. **Structure is a code computed from confirmed swings and the current price:** higher or
+    lower highs and lows, and whether the current price has broken the last confirmed low
+    or high. The decision model learns what each state is worth, with the other evidence.
+33. **Two passes.** The first computes everything on price and flow. The second computes
+    the same swings and structure on derived series (RSI, net flow, later others) and
+    whether they agree with price. A disagreement is evidence against a trade, not a signal
+    to take one; the decision model weighs it.
+
 ## How results are judged on six years
 
 Frozen November 20, 2026, before the older years arrive, so that no split is chosen after
@@ -452,44 +480,48 @@ done. Items 7 to 9 change base rows, so they come before the long history is ing
    market a middle candidate loses about one spread; a limit resting at its extreme gets a
    better price and still loses; no agreement rule passed. The one pattern that repeated is
    that entering against the `slow_atr_1` trend is worse than entering with it, so the
-   pullback that holds across timeframes is the first family to build after the failed
-   break in item 12, and the daily loss cap's effect on the product mix is a question for
-   item 11.
-7. **Base changes, in one rebuild.**
-   - *The ATR normalizer floored at the spread* (decision 23).
+   slow trend is an input the decision model must have, and the daily loss cap's effect on
+   the product mix is a question for item 8.
+The items from here on were rewritten on November 23, 2026
+([decisions 29 to 33](#decisions-of-november-23-2026)); the earlier list had trained models
+in the middle of the pipeline and is in the git history.
+
+7. **Structure of price, as decided.** Mostly built: the swing stages are an ATR zigzag whose
+   confirmed swings never change, and they already give `progress`, `trend`, the class of
+   the last high and low, provisional higher lows and lower highs, and the age of each
+   break. To add: a scale at 3 ATR on every timeframe, and one structure code per scale
+   that combines the trend with which confirmed levels the current price has broken. The
+   swing stages are sparse or small, so this rebuild takes minutes.
+8. **The yardstick decision model.** The first version of the one model, on the features that
+   exist: its decision rows, its target (long, short, or no trade, from what a bracket
+   trade on each side earned after costs with a short limit entry), walk-forward and
+   purged, judged by the replay. Nothing is stored. It will probably not beat staying flat.
+   Its purpose is that every later input is judged by one question: is the decision model
+   better after costs with it than without it, on the same rows?
+9. **Base changes, in one rebuild.**
    - *A rolling net-flow series* that does not reset at the session open (not
      `session_cvd`) and is NULL while its window holds rows without data coverage.
+   - *The ATR normalizer floored at the spread* (decision 23).
    - *The `source.py` change* in the [to-do list](todo.md#housekeeping).
-8. **The book between trades** (`book_1s`, merged to every step): queue imbalance,
-   order-flow imbalance, spread over time, depletion and refill. Step 1 is not finished
-   without it, and it is the only information in the files that nothing reads.
-9. **The scheduled-news table** and its two elapsed-time features (decision 15).
-10. **Six years of GC and SI**, when the files are on the new machine: the named checks on
-    the untouched years first, then the build (decision 13), judged as
+10. **The second pass: swings and structure of RSI and of net flow**, on every timeframe,
+    with the swing code that price uses. Their threshold is in the series' own units (a
+    multiple of its own typical move, since a price ATR does not apply), frozen in a spec
+    first. Then the agreement codes: for each timeframe, whether the structure of RSI and of
+    flow agrees with price's, and where their last swings diverge from price's.
+11. **The book between trades** (`book_1s`, merged to every step): queue imbalance,
+    order-flow imbalance, spread over time, depletion and refill.
+12. **The scheduled-news table** and its two elapsed-time features (decision 15).
+13. **Six years of GC and SI**, when the files are here: the named checks on the untouched
+    years first, then the build (decision 13), judged as
     [above](#how-results-are-judged-on-six-years).
-11. **The yardstick decision model.** Train take-or-skip on the value of attempting,
-    walk-forward and purged, on the features that exist. Store no model. It will probably
-    not beat staying flat. Its purpose is that every later input is judged by one question:
-    is the decision model better after costs with it than without it, on the same rows?
-12. **The event families, through steps 3 to 5.** Each adds its indicators of indicators,
-    its swings, and its structure, and is then replayed alone and inside the yardstick:
-    - *the failed break*, from the breaches and reclaims the swing stages already emit;
-    - *flow*: RSI, EMA and slope of net flow per phase, its swings with thresholds above the
-      measured row-to-row noise, price against flow divergence (`signal_*`);
-    - *RSI*: RSI and EMA of the RSI series, RSI swings, price against RSI divergence;
-    - *sequences and agreement*: higher-low and lower-high runs, and the pullback that holds
-      across the three timeframes;
-    - *the partner*: the [pair stage](pair-design.md) for GC with SI.
-13. **The four targets and their benchmark** (decisions 3 to 5): turn, continue, direction,
-    and the size of the coming move, whose simplest model is the current ATR and the time
-    of day. First for price, then for flow and RSI.
-14. **Stored model stages** for the targets that passed decision 5 and that improve the
-    yardstick model, then the second structure pass on their probabilities. A model that
-    reads another model is stored only on the six-year history.
+14. **More inputs, each judged by the decision model:** indicators of indicators (RSI and
+    EMA of RSI, slope of flow), structure across the three timeframes in one code, the
+    [pair stage](pair-design.md) for GC with SI, and a slower timeframe for a view of
+    several days.
 15. **More products**: ES with NQ first; YM, RTY, and PL need one of the storage remedies of
     decision 25.
-16. **The decision model**, on out-of-fold inputs only, evaluated once on the holdout. Then
-    paper trading on the live feed, and live trading after it.
+16. **The final evaluation** of the decision model on the holdout, once. Then paper trading
+    on the live feed, and live trading after it.
 
 ### After-cost replay
 

@@ -44,8 +44,9 @@ for judging a result that were written before the data that will test them
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next tasks**, in order ([build order](roadmap.md#build-order)): items 7 to 9, the base
-changes, the book, and the news table, all before the six-year history is built in item 10
+**The next tasks**, in order ([build order](roadmap.md#build-order), rewritten November 23):
+item 7, the 3 ATR scale and the structure code; item 8, the first decision model as the
+yardstick; then the base changes and the second pass on RSI and net flow
 ([how](#next-steps)). Items 1 to 6 are done.
 
 **This machine is the starting point** (Paul, November 23). Nothing more is needed from the
@@ -270,7 +271,7 @@ from the DBN files by the code, in under an hour for the year held.
    (`~/git/local-dev`, the `local-dev-services` skill).
 6. **Then the downloads Paul adds:** five more years of GC and SI, later the other
    products. Add each job folder unchanged; do not ingest the older years before
-   build-order items 7 to 9 are merged ([decision 13](roadmap.md#decisions-of-november-20-2026)).
+   the base changes of build-order item 9 are merged ([decision 13](roadmap.md#decisions-of-november-20-2026)).
 
 One thing from another session was left as it was on the first machine: the branch
 `docs/first-executable-pivot-model` (worktree `~/git/trading-wt-review-87`), which holds
@@ -296,32 +297,38 @@ reclaim window and label horizon, and a migration that copies the tables (`0008`
 pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**7. Base changes, in one rebuild.**
+**The plan changed on November 23** ([decisions 29 to 33](roadmap.md#decisions-of-november-23-2026)):
+no model predicts reversals, so there are no model stages, no stacked training, and one
+trained model, the decision model. Swings are the rule-based ATR zigzag that
+`stage_step_pivot.py` already is; structure is computed from confirmed swings and the
+current price; a second pass does the same on RSI and net flow.
 
-- *The ATR floor.* The normalizer of `*_atr` features is floored at the spread, as the swing
-  threshold is. It changes stored values only where the ATR has collapsed; measure how many
-  rows change and record it.
-- *The rolling net-flow series* and *the `source.py` change*.
+**7. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
+variants; a migration only if the variant registry needs rows), and one structure code per
+scale. `progress` is already the confidence of the open swing. Check the count of confirmed
+swings a year at 3 ATR on each timeframe and record it: the slow one will have few.
 
-**8. The book between trades.** Freeze the list of inputs first
-([metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), switch ingestion's day
-cache to keep book events, and measure the build time and the live cost per second: book
-events are 20 to 60 times the trades.
+**8. The yardstick decision model.** Write the spec first: decision rows (every middle row
+is too correlated; sample about one window apart, or use rows where a structure code
+changes), the target from a bracket trade on each side after costs, the short limit entry
+([decision 28](roadmap.md#decisions-of-november-23-2026)), and the walk-forward blocks.
+Store runs and would-be trades in PostgreSQL before it, so every variant is counted.
 
-**9. The scheduled-news table.** Release times that were published in advance (inflation,
-employment, central bank decisions) for the whole history, never the time a number was
-revised. A table, two elapsed-time features, and results reported with and without the
-minutes around a release.
+**9. Base changes, in one rebuild.** The rolling net-flow series (the second pass needs it),
+the ATR floor (measure how many rows change), and the `source.py` change.
 
-**10. Six years of GC and SI:** the named checks on the untouched years first
-([decision 13](roadmap.md#decisions-of-november-20-2026)), then the build, judged by
-[the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
+**10. The second pass.** The swing code takes a source in its own units
+([contract](pivot-structure-design.md#swing-sources-price-and-rsi)). Measure the row-to-row
+noise of RSI and of net flow on each timeframe and freeze a threshold above it; then the
+agreement codes against price.
 
-Then items 11 to 16: the yardstick decision model, the event families through steps 3 to
-5, the four targets, stored model stages, more products, and the decision model.
+**11 to 13.** The book between trades (freeze the inputs first; book events are 20 to 60
+times the trades), the scheduled-news table, and six years of GC and SI with the named
+checks on the untouched years first. A six-year build is a few hours, so the order of the
+items before it is set by what is learned, not by the cost of rebuilding.
 
 Also open, in no fixed order ([todo](todo.md)): store runs and would-be trades in
-PostgreSQL (needed before item 11, so that every variant is counted); a session quality
+PostgreSQL (needed before item 8, so that every variant is counted); a session quality
 policy; the free `definition` download (needs the account owner); backtests reading stored
 rows for speed.
 

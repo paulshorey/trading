@@ -14,32 +14,31 @@ the [build log](build-log.md).
       candidate's extreme as the limit entry of later replays.
 - [x] **Replay the middle timeframe's candidates** (item 6): done November 23
       ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)).
-- [ ] **Base changes, in one rebuild** (item 7):
+- [ ] **Structure of price** (item 7): a 3 ATR scale on every timeframe, and one structure
+      code per scale (the trend, and which confirmed levels the current price has broken).
+- [ ] **The yardstick decision model** (item 8): spec first (decision rows, the long, short,
+      or no-trade target, the short limit entry, the walk-forward blocks); nothing stored.
+- [ ] **Base changes, in one rebuild** (item 9):
+  - [ ] a rolling net-flow series without session resets;
   - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
         ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
         [decision 23](roadmap.md#decisions-of-november-20-2026));
-  - [ ] a rolling net-flow series without session resets;
   - [ ] the `source.py` change under [housekeeping](#housekeeping).
-- [ ] **`book_1s`**, merged to every step (item 8): tier 0 from every book event (queue
+- [ ] **Swings and structure of RSI and of net flow**, and their agreement with price
+      (item 10): measure each series' row-to-row noise and freeze its threshold first
+      ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
+- [ ] **`book_1s`**, merged to every step (item 11): tier 0 from every book event (queue
       imbalance, order-flow imbalance, time-weighted spread, depletion and refill;
       [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
       day cache switched to keep book events.
-- [ ] **The scheduled-news table** and its elapsed-time features (item 9).
-- [ ] **Six years of GC and SI** (item 10): the named checks on the untouched years, then
+- [ ] **The scheduled-news table** and its elapsed-time features (item 12).
+- [ ] **Six years of GC and SI** (item 13): the named checks on the untouched years, then
       the build, judged by [the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
-- [ ] **The yardstick decision model** (item 11): take-or-skip on the value of attempting;
-      nothing stored.
-- [ ] **The event families** (item 12): the failed break; flow (indicators of indicators,
-      swings, divergence); RSI (the same; measure the row-to-row RSI noise and set
-      thresholds above it, [contract](pivot-structure-design.md#swing-sources-price-and-rsi));
-      sequences and agreement across timeframes (`signal_*`); the partner
-      ([pair design](pair-design.md)).
-- [ ] **The four targets** and their benchmark (item 13): turn (stored), continue,
-      direction, and the size of the coming move.
-- [ ] **Stored model stages**, then the second structure pass (item 14).
+- [ ] **More inputs** (item 14): indicators of indicators, structure across timeframes, the
+      partner ([pair design](pair-design.md)), a slower timeframe.
 - [ ] **More products** (item 15): ES with NQ; YM, RTY, and PL need a storage remedy first
       ([decision 25](roadmap.md#decisions-of-november-20-2026)).
-- [ ] **The decision model and the final holdout** (item 16). September 1, 2026 onward is
+- [ ] **The final evaluation on the holdout** (item 16). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 
 ## Also open

@@ -192,7 +192,7 @@ The rerun changed only the `fresh` groups, by at most 245 candidates of a group 
 attempt, and no conclusion (first run: `~/replay-agreement-gc-si.json`).
 
 So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
-It remains to be tested as probabilities from models (build-order items 13 and 14), with the slow
+It remains to be tested inside the decision model (build-order item 8), with the slow
 trend among their inputs.
 
 ## The middle timeframe's candidates (spec frozen November 23, 2026, before its run)
@@ -298,7 +298,7 @@ What this shows:
    against 10 for SI in the first row): the SI stop, one hourly ATR, was too large a share of
    $3,000 once anything had been lost. The cap as decided therefore also sets the product mix;
    a stop sized by risk in dollars, or a cap per product, would not. This is a question for
-   the decision model's sizing (item 11), not changed here.
+   the decision model's sizing (item 8), not changed here.
 6. **Micro costs change the scale, not the sign.** Commission is 0.8% of risk on the micros
    against 0.2% on the full-size contracts; every label's value of attempting stays below
    zero with its interval (-$15 to -$30 an attempt).

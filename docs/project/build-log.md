@@ -81,7 +81,7 @@ before any code read an outcome, and the result is in
 ## The new machine (November 23, 2026)
 
 The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cores, 64 GB,
-4 TB), following [the handoff](handoff.md#moving-to-the-new-machine).
+4 TB), following [the handoff](handoff.md#setting-up-a-machine).
 
 - `research catalog --verify`: 622 files, 29.19 GB, no checksum failure, 12 files `degraded`.
 - Migrations `0001` to `0009` applied; 622 files registered. (The old registry listed 1,866:

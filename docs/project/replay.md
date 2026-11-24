@@ -295,9 +295,10 @@ What this shows:
    daily intervals that include zero in 44 of 48 cells; three of the other four are losses,
    and the one gain (`mid_atr_0p5_q50`, limit entry, January to April) was +$8,370 with an
    interval around zero in the second half. From January to April almost every fill was GC (230
-   against 10 for SI in the first row): the SI stop, one hourly ATR, was too large a share of
-   $3,000 once anything had been lost. The cap as decided therefore also sets the product mix;
-   a stop sized by risk in dollars, or a cap per product, would not. This is a question for
+   against 10 for SI in the first row). Measured afterwards: the median hourly ATR was $20.50
+   for GC and $0.76 for SI, so the stop risks about $2,050 on a GC contract and $3,800 on SI,
+   more than the cap by itself. The cap as decided therefore also sets the product mix
+   ([review](roadmap.md#review-of-november-23-2026), point 3). This is a question for
    the decision model's sizing (item 8), not changed here.
 6. **Micro costs change the scale, not the sign.** Commission is 0.8% of risk on the micros
    against 0.2% on the full-size contracts; every label's value of attempting stays below

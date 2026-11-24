@@ -47,8 +47,9 @@ once, for any timeframe. The state of each step is in the
    zigzag and structure on RSI, on net volume flow (CVD), and on other indicators, then
    whether their structure agrees with price's or diverges from it, within and across
    timeframes. This is the second pass: it reads the indicators of step 3.
-6. **The decision model.** The one trained model. It reads everything above and decides
-   long, short, or no trade; its inference makes the backtest and live decisions. It is
+6. **The decision model.** The one trained model. It reads everything above and names a
+   position: long, short, or flat (flat closes an open position and cancels its orders);
+   its inference makes the backtest and live decisions. It is
    judged by one portfolio's results after costs. A first version is trained early, on what
    exists, as the yardstick: an input earns its place when the decision model is better
    after costs with it than without it.

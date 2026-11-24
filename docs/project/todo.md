@@ -9,37 +9,37 @@ the [build log](build-log.md).
 
 - [x] **Set up the new machine** and rebuild the database there: done November 23
       ([what was found](build-log.md#the-new-machine-november-23-2026)).
-- [ ] **A short-lived limit entry** ([decision 28](roadmap.md#decisions-of-november-23-2026)):
-      spec first in [replay.md](replay.md), then the run. It replaces the 2,400 s limit at the
-      candidate's extreme as the limit entry of later replays.
 - [x] **Replay the middle timeframe's candidates** (item 6): done November 23
       ([results](replay.md#results-for-the-middle-timeframe-november-23-2026)).
-- [ ] **Structure of price** (item 7): a 3 ATR scale on every timeframe, and one structure
-      code per scale (the trend, and which confirmed levels the current price has broken).
-- [ ] **The yardstick decision model** (item 8): spec first (decision rows, the long, short,
-      or no-trade target, the short limit entry, the walk-forward blocks); nothing stored.
-- [ ] **Base changes, in one rebuild** (item 9):
-  - [ ] a rolling net-flow series without session resets;
-  - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
-        ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
-        [decision 23](roadmap.md#decisions-of-november-20-2026));
-  - [ ] the `source.py` change under [housekeeping](#housekeeping).
+The items below follow the order proposed on November 23
+([roadmap](roadmap.md#build-order)); Paul has not approved it yet.
+
+- [ ] **Paul: review** the [yardstick spec](yardstick-spec.md), the proposed order, and the
+      open choice of cap, sizing, and bracket
+      ([review, point 3](roadmap.md#review-of-november-23-2026)).
+- [ ] **The yardstick, part A** (item 7): the label, the decision dataset, the walk-forward
+      forecast, the horizon map; runs stored in `research.*`.
+- [ ] **The engine makes position decisions** (item 8): long, short, or flat; exit on flat;
+      limit entries that last seconds with the back-of-queue fill model; the bracket's
+      timeframe named by the strategy; a stored forecast as an input. Then the yardstick,
+      part B.
+- [ ] **Structure of price** (item 9): a 3 ATR scale on every timeframe and one structure
+      code per scale.
+- [ ] **Base changes, in one rebuild** (item 10): a rolling net-flow series without session
+      resets; the ATR normalizer floored at the spread
+      ([finding](build-log.md#pr-d-results-swings)); the `source.py` change under
+      [housekeeping](#housekeeping).
 - [ ] **Swings and structure of RSI and of net flow**, and their agreement with price
-      (item 10): measure each series' row-to-row noise and freeze its threshold first
+      (item 11): measure each series' row-to-row noise and freeze its threshold first
       ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
-- [ ] **`book_1s`**, merged to every step (item 11): tier 0 from every book event (queue
-      imbalance, order-flow imbalance, time-weighted spread, depletion and refill;
-      [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
-      day cache switched to keep book events.
-- [ ] **The scheduled-news table** and its elapsed-time features (item 12).
-- [ ] **Six years of GC and SI** (item 13): the named checks on the untouched years, then
-      the build, judged by [the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
-- [ ] **More inputs** (item 14): indicators of indicators, structure across timeframes, the
-      partner ([pair design](pair-design.md)), a slower timeframe.
-- [ ] **More products** (item 15): ES with NQ; YM, RTY, and PL need a storage remedy first
-      ([decision 25](roadmap.md#decisions-of-november-20-2026)).
+- [ ] **Six years of GC and SI** (item 12).
+- [ ] **`book_1s`** and **the scheduled-news table** (item 13).
+- [ ] **ES** (item 14), with one-second values stored where they are read.
+- [ ] **More inputs and the named variants** (item 15).
 - [ ] **The final evaluation on the holdout** (item 16). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
+- [ ] **After approval:** remove the label stages, `benchmark.py`, and the candidate replay
+      once part B runs in the engine; cut the roadmap to the current plan.
 
 ## Also open
 

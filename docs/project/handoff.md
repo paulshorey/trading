@@ -44,10 +44,10 @@ for judging a result that were written before the data that will test them
 decisions; three timeframes with one job each; and a decision model that is given a side by
 an event and learns whether to take the trade.
 
-**The next tasks**, in order ([build order](roadmap.md#build-order), rewritten November 23):
-item 7, the 3 ATR scale and the structure code; item 8, the first decision model as the
-yardstick; then the base changes and the second pass on RSI and net flow
-([how](#next-steps)). Items 1 to 6 are done.
+**The next tasks** ([build order](roadmap.md#build-order), proposed November 23 and waiting
+for Paul's review): the first decision model's forecast as the yardstick, the engine changes
+that let a strategy go long, short, or flat with short limit entries, then the 3 ATR scale
+and the second pass on RSI and net flow ([how](#next-steps)). Items 1 to 6 are done.
 
 **This machine is the starting point** (Paul, November 23). Nothing more is needed from the
 first one: `fingerprint-old-machine.txt` was not copied and will not be compared. The
@@ -297,35 +297,21 @@ reclaim window and label horizon, and a migration that copies the tables (`0008`
 pattern). A new kind of stage reads `Timeframe.frame(products)` and is registered for every
 timeframe in `pipeline.py`.
 
-**The plan changed on November 23** ([decisions 29 to 33](roadmap.md#decisions-of-november-23-2026)):
-no model predicts reversals, so there are no model stages, no stacked training, and one
-trained model, the decision model. Swings are the rule-based ATR zigzag that
-`stage_step_pivot.py` already is; structure is computed from confirmed swings and the
-current price; a second pass does the same on RSI and net flow.
+**The plan changed on November 23.** Paul withdrew the trained reversal model
+([decisions 29 to 34](roadmap.md#decisions-of-november-23-2026)): swings and structure are
+computed by rule, a second pass does the same on RSI and net flow, and the one trained
+model names a position (long, short, or flat). A [review](roadmap.md#review-of-november-23-2026)
+the same day proposed a new order and a [spec for the first decision model](yardstick-spec.md).
+**Both are proposals: wait for Paul's review before building from them.** Three things are
+his to decide: the spec's target and policy, the order, and how the daily cap, the position
+size, and the bracket are made to fit (one hourly ATR risks more than the cap allows).
 
-**7. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
-variants; a migration only if the variant registry needs rows), and one structure code per
-scale. `progress` is already the confidence of the open swing. Check the count of confirmed
-swings a year at 3 ATR on each timeframe and record it: the slow one will have few.
-
-**8. The yardstick decision model.** Write the spec first: decision rows (every middle row
-is too correlated; sample about one window apart, or use rows where a structure code
-changes), the target from a bracket trade on each side after costs, the short limit entry
-([decision 28](roadmap.md#decisions-of-november-23-2026)), and the walk-forward blocks.
-Store runs and would-be trades in PostgreSQL before it, so every variant is counted.
-
-**9. Base changes, in one rebuild.** The rolling net-flow series (the second pass needs it),
-the ATR floor (measure how many rows change), and the `source.py` change.
-
-**10. The second pass.** The swing code takes a source in its own units
-([contract](pivot-structure-design.md#swing-sources-price-and-rsi)). Measure the row-to-row
-noise of RSI and of net flow on each timeframe and freeze a threshold above it; then the
-agreement codes against price.
-
-**11 to 13.** The book between trades (freeze the inputs first; book events are 20 to 60
-times the trades), the scheduled-news table, and six years of GC and SI with the named
-checks on the untouched years first. A six-year build is a few hours, so the order of the
-items before it is set by what is learned, not by the cost of rebuilding.
+In the proposed order: item 7, the forecast and the horizon map, needs no engine change.
+Item 8 changes the engine (`engine.py`, `strategies.py`, `execution.py`): none of these is in
+a stage's identity, so no stored row goes stale, but whole-session and second-by-second runs
+must still be identical (`research verify`). Item 9 adds `3.0` to
+`stage_step_pivot.MULTIPLIERS` and a structure code. Items 10 and 11 need a rebuild; a
+six-year build is a few hours, so the order is set by what is learned, not by rebuild cost.
 
 Also open, in no fixed order ([todo](todo.md)): store runs and would-be trades in
 PostgreSQL (needed before item 8, so that every variant is counted); a session quality

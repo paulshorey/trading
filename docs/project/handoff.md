@@ -305,8 +305,6 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 For Paul. His decisions are in the [roadmap](roadmap.md#decisions).
 
-1. **The trend gate's definition** ([spec](yardstick-spec.md#part-b-the-policy-after-costs)):
-   "no timeframe's 3 ATR trend against the side" is proposed; Paul has not confirmed it.
 2. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
    its rows also stay out of indicator history is still open.
 3. **The live contract** (full-size or micro), which sets the cost model. Until it is

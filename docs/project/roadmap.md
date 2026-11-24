@@ -289,9 +289,10 @@ and 34 (replaced by 35), 19 (replaced by 36).
     every `1m@1s` row; there is no separate decision timeframe. The slower timeframes give
     the trend and can forbid a trade: when the fast timeframe looks up and a slower one is
     down, no long is opened. "Up" and "down" are each timeframe's `trend` on its 3 ATR
-    zigzag (a higher high and a higher low, or the mirror). The gate is applied by the
-    policy, and the model also reads the same trends as inputs; a run without the gate shows
-    what it does.
+    zigzag (a higher high and a higher low, or the mirror). A long needs no timeframe down
+    and a short none up; requiring all to agree is the stricter rule to switch to if this
+    one lets too many bad trades through. The gate is applied by the policy, and the model
+    also reads the same trends as inputs; a run without the gate shows what it does.
 39. **The bracket** (Paul, November 24). Stop and target are the same distance from the
     entry, 1.5 slow ATRs, with no time limit; a position still open is closed before the
     day's close. Measured on January to August 2026, from starts every 15 minutes: price

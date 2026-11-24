@@ -14,7 +14,6 @@ the [build log](build-log.md).
 - [x] **Remove the withdrawn design** (November 23): the label stages and tables, the
       benchmark, the candidate replay; the roadmap cut to the current plan
       ([record](build-log.md#the-withdrawn-design-removed-november-23-2026)).
-- [ ] **Paul: confirm the trend gate** of the [first decision model](yardstick-spec.md#part-b-the-policy-after-costs).
 - [ ] **The engine makes position decisions** (item 7): buy, sell, or nothing, one step at a
       time; a closing decision exits at the market; limit entries that last seconds with the
       back-of-queue fill rule; the stop's timeframe named by the strategy; risk and the daily

@@ -2,8 +2,7 @@
 
 **Proposed November 23, 2026 and revised for Paul's decisions 35 to 39 (November 23 and
 24). Nothing is built and nothing has been run.** Paul has set the closing rules, the
-bracket, and where decisions are made; the definition of the trend gate waits for his
-confirmation. Whatever he changes is changed here
+bracket, where decisions are made, and the trend gate. Whatever he changes is changed here
 before any outcome is read. It is build-order item 9 of the [roadmap](roadmap.md#build-order) and
 step 6 of the process; Part B needs the engine of item 7 and the 3 ATR scale of item 8.
 
@@ -103,8 +102,9 @@ Each is a variant of its own, written into this page before it is run.
 - **Mirrored training rows.** Each row is also given to the model with every directional
   feature and the label negated, which forces the model to treat rises and falls alike. It
   needs each feature declared as directional or not.
-- **Other multiples of the slow ATR** for the bracket (1 and 2), and a gate that needs every
-  timeframe's trend to agree with the side, not only none against it.
+- **Other multiples of the slow ATR** for the bracket (1 and 2).
+- **A stricter gate** that needs every timeframe's trend to agree with the side, not only
+  none against it: Paul's choice if the first gate lets too many bad trades through.
 
 ## What has to be built
 

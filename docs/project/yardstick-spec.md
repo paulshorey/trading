@@ -302,6 +302,7 @@ recorded as a change made after a result was seen.
 | The yardstick | `trees_coarse_calibrated`: `trees_coarse` times this slope |
 | Kept as recorded | `trees_coarse_shrunk`, with the first run's slope: blocks on both sides, every row counting once |
 | Reported | For each test month, all four slopes: forward or two-sided, by date or by row |
+| No longer refitted | `trees_shrunk`. Its slope was zero in every month of run 4, so it was the flat forecast. Runs from 7 on report `trees` unshrunk and calibrate `trees_coarse` only |
 
 **Result** (run 7, on the rows rebuilt after the review; `~/yardstick-review.json`). All
 four slopes are zero in every month, so neither the direction of the fit nor the weighting

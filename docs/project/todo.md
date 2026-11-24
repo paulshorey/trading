@@ -20,10 +20,9 @@ the [build log](build-log.md).
 - [x] **Make the forecast no worse than `flat`** (November 24): the slope on held-out
       training dates is zero, so the yardstick stays flat
       ([results](yardstick-spec.md#results-of-the-variant-november-24-2026)).
-- [ ] **Base changes, in one rebuild** (item 10): a CVD that runs through a contract's life
-      without session resets; the ATR normalizer floored at the spread
-      ([finding](build-log.md#pr-d-results-swings)); the `source.py` change under
-      [housekeeping](#housekeeping).
+- [x] **Base changes, in one rebuild** (item 10; November 24): a CVD that runs through a
+      contract's life, the ATR normalizer floored at the spread, the roll warm-up count
+      ([record](build-log.md#base-changes-a-continuous-cvd-the-atr-floor-the-roll-warm-up-november-24-2026)).
 - [ ] **Swings and structure of RSI and of CVD**, each sized by its own ATR, and the codes
       comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
       each series' row-to-row noise and freeze its floor first
@@ -84,11 +83,6 @@ the [build log](build-log.md).
 
 ## Housekeeping
 
-- [ ] **At the next `source.py` rebuild**, give `HistoricalSource` the roll warm-up count
-      apart from its warm-up list, and skip warm-up sessions outside the downloaded data, so
-      a download that starts partway through a session cannot make a backtest differ from
-      storage ([edge case](build-log.md#full-scale-checks-after-pr-c2)). `source.py` is in
-      every stage's identity, so do it with the rebuild of the timeframe parameter.
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to
       Ubuntu 26.

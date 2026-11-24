@@ -98,6 +98,9 @@ points of price, ATR multiples, bounded ratios, oscillators, logs relative to a
 trailing average, or elapsed time, declared with `strategy_core.features.Unit`. Raw
 prices belong only in data handling and execution: order prices, fills, and P&L. Every
 new feature must pass the scale-invariance test (all prices or all sizes multiplied).
+A value in ATRs divides by the ATR floored at the spread (`strategy_core.normalizer`,
+`candle_*.norm_atr_bps`), never by the bare ATR, which decays to nothing in a market that has
+stopped moving. A series other than price (RSI, CVD) is measured in its own ATR.
 
 ## Sliding windows count rows, not clock time (required)
 

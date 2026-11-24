@@ -81,7 +81,7 @@ is one stored table with its own version.
 
 | Step | Stages | State | What is missing |
 | --- | --- | --- | --- |
-| 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`; planned `book_1s` | Built from trades | The book between trades: the data reaches the engine, no stage reads it. A net-flow series that does not reset at the session open |
+| 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`; planned `book_1s` | Built from trades, with a CVD that runs through each contract's life | The book between trades: the data reaches the engine, no stage reads it |
 | 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Built on three timeframes, with row counting and per-phase indicators; a timeframe is a parameter | A session-long window for a view of several days |
 | 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
@@ -352,7 +352,7 @@ seeing a result.
 
 ## Build order
 
-Rewritten November 23, 2026; items 7 to 9 were done on November 24. Each item names the step
+Rewritten November 23, 2026; items 7 to 10 were done on November 24. Each item names the step
 of the process it advances.
 
 **Done.** (1) The after-cost replay of fast candidates. (2) Sparse storage of the fast swing
@@ -362,16 +362,11 @@ engine makes position decisions: buy, sell, or nothing at every second, closing 
 limit entries that last seconds, a bracket without a time limit, risk as a percentage. (8) A
 swing scale at 3 ATR and a structure code per scale. (9) The first decision model
 ([results](yardstick-spec.md#results-november-24-2026)): no skill at the bracket's horizon,
-a small one a minute ahead, every policy cell a loss. What each built and found is in the
+a small one a minute ahead; shrunk to what holds outside its training sessions, it stays
+flat. (10) Base changes: a CVD that runs through a contract's life, the ATR normalizer
+floored at the spread, the roll warm-up count. What each built and found is in the
 [build log](build-log.md).
 
-10. **Base changes, in one rebuild** (step 1). A CVD that does not start again at the day's
-    open: today's running total (`session_cvd`) begins at zero after every daily break, so
-    its level says how long the day has run as much as who is trading, and a swing of it
-    cannot cross a break. The new `cvd` runs through the life of a contract; both stay
-    stored. (Net flow over a window already exists as a ratio, `delta_ratio`.) Also the ATR
-    normalizer floored at the spread, and the `source.py` change in the
-    [to-do list](todo.md#housekeeping).
 11. **The second pass: swings and structure of RSI and of CVD** (step 5;
     [decision 41](#decisions)), on every timeframe, with the swing code that price uses.
     Each series gets its own ATR: per phase, the Wilder average of the series' true range

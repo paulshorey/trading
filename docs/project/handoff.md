@@ -27,16 +27,16 @@ decides buy, sell, or nothing at every second; the slower timeframes forbid a tr
 their trend; the bracket is 1.5 slow ATRs each way with no time limit; risk is a percentage
 of the account.
 
-**The next tasks** ([build order](roadmap.md#build-order)): item 10, the base changes (a
-net-flow series that does not reset, the ATR floor); item 11, the second pass on RSI and net
-flow; item 12, the swing mode ([decision 40](roadmap.md#decisions)); then six years of
-data ([how](#next-steps)).
+**The next tasks** ([build order](roadmap.md#build-order)): item 11, the zigzag and structure
+of RSI and of CVD, each sized by its own ATR ([decision 41](roadmap.md#decisions)); item 12,
+the swing mode ([decision 40](roadmap.md#decisions)); then six years of data
+([how](#next-steps)).
 
 **The state of this machine** (November 24): lint and tests pass, `ingest plan GC SI`
-reports every contract `current`, and the database (about 165 GB) holds one year of GC and
-SI on three timeframes. `~/fingerprint-new.txt` is the baseline that later rebuilds are
-compared with; it predates the 3 ATR scale, so the swing tables differ from it
-([how it was checked](build-log.md#the-new-machine-november-23-2026)). One year of MBP-1 for
+reports every contract `current`, and the database holds one year of GC and SI on three
+timeframes (288 GB with the dead space of the last rebuild; about 170 GB of rows).
+`~/fingerprint-new.txt` is the baseline that later rebuilds are compared with, taken after
+the base changes of November 24. One year of MBP-1 for
 GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
 in cloud storage; they return, with NQ and five more years of GC and SI, later.
 
@@ -271,11 +271,14 @@ fits, and reports; `research policy RUN GC SI` replays the policy cells with tha
 models. Both write `research.run`. Measure skill over all rows together, never within a
 trade date ([why](yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
 
-**10 and 11. Base changes, then the second pass.** The rolling net-flow series, the ATR
-floor (measure how many rows change), and the `source.py` change, in one rebuild. Then the
-swings of RSI and net flow: measure each series' row-to-row noise and freeze a threshold
-above it first ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)). The
-swing stage already takes the 3 ATR scale and writes `structure`.
+**11. The second pass** ([decision 41](roadmap.md#decisions)). The base rows now carry
+`cvd`, a running total that never restarts, and values in ATRs divide by the floored
+normalizer (`normalizer.py`, `candle_*.norm_atr_bps`). For each of RSI and CVD: its own ATR,
+per phase, as the Wilder average of the series' true range over its window; the swing code
+with that ATR in place of price's ([contract](pivot-structure-design.md#swing-sources-price-and-rsi));
+a floor above the series' row-to-row noise, measured and frozen in a spec first; then the
+codes that compare the three structures. They are new stages, so nothing stored is rebuilt.
+RSI has one value a row, where price and CVD have one a trade.
 
 **The one-minute finding points at entries.** The book between trades (item 14) is judged
 there: does it raise the one-minute skill, and does a rule that uses it get better fills

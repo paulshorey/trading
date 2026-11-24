@@ -6,6 +6,53 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Base changes: a continuous CVD, the ATR floor, the roll warm-up (November 24, 2026)
+
+Build-order item 10, step 1 of the process. Three changes to base rows and to what every
+stage reads, made together because each forces a rebuild of every table.
+
+- **`cvd`**, on the rows of every step (`bar_1s`, `bar_10s`, `bar_1m`): buy minus sell volume
+  through the life of a contract. `session_cvd` restarts at each session open; `cvd` never
+  does, so a swing of it can cross the daily break ([decision 41](roadmap.md#decisions)).
+  It is NULL only on a missing row. Both stay stored.
+- **The ATR floor** ([decision 23](roadmap.md#decisions); `strategy_core/normalizer.py`).
+  Every value in ATRs now divides by the larger of the ATR and the last sampled book spread:
+  the window features, the indicators, the statistics, the volatility family, and the frozen
+  ATR of the swings. `atr_bps` and `atr_price` are unchanged, and where the floor does not
+  bind every value is unchanged bit for bit. The normalizer is stored as
+  `candle_*.norm_atr_bps`, which is context and not a model input.
+- **The roll warm-up** (`source.py`): a source knows how many sessions a contract replays
+  after a roll apart from its warm-up list, and a session that was downloaded only in part
+  is left out of a backtest's warm-up, as storage leaves it out. No download held has such
+  a session.
+
+**How many rows the floor changes** (rows where the spread is above the ATR):
+
+| Timeframe | GC, front sessions | SI, front sessions | GC, every stored row | SI, every stored row |
+| --- | ---: | ---: | ---: | ---: |
+| `1m@1s` | 251,389 of 21.1 million (1.2%) | 724,538 (3.4%) | 28% | 33% |
+| `10m@10s` | 5,674 of 2.1 million (0.3%) | 13,703 (0.6%) | 4% | 8% |
+| `1h@1m` | 57 of 350,941 | 254 | 1.5% | 2.0% |
+
+Nearly all of it is in the thinly traded sessions before a contract becomes the front one,
+where the one-minute ATR was as small as a 10^20th of the spread. On front sessions the fast
+timeframe is the one touched: the spread is wider than a one-minute ATR in one row in thirty
+for SI.
+
+**Build and checks**
+
+- Migration `0013_cvd_and_atr_floor`; `research ingest run GC SI --rebuild --workers 8`,
+  run 4, 57 minutes, every table; `ingest plan GC SI` reports all 12 contracts `current`.
+  The database is 288 GB, about 120 GB of it the rewritten rows' dead space
+  (`VACUUM FULL` gives it back; the disk has 3 TB free).
+- `cvd` is set on 351,780 of the 353,100 front minute rows of each product (the rest are
+  missing rows).
+- The first decision model on the rebuilt rows (run 6): unchanged. `trees` 0.051 (-0.027 to
+  0.126), its slope zero in all four months; the yardstick stays flat.
+- Tests: strategy-core 154, backtest-runner 57. New: the floor and the carried spread on
+  hand-built rows; a market that stops moving, where the unfloored value grows and the
+  floored one stays within 1.5 spreads; `cvd` across a session open and missing data.
+
 ## A forecast that is no worse than flat (November 24, 2026)
 
 The first decision model forecast boldly and wrongly, so its policy traded noise. Fixed as a

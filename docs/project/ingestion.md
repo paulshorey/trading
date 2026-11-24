@@ -367,6 +367,10 @@ bounded transfer timeouts and a nonzero exit for incomplete runs remain reliabil
   the gap are unknown.
 - **Session CVD** (`bar_1s.session_cvd`) runs from the calendar session's open and is NULL
   from the first missing second of that session on. Unknown-side volume stays out of it.
+- **The contract's CVD** (`cvd`, on every step's rows) is the same running total from the
+  contract's first stored second, never restarted at a session open, so a swing of it can
+  cross the daily break. It is NULL only on a missing row; what traded unseen in missing
+  data is not in it, so a reader starts a new segment there, as the swing stages do.
 - **Exact base statistics.** Prices, spreads, the effective-spread numerator, depth sums,
   and times are integers (Databento fixed point); every field merges into minutes and
   windows by sums, extremes, first and last values, or the path rules below. Ratios are
@@ -436,7 +440,7 @@ Definitions, units, and NULL rules are in the code and the column comments:
 | Handoff entries                                                                               | Stored as                                                                                                                                                                                                         |
 | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `trade_ohlc`, `trade_volume`, `trade_record_count`, `trade_time_bounds`, `price_quantity_sum` | `bar_1s`: OHLC, high/low times, first/last times, volume, trades, `pv`                                                                                                                                            |
-| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`                                                                                                                              |
+| `aggressor_volume`, `aggressor_record_count`, `volume_delta`, `cvd_bar_path`, `session_cvd`   | buy/sell volume and trades (unknown = rest), `delta_high`/`delta_low`, `session_cvd`, `cvd`                                                                                                                            |
 | `trade_size_mean_std`, `trade_size_min_max`, `trade_size_concentration`                       | `size_sq`, `max_size`; features `size_hhi`, `max_size_ratio`, `size_side_ratio`                                                                                                                                   |
 | `trade_price_path_variation`, `aggressor_transition_counts`                                   | `path_abs`, `upticks`, `downticks`, `side_pairs`, `side_switches`, `first_side`, `last_side`, `drawdown`, `drawup`, `extreme_order`; features `path_*`, `uptick_ratio`, `side_switch_ratio`                       |
 | `beyond_opposite_best_volume_pct`                                                             | `sweep_buy_volume`, `sweep_sell_volume`; `sweep_ratio`, `sweep_delta_ratio`                                                                                                                                       |

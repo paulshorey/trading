@@ -94,7 +94,10 @@ class Engine:
         self.reports: dict[str, AggregationReport] = {}
         self.contracts: list[str] = []
 
-    def process(self, chunk: MarketChunk) -> ChunkResult:
+    def process(self, chunk: MarketChunk, frame: FeatureFrame | None = None) -> ChunkResult:
+        """Process one chunk. `frame` is the chunk's feature rows when another engine already
+        computed them for the same chunks and feature settings (several policies compared on
+        the same data); otherwise this engine's own pipeline computes them."""
         if chunk.contract != self.contract:
             self.switch_contract(chunk.contract)
         c = self.config
@@ -108,22 +111,9 @@ class Engine:
             close_delay=c.close_delay,
         )
         self.reports.setdefault(chunk.session, AggregationReport()).add(agg.report)
-        frame = self.pipeline.update(chunk)
+        if frame is None:
+            frame = self.pipeline.update(chunk)
         n = len(frame)
-        signals, contracts = np.zeros(n, np.int8), np.zeros(n, np.int64)
-        closes = np.zeros(n, bool), np.zeros(n, bool)
-        if chunk.tradable and n:
-            signals = self.strategy.signals(frame.features).astype(np.int8)
-            close = self.calendar.close_after(frame.end)
-            signals[(close - frame.end) <= c.flat_before_close + self.entry.cutoff_s * NS] = 0
-            atr = bracket_atr(frame.context, self.strategy.bracket)
-            signals[~np.isfinite(atr)] = 0
-            contracts = self.sim.size(atr)
-            self.unsized += int(np.count_nonzero(signals[contracts == 0]))
-            signals[contracts == 0] = 0
-            if hasattr(self.strategy, "closes"):
-                closes = self.strategy.closes(frame.features)
-        self.signals += int(np.count_nonzero(signals))
         view = ExecView.from_aggregation(
             chunk.trades,
             agg.order,
@@ -135,12 +125,40 @@ class Engine:
         )
         if view.n:
             self.ts_floor = int(view.ts_max[-1])
+        signals, contracts = np.zeros(n, np.int8), np.zeros(n, np.int64)
+        closes = np.zeros(n, bool), np.zeros(n, bool)
+        if chunk.tradable and n:
+            atr = bracket_atr(frame.context, self.strategy.bracket)
+            seen = frame.features | self.costs(view, frame.end, atr)
+            signals = self.strategy.signals(seen).astype(np.int8)
+            close = self.calendar.close_after(frame.end)
+            signals[(close - frame.end) <= c.flat_before_close + self.entry.cutoff_s * NS] = 0
+            signals[~np.isfinite(atr)] = 0
+            contracts = self.sim.size(atr)
+            self.unsized += int(np.count_nonzero(signals[contracts == 0]))
+            signals[contracts == 0] = 0
+            if hasattr(self.strategy, "closes"):
+                closes = self.strategy.closes(seen)
+        self.signals += int(np.count_nonzero(signals))
         closed = self.execute(view, frame, signals, contracts, closes)
         if view.book.n:
             book = view.book
             self.book_floor, self.book_recv = int(book.ts_max[-1]), book.recv_max
             self.quote = book.last
         return ChunkResult(frame, signals, view, closed)
+
+    def costs(self, view: ExecView, ends: np.ndarray, atr: np.ndarray) -> dict[str, np.ndarray]:
+        """What a trade decided at each row would cost, in R (its stop distance), for the
+        strategy's decision and never as a model input: `exec.spread_r`, the spread of the
+        book the engine holds at the decision (NaN without a usable book), and
+        `exec.commission_r`, both commissions."""
+        tick = self.product.tick_size
+        with np.errstate(invalid="ignore"):
+            stop = self.sim.stop_ticks(atr)
+            bid, ask, ok = view.book.known_many(ends)
+            spread = np.where(ok, (ask - bid) / tick, np.nan) / stop
+            commission = 2 * self.config.commission_per_contract / (stop * self.product.tick_value)
+        return {"exec.spread_r": spread, "exec.commission_r": commission}
 
     def book_view(self, chunk: MarketChunk, ends: np.ndarray) -> BookView:
         """The chunk's book events by slot, then receive order, as a live session releases
@@ -218,14 +236,21 @@ class Engine:
 
     def settle(self, trade: dict, pos: Position) -> None:
         """Add a closed trade to its session's result, and stop opening positions for the rest
-        of the session once the daily loss limit is reached (with an account size)."""
+        of the session once the daily loss limit is reached: a share of the account, or without
+        an account size a number of R after commission."""
         c = self.config
-        if c.account_usd is None:
+        if c.account_usd is None and c.daily_loss_r is None:
             return
         close = pos.force_exit_ns + c.flat_before_close  # the session's close names it
-        total = self.session_pnl.get(close, 0.0) + trade["pnl_usd"]
+        if c.account_usd is not None:
+            result, limit = trade["pnl_usd"], c.account_usd * c.daily_loss_pct / 100
+        else:
+            risk = abs(pos.entry_px - pos.stop_px) / self.product.tick_size
+            result = trade["pnl_usd"] / (risk * self.product.tick_value * pos.contracts)
+            limit = c.daily_loss_r
+        total = self.session_pnl.get(close, 0.0) + result
         self.session_pnl[close] = total
-        if -total >= c.account_usd * c.daily_loss_pct / 100 and close not in self.limited:
+        if -total >= limit and close not in self.limited:
             self.limited.append(close)
             self.blocked_until = max(self.blocked_until, close)
 

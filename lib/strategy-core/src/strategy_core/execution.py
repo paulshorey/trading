@@ -77,6 +77,9 @@ class ExecutionConfig:
     account_usd: float | None = None
     risk_pct: float = 0.5
     daily_loss_pct: float = 2.0
+    # The same limit in units of risk, for runs without an account size: no position is opened
+    # in a session once its closed trades have lost this many R after commission (None: none).
+    daily_loss_r: float | None = None
 
     def __post_init__(self):
         if type(self.contracts) is not int or not 1 <= self.contracts <= 100:
@@ -87,6 +90,8 @@ class ExecutionConfig:
             raise ValueError('passive_fill must be "queue" or "through"')
         if self.account_usd is not None and not 0 < self.account_usd <= 1e12:
             raise ValueError("account_usd must be positive, or None")
+        if self.daily_loss_r is not None and not 0 < self.daily_loss_r <= 1000:
+            raise ValueError("daily_loss_r must be positive, or None")
         for name in ("risk_pct", "daily_loss_pct"):
             if not 0 < getattr(self, name) <= 100:
                 raise ValueError(f"{name} must be in (0, 100]")
@@ -271,6 +276,34 @@ class BookView:
         """The latest book the engine holds when the slot ending at `end` closes."""
         k = int(np.searchsorted(self.slot_end, end, side="right")) - 1
         return self.held(self.quote(k), end - 1)
+
+    def known_many(self, ends: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """`known` for many slot ends at once: the bid and ask the engine holds when each slot
+        closes, and whether that book is usable (two-sided, not flagged, and an observation
+        of covered data)."""
+        n = len(ends)
+        k = np.searchsorted(self.slot_end, ends, side="right") - 1
+        s = np.where(k >= 0, self.state[np.maximum(k, 0)], -1) if self.n else np.full(n, -1)
+        bid, ask = np.full(n, UNDEF_PRICE, np.int64), np.full(n, UNDEF_PRICE, np.int64)
+        flagged, at = np.zeros(n, bool), np.zeros(n, np.int64)
+        has = s >= 0
+        if has.any():
+            bid[has], ask[has] = self.b.bid[s[has]], self.b.ask[s[has]]
+            flagged[has] = (self.b.flags[s[has]] & F_MAYBE_BAD_BOOK) > 0
+            at[has] = self.ts_max[k[has]]
+        if self.before is not None and not has.all():
+            q = self.before
+            bid[~has], ask[~has], flagged[~has], at[~has] = q.bid, q.ask, q.unreliable, q.ts_event
+        ok = (bid != UNDEF_PRICE) & (ask != UNDEF_PRICE) & (bid <= ask) & ~flagged
+        if self.before is None:
+            ok &= has
+        if self.cover is not None:
+            time = ends - 1
+            i = np.searchsorted(self.cover[:, 0], time, side="right") - 1
+            j = np.maximum(i, 0)
+            inside = (i >= 0) & (time < self.cover[j, 1]) & (at >= self.cover[j, 0])
+            ok &= inside if len(self.cover) else False
+        return bid, ask, ok
 
     @property
     def last(self) -> Quote | None:

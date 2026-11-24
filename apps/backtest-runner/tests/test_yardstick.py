@@ -157,3 +157,75 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
 def test_the_holdout_is_refused():
     with pytest.raises(ValueError, match="holdout"):
         yardstick.run(["GC"], date(2026, 8, 1), date(2026, 9, 1))
+
+
+def test_the_policy_opens_beyond_the_cost_and_closes_by_its_rule():
+    from backtest_runner import policy
+
+    f = {
+        policy.FORECAST: np.array([0.5, -0.5, 0.02, -0.02, 0.5, 0.5, 0.0]),
+        "exec.spread_r": np.array([0.03, 0.03, 0.03, 0.03, 0.4, np.nan, 0.03]),
+        "exec.commission_r": np.full(7, 0.01),
+        "slow": np.array([-1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    }
+    gated = policy.ModelPolicy("unused.joblib", gate=("slow",))
+    free = policy.ModelPolicy("unused.joblib", gate=())
+    # beyond the cost of 0.04 R: a buy, a sell; inside it: nothing; a spread over a quarter of
+    # R, or no usable book: nothing. The slow trend is down in the first two rows: no long
+    assert free.signals(f).tolist() == [1, -1, 0, 0, 0, 0, 0]
+    assert gated.signals(f).tolist() == [0, -1, 0, 0, 0, 0, 0]
+    assert policy.ModelPolicy("unused.joblib", threshold=0.25, gate=()).signals(f).tolist() == [
+        1, -1, 1, -1, 0, 0, 0,
+    ]  # fmt: skip
+    hold, turn, opposite = (
+        policy.ModelPolicy("unused.joblib", close=c, gate=("slow",)).closes(f)
+        for c in policy.CLOSES
+    )
+    assert not hold[0].any() and not hold[1].any()
+    # turn: a long is closed once the forecast is not above zero, whatever the gate or the book
+    assert turn[0].tolist() == [False, True, False, True, False, False, True]
+    assert turn[1].tolist() == [True, False, True, False, True, True, True]
+    # opposite: only by the forecast that would open the other side
+    assert opposite[0].tolist() == [False, True, False, False, False, False, False]
+    # (a wide book never blocks closing: 0.5 is beyond even the cost of the 0.4 R spread)
+    assert opposite[1].tolist() == [True, False, False, False, True, False, False]
+    assert len(policy.CELLS) == 8 and policy.CELLS[0] == ("hold", "cross", True)
+    assert (
+        policy.BRACKET.max_hold_s is None and policy.BRACKET.target_atr == policy.BRACKET.stop_atr
+    )
+    with pytest.raises(ValueError, match="close must be"):
+        policy.ModelPolicy("unused.joblib", close="flip")
+
+
+def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():
+    from backtest_runner import policy
+
+    key = ("hold", "cross", True, "base")
+    may = (date(2026, 5, 4) - BASE).days
+
+    def part(product, r, day):
+        cell = {
+            "summary": {"signal_rows": 9, "cancelled_orders": 0, "expired_orders": 1,
+                        "sessions_at_daily_limit": 0, "exit_reasons": {"stop": len(r)}},
+            "day": np.array(day), "side": np.array([1, -1][: len(r)], np.int8),
+            "r": np.array(r), "stop_ticks": np.full(len(r), 300.0),
+            "flagged_exit": np.zeros(len(r), bool),
+        }  # fmt: skip
+        return {"product": product, "month": 5, "days": [may, may + 1, may + 2],
+                "flagged_sessions": [], "cells": {key: cell}}  # fmt: skip
+
+    out = policy.cell_report([part("GC", [1.0, -1.0], [may, may]), part("SI", [-1.0], [may + 2])],
+                             key, ["GC", "SI"])  # fmt: skip
+    assert out["trade_dates"] == 3 and out["all"]["trades"] == 3 and out["expired_orders"] == 2
+    # commission: $5 on a stop of 300 ticks at $10 (GC) or $25 (SI)
+    gc, si = 5 / 3000, 5 / 7500
+    assert out["GC"]["net_r"] == pytest.approx(-2 * gc, abs=1e-3)
+    assert out["all"]["net_r_per_trade_date"]["mean"] == pytest.approx(
+        (-2 * gc - 1 - si) / 3, abs=1e-4
+    )
+    assert out["buys"]["trades"] == 2 and out["sells"]["trades"] == 1
+    assert out["by_month"]["2026-05"]["trades"] == 3 and out["by_month"]["2026-06"]["trades"] == 0
+    # micro: $2.50 a round trip on a stop of $300 (MGC) or $1,500 (SIL); $500 buys one MGC, no SIL
+    assert out["micro_costs"]["net_r"] == pytest.approx(-2 * 2.5 / 300 - 1 - 2.5 / 1500, abs=1e-3)
+    assert out["account_100k_whole_micro_contracts"]["trades_too_large_for_the_risk"] == 1
+    assert out["daily"].tolist() == pytest.approx([-2 * gc, 0.0, -1 - si])

@@ -848,3 +848,43 @@ def test_the_trend_gate_forbids_opening_against_a_named_trend_and_nothing_else()
     assert short_ok.tolist() == [False, False, False, False, False]
     assert trend_gate(f, ("slow",), 5)[1].tolist() == [False, True, True, True, False]
     assert all(v.all() for v in trend_gate(f, (), 5))
+
+
+def test_the_book_held_at_many_slot_ends_equals_the_book_held_at_each():
+    t = random_trades(T0, T0 + HOUR, seed=4, rate=3)
+    book = random_book(t, seed=9, recv_jitter_ns=300_000_000)
+    cover = np.array([[T0, T0 + 1000 * S], [T0 + 1200 * S, T0 + HOUR]])  # a gap in the data
+    view = exec_view(t, book).book
+    for held in (view, BookView(view.b, view.slot_end, coverage=cover), BookView.empty()):
+        ends = T0 + np.arange(1, 3601, 7) * S
+        bid, ask, ok = held.known_many(ends)
+        for i, end in enumerate(ends.tolist()):
+            quote = held.known(end)
+            usable = quote is not None and quote.usable
+            assert bool(ok[i]) == usable, end
+            if usable:
+                assert (int(bid[i]), int(ask[i])) == (quote.bid, quote.ask)
+    assert ok.sum() == 0  # no events: no book
+
+
+def test_a_strategy_sees_what_a_trade_would_cost_in_r_at_each_row():
+    cal = calendar((0, 1))
+    t = random_trades(T0, T0 + HOUR, seed=4, rate=3)
+    chunk = session_chunk(cal, t, int(cal.opens[0]), int(cal.closes[0]))
+    seen = {}
+
+    class Watching(OneShot):
+        def signals(self, f):
+            seen.update(f)
+            return super().signals(f)
+
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100, order_latency_ms=50)
+    engine = Engine(GC, cal, Watching(), config)
+    frame = engine.process(chunk).frame
+    assert "exec.spread_r" not in frame.features  # a cost is not a model input
+    spread, commission = seen["exec.spread_r"], seen["exec.commission_r"]
+    atr = frame.context["atr"]
+    i = int(np.flatnonzero(np.isfinite(atr) & np.isfinite(spread))[-1])
+    stop = max(round(engine.strategy.bracket.stop_atr * atr[i] * 1e9 / GC.tick_size), 1)
+    assert commission[i] == pytest.approx(2 * 2.5 / (stop * GC.tick_value))
+    assert spread[i] > 0 and spread[i] * stop == pytest.approx(round(spread[i] * stop))  # ticks

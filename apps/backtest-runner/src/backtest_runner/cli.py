@@ -60,6 +60,15 @@ def main() -> None:
     p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
     p.add_argument("--rebuild", action="store_true", help="Build the dataset again")
     p.add_argument("--no-horizons", action="store_true", help="Skip the horizon map")
+    p = sub.add_parser(
+        "policy",
+        help="The first decision model's policy in the engine (docs/project/yardstick-spec.md)",
+        description="Replays every policy cell of the spec on the test months with the models "
+        "of one `research yardstick` run. The run is recorded in research.run.",
+    )
+    p.add_argument("model_run", type=int, help="The yardstick run whose models decide")
+    p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
+    p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
     args = parser.parse_args()
@@ -124,6 +133,15 @@ def main() -> None:
                 log=lambda line: print(line, file=sys.stderr, flush=True),
                 rebuild=args.rebuild,
                 horizons=not args.no_horizons,
+            )
+        elif args.command == "policy":
+            from . import policy
+
+            result = policy.run(
+                args.model_run,
+                args.products,
+                args.workers,
+                log=lambda line: print(line, file=sys.stderr, flush=True),
             )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)

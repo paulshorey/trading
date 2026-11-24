@@ -48,7 +48,7 @@ once, for any timeframe. The state of each step is in the
    whether their structure agrees with price's or diverges from it, within and across
    timeframes. This is the second pass: it reads the indicators of step 3.
 6. **The decision model.** The one trained model. It reads everything above and decides
-   buy, sell, or nothing at each decision row. The position is long, flat, or short and moves
+   buy, sell, or nothing at every second. The position is long, flat, or short and moves
    one step per decision, so the opposite decision closes an open position and cancels its
    orders, whatever its bracket says. Its inference makes the backtest and live decisions. It is
    judged by one portfolio's results after costs. A first version is trained early, on what
@@ -58,9 +58,10 @@ once, for any timeframe. The state of each step is in the
 Each part has a role ([structure](docs/project/roadmap.md#how-the-analysis-is-structured)):
 steps 1 to 3 describe the **state** of the market; swings and structure describe where
 price and its derivatives stand against their own recent highs and lows; step 6 makes
-**decisions**. The slow timeframe sets direction and the size of the bracket, the middle
-one is where decisions are made, and the fast one times the entry. Entries are limit orders
-that last a few seconds. The risk of a trade and the loss that ends a day are percentages of
+**decisions**. The decision is made every second, on `1m@1s`, reading every timeframe. The
+slower timeframes give the trend and forbid a trade against it, and the slow ATR sizes the
+bracket: stop and target the same distance away, no time limit, closed before the day's
+close. Entries are limit orders that last a few seconds. The risk of a trade and the loss that ends a day are percentages of
 the account. Trades are intraday and flat before each close.
 
 Do not skip a step because an early experiment on it was flat. Record the result, then

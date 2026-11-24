@@ -25,9 +25,9 @@ found. The label stages, the benchmark, and the candidate replay were removed
 ([build log](build-log.md#the-withdrawn-design-removed-november-23-2026)).
 
 **The next tasks** ([build order](roadmap.md#build-order)): item 7, the engine makes
-position decisions; item 8, the first decision model ([spec](yardstick-spec.md), which Paul
-is still reviewing: build nothing from it that he has not confirmed); then the 3 ATR scale
-and the second pass ([how](#next-steps)).
+position decisions; item 8, the 3 ATR scale and the structure code; item 9, the first
+decision model ([spec](yardstick-spec.md)); then the base changes and the second pass
+([how](#next-steps)).
 
 **The state of this machine** (November 23): lint and tests pass, `ingest plan GC SI`
 reports every contract `current`, and the database (about 150 GB) holds one year of GC and
@@ -266,17 +266,20 @@ and `Engine.execute` ignores it while a position is open. To build, in `strategi
   a resting limit at a price; add the back-of-queue fill rule beside the strict one;
 - the stop sized by the timeframe the strategy names, the position by a risk percentage, and
   no new position once the day's loss limit is reached ([decision 36](roadmap.md#decisions));
+- a bracket without a time limit (`Bracket.max_hold_s` is required today), and the gate that
+  forbids opening against a slower timeframe's trend ([decision 38](roadmap.md#decisions));
 - moving the stop to the entry price as an option of the bracket, off by default;
 - a rule-based strategy that uses all of it, so `research verify` proves whole sessions and
   one second at a time are still identical, and the UI still shows its trades.
 
-**8. The first decision model** follows its [spec](yardstick-spec.md). Paul is still
-reviewing the label: confirm it with him before building Part A.
-Store runs and their variants in PostgreSQL (`research.*`) first, so every variant is counted.
-
-**9. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
+**8. Structure of price.** Add `3.0` to `stage_step_pivot.MULTIPLIERS` (new stages and
 variants) and one structure code per scale. Count the confirmed swings a year at 3 ATR on
-each timeframe and record it.
+each timeframe and record it. The trend gate ([decision 38](roadmap.md#decisions)) reads the
+3 ATR `trend` of each timeframe.
+
+**9. The first decision model** follows its [spec](yardstick-spec.md): decisions every
+second, a bracket of 1.5 slow ATRs each way with no time limit. Store runs and their
+variants in PostgreSQL (`research.*`) first, so every variant is counted.
 
 **10 and 11. Base changes, then the second pass.** The rolling net-flow series, the ATR
 floor (measure how many rows change), and the `source.py` change, in one rebuild. Then the
@@ -302,8 +305,8 @@ and finds turning points sooner than the baselines at a like false-alarm rate
 
 For Paul. His decisions are in the [roadmap](roadmap.md#decisions).
 
-1. **The first decision model's label** ([spec](yardstick-spec.md)): Paul asked for it to be
-   explained before he confirms it. The closing rules are decided (decision 37).
+1. **The trend gate's definition** ([spec](yardstick-spec.md#part-b-the-policy-after-costs)):
+   "no timeframe's 3 ATR trend against the side" is proposed; Paul has not confirmed it.
 2. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
    its rows also stay out of indicator history is still open.
 3. **The live contract** (full-size or micro), which sets the cost model. Until it is

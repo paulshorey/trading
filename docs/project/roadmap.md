@@ -44,19 +44,26 @@ No model sits in the middle. Swings and structure are computed by rule
 
 ### The trade the system looks for
 
-Three timeframes, each with one job:
+**One decision, every second, reading every timeframe** ([decision 38](#decisions)). The
+model runs at every `1m@1s` row and sees all three timeframes as of that second:
 
-- **Slow (`1h@1m`)** sets direction and regime. Its ATR sizes the protective stop, so the
-  move traded is large against the spread.
-- **Middle (`10m@10s`)** is where decisions are made: every ten-second row is a decision row.
-- **Fast (`1m@1s`)** times the entry: a limit order that lasts a few seconds.
+- **Fast (`1m@1s`)** is where the decision is made and the entry is timed: a limit order
+  that lasts a few seconds.
+- **Middle (`10m@10s`) and slow (`1h@1m`)** give the larger trend, and they can forbid a
+  trade: a long is opened only when no timeframe's trend is down, a short only when none is
+  up.
+- **The slow ATR sizes the trade.** An ATR is the typical range of one window, so it differs
+  by timeframe: for GC about $2.30 on `1m@1s`, $8 on `10m@10s`, and $20.60 on `1h@1m`
+  (January to August 2026). The stop and the target are each 1.5 slow ATRs away
+  ([decision 39](#decisions)): about $31 on GC, a move that takes hours, not seconds, and
+  against which the spread is about 2%.
 
 **A decision is a step, and the position follows the market** ([decision 35](#decisions)).
-At each decision row the model's forecast becomes buy, sell, or nothing. The position is
+At each second the model's forecast becomes buy, sell, or nothing. The position is
 long, flat, or short, and a decision moves it one step: a buy opens a long when flat and
 closes a short when short; a sell is the mirror. A closing decision exits at the market and
-cancels the position's orders, whatever the bracket says. The bracket is a stop, a target, a
-time limit, and the flat-before-close rule. Whether a policy closes on decisions at all is a
+cancels the position's orders, whatever the bracket says. The bracket is a stop, a target,
+and the flat-before-close rule; there is no time limit inside the day. Whether a policy closes on decisions at all is a
 setting: the default holds a position to its bracket, and two rules that close early run
 beside it ([decision 37](#decisions)). Trades are intraday.
 
@@ -222,8 +229,8 @@ and 34 (replaced by 35), 19 (replaced by 36).
     Results are reported at both costs. The micro books are not in the data, so the second
     is a stress, not a simulation.
 20. **No trade count is aimed for.** A policy is never tuned toward a number of trades.
-21. **It runs unattended, inside the session.** An entry is allowed only while its longest
-    hold still fits before the forced exit.
+21. **It runs unattended, inside the session.** Every position is closed before the day's
+    close, and no position is opened in the last hour before that forced exit.
 22. **The purpose is to prove the method before any capital is committed.** Unusual ideas
     are welcome; each is still written down before it is run and recorded whatever it shows.
 23. **No trade where the market cannot be trusted.** An entry is not eligible when the
@@ -278,6 +285,20 @@ and 34 (replaced by 35), 19 (replaced by 36).
     the position) and `opposite` (close on a clear signal the other way) run beside it on the
     same openings, to see what closing early adds.
 
+38. **One decision, every second** (Paul, November 24). Inference and the decision run at
+    every `1m@1s` row; there is no separate decision timeframe. The slower timeframes give
+    the trend and can forbid a trade: when the fast timeframe looks up and a slower one is
+    down, no long is opened. "Up" and "down" are each timeframe's `trend` on its 3 ATR
+    zigzag (a higher high and a higher low, or the mirror). The gate is applied by the
+    policy, and the model also reads the same trends as inputs; a run without the gate shows
+    what it does.
+39. **The bracket** (Paul, November 24). Stop and target are the same distance from the
+    entry, 1.5 slow ATRs, with no time limit; a position still open is closed before the
+    day's close. Measured on January to August 2026, from starts every 15 minutes: price
+    reaches 1.5 slow ATRs either way before the close in 71% of cases, after a median of 3.6
+    hours (1 ATR: 82%, 1.9 hours; 2 ATRs: 57%, 5.2 hours; 3 ATRs: 36%, 7.6 hours). Larger
+    than 2 and most trades would simply end at the close. The multiple is a variable.
+
 **Open, to be tested and not decided:** moving the stop to the entry price once price has
 moved a set number of ATRs in favour ([named in the spec](yardstick-spec.md#named-now-run-later)).
 
@@ -318,7 +339,7 @@ stages for every timeframe. (6) The replay of the middle timeframe's candidates.
 built and found is in the [build log](build-log.md).
 
 7. **The engine makes position decisions** (step 6). A strategy returns buy, sell, or
-   nothing at each decision row, and the engine moves the position one step
+   nothing at every second, and the engine moves the position one step
    ([decision 35](#decisions)): it opens, leaves alone, or closes at the market and cancels
    the position's orders. Entries are market orders or limit orders that last seconds
    ([decision 28](#decisions)), with the back-of-queue fill model beside the strict one. The
@@ -326,17 +347,18 @@ built and found is in the [build log](build-log.md).
    and the day ends at the daily limit ([decision 36](#decisions)). Moving the stop to the
    entry price is an option of the bracket, off by default. Whole sessions and one second at
    a time must still give identical results (`research verify`). It is checked with a
-   rule-based strategy; no model is needed yet.
-8. **The first decision model** (step 6; [spec](yardstick-spec.md)). Part A: the decision
+   rule-based strategy; no model is needed yet. A bracket without a time limit, and the gate
+   that forbids a trade against a slower timeframe's trend, are part of it.
+8. **Structure of price** (step 4). A scale at 3 ATR on every timeframe (roughly 140
+   confirmed highs a year a product on the slow timeframe and 900 on the middle one, scaled
+   from the counts at 2 ATR), and one structure code per scale. The gate of decision 38
+   reads its `trend`, so it comes before the model.
+9. **The first decision model** (step 6; [spec](yardstick-spec.md)). Part A: the decision
    dataset, the label, a walk-forward forecast on the features that exist, and the table of
-   what is predictable at 1, 5, 15, and 60 minutes from each kind of input. Part B: the
+   what is predictable at 1, 5, 15, and 60 minutes and over the bracket from each kind of input. Part B: the
    policy in the engine, in one portfolio after costs. It will probably show no skill and
    place few trades. From here on, an input is judged by one question: does the model
    forecast better with it than without it, on the same rows?
-9. **Structure of price** (step 4). A scale at 3 ATR on every timeframe (roughly 140
-   confirmed highs a year a product on the slow timeframe and 900 on the middle one, scaled
-   from the counts at 2 ATR), and one structure code per scale. It is the first input the
-   decision model judges.
 10. **Base changes, in one rebuild** (step 1). A rolling net-flow series that does not reset
     at the session open; the ATR normalizer floored at the spread; the `source.py` change in
     the [to-do list](todo.md#housekeeping).
@@ -377,8 +399,8 @@ built and found is in the [build log](build-log.md).
   profitable ([Bailey et al.](https://escholarship.org/uc/item/4w1110bb)).
 
 One control tests the value of the sliding clock itself: the same policy deciding only at
-completed minute boundaries, against deciding at every ten-second row, in one portfolio
-with the same limits.
+completed minute boundaries, against deciding at every second, in one portfolio with the
+same limits.
 
 ## After the build order
 

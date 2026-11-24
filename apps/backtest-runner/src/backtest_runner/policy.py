@@ -192,6 +192,7 @@ def replay_month(product: str, month: int, artifact: str) -> dict:
                     "signal_rows",
                     "cancelled_orders",
                     "expired_orders",
+                    "orders_with_unknown_outcome",
                     "sessions_at_daily_limit",
                     "exit_reasons",
                 )
@@ -241,7 +242,7 @@ def cell_report(parts: list[dict], key: tuple, products: list[str]) -> dict:
     names = ("day", "side", "net", "micro", "pct", "product", "flagged")
     rows: dict[str, list] = {k: [] for k in names}
     summary = {"signal_rows": 0, "cancelled_orders": 0, "expired_orders": 0,
-               "sessions_at_daily_limit": 0}  # fmt: skip
+               "orders_with_unknown_outcome": 0, "sessions_at_daily_limit": 0}  # fmt: skip
     reasons: dict[str, int] = {}
     flagged_exits = unsized = 0
     for part in parts:
@@ -268,15 +269,19 @@ def cell_report(parts: list[dict], key: tuple, products: list[str]) -> dict:
     out |= {"trade_dates": len(dates), "all": describe(a["net"], a["day"], dates)}
     # an exit priced without a book has an unknown result: also given with each one charged
     # one further stop distance (roadmap, how a policy is evaluated)
-    out["all_with_unpriced_exits_charged_1r"] = describe(a["net"] - a["flagged"], a["day"], dates)
+    charged = a["net"] - a["flagged"]
+    worst = {"all": describe(charged, a["day"], dates)}
     for label, pick in (("buys", a["side"] > 0), ("sells", a["side"] < 0)):
         out[label] = describe(a["net"][pick], a["day"][pick], dates)
+        worst[label] = describe(charged[pick], a["day"][pick], dates)
     for k, name in enumerate(products):
         pick = a["product"] == k
         own = np.unique(
             np.concatenate([np.asarray(p["days"], int) for p in parts if p["product"] == name])
         )
         out[name] = describe(a["net"][pick], a["day"][pick], own)
+        worst[name] = describe(charged[pick], a["day"][pick], own)
+    out["with_unpriced_exits_charged_1r"] = worst
     out["by_month"] = {}
     for month in TEST_MONTHS:
         lo, hi = yardstick.month_days(month)

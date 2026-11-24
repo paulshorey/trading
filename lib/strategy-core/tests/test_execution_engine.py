@@ -970,6 +970,13 @@ def test_a_trade_received_before_a_late_fill_can_still_exit_the_position():
     outcome, trade, _ = attempt_limit(sim, view, pos, limit, T0 + 200 * S)
     assert pos.entry_ns == T0 + 80 * S and outcome == "closed"
     assert trade["exit_reason"] == "target" and int(trade["exit_ns"]) == T0 + 81 * S
+    # a stop moved to the entry price by that earlier-received trade is not in force before
+    # the engine knows of the position and its amended order has arrived
+    even = Simulator(GC, CFG, Bracket(3.0, 1.0, 600, breakeven_atr=0.5), CAL)
+    pos = even.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    attempt_limit(even, view, pos, limit, T0 + 200 * S)
+    assert pos.entry_ns == T0 + 80 * S and pos.entry_known_ns > T0 + 81 * S
+    assert pos.stop_at_entry_ns == pos.entry_known_ns + CFG.order_latency
 
 
 def test_after_an_order_with_an_unknown_outcome_nothing_more_is_opened_that_session():

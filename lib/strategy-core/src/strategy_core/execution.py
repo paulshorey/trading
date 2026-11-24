@@ -665,7 +665,10 @@ class Simulator:
             far = live & ((prices - pos.entry_px) * pos.direction >= move)
             if far.any():
                 first = j + int(np.argmax(far))
-                pos.stop_at_entry_ns = int(view.known[first]) + self.config.order_latency
+                # never before the engine knows of the position: with event times out of
+                # order, the record of that trade can be received before the fill's own
+                seen = max(int(view.known[first]), pos.entry_known_ns)
+                pos.stop_at_entry_ns = seen + self.config.order_latency
         if not pos.stop_at_entry_ns:
             return pos.stop_px
         return np.where(when >= pos.stop_at_entry_ns, pos.entry_px, pos.stop_px)

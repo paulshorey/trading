@@ -208,10 +208,11 @@ def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():
     def part(product, r, day):
         cell = {
             "summary": {"signal_rows": 9, "cancelled_orders": 0, "expired_orders": 1,
-                        "sessions_at_daily_limit": 0, "exit_reasons": {"stop": len(r)}},
+                        "orders_with_unknown_outcome": 1, "sessions_at_daily_limit": 0,
+                        "exit_reasons": {"stop": len(r)}},
             "day": np.array(day), "side": np.array([1, -1][: len(r)], np.int8),
             "r": np.array(r), "stop_ticks": np.full(len(r), 300.0),
-            "flagged_exit": np.zeros(len(r), bool),
+            "flagged_exit": np.arange(len(r)) == 1,  # the second trade's exit met no book
         }  # fmt: skip
         return {"product": product, "month": 5, "days": [may, may + 1, may + 2],
                 "flagged_sessions": [], "cells": {key: cell}}  # fmt: skip
@@ -226,6 +227,14 @@ def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():
         (-2 * gc - 1 - si) / 3, abs=1e-4
     )
     assert out["buys"]["trades"] == 2 and out["sells"]["trades"] == 1
+    # the unknown are counted, and the result is also given with the unpriced exit charged 1 R:
+    # it was GC's sell, so only that side and that product are lower
+    assert out["orders_with_unknown_outcome"] == 2 and out["exits_priced_without_a_book"] == 1
+    worst = out["with_unpriced_exits_charged_1r"]
+    assert worst["all"]["net_r"] == pytest.approx(out["all"]["net_r"] - 1, abs=1e-3)
+    assert worst["sells"]["net_r"] == pytest.approx(out["sells"]["net_r"] - 1, abs=1e-3)
+    assert worst["GC"]["net_r"] == pytest.approx(out["GC"]["net_r"] - 1, abs=1e-3)
+    assert worst["buys"] == out["buys"] and worst["SI"] == out["SI"]
     assert out["by_month"]["2026-05"]["trades"] == 3 and out["by_month"]["2026-06"]["trades"] == 0
     # micro: $2.50 a round trip on a stop of $300 (MGC) or $1,500 (SIL); $500 buys one MGC, no SIL
     assert out["micro_costs"]["net_r"] == pytest.approx(-2 * 2.5 / 300 - 1 - 2.5 / 1500, abs=1e-3)

@@ -37,7 +37,10 @@ and the four were merged together.
   leaves out a partly downloaded session only when it lies outside the stored period (one
   between whole sessions is stored, as missing rows, and is replayed). The cache key holds
   every builder of the selected contracts' rows, not one digest a stage. A policy result is
-  also given with each exit priced without a book charged one further stop distance.
+  also given with each exit priced without a book charged one further stop distance, for
+  buys, sells, and each product too, and carries the count of orders with an unknown
+  outcome. A stop moved to the entry price is never in force before the engine knows of
+  the position.
 
 **Build and checks**
 

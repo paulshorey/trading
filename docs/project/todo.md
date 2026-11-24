@@ -54,6 +54,10 @@ the [build log](build-log.md).
 - [ ] **The candidate summary assumes market entries.** `service.backtest` replays every
       signal as an independent market entry; for a strategy with passive entries it is not
       that strategy's execution. Use the limit path, or label the summary.
+- [ ] **Floor the daily ATR at the spread.** `day_range_ratio`, `day_high_dist`, and
+      `day_low_dist` (`vol_*`) divide by the bare 14-session ATR. On front sessions it is
+      hundreds of spreads, so no row is affected today; the rule still applies. Make it with
+      the next change that rebuilds the volatility tables.
 - [ ] **Session quality policy.** Backtests include degraded sessions with only a report.
       Decide and implement a default: skip, or mark and exclude from ML rows. Examples are
       2025-11-28 (CME outage; NQ, YM, and RTY records flag a possibly wrong book) and the

@@ -178,6 +178,24 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(back_days)
     )
     assert [c.contract for c in source.chunks()] == ["GCG7", "GCG7", "GCG7"]  # forward only
+    # the warm-up list may hold fewer sessions than a roll replays (a session not downloaded
+    # whole is left out of it): the count is its own number
+    short = HistoricalSource(
+        GC, files, [], sessions, ExecutionConfig(), cache=FakeCache(days), roll_warmup=1
+    )
+    with pytest.raises(ValueError, match="front contract"):  # nothing before D1 names a front
+        list(short.chunks())
+    two = HistoricalSource(
+        GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(days),
+        roll_warmup=2,
+    )  # fmt: skip
+    assert [(c.contract, c.session, c.tradable) for c in two.chunks()] == [
+        ("GCZ6", "2026-09-01 GCZ6 (warmup)", False),
+        ("GCZ6", "2026-09-02 GCZ6", True),
+        ("GCG7", "2026-09-01 GCG7 (warmup)", False),  # the roll replays two sessions
+        ("GCG7", "2026-09-02 GCG7 (warmup)", False),
+        ("GCG7", "2026-09-03 GCG7", True),
+    ]
 
 
 def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):

@@ -141,9 +141,20 @@ def prepare(spec: RunSpec) -> Prepared:
     if spec.warmup_sessions is None:
         spec = replace(spec, warmup_sessions=stored_lead(product, files))
     calendar, warmup, trading = load_sessions(product, spec.start, spec.end, spec.warmup_sessions)
+    # A session that was downloaded only in part is not stored, so a warm-up never reads it
+    data = ProductData(product, files, job_ranges(product.parent_symbol, product.dataset))
+    partial = {s.trade_date for s in warmup if data.touched(s) and not data.downloaded(s)}
+    warmup = [s for s in warmup if s.trade_date not in partial]
     execution = ExecutionConfig(**spec.execution)
     source = HistoricalSource(
-        product, files, warmup, trading, execution, spec.contract, DayCache(book=True)
+        product,
+        files,
+        warmup,
+        trading,
+        execution,
+        spec.contract,
+        DayCache(book=True),
+        roll_warmup=spec.warmup_sessions,
     )
     return Prepared(
         spec,

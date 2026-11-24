@@ -202,6 +202,10 @@ class ProductData:
     def downloaded(self, s: Session) -> bool:
         return any(lo <= s.open and s.close <= hi for lo, hi in self.merged())
 
+    def touched(self, s: Session) -> bool:
+        """Whether any downloaded range holds part of the session."""
+        return any(lo < s.close and s.open < hi for lo, hi in self.merged())
+
     def sessions(self) -> tuple[str, list[Session], list[Session]]:
         """Calendar name, all sessions in the downloaded period, and the downloaded ones."""
         ranges = self.merged()

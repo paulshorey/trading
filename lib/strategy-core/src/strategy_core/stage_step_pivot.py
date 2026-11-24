@@ -37,6 +37,7 @@ from .columns import SMALLINT, Column, Table
 from .engine import MarketChunk
 from .features import Unit
 from .market import PX
+from .normalizer import last_spread_bps
 from .stages import Stage
 from .timeframes import FAST, MIDDLE, SLOW, Timeframe
 
@@ -71,28 +72,17 @@ def with_structure(table: Table) -> Table:
 
 
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
-    """The last sampled book spread as of each minute row, in bps of its midpoint: from the
-    latest minute with a usable book, in this chunk or carried (`carry`: has, bid, ask; updated
-    in place), and unknown from a missing minute until the next usable book."""
-    status = base.values["status"]
-    m = len(status)
-    index = np.arange(m)
-    valid = ~base.nulls["last_bid"] & ~base.nulls["last_ask"]
-    gap = np.maximum.accumulate(np.where(status == MISSING, index, -1))
-    i = np.maximum.accumulate(np.where(valid, index, -1))
-    fresh = (i >= 0) & (i > gap)
-    known = fresh | ((gap < 0) & bool(carry[0]))
-    at = np.maximum(i, 0)
-    # in quoted prices, as `candle_1m_1s.book_spread_bps` computes the same spread
-    bid = np.where(fresh, base.values["last_bid"][at], carry[1]) / PX
-    ask = np.where(fresh, base.values["last_ask"][at], carry[2]) / PX
-    if fresh[-1]:
-        carry[:] = (1, base.values["last_bid"][i[-1]], base.values["last_ask"][i[-1]])
-    elif gap[-1] >= 0:
-        carry[0] = 0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        spread = (ask - bid) / ((ask + bid) / 2) * 1e4
-    return np.where(known & np.isfinite(spread), spread, np.nan)
+    """The last sampled book spread as of each step row, in bps of its midpoint
+    (`normalizer.last_spread_bps`): from the latest row with a usable book, in this chunk or
+    carried (`carry`: has, bid, ask; updated in place), and unknown from a missing row until
+    the next usable book."""
+    return last_spread_bps(
+        base.values["status"],
+        ~base.nulls["last_bid"] & ~base.nulls["last_ask"],
+        base.values["last_bid"],
+        base.values["last_ask"],
+        carry,
+    )
 
 
 class StepPivotStage(Stage):
@@ -114,6 +104,7 @@ class StepPivotStage(Stage):
         "bars",
         "market",
         "windows",
+        "normalizer",
         "warmup",
         "state",
     )
@@ -183,7 +174,11 @@ class StepPivotStage(Stage):
             spread = minute_spread(base, self.book)
             now = np.maximum(self.K * swings.as_float(candle, "atr_bps"), self.FLOOR * spread)
             theta = np.r_[theta, now]
-            atr = np.r_[atr, swings.as_float(vol, "atr_price") * PX]
+            # the frozen ATR that swing values are measured in: floored at the spread
+            raw, norm = swings.as_float(candle, "atr_bps"), swings.as_float(candle, "norm_atr_bps")
+            with np.errstate(divide="ignore", invalid="ignore"):
+                factor = np.where(np.isfinite(norm) & (raw > 0) & (norm > raw), norm / raw, 1.0)
+            atr = np.r_[atr, swings.as_float(vol, "atr_price") * PX * factor]
             self.carry = np.array([theta[-1], atr[-1]])
             self.last_minute = int(done[-1])
         at = np.searchsorted(known, minute - 1)  # the minute completed just before its own

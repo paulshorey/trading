@@ -287,6 +287,8 @@ class StepVolStage(Stage):
         )  # fmt: skip
         atr_bps = candle.values["atr_bps"]
         atr_bps = np.where(~candle.nulls["atr_bps"] & (atr_bps > 0), atr_bps, np.nan)
+        norm_bps = candle.values["norm_atr_bps"]
+        norm_bps = np.where(~candle.nulls["norm_atr_bps"] & (norm_bps > 0), norm_bps, np.nan)
         key = session_minute(self.context.calendar, minutes.end, self.TF.step)
         # one sample per minute: the window ending with the minute's last step row
         sample = (c.ordinal % self.TF.per_minute == 0) & np.isfinite(atr_bps)
@@ -302,8 +304,8 @@ class StepVolStage(Stage):
             def bps(x):  # a quoted price distance or average, relative to the current price
                 return x / px * 1e4
 
-            def in_atr(x):
-                return bps(x) / atr_bps
+            def in_atr(x):  # in the ATR floored at the spread (normalizer.py)
+                return bps(x) / norm_bps
 
             bull, bear = bps(k["bull"]), bps(k["bear"])
             pxf = np.where(complete & (close_fixed > 0), close_fixed, np.nan)  # fixed point

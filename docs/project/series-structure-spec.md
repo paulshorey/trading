@@ -100,6 +100,28 @@ price path and the flow the model already reads, and 86 test dates resolve only 
 difference. The stages stay whatever the result: they are step 5 of the process, and the
 codes that compare the three structures, which are the point of them, are not built yet.
 
+### Result (November 25, 2026)
+
+| Forecast (run 11, 86 test dates) | Pooled rank correlation | Squared error against `flat` |
+| --- | --- | --- |
+| `trees`, all 1,449 features | 0.042 (-0.033 to 0.121) | 9% higher |
+| `trees_without_series`, the 741 | 0.044 (-0.030 to 0.116) | 12% higher |
+| Difference, paired by trade date | -0.002 (-0.056 to 0.052) | |
+| `trees_coarse` | 0.011 (-0.065 to 0.090) | 10% higher |
+| `ridge` | 0.042 (-0.038 to 0.120) | 53% higher |
+
+**The new inputs add no measurable skill**, as expected before the run. The forecast without
+them reproduces run 9 (0.044), so the comparison is on the same footing. By product `trees`
+is 0.082 for GC and 0.000 for SI; by month -0.101, 0.097, 0.151, and 0.069. All four
+calibration slopes are zero in every month, so the yardstick is still the flat forecast and
+the policy was not replayed. Evidence: `~/yardstick-series.json`.
+
+**The horizon map was not rerun.** With 1,449 features and a seventh kind of input it takes
+more than two hours; the first attempt (run 10, left unfinished in `research.run`) was
+stopped by the session's time limit on the last of its five horizons, before anything was
+saved. Run 11 used `--no-horizons`. To get the map, run `research yardstick GC SI` from a
+terminal, where nothing limits it.
+
 ## Not in this step
 
 The codes that compare the three structures (agreement, divergence at the latest highs and

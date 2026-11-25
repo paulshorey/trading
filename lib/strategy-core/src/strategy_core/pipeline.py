@@ -33,8 +33,9 @@ from .market import NS, SessionCalendar
 from .stage_bar_1s import BarStage
 from .stage_step_bar import MinuteBarStage, step_bar
 from .stage_step_candle import CandleStage, HourCandleStage, step_candle
-from .stage_step_pivot import BY_TIMEFRAME as STEP_SCALES
+from .stage_step_pivot import BY_TIMEFRAME as PRICE_SCALES
 from .stage_step_pivot import FAST_SCALES
+from .stage_step_series import BY_TIMEFRAME as SERIES_SCALES
 from .stage_step_stats import HourStatsStage, SecondStatsStage, step_stats
 from .stage_step_vol import VolMinuteStage, VolSecondStage, step_vol
 from .stages import Stage, StageContext
@@ -52,6 +53,10 @@ MERGED = tuple(tf for tf in TIMEFRAMES if tf.merged)  # their step rows are merg
 EXPORTED = {
     FAST_TF.name: (BarStage, CandleStage, SecondStatsStage, VolSecondStage),
     SLOW.name: (MinuteBarStage, HourCandleStage, HourStatsStage, VolMinuteStage),
+}
+# The swing scales of each timeframe: those of price, then of RSI and of CVD.
+STEP_SCALES: dict[str, tuple[type[Stage], ...]] = {
+    tf.name: (*PRICE_SCALES[tf.name], *SERIES_SCALES[tf.name]) for tf in TIMEFRAMES
 }
 STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
     tf.name: EXPORTED.get(tf.name) or (step_bar(tf), step_candle(tf), step_stats(tf), step_vol(tf))
@@ -77,6 +82,10 @@ SPARSE = frozenset(s.NAME for s in FAST_SCALES)
 # end. The step is part of the rule's name: another shortest step rebuilds the sparse stages.
 STEP_ROWS = min(tf.seconds for tf in MERGED)
 STORED_ROWS = f"events+step_ends_{STEP_ROWS}s:v4"
+# The fast scales of RSI and of CVD are stored at the last second of every step row only: where
+# a slower row and the decision dataset read them. The engine computes every second.
+SPARSE_STEPS = frozenset(s.NAME for s in SERIES_SCALES[FAST_TF.name])
+STORED_STEPS = f"step_ends_{STEP_ROWS}s:v1"
 
 
 def check_graph(stages: tuple[type[Stage], ...] = STAGES) -> None:
@@ -120,10 +129,12 @@ def stored_rows(name: str, rows: PipelineRows) -> Table:
     """The rows of stage `name` that storage keeps: all of them, or for a sparse stage those at
     `stored_ordinals` and at the last second of every step row. Values are never changed."""
     table = rows.tables[name]
-    if name not in SPARSE:
+    if name not in SPARSE and name not in SPARSE_STEPS:
         return table
     ordinal = table.values["slot_ordinal"]
-    keep = (ordinal % STEP_ROWS == 0) | np.isin(ordinal, stored_ordinals(rows))
+    keep = ordinal % STEP_ROWS == 0
+    if name in SPARSE:
+        keep |= np.isin(ordinal, stored_ordinals(rows))
     return Table(
         {k: v[keep] for k, v in table.values.items()},
         {k: v[keep] for k, v in table.nulls.items()},
@@ -283,8 +294,18 @@ class StageFeatures:
         completed at or before the second, and that row's age. The step row ending at T
         completes with the second ending at T, so its age is then zero."""
         step_end = rows.tables[group[0]].values["end_ns"]
-        row_end = np.r_[self.last_end[timeframe], step_end]
         last = self.last[timeframe]
+        if not len(step_end) and last:
+            # No step row completed in this chunk (most seconds of a live session): every
+            # second reads the latest one. The same values as below, without the joins.
+            for stage in group:
+                if len(rows.tables[stage].values["end_ns"]):
+                    raise AssertionError(f"{stage} rows must align with {group[0]}")
+            n = len(ends)
+            out = {name: np.full(n, v[0], np.float64) for name, v in last.items()}
+            out[self.AGES[timeframe].name] = (ends - self.last_end[timeframe][0]) / NS
+            return out
+        row_end = np.r_[self.last_end[timeframe], step_end]
         values: dict[str, np.ndarray] = {}
         for stage in group:
             table = rows.tables[stage]

@@ -174,40 +174,41 @@ through an unknown interval. Historical events remain queryable with their old e
 The empty-window/analysis-close policy of the related stage plan does not turn an
 unchanged carried price into a new observed trade for this detector.
 
-## Swing sources: price and RSI
+## Swing sources: price, RSI, and CVD
 
 The detector and the structure layer are generic over a **source series**, so swings,
 higher lows and lower highs, trend, runs, provisional relations, breaches, and reclaims are
 computed the same way for every source. A source declares its observations, how distance
-is measured, and its threshold:
+is measured, and its threshold. RSI and CVD are built as specified in
+[series-structure-spec.md](series-structure-spec.md) ([decision 41](roadmap.md#decisions)):
 
-| Source  | Observations                                                                    | Distance                         | Threshold `θ`                                        |
-| ------- | ------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
-| `price` | Released trades, in order; published per second or minute row                   | `10⁴ × ln(H / p)` (log-bps)      | `max(k × ATR_bps, 2 × spread_bps)`, frozen           |
-| `rsi`   | The window's RSI, one value per row: `1m@1s` RSI per second, `1h@1m` per minute | `H − p` in RSI points (additive) | Fixed points: initially 5, 10, and 20 per resolution |
+| Source  | Observations                                                  | Distance                    | Threshold `θ`, frozen when the extreme is set          |
+| ------- | ------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ |
+| `price` | Released trades, in order; published per step row             | `10⁴ × ln(H / p)` (log-bps) | `max(k × ATR_bps, 2 × spread_bps)`                     |
+| `rsi`   | The window's RSI at each step row's close: one value per row  | `H − p` in RSI points       | `max(k × the RSI's own ATR, 2.5 points)`               |
+| `cvd`   | Running buy − sell volume at each step row's close            | `H − p` in contracts        | `max(k × the CVD's own ATR, 3 typical trades)`         |
 
-What differs for RSI:
+`k` is 0.5, 1, 2, or 3 for every source. A series' own ATR is computed as price's is, with
+the series in place of price (`stage_step_series.py`).
 
-- **No intra-row path.** RSI changes only when a row closes, so each row is one
-  observation, and events happen at row closes.
-- **No price-only rules.** RSI is already normalized, so there is no spread floor and no
-  positive-price rule. An undefined RSI (an incomplete window) ends the epoch like an
-  undefined threshold input.
-- **Levels are features.** RSI is an index, so an RSI pivot's level is a model input
-  (`Unit.INDEX`): a low at 28 differs from one at 45. Raw price levels stay context. RSI
-  distances and changes are stored in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1).
-- **One chronological series.** The stored `1m@1s` RSI is per phase, so consecutive
-  second rows come from different phase states, each a 14-minute RSI. Read row by row,
-  they form one rolling RSI sampled every second. That is one swing history, not 60.
-  Phase-to-phase jitter is filtered by the threshold; PR D measures the row-to-row RSI
-  noise and keeps the smallest threshold above it.
-- **Own stages.** Columns carry units, so RSI structure lives in `pivot_rsi_1s` and
-  `pivot_rsi_1m` (tier 2, inputs `candle_1m_1s` and `candle_1h_1m`). These stages use the
-  same detector code, with threshold points as their variants. Their events share
-  `market.pivot_event` and are marked by stage.
+What differs for RSI and CVD:
 
-More sources (cumulative delta, MACD histogram, other oscillators) can be added later as
-stages that declare the same three things.
+- **No path inside a row.** Each row is one observation, at its close, and events happen at
+  row closes. Price is the one source that reads the trades inside a row.
+- **Their own ATR.** A swing of RSI is measured in ATRs of RSI and a swing of CVD in ATRs of
+  CVD, never in price's. Values "in ATRs" divide by that ATR floored at half the smallest
+  swing, as price's divide by its ATR floored at the spread.
+- **Levels.** RSI is an index, so the level of an RSI high or low is a model input
+  (`Unit.INDEX`): a low at 28 differs from one at 45. A CVD level is a count of contracts
+  from wherever counting began: context only, read by its changes, never by its level.
+- **One chronological series.** The stored RSI is per phase, so consecutive rows come from
+  different phase states. Read row by row, they form one rolling RSI sampled every step.
+  That is one swing history, not 60; the threshold filters the jitter between phases.
+- **Own stages.** `pivot_rsi_<rows>` and `pivot_cvd_<rows>` (tier 2; inputs `bar_<rows>` and
+  `candle_<window>`), one stage per scale, with their events in `market.pivot_event`.
+
+More sources (MACD histogram, other oscillators) can be added as stages that declare the
+same three things.
 
 ## Tier 3: structure signals
 

@@ -41,6 +41,8 @@ def test_every_feature_belongs_to_one_kind_of_input():
     assert yardstick.group_of("10m@10s.imbalance_vw") == "book"
     assert yardstick.group_of("1h@1m.atr5_bps") == "volatility"
     assert yardstick.group_of("1h@1m.slow_atr_3.structure") == "swings"
+    assert yardstick.group_of("1h@1m.slow_rsi_atr_3.structure") == "series"
+    assert yardstick.group_of("10m@10s.mid_cvd_atr_1.progress") == "series"
     assert yardstick.group_of("1m@1s.session_elapsed_s") == "session"
     assert yardstick.group_of("1h@1m.age_s") == "session"
 
@@ -379,3 +381,27 @@ def test_the_slope_weighs_each_trade_date_once_or_each_row_once():
     assert yardstick.slope_of(forecast, y, day, by_date=False) == pytest.approx(0.26)
     assert yardstick.slope_of(-forecast, y, day, by_date=True) == 0.0  # never below zero
     assert yardstick.slope_of(np.full(100, np.nan), y, day, by_date=True) == 0.0
+
+
+def test_an_added_input_is_judged_by_the_paired_difference_in_skill():
+    """Two forecasts of one target on the same dates: the difference of their pooled rank
+    correlations, with an interval from resampling the dates both were scored on."""
+    rng = np.random.default_rng(3)
+    day = np.repeat(np.arange(60), 200)
+    signal = rng.normal(size=len(day))
+    shared = np.repeat(rng.normal(size=60), 200)  # what every row of a date has in common
+    y = signal + shared + rng.normal(size=len(day))
+    better, worse = signal + 0.5 * rng.normal(size=len(day)), signal + 3 * rng.normal(size=len(day))
+    found = yardstick.paired_difference(better, worse, y, day)
+    alone = [yardstick.pooled_correlation(f, y, day)["value"] for f in (better, worse)]
+    assert found["trade_dates"] == 60
+    assert found["value"] == pytest.approx(alone[0] - alone[1], abs=2e-5)
+    assert 0 < found["interval_95"][0] < found["value"] < found["interval_95"][1]
+    # pairing cancels what the dates share: the interval is narrower than either forecast's own
+    own = yardstick.pooled_correlation(better, y, day)["interval_95"]
+    assert found["interval_95"][1] - found["interval_95"][0] < own[1] - own[0]
+    same = yardstick.paired_difference(better, better, y, day)
+    assert same["value"] == 0 and same["interval_95"] == [0, 0]
+    # rows only one of them scored are left out
+    partial = np.where(day < 30, np.nan, worse)
+    assert yardstick.paired_difference(better, partial, y, day)["trade_dates"] == 30

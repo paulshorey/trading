@@ -200,7 +200,7 @@ safeguard, if either is ever undefined, the segment ends exactly as for missing 
 ### 3.3 Structure: higher lows and lower highs
 
 The same detector and structure layer also run on the RSI series
-([swing sources](pivot-structure-design.md#swing-sources-price-and-rsi)): RSI pivots with
+([swing sources](pivot-structure-design.md#swing-sources-price-rsi-and-cvd)): RSI pivots with
 thresholds in RSI points (5, 10, 20), their higher lows and lower highs, and in tier 3
 the structural divergences between price and RSI.
 

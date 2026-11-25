@@ -41,7 +41,7 @@ below it, and every floor is finished before anything reads from it.
 | 0    | Exact base rows from trades: OHLCV, aggressor flow, book at trades, price-path extremes                           | `bar_1s`, `bar_1m`                                                       |
 | 0    | Exact base rows from book events (planned): queue and order-flow imbalance, spread over time, depletion, refill   | `book_1s`                                                                |
 | 1    | Rolling candles and standard indicators (RSI, EMA, MACD, ATR, …), window statistics, and the volatility family    | `candle_1m_1s`, `candle_1h_1m`, `stats_1h_1m`, `vol_1s`, `vol_1m`        |
-| 2    | Market structure of price (sized by tier-1 volatility) and of RSI: confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_1m` (+ `pivot_event`); planned: `pivot_rsi_1s`, `_1m` |
+| 2    | Market structure of price (sized by tier-1 volatility), of RSI, and of CVD (each sized by its own ATR): confirmed pivots, HH/HL/LH/LL, trend, breaches | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_rsi_*`, `pivot_cvd_*` (+ `pivot_event`) |
 | 3    | Signals combining tiers 1 and 2: higher-low sequences, pullback quality, divergences, sweeps, cross-scale context | `signal_1s`, `signal_1m`                                                 |
 | —    | Labels: future outcomes for training and evaluation, never inputs                                                 | none stored today (the decision model's label is planned)                |
 
@@ -86,8 +86,8 @@ the DBN files and writes the stale stages. Details are in [plan section 4](plan-
 | `vol_1m`       | 1    | `bar_1m`, `candle_1h_1m` (its windows, path fields, ATR, and spread: a declared edge within tier 1)                  |
 | `pivot_1s`     | 2    | `market` (trade path), `bar_1s` (coverage), `candle_1m_1s` (ATR, spread), `vol_1s` (ATR in price units)              |
 | `pivot_1m`     | 2    | `market` (trade path), `bar_1s` (coverage), `bar_1m` (spread), `candle_1h_1m` (ATR), `vol_1m` (ATR in price units)   |
-| `pivot_rsi_1s` | 2    | `candle_1m_1s` (its RSI series); planned                                                                             |
-| `pivot_rsi_1m` | 2    | `candle_1h_1m` (its RSI series); planned                                                                             |
+| `pivot_rsi_<rows>` | 2 | `candle_<window>` (its RSI at each row's close), `bar_<rows>` (status); one per timeframe ([spec](series-structure-spec.md)) |
+| `pivot_cvd_<rows>` | 2 | `bar_<rows>` (its `cvd` and status), `candle_<window>` (the window's volume and trade count, for the typical trade) |
 | `signal_1m`    | 3    | `candle_1h_1m`, `vol_1m`, `pivot_1m`, `pivot_rsi_1m`                                                                 |
 | `signal_1s`    | 3    | `candle_1m_1s`, `vol_1s`, `pivot_1s`, `pivot_rsi_1s`; `pivot_1m`, `pivot_rsi_1m`, and `signal_1m` as of availability |
 

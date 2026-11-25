@@ -23,15 +23,13 @@ the [build log](build-log.md).
 - [x] **Base changes, in one rebuild** (item 10; November 24): a CVD that runs through a
       contract's life, the ATR normalizer floored at the spread, the roll warm-up count
       ([record](build-log.md#base-changes-a-continuous-cvd-the-atr-floor-the-roll-warm-up-november-24-2026)).
-- [ ] **Swings and structure of RSI and of CVD**, each sized by its own ATR, and the codes
-      comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
-      each series' row-to-row noise and freeze its floor first
-      ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
-      Read `cvd` by its changes only, never its level: a backtest that starts after a
-      contract's first stored session counts from zero there, so its level differs from the
-      stored one by a constant, and a missing second adds an unknown one. A segment that
-      ends at missing data and values that are differences inside it are unaffected; the
-      spec must state this and a test must shift the level and compare.
+- [x] **Swings and structure of RSI and of CVD**, each sized by its own ATR (item 11,
+      [decision 41](roadmap.md#decisions); November 24): 24 stages,
+      [spec](series-structure-spec.md),
+      [record](build-log.md#swings-and-structure-of-rsi-and-of-cvd-november-24-2026).
+- [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
+      divergence at the latest highs and lows, a level one series has broken that another
+      holds. Specify them first; they are a new stage, and inputs like any other.
 - [ ] **The swing mode** (item 12): positions held across the daily break and across days,
       as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).
 - [ ] **Six years of GC and SI** (item 13).

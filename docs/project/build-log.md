@@ -6,6 +6,70 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Swings and structure of RSI and of CVD (November 24, 2026)
+
+Build-order item 11, step 5 of the process ([decision 41](roadmap.md#decisions);
+[spec](series-structure-spec.md), frozen before the build and before the model run).
+
+**What a series is.** One value per aggregated row of a timeframe, at the row's close: the
+RSI of the window that ends there (`candle_<window>.rsi`) or the contract's running buy
+minus sell volume through it (`bar_<rows>.cvd`). No trade is read. The zigzag of price stays
+the one stage that reads the trades inside a row, to know which level was reached first.
+
+**Built** (`stage_step_series.py`): 24 stages, one per timeframe, series, and multiple
+(`<stream>_rsi_atr_<k>`, `<stream>_cvd_atr_<k>`, k of 0.5, 1, 2, 3), in the six tables of
+migration `0016` with their events in `market.pivot_event`. Each computes the series' own
+ATR (per phase, the Wilder average of the window's true range of the series), freezes a
+threshold of k ATRs when an extreme is set, floored at 2.5 RSI points or 3 typical trades,
+and runs the detector and the structure code that price uses. Values in ATRs divide by the
+series' ATR floored at half that smallest swing. RSI is read to a millionth of a point, so
+that floating-point noise never decides whether two equal values differ (found by the
+price-scaling test: two rows differed). The fast tables hold the last second of every
+ten-second row; the engine computes every second.
+
+**How the thresholds were chosen** (GC and SI, March 2 to April 24, 2026, 39 trade dates).
+RSI's own ATR is about 7 points on every timeframe and both products; CVD's is 24, 111, and
+355 contracts for GC and 8, 43, and 149 for SI, which is why each needs its own. At the same
+multiple of its own ATR each series makes about as many swings as price, so price's
+multiples are used and a swing of one series compares with a swing of another. Confirmed
+highs a trade date in the stored rows, GC then SI:
+
+| Timeframe | Multiple | Price | RSI | CVD |
+| --- | ---: | ---: | ---: | ---: |
+| `1m@1s` | 0.5 | 895 / 566 | 1,122 / 978 | 521 / 413 |
+| | 1 | 292 / 273 | 338 / 324 | 213 / 196 |
+| | 2 | 81 / 94 | 78 / 81 | 80 / 78 |
+| | 3 | 37 / 44 | 36 / 39 | 43 / 44 |
+| `10m@10s` | 0.5 | 120 / 112 | 120 / 121 | 62 / 55 |
+| | 1 | 31 / 31 | 34 / 34 | 22 / 22 |
+| | 2 | 7.8 / 7.8 | 7.5 / 7.5 | 7.6 / 8.2 |
+| | 3 | 3.7 / 3.4 | 3.3 / 3.3 | 4.1 / 4.5 |
+| `1h@1m` | 0.5 | 21 / 20 | 19 / 21 | 10 / 10 |
+| | 1 | 5.6 / 5.0 | 5.9 / 5.4 | 3.6 / 3.9 |
+| | 2 | 1.3 / 1.1 | 1.3 / 1.1 | 1.2 / 1.6 |
+| | 3 | 0.6 / 0.6 | 0.6 / 0.5 | 0.7 / 0.7 |
+
+They agree with the counts a plain zigzag gave before the build (in the spec), except that
+the spec's count for price at 3 slow ATRs (1.3) was too high; the stored 0.6 is right.
+
+**Checked.** Each scale equals a plain-Python reference (own ATR, threshold, zigzag) on the
+test world, in any chunking and from checkpoints; features are unchanged when all prices or
+all sizes are multiplied; shifting CVD's level by a constant changes no feature, only the
+stored levels (a backtest that starts later counts from another zero); a backtest warmed for
+the lead computes the stored rows. `ingest run GC SI` added the stages to all 12 contracts
+without rebuilding any other (858 sessions, run 6; every contract `current`). The new
+fingerprint, `~/fingerprint-series.txt`, holds the 432 lines of `~/fingerprint-new.txt`
+unchanged and 576 new ones (24 scales, 12 contracts, rows and events). `research verify` on the example day: features and all 18 trades identical between the
+whole session and second by second, at 9.8 ms a market second (8.8 ms with 741 features).
+
+**The engine** now holds 1,449 features (741 before). Its per-second cost grows with the
+number of features, so a second in which no slower row completes now reuses the last row's
+values instead of joining them again (`StageFeatures.as_of`); the second-by-second
+equivalence test takes 190 s against 183 s before the stages were added.
+
+**The model, with and without them** ([the test](series-structure-spec.md#the-test-of-these-inputs-frozen-before-the-run)).
+MODEL
+
 ## Review fixes to the four open PRs (November 24, 2026)
 
 Paul reviewed PRs #98 to #101 and found defects in each. All are fixed on the top of the stack

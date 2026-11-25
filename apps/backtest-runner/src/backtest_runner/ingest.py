@@ -54,7 +54,15 @@ from strategy_core import warmup
 from strategy_core.execution import ExecutionConfig
 from strategy_core.features import FeatureConfig
 from strategy_core.market import NS, PRODUCTS, Product
-from strategy_core.pipeline import SPARSE, STAGES, STORED_ROWS, Pipeline, stored_rows
+from strategy_core.pipeline import (
+    SPARSE,
+    SPARSE_STEPS,
+    STAGES,
+    STORED_ROWS,
+    STORED_STEPS,
+    Pipeline,
+    stored_rows,
+)
 from strategy_core.stages import StageContext
 from strategy_core.state import from_bytes, to_bytes
 
@@ -150,7 +158,8 @@ def identities(product: Product, calendar_name: str) -> dict[str, dict]:
                 "inputs": {n: out["source" if n == "market" else n]["sha256"] for n in cls.INPUTS},
             }
             # which of its rows are stored: a changed rule rebuilds the stage
-            | ({"stored_rows": STORED_ROWS} if cls.NAME in SPARSE else {}),
+            | ({"stored_rows": STORED_ROWS} if cls.NAME in SPARSE else {})
+            | ({"stored_rows": STORED_STEPS} if cls.NAME in SPARSE_STEPS else {}),
         )
     return out
 

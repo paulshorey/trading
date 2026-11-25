@@ -136,10 +136,15 @@ class HistoricalSource:
     quality: dict[str, dict] = field(default_factory=dict)
     used_files: dict[str, DbnFile] = field(default_factory=dict)
     kept_front: set[date] = field(default_factory=set)  # rolls skipped for incomplete data
+    # Sessions a contract replays before it trades after a roll. None: as many as `warmup`
+    # holds. It is its own number because `warmup` may hold fewer: a session that was not
+    # downloaded whole is left out of it, as storage leaves it out.
+    roll_warmup: int | None = None
 
     def chunks(self) -> Iterator[MarketChunk]:
         sessions = [*self.warmup, *self.trading]
         start = len(self.warmup)
+        lead = len(self.warmup) if self.roll_warmup is None else self.roll_warmup
         previous = None
         for i in range(start, len(sessions)):
             s = sessions[i]
@@ -147,7 +152,7 @@ class HistoricalSource:
                 sessions[i - 1] if i else None, s, previous
             )
             if contract != previous:
-                for w in sessions[max(i - len(self.warmup), 0) : i]:
+                for w in sessions[max(i - lead, 0) : i]:
                     yield self.session_chunk(contract, w, tradable=False)
                 previous = contract
             yield self.session_chunk(contract, s, tradable=True)

@@ -486,7 +486,7 @@ def test_fast_pivots_equal_a_plain_python_reference(days, whole, stage):
     vol, vn = join(whole, "vol_1s")
     np.testing.assert_array_equal(candle["end_ns"], ends)
     atr_bps, spread = nan_null(candle, cn, "atr_bps"), nan_null(candle, cn, "book_spread_bps")
-    atr = nan_null(vol, vn, "atr_price")
+    atr = nan_null(vol, vn, "norm_atr_price")
     now = np.where(np.isnan(atr_bps) | np.isnan(spread), np.nan,
                    np.maximum(stage.K * atr_bps, 2.0 * spread))  # fmt: skip
     theta, snapshot = np.r_[np.nan, now[:-1]], np.r_[np.nan, atr[:-1]]
@@ -505,7 +505,7 @@ def test_fast_pivots_equal_a_plain_python_reference(days, whole, stage):
         )
     )
     assert got == want
-    assert len(want) > (150 if stage.K < 2 else 40)
+    assert len(want) > (150 if stage.K < 2 else 40 if stage.K < 3 else 20)
     # events carry their row: its end, its availability, and the trade's time inside it
     np.testing.assert_array_equal(ev["end_ns"], ends[ev["slot_ordinal"] - first])
     np.testing.assert_array_equal(ev["available_ns"], ev["end_ns"] + CONFIG.close_delay)
@@ -561,7 +561,7 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
     atr_bps = nan_null(candle, cn, "atr_bps")
     now = np.where(np.isnan(atr_bps) | np.isnan(spread), np.nan,
                    np.maximum(stage.K * atr_bps, 2.0 * spread))  # fmt: skip
-    atr = nan_null(vol, vn, "atr_price")
+    atr = nan_null(vol, vn, "norm_atr_price")
     before = minute - 1 - first  # the minute completed before each second's own
     theta = np.where(before >= 0, now[np.maximum(before, 0)], np.nan)
     snapshot = np.where(before >= 0, atr[np.maximum(before, 0)], np.nan)
@@ -582,7 +582,9 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
         )
     )
     assert got == [(k, int(minute[a]), level, int(minute[b])) for k, a, level, b in want]
-    assert len(want) > {0.1: 60, 0.2: 25, 0.5: 8, 1.0: 3, 2.0: 0}[stage.K]
+    assert len(want) > {0.1: 60, 0.2: 25, 0.5: 8, 1.0: 3, 2.0: 0, 3.0: -1}[stage.K]
+    if not len(want):  # this small world has no slow swing of 3 ATRs: the fast scale tests it
+        return
     # a confirmation inside a minute is published with that minute's row, never earlier
     rows_, rn = join(whole, stage.NAME)
     np.testing.assert_array_equal(rows_["slot_ordinal"], candle["slot_ordinal"])
@@ -602,6 +604,49 @@ def test_slow_pivots_equal_a_plain_python_reference_and_publish_per_minute(days,
     assert rows_["state"][gap - 1] == ACTIVE and (rows_["state"][gap : gap + 60] == IDLE).all()
     assert rows_["state"][gap + 61] > IDLE
     assert rows_["segment"][gap + 61] == rows_["segment"][gap - 1] + 1
+
+
+def test_a_market_that_stopped_moving_keeps_its_detector_ready():
+    """Fifteen minutes at one price, then a move. The ATR decays to exactly zero, so the
+    normalizing ATR is the spread: the volatility row gives it in price units, `spread_atr` is
+    one, and the detector holds an open segment through the flat stretch, so the flat price is
+    the first swing low and it is measured in a positive ATR."""
+    cal = calendar((0, 1))
+    flat = 900
+    rows = [(T0 + k * S + S // 2, 100.0, 1, 1) for k in range(flat)]  # book 99.9 / 100.1
+    path = [100.0 + 0.1 * min(j, 40 - j) for j in range(41)] * 3
+    rows += [
+        (T0 + (flat + j) * S + S // 2, px, 1, 1, 1_000, px - 0.1, px + 0.1)
+        for j, px in enumerate(path)
+    ]
+    cover = np.array([[T0, int(cal.closes[0])]], np.int64)
+    chunk = MarketChunk("X", int(cal.opens[0]), int(cal.closes[0]), trades(rows), cover)
+    out = [builder(cal).process(chunk)]
+    candle, _ = join(out, "candle_1m_1s")
+    vol, vn = join(out, "vol_1s")
+    still = slice(600, flat)  # warm, and every window is flat
+    assert (candle["atr_bps"][still] == 0).all() and (vol["atr_price"][still] == 0).all()
+    np.testing.assert_allclose(candle["norm_atr_bps"][still], 20.0, rtol=1e-12)  # the spread
+    np.testing.assert_allclose(vol["norm_atr_price"][still], 0.2, rtol=1e-12)
+    np.testing.assert_allclose(vol["spread_atr"][still], 1.0, rtol=1e-12)
+    assert not vn["spread_atr"][still].any() and not vn["norm_atr_price"][still].any()
+    moving = slice(flat + 10, flat + 100)  # the ATR is back above the spread: bit for bit
+    assert (candle["atr_bps"][moving] > candle["norm_atr_bps"][moving] * (1 - 1e-12)).any()
+    above = np.flatnonzero(candle["atr_bps"] >= candle["norm_atr_bps"])
+    assert len(above) and (vol["norm_atr_price"][above] == vol["atr_price"][above]).all()
+    for stage in FAST:
+        state, _ = join(out, stage.NAME)
+        assert (state["state"][still] == SEEKING).all()  # ready: a segment is open
+        ev, _ = events_of(out, stage.NAME)
+        pivot = ev["kind"] <= LOW
+        assert pivot.any() and (ev["atr"][pivot] > 0).all()
+        first = int(np.flatnonzero(pivot)[0])
+        # the flat price is the first low, confirmed by the move up from it, and measured in
+        # the spread: the detector was following price before the move began
+        assert ev["kind"][first] == LOW and ev["level"][first] == round(100.0 * PX)
+        at = int(ev["ext_ordinal"][first] - candle["slot_ordinal"][0])
+        assert at < flat and vol["atr_price"][at - 1] == 0
+        assert ev["atr"][first] == vol["norm_atr_price"][at - 1] * PX
 
 
 def test_identical_in_any_chunking_and_from_checkpoints(days, whole):
@@ -750,9 +795,10 @@ def test_warmup_covers_the_threshold_inputs_and_warm_reports_the_structure(days,
     atr = warmup.wilder(SMALL.atr_period)
     assert FAST[0](ctx).warmup() == atr * 60
     assert SLOW[0](ctx).warmup() == atr * 3600
-    assert {s.K for s in FAST} == {s.K for s in SLOW} == {0.5, 1.0, 2.0}
+    assert {s.K for s in FAST} == {s.K for s in SLOW} == {0.5, 1.0, 2.0, 3.0}
     assert [s.VARIANT for s in (*FAST, *SLOW)] == [
-        "fast_atr_0p5", "fast_atr_1", "fast_atr_2", "slow_atr_0p5", "slow_atr_1", "slow_atr_2",
+        "fast_atr_0p5", "fast_atr_1", "fast_atr_2", "fast_atr_3",
+        "slow_atr_0p5", "slow_atr_1", "slow_atr_2", "slow_atr_3",
     ]  # fmt: skip
     settings = FAST[1](ctx).settings()
     assert (settings["multiplier"], settings["spread_floor"], settings["reclaim_window_rows"]) == (
@@ -769,3 +815,34 @@ def test_warmup_covers_the_threshold_inputs_and_warm_reports_the_structure(days,
     assert warm == [False, True, True, True, True, False, True, True, True, True]  # 6th: the gap
     missing = join(whole, "bar_1s")[0]["status"] == MISSING
     assert missing.sum() == 40
+
+
+def test_the_structure_code_combines_the_trend_with_the_break_of_the_last_high_or_low():
+    from strategy_core.columns import Table
+    from strategy_core.stage_step_pivot import STRUCTURE, with_structure
+
+    n = 7
+    trend = np.array([1, 1, 1, 0, -1, -1, 0])
+    up_age = np.array([5, 0, 0, 0, 3, 0, 9])
+    down_age = np.array([0, 0, 7, 0, 0, 2, 4])
+    table = Table(
+        {
+            "end_ns": np.arange(n),
+            "trend": trend,
+            "break_up_age_s": up_age,
+            "break_down_age_s": down_age,
+        },
+        {
+            "trend": np.array([False] * 6 + [True]),
+            "break_up_age_s": up_age == 0,
+            "break_down_age_s": down_age == 0,
+        },
+    )
+    out = with_structure(table)
+    # up and extending, up and inside, up with its low broken, mixed and inside, down with its
+    # high broken, down and extending; the last row's trend is unknown
+    assert out.values["structure"].tolist() == [8, 7, 6, 4, 2, 0, 0]
+    assert out.nulls["structure"].tolist() == [False] * 6 + [True]
+    both = Table(table.values, table.nulls | {"trend": np.zeros(n, bool)})
+    assert with_structure(both).values["structure"][6] == 3  # both broken: the low more recently
+    assert STRUCTURE.role == "feature" and len(with_structure(table)) == n

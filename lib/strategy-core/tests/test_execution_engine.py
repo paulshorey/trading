@@ -2,11 +2,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
-from helpers import T0, calendar, coverage, quotes, trades
+from helpers import T0, TICK, calendar, coverage, quotes, trades
 from strategy_core.engine import Engine, MarketChunk, session_view, split_by_second
 from strategy_core.execution import (
     CANCELLED,
+    EXPIRED,
     FILLED,
+    UNKNOWN,
     WAIT,
     BookView,
     ExecutionConfig,
@@ -17,6 +19,7 @@ from strategy_core.features import FeatureConfig, FeatureFrame
 from strategy_core.labels import (
     CandidateSummary,
     attempt,
+    attempt_limit,
     candidate_outcomes,
     iter_candidate_outcomes,
     summarize_candidates,
@@ -27,12 +30,13 @@ from strategy_core.market import (
     HOUR,
     NS,
     PRODUCTS,
+    PX,
     UNDEF_PRICE,
     UNDEF_SIZE,
     BookEvents,
     Trades,
 )
-from strategy_core.strategies import BiasPullback, Bracket, make_strategy
+from strategy_core.strategies import BiasPullback, Bracket, Entry, make_strategy, trend_gate
 from strategy_core.synthetic import random_book, random_trades, trade_events
 
 GC = PRODUCTS["GC"]
@@ -279,27 +283,64 @@ def run(cal, strategy, chunks, config, features):
     return engine.finish(), FeatureFrame.concat(frames)
 
 
-@pytest.mark.parametrize("use_bias", [False, True])
-def test_whole_session_and_second_by_second_runs_are_identical(use_bias):
+CASES = {
+    "pullback": ({"use_bias": False}, {}),
+    "bias": ({"use_bias": True}, {}),
+    # a position is closed by the signal that would open the other side
+    "opposite": ({"use_bias": False, "close": "opposite"}, {}),
+    # limit entries at the touch, cancelled after 3 seconds, behind the displayed size
+    "passive": ({"use_bias": False, "entry": {"kind": "passive", "wait_s": 3.0}}, {}),
+    "passive_through": (
+        {"use_bias": False, "close": "opposite", "entry": {"kind": "passive", "wait_s": 20.0}},
+        {"passive_fill": "through"},
+    ),
+    # no time limit, the middle timeframe's ATR, the stop moved to the entry price, a gate
+    "swing": (
+        {
+            "use_bias": False,
+            "close": "opposite",
+            "gate": ["10m@10s.mid_atr_0p5.trend"],
+            "entry": {"kind": "market", "cutoff_s": 600},
+            "bracket": {
+                "target_atr": 1.0,
+                "stop_atr": 1.0,
+                "max_hold_s": None,
+                "atr": "10m@10s",
+                "breakeven_atr": 0.3,
+            },
+        },
+        {},
+    ),
+    # positions sized by risk, and a session stopped by its loss limit
+    "risk": (
+        {"use_bias": False},
+        {"account_usd": 20_000.0, "risk_pct": 1.0, "daily_loss_pct": 1.5},
+    ),
+}
+
+
+@pytest.mark.parametrize("case", CASES)
+def test_whole_session_and_second_by_second_runs_are_identical(case):
     cal = calendar((0, 2.5), (3, 6))
     features = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    extra, execution = CASES[case]
     config = ExecutionConfig(
         feed_latency_ms=3,
         close_delay_ms=80,
         order_latency_ms=40,
         cooldown_s=5,
         flat_before_close_s=120,
+        **execution,
     )
     t = random_trades(T0, T0 + 6 * HOUR, seed=21, rate=1.5, recv_jitter_ns=150_000_000)
     params = {
-        "use_bias": use_bias,
         "trigger_rsi": 40.0,
         "trigger_delta": -1.0,
         "bias_ret_atr": 0.0,
         "bias_rsi": 0.0,
         "max_bias_age_s": 4000.0,
         "bracket": {"target_atr": 1.0, "stop_atr": 1.0, "max_hold_s": 120},
-    }
+    } | extra
     book = random_book(t, seed=22, recv_jitter_ns=150_000_000)
     sessions = []
     for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True):
@@ -318,12 +359,67 @@ def test_whole_session_and_second_by_second_runs_are_identical(use_bias):
     )
     for name, values in whole_frame.features.items():
         np.testing.assert_array_equal(step_frame.features[name], values, err_msg=name)
+    for name, values in whole_frame.context.items():
+        np.testing.assert_array_equal(step_frame.context[name], values, err_msg=name)
     assert whole["trades"] == stepwise["trades"]
     assert whole["summary"] == stepwise["summary"]
     assert whole["quality"] == stepwise["quality"]
-    assert whole["summary"]["trades"] >= 5, whole["summary"]
-    assert {t["exit_reason"] for t in whole["trades"]} >= {"target", "stop"}
-    assert whole["quality"]["test"]["late_trades"] > 0  # the jitter exercises late arrivals
+    summary, done = whole["summary"], whole["trades"]
+    assert summary["trades"] >= 5, summary
+    reasons = {t["exit_reason"] for t in done}
+    if case in ("pullback", "bias"):
+        assert reasons >= {"target", "stop"}
+        assert summary["expired_orders"] == summary["unsized_signals"] == 0
+        assert whole["quality"]["test"]["late_trades"] > 0  # the jitter exercises late arrivals
+    if case == "opposite":
+        assert "decision" in reasons
+        # a closing decision is made while the position is known, by the opposite signal
+        for t in (t for t in done if t["exit_reason"] == "decision"):
+            assert int(t["exit_ns"]) - int(t["entry_ns"]) > 0
+    if case == "passive":
+        assert summary["expired_orders"] > 0  # nothing reached them within 3 seconds
+    if case in ("passive", "passive_through"):
+        # filled at the touch of the book they met: on average better than the mid-price the
+        # engine held when it decided, where a market order pays half the spread
+        assert np.mean([t["entry_slip_ticks"] for t in done]) < 0
+    if case == "swing":
+        assert not reasons & {"time"} and reasons & {"session_close", "decision"}
+        assert any("stop_at_entry" in t["flags"] for t in done)
+        gate = whole_frame.features["10m@10s.mid_atr_0p5.trend"]
+        at = np.searchsorted(whole_frame.end, [int(t["signal_end_ns"]) for t in done])
+        assert all(not gate[i] * t["direction"] < 0 for i, t in zip(at, done, strict=True))
+        assert np.isfinite(whole_frame.context["atr:10m@10s"]).any()
+    if case == "risk":
+        assert {t["contracts"] for t in done} - {1} and summary["net_pct"] == pytest.approx(
+            100 * summary["net_usd"] / 20_000
+        )
+        assert summary["sessions_at_daily_limit"] >= 1
+        # sized so that the stop risks at most 1% of the account
+        for t in done:
+            risk = abs(t["entry_px"] - t["stop_px"]) / 0.1 * GC.tick_value * t["contracts"]
+            assert risk <= 200 + 1e-6
+
+
+def test_no_position_is_opened_after_the_daily_loss_limit_until_the_next_session():
+    cal = calendar((0, 2.5), (3, 6))
+    config = ExecutionConfig(account_usd=20_000.0, risk_pct=1.0, daily_loss_pct=0.01)
+    t = random_trades(T0, T0 + 6 * HOUR, seed=21, rate=1.5)
+    engine = Engine(GC, cal, make_strategy("bias_pullback", {
+        "use_bias": False, "trigger_rsi": 40.0, "trigger_delta": -1.0,
+    }), config, FeatureConfig(rsi_period=3, atr_period=3, volume_period=3))  # fmt: skip
+    for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True):
+        inside = (t.ts_recv >= o) & (t.ts_recv < c)
+        engine.process(session_chunk(cal, t.take(inside), o, c))
+    out = engine.finish()
+    # a limit of $2 is passed by the first losing trade of each session: nothing follows it
+    by_session = [
+        [x for x in out["trades"] if o < int(x["entry_ns"]) < c]
+        for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True)
+    ]
+    for held in by_session:
+        total = np.cumsum([x["pnl_usd"] for x in held])
+        assert len(held) >= 1 and total[-1] <= -2 and (total[:-1] > -2).all()
+    assert out["summary"]["sessions_at_daily_limit"] == 2
 
 
 def test_labels_match_the_engine_for_the_same_decision():
@@ -583,3 +679,344 @@ def test_a_session_view_is_the_view_the_engine_builds_for_the_session():
     for view in (result.view, alone):
         rows = candidate_outcomes(sim, "GCZ6", result.frame, result.signals, view)
         assert rows == engine.finish()["trades"] and len(rows) == 1
+
+
+def test_a_resting_limit_entry_fills_at_its_price_when_a_trade_goes_through_it():
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    rows = [
+        (T0 + 60_120_000_000, 1999.5, 1, 1),  # through the price, before the order arrives
+        (T0 + 70 * S, 1999.8, 1, 1),  # at the price: no queue position, so no fill
+        (T0 + 80 * S, 1999.7, 1, 1),  # through it: filled at the limit price
+        (T0 + 90 * S, 2000.4, 1, 1),  # through the target, 0.5 above the fill
+    ]
+    view = exec_view(trades(rows), quotes([ENTRY]))
+    limit = round(1999.8 * PX)
+
+    def state(expire_s, config=CFG, px=limit, direction=1, signal_s=60, atr=0.5, data=view):
+        s = Simulator(GC, config, sim.bracket, CAL)
+        pos = s.order(direction, "GCZ6", T0 + signal_s * S, atr, {}, data)
+        return attempt_limit(s, data, pos, px, T0 + expire_s * S), pos
+
+    (closed, trade, known), pos = state(200)
+    assert closed == "closed" and trade["exit_reason"] == "target"
+    assert (pos.entry_px, pos.entry_ns, pos.entry_known_ns) == (
+        limit, T0 + 80 * S, T0 + 81_100_000_000,
+    )  # fmt: skip
+    assert trade["pnl_ticks"] == pytest.approx(5) and known == int(trade["exit_known_ns"])
+    # never filled before its expiry: known when that second closes, and no trade
+    assert state(75)[0] == ("expired", None, T0 + 76_100_000_000)
+    assert state(60)[0] == ("expired", None, T0 + 61_100_000_000)  # expired when it arrives
+    touch = ExecutionConfig(**{**CFG.__dict__, "limit_fill": "touch"})
+    assert state(200, touch)[1].entry_ns == T0 + 70 * S
+    # a book already through the price fills on arrival, at the book and never worse
+    (closed, trade, _), pos = state(200, px=round(2000.3 * PX))
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.1 * PX), ARRIVAL)
+    # ... but only at a price the book shows within the limit: one that a stress tick, or size
+    # beyond the displayed size, pushes past its price is not filled there. It rests, and the
+    # trade through its price at 70 s fills it
+    worse = ExecutionConfig(**{**CFG.__dict__, "adverse_ticks": 5})
+    _, pos = state(200, worse, px=round(2000.3 * PX))
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.3 * PX), T0 + 70 * S)
+    deep = Simulator(GC, CFG, sim.bracket, CAL)
+    large = deep.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view, contracts=9)  # 5 are displayed
+    large.limit_px, large.expire_ns = round(2000.1 * PX), T0 + 200 * S
+    assert deep.rest(view, large)[0] == FILLED and large.entry_ns == T0 + 70 * S
+    assert large.entry_px == round(2000.1 * PX) and "beyond_displayed_size" not in large.flags
+    # a sell rests above the market: the trade at 2000.4 goes through 2000.3
+    (closed, trade, _), pos = state(200, px=round(2000.3 * PX), direction=-1)
+    assert (pos.entry_px, pos.entry_ns) == (round(2000.3 * PX), T0 + 90 * S)
+    # the trade that fills the order never triggers its exits: a stop one tick below the price
+    (closed, trade, _), pos = state(200, atr=0.01)
+    assert pos.stop_px == limit - TICK and trade["exit_reason"] == "target"
+    # no usable book when it arrives: unknown; the data ends while it rests: unknown
+    short = exec_view(trades(rows[:2]), quotes([ENTRY]), end=T0 + 75 * S)
+    assert state(200, data=short)[0] == ("pending", None, 0)
+    assert state(74, data=short)[0][0] == "expired"
+    none = exec_view(trades(rows), quotes([(T0 + 1 * S, None, 2000.1)]))
+    assert state(200, data=none)[0] == ("entry_no_book", None, T0 + 61_100_000_000)
+    assert state(200, signal_s=3300)[0] == ("late", None, T0 + 3300 * S)
+
+
+def test_a_closing_decision_is_a_market_order_that_the_bracket_can_still_beat():
+    sim = Simulator(GC, CFG, Bracket(9, 1.0, 600), CAL)
+    book = [ENTRY, (T0 + 69 * S, 2000.3, 2000.4), (T0 + 75 * S, 2000.0, 2000.1)]
+
+    def exit_of(rows, decision_s=70):
+        view = exec_view(trades(rows), quotes(book))
+        pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+        assert sim.fill(view, pos)[0] == FILLED
+        sim.close(pos, T0 + decision_s * S + CFG.close_delay)
+        return sim.advance(view, 0, pos)[1]
+
+    out = exit_of([(T0 + 61 * S, 2000.2, 1, 1)])
+    # decided at 70.1 s, it arrives 50 ms later and sells at the bid it meets
+    assert out["exit_reason"] == "decision" and int(out["exit_ns"]) == T0 + 70_150_000_000
+    assert out["exit_px"] == pytest.approx(2000.3)
+    assert int(out["exit_known_ns"]) == T0 + 71_100_000_000
+    # the stop is still at the exchange while the order travels: a trade at 70.12 s fills it
+    out = exit_of([(T0 + 70_120_000_000, 1999.6, 1, 1)])
+    assert out["exit_reason"] == "stop"
+    out = exit_of([(T0 + 70_160_000_000, 1999.6, 1, 1)])  # after it arrived: too late
+    assert out["exit_reason"] == "decision"
+    # a decision after the timed exit changes nothing
+    assert exit_of([(T0 + 61 * S, 2000.2, 1, 1)], decision_s=700)["exit_reason"] == "time"
+
+
+def test_a_position_without_a_time_limit_is_held_to_the_forced_exit():
+    sim = Simulator(GC, CFG, Bracket(9, 9, None), CAL)
+    view = exec_view(trades([(T0 + 61 * S, 2000.2, 1, 1)]), quotes([ENTRY]))
+    pos = sim.order(-1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    assert sim.fill(view, pos)[0] == FILLED
+    out = sim.advance(view, 0, pos)[1]
+    assert out["exit_reason"] == "session_close" and out["hold_s"] == pytest.approx(3239.9)
+    with pytest.raises(ValueError, match="max_hold_s"):
+        Bracket(max_hold_s=0)
+    with pytest.raises(ValueError, match="atr must be"):
+        Bracket(atr="5m@5s")
+
+
+def test_a_passive_entry_joins_the_touch_behind_the_displayed_size():
+    entry = Entry("passive", wait_s=5.0)
+    rows = [
+        (T0 + 61 * S, 2000.0, 3, -1),  # sellers hit three of the five ahead at the bid
+        (T0 + 62 * S, 2000.0, 2, -1),  # the other two
+        (T0 + 63 * S, 2000.0, 1, -1),  # its own contract
+        (T0 + 90 * S, 2000.6, 1, 1),  # through the target 0.5 above
+    ]
+    view = exec_view(trades(rows), quotes([ENTRY]))
+
+    def entered(config=CFG, data=view, direction=1, contracts=None):
+        sim = Simulator(GC, config, BRACKET, CAL, entry)
+        pos = sim.order(direction, "GCZ6", T0 + 60 * S, 0.5, {}, data, contracts)
+        return sim.enter(data, pos), pos, sim
+
+    (status, known, after), pos, sim = entered()
+    assert (status, pos.limit_px, pos.entry_px) == (FILLED, round(2000.0 * PX), round(2000.0 * PX))
+    assert (pos.entry_ns, known, pos.fill_record) == (T0 + 63 * S, T0 + 64_100_000_000, 2)
+    assert sim.advance(view, after, pos)[1]["exit_reason"] == "target"
+    # only a seller consumes bids: a print of unknown side, or a buyer's, at the bid moves no
+    # queue, however large (MBP-1 gives no evidence that it did)
+    for side in (0, 1):
+        big = exec_view(trades([(T0 + 61 * S, 2000.0, 6, side)]), quotes([ENTRY]))
+        (status, _, _), pos, _ = entered(data=big)
+        assert (status, pos.queue) == (EXPIRED, 6), side
+    sold = exec_view(trades([(T0 + 61 * S, 2000.0, 6, -1)]), quotes([ENTRY]))
+    assert entered(data=sold)[0][0] == FILLED
+    # a sell rests at the ask: buyers lift the size ahead; sellers and unknown prints do not
+    for side, status in ((1, FILLED), (-1, EXPIRED), (0, EXPIRED)):
+        lifted = exec_view(trades([(T0 + 61 * S, 2000.1, 6, side)]), quotes([ENTRY]))
+        assert entered(data=lifted, direction=-1)[0][0] == status, side
+    # two contracts need one more to trade there: nothing does before the order is cancelled
+    (status, known, _), pos, _ = entered(contracts=2)
+    assert (status, known, pos.queue) == (EXPIRED, T0 + 66_100_000_000, 1)
+    strict = ExecutionConfig(**{**CFG.__dict__, "passive_fill": "through"})
+    assert entered(strict)[0][0] == EXPIRED  # no trade went through the bid
+    # a sell joins the ask; a trade through it fills it at its price at once
+    up = exec_view(trades([(T0 + 61 * S, 2000.2, 1, 1)]), quotes([ENTRY]))
+    (status, _, _), pos, _ = entered(strict, up, direction=-1)
+    assert (status, pos.entry_px, pos.entry_ns) == (FILLED, round(2000.1 * PX), T0 + 61 * S)
+    # chunk by chunk, the size still ahead is carried on the position
+    sim = Simulator(GC, CFG, BRACKET, CAL, entry)
+    whole = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    first = exec_view(trades(rows[:1]), quotes([ENTRY]), end=T0 + 62 * S)
+    assert sim.enter(first, whole) == (WAIT, 0, 0) and whole.queue == 3 and whole.resting
+    rest = exec_view(trades(rows[1:]), quotes([]), end=T0 + HOUR)
+    assert sim.enter(rest, whole)[0] == FILLED and whole.entry_ns == T0 + 63 * S
+    with pytest.raises(ValueError, match="kind"):
+        Entry("limit")
+
+
+def test_the_stop_moves_to_the_entry_price_once_the_amended_order_has_arrived():
+    bracket = Bracket(target_atr=3.0, stop_atr=1.0, max_hold_s=600, breakeven_atr=1.0)
+    sim = Simulator(GC, CFG, bracket, CAL)
+    book = [ENTRY, (T0 + 64 * S, 2000.0, 2000.1)]
+
+    def exit_of(rows):
+        view = exec_view(trades(rows), quotes(book))
+        pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+        assert sim.fill(view, pos)[0] == FILLED and pos.entry_px == round(2000.1 * PX)
+        return sim.advance(view, 0, pos)[1], pos
+
+    far = (T0 + 63 * S, 2000.6, 1, 1)  # 0.5 in favour: known at 64.1 s, amended by 64.15 s
+    out, pos = exit_of([far, (T0 + 64_120_000_000, 2000.1, 1, 2), (T0 + 65 * S, 2000.0, 1, 2)])
+    assert pos.stop_at_entry_ns == T0 + 64_150_000_000
+    # the trade at the entry price at 64.12 s came before the amendment; the one at 65 s is
+    # at the moved stop and sells at the bid it left
+    assert out["exit_reason"] == "stop" and int(out["exit_ns"]) == T0 + 65 * S
+    assert out["flags"] == ["stop_at_entry"] and out["exit_px"] == pytest.approx(2000.0)
+    assert out["r_multiple"] == pytest.approx(-0.2)  # risk is still the first stop's distance
+    # without the move in favour the stop stays where it was
+    out, pos = exit_of([(T0 + 65 * S, 2000.0, 1, 2)])
+    assert out["exit_reason"] == "time" and not pos.stop_at_entry_ns and out["flags"] == []
+
+
+def test_positions_are_sized_by_the_risk_of_their_stop():
+    risky = ExecutionConfig(account_usd=100_000.0, risk_pct=0.5)
+    sim = Simulator(GC, risky, Bracket(stop_atr=1.0), CAL)
+    # a stop of 5 ticks risks $50 a contract and one of 100 ticks $1,000: $500 buys 10 and 0
+    assert sim.size(np.array([0.5, 10.0, 4.9, np.nan])).tolist() == [10, 0, 1, 0]
+    assert Simulator(GC, CFG, BRACKET, CAL).size(np.array([0.5, 10.0])).tolist() == [1, 1]
+    with pytest.raises(ValueError, match="risk_pct"):
+        ExecutionConfig(account_usd=1e5, risk_pct=0)
+
+
+def test_the_trend_gate_forbids_opening_against_a_named_trend_and_nothing_else():
+    f = {
+        "slow": np.array([1.0, -1.0, 0.0, np.nan, 1.0]),
+        "mid": np.array([1.0, 1.0, 1.0, 1.0, -1.0]),
+    }
+    long_ok, short_ok = trend_gate(f, ("slow", "mid"), 5)
+    assert long_ok.tolist() == [True, False, True, True, False]
+    assert short_ok.tolist() == [False, False, False, False, False]
+    assert trend_gate(f, ("slow",), 5)[1].tolist() == [False, True, True, True, False]
+    assert all(v.all() for v in trend_gate(f, (), 5))
+
+
+def test_the_book_held_at_many_slot_ends_equals_the_book_held_at_each():
+    t = random_trades(T0, T0 + HOUR, seed=4, rate=3)
+    book = random_book(t, seed=9, recv_jitter_ns=300_000_000)
+    cover = np.array([[T0, T0 + 1000 * S], [T0 + 1200 * S, T0 + HOUR]])  # a gap in the data
+    view = exec_view(t, book).book
+    for held in (view, BookView(view.b, view.slot_end, coverage=cover), BookView.empty()):
+        ends = T0 + np.arange(1, 3601, 7) * S
+        bid, ask, ok = held.known_many(ends)
+        for i, end in enumerate(ends.tolist()):
+            quote = held.known(end)
+            usable = quote is not None and quote.usable
+            assert bool(ok[i]) == usable, end
+            if usable:
+                assert (int(bid[i]), int(ask[i])) == (quote.bid, quote.ask)
+    assert ok.sum() == 0  # no events: no book
+
+
+def test_a_strategy_sees_what_a_trade_would_cost_in_r_at_each_row():
+    cal = calendar((0, 1))
+    t = random_trades(T0, T0 + HOUR, seed=4, rate=3)
+    chunk = session_chunk(cal, t, int(cal.opens[0]), int(cal.closes[0]))
+    seen = {}
+
+    class Watching(OneShot):
+        def signals(self, f):
+            seen.update(f)
+            return super().signals(f)
+
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=100, order_latency_ms=50)
+    engine = Engine(GC, cal, Watching(), config)
+    frame = engine.process(chunk).frame
+    assert "exec.spread_r" not in frame.features  # a cost is not a model input
+    spread, commission = seen["exec.spread_r"], seen["exec.commission_r"]
+    atr = frame.context["atr"]
+    i = int(np.flatnonzero(np.isfinite(atr) & np.isfinite(spread))[-1])
+    stop = max(round(engine.strategy.bracket.stop_atr * atr[i] * 1e9 / GC.tick_size), 1)
+    assert commission[i] == pytest.approx(2 * 2.5 / (stop * GC.tick_value))
+    assert spread[i] > 0 and spread[i] * stop == pytest.approx(round(spread[i] * stop))  # ticks
+
+
+def test_a_limit_that_rests_through_missing_data_has_an_unknown_outcome():
+    """A trade during missing data could have filled the order unseen, so neither a later fill
+    nor an expiry is known. A fill seen before the gap is."""
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    limit = round(1999.8 * PX)
+    gap = np.array([[T0, T0 + 65 * S], [T0 + 70 * S, T0 + 3600 * S]])  # nothing from 65 to 70 s
+
+    def state(rows, expire_s=75, cover=gap):
+        t, book = trades(rows), quotes([ENTRY])
+        full = exec_view(t, book)
+        data = ExecView(
+            full.t, full.known, BookView(full.book.b, full.book.slot_end, coverage=cover), full.end
+        )
+        pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, data)
+        return attempt_limit(sim, data, pos, limit, T0 + expire_s * S), pos
+
+    # it arrives at 60.15 s and would expire at 75 s with no trade through its price
+    (outcome, trade, known), _ = state([(T0 + 72 * S, 1999.9, 1, -1)])
+    assert (outcome, trade, known) == ("uncovered", None, T0 + 66_100_000_000)
+    # a trade through its price after the gap proves nothing about what came first
+    assert state([(T0 + 72 * S, 1999.7, 1, -1)])[0][0] == "uncovered"
+    # one seen before the gap is a known entry
+    (outcome, trade, _), pos = state([(T0 + 62 * S, 1999.7, 1, -1), (T0 + 90 * S, 2000.4, 1, 1)])
+    assert outcome == "closed" and pos.entry_ns == T0 + 62 * S
+    # an order that expires before the gap is known not to have traded
+    assert state([(T0 + 72 * S, 1999.7, 1, -1)], expire_s=64)[0][0] == "expired"
+    whole = np.array([[T0, T0 + 3600 * S]])
+    assert state([(T0 + 72 * S, 1999.9, 1, -1)], cover=whole)[0][0] == "expired"
+    # chunk by chunk: watched to 65 s in the first chunk, unknown in the one that holds the gap
+    t, book = trades([(T0 + 72 * S, 1999.9, 1, -1)]), quotes([ENTRY])
+    first = exec_view(t.take(np.arange(0)), book, end=T0 + 64 * S)
+    first = ExecView(first.t, first.known, BookView(first.book.b, first.book.slot_end,
+                                                    coverage=gap), first.end)  # fmt: skip
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, first)
+    pos.limit_px, pos.expire_ns = limit, T0 + 75 * S
+    assert sim.rest(first, pos) == (WAIT, 0, 0) and pos.covered_to == T0 + 64 * S
+    later = exec_view(t, quotes([]), end=T0 + 80 * S)
+    later = ExecView(later.t, later.known, BookView(later.book.b, later.book.slot_end,
+                                                    coverage=gap), later.end)  # fmt: skip
+    assert sim.rest(later, pos) == (UNKNOWN, T0 + 66_100_000_000, 0)
+
+
+def test_a_trade_received_before_a_late_fill_can_still_exit_the_position():
+    """Event times can arrive out of order. The trade that fills a resting order is excluded
+    from its exits, and nothing else is: a record received earlier that happened later counts."""
+    sim = Simulator(GC, CFG, Bracket(1.0, 1.0, 600), CAL)
+    limit = round(1999.8 * PX)
+    rows = [
+        # received first, happened at 81 s: through the target 0.5 above the fill
+        (T0 + 81 * S, 2000.4, 1, 1, 1_000),
+        # received a second and a half later, happened at 80 s: the fill, through the limit
+        (T0 + 80 * S, 1999.7, 1, -1, 1_500_000_000),
+    ]
+    view = exec_view(trades(rows), quotes([ENTRY]))
+    pos = sim.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    outcome, trade, _ = attempt_limit(sim, view, pos, limit, T0 + 200 * S)
+    assert pos.entry_ns == T0 + 80 * S and outcome == "closed"
+    assert trade["exit_reason"] == "target" and int(trade["exit_ns"]) == T0 + 81 * S
+    # a stop moved to the entry price by that earlier-received trade is not in force before
+    # the engine knows of the position and its amended order has arrived
+    even = Simulator(GC, CFG, Bracket(3.0, 1.0, 600, breakeven_atr=0.5), CAL)
+    pos = even.order(1, "GCZ6", T0 + 60 * S, 0.5, {}, view)
+    attempt_limit(even, view, pos, limit, T0 + 200 * S)
+    assert pos.entry_ns == T0 + 80 * S and pos.entry_known_ns > T0 + 81 * S
+    assert pos.stop_at_entry_ns == pos.entry_known_ns + CFG.order_latency
+
+
+def test_after_an_order_with_an_unknown_outcome_nothing_more_is_opened_that_session():
+    """A limit that rested through missing data may have filled unseen, so the portfolio is
+    not known to be flat: the engine counts the order and opens nothing until the session's
+    close. The next session trades again."""
+    cal = calendar((0, 1), (2, 3))
+    features = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    config = ExecutionConfig(feed_latency_ms=0, close_delay_ms=80, order_latency_ms=40,
+                             cooldown_s=0, flat_before_close_s=120)  # fmt: skip
+    t = random_trades(T0, T0 + 3 * HOUR, seed=21, rate=1.5)
+    book = random_book(t, seed=22)
+    params = {
+        "trigger_rsi": 40.0, "trigger_delta": -1.0, "bias_ret_atr": 0.0, "bias_rsi": 0.0,
+        "max_bias_age_s": 4000.0, "use_bias": False,
+        "bracket": {"target_atr": 1.0, "stop_atr": 1.0, "max_hold_s": 120},
+        "entry": {"kind": "passive", "wait_s": 20.0},
+    }  # fmt: skip
+
+    def play(cover):
+        engine = Engine(GC, cal, make_strategy("bias_pullback", params), config, features)
+        for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True):
+
+            def inside(r, o=o, c=c):
+                known = r.ts_recv + config.feed_latency
+                return r.take((known >= o + config.close_delay) & (known < c + config.close_delay))
+
+            engine.process(MarketChunk("GCZ6", o, c, inside(t), cover, "test", True, inside(book)))
+        return engine.finish()
+
+    whole = play(coverage(cal))
+    assert whole["summary"]["orders_with_unknown_outcome"] == 0
+    orders = sorted(int(x["signal_end_ns"]) for x in whole["trades"])
+    first_close = int(cal.closes[0])
+    resting = next(s for s in orders if T0 + 600 * S < s < first_close - 600 * S)
+    assert [s for s in orders if resting < s < first_close]  # with data, it trades on
+    # five seconds without data, starting just after that order begins to rest
+    lost = np.array([[T0, resting + S], [resting + 6 * S, int(cal.closes[-1])]], np.int64)
+    out = play(lost)
+    assert out["summary"]["orders_with_unknown_outcome"] == 1
+    later = [int(x["signal_end_ns"]) for x in out["trades"]]
+    assert not [s for s in later if resting <= s < first_close]  # nothing more that session
+    assert [s for s in later if s < resting] and [s for s in later if s > first_close]

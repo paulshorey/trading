@@ -81,6 +81,13 @@ COLUMNS: tuple[Column, ...] = (
         BIGINT,
         "Buy - sell volume from the session open through this second; NULL after missing data",
     ),
+    Column(
+        "cvd",
+        BIGINT,
+        "Buy - sell volume from the contract's first stored second through this one: it never "
+        "restarts at a session open. NULL on a missing second; what traded unseen in missing "
+        "data is not in it",
+    ),
     *_metric_columns(),
 )
 OBSERVED_ONLY = {"open", "high", "low", "close", "high_at_ns", "low_at_ns", "pv"} | {
@@ -93,14 +100,18 @@ OBSERVED_ONLY = {"open", "high", "low", "close", "high_at_ns", "low_at_ns", "pv"
 class SessionState:
     """Accumulators from each calendar session's open (the scheduled-open interval holding the
     slot): buy - sell and sided volume, and the first, highest, and lowest trade price.
-    Missing data makes the rest of the session incomplete."""
+    Missing data makes the rest of the session incomplete. `total` is buy - sell volume from
+    the first row this state saw, across sessions."""
 
-    STATE = ("interval", "cvd", "sided", "incomplete", "open_px", "high_px", "low_px", "has_px")
+    STATE = (
+        "interval", "cvd", "sided", "incomplete", "open_px", "high_px", "low_px", "has_px", "total",
+    )  # fmt: skip
 
     def __init__(self, calendar: SessionCalendar):
         self.calendar = calendar
         self.interval, self.cvd, self.sided, self.incomplete = -1, 0, 0, 0
         self.open_px, self.high_px, self.low_px, self.has_px = 0, 0, 0, 0
+        self.total = 0
 
     def update(self, bars: BaseBars) -> dict[str, np.ndarray]:
         m = len(bars)
@@ -115,9 +126,11 @@ class SessionState:
             "low_px": np.zeros(m, np.int64),
             "has_px": np.zeros(m, np.int8),
             "interval_open": cal.opens[np.maximum(iv, 0)],
+            "total": self.total + np.cumsum(bars.buy - bars.sell),
         }
         if m == 0:  # a chunk inside a closure has no rows
             return out
+        self.total = int(out["total"][-1])
         cuts = np.flatnonzero(np.r_[True, iv[1:] != iv[:-1]])
         big = np.iinfo(np.int64).max
         for a, b in zip(cuts, np.r_[cuts[1:], m], strict=True):
@@ -210,6 +223,7 @@ class BarStage(Stage):
             "delta_high": bars.delta_high,
             "delta_low": bars.delta_low,
             "session_cvd": session["cvd"],
+            "cvd": session["total"],
         }
         v |= {RENAME.get(k, k): a for k, a in metrics.items()}
         nulls = {"session_cvd": missing | ~session["complete"]}

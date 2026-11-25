@@ -133,6 +133,22 @@ def stored_lead(product: Product, files: dict) -> int:
     return max(LEAD_FLOOR, required_lead(session_seconds(period))[0])
 
 
+def stored_warmup(warmup: list, data: ProductData) -> list:
+    """The warm-up sessions storage also holds. Storage keeps every scheduled session from the
+    first to the last fully downloaded one (`ingest.plan_product`): a session between them
+    that was downloaded only in part is stored, its uncovered seconds as missing rows, and is
+    replayed the same way here. A partly downloaded session outside them is not stored, and
+    replaying its fragment would warm the stages with rows storage never had, so it is left
+    out."""
+    _, _, downloaded = data.sessions()
+    if not downloaded:
+        return warmup
+    first, last = downloaded[0].open, downloaded[-1].open
+    return [
+        s for s in warmup if first <= s.open <= last or data.downloaded(s) or not data.touched(s)
+    ]
+
+
 def prepare(spec: RunSpec) -> Prepared:
     product = PRODUCTS[spec.product]
     files = files_for(product.parent_symbol, product.dataset)
@@ -141,9 +157,18 @@ def prepare(spec: RunSpec) -> Prepared:
     if spec.warmup_sessions is None:
         spec = replace(spec, warmup_sessions=stored_lead(product, files))
     calendar, warmup, trading = load_sessions(product, spec.start, spec.end, spec.warmup_sessions)
+    data = ProductData(product, files, job_ranges(product.parent_symbol, product.dataset))
+    warmup = stored_warmup(warmup, data)
     execution = ExecutionConfig(**spec.execution)
     source = HistoricalSource(
-        product, files, warmup, trading, execution, spec.contract, DayCache(book=True)
+        product,
+        files,
+        warmup,
+        trading,
+        execution,
+        spec.contract,
+        DayCache(book=True),
+        roll_warmup=spec.warmup_sessions,
     )
     return Prepared(
         spec,

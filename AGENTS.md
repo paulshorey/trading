@@ -12,8 +12,10 @@ timeframes at once.
 
 The central signal: on a faster and a slower timeframe, how likely is it that price has
 recently reversed and is now continuing? When both say "reversed up, continuing up", that is
-a buy; the mirror is a sell. The model combines this with other signals, above all
-divergences between price and RSI and between price and volume flow (CVD).
+a buy; the mirror is a sell. That is read from each timeframe's confirmed swing highs and
+lows and where price now stands against them, never from a model's guess about the current
+bar. The model combines this with other signals, above all whether the swings of RSI and of
+volume flow (CVD) agree with price's or diverge from them.
 
 ## The process (required order)
 
@@ -34,26 +36,35 @@ once, for any timeframe. The state of each step is in the
 3. **Indicators, then indicators of indicators.** RSI, EMA, ATR and the like on the windows;
    then the same tools applied to those series (RSI of RSI, EMA of RSI, trends of CVD), so
    the analysis covers derivatives of price and not only price.
-4. **Reversal and continuation probabilities.** For the price path, and for derived series
-   such as CVD and RSI: the probability that the current move will continue or reverse, and
-   that it has just reversed or continued. Pivots are found by rule first; trained models
-   then produce the probabilities, and their out-of-sample predictions are stored as inputs
-   for the next steps.
-5. **Structure and divergence.** Higher lows, lower highs, and divergences between the
-   pivots of price and those of RSI and of volume flow, within and across timeframes. It
-   has two passes: the first uses only the pivots and is an input to the models of step 4;
-   the second adds their probabilities.
-6. **The decision model.** Trained on everything above; its inference makes the backtest
-   and live decisions. It is judged by one portfolio's results after costs. A first version
-   is trained early, on what exists, as the yardstick: an input earns its place when the
-   decision model is better after costs with it than without it.
+4. **Swings and structure of price.** An ATR zigzag on each timeframe: a high is confirmed
+   when price has moved the threshold (about 3 ATR) away from it, and a confirmed swing
+   never changes. From the confirmed highs and lows and the current price: higher or lower
+   highs and lows, the trend they make, which levels the current price has broken, and how
+   far the open move has come toward confirming the next swing (`progress`, the pullback so
+   far over the threshold: on a random walk, the chance it confirms). No model predicts a
+   reversal: the swings are computed by rule only (Paul, November 23, 2026).
+5. **Swings and structure of derived series, and their agreement with price.** The same
+   zigzag and structure on RSI, on net volume flow (CVD), and on other indicators, then
+   whether their structure agrees with price's or diverges from it, within and across
+   timeframes. This is the second pass: it reads the indicators of step 3.
+6. **The decision model.** The one trained model. It reads everything above and decides
+   buy, sell, or nothing at every second. The position is long, flat, or short and moves
+   one step per decision, so the opposite decision closes an open position and cancels its
+   orders, whatever its bracket says. Its inference makes the backtest and live decisions. It is
+   judged by one portfolio's results after costs. A first version is trained early, on what
+   exists, as the yardstick: an input earns its place when the decision model is better
+   after costs with it than without it.
 
 Each part has a role ([structure](docs/project/roadmap.md#how-the-analysis-is-structured)):
-steps 1 to 3 describe the **state** of the market; pivots and structure raise **events**, the
-moments worth a decision; models give **forecasts**; step 6 makes **decisions**. An event
-names a side, on the middle timeframe; the slow one sets direction and the size of the
-bracket; the fast one times the entry. The decision model learns whether to take the trade
-an event proposes. Trades are intraday and flat before each close.
+steps 1 to 3 describe the **state** of the market; swings and structure describe where
+price and its derivatives stand against their own recent highs and lows; step 6 makes
+**decisions**. The decision is made every second, on `1m@1s`, reading every timeframe. The
+slower timeframes give the trend and forbid a trade against it, and the slow ATR sizes the
+bracket: stop and target the same distance away, no time limit, closed before the day's
+close. Entries are limit orders that last a few seconds. The risk of a trade and the loss that ends a day are percentages of
+the account. Trades are intraday and flat before each close; a second mode that holds a
+position across sessions is planned as a switch, with intraday the default
+([decision 40](docs/project/roadmap.md#decisions)).
 
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
@@ -89,6 +100,9 @@ points of price, ATR multiples, bounded ratios, oscillators, logs relative to a
 trailing average, or elapsed time, declared with `strategy_core.features.Unit`. Raw
 prices belong only in data handling and execution: order prices, fills, and P&L. Every
 new feature must pass the scale-invariance test (all prices or all sizes multiplied).
+A value in ATRs divides by the ATR floored at the spread (`strategy_core.normalizer`,
+`candle_*.norm_atr_bps`), never by the bare ATR, which decays to nothing in a market that has
+stopped moving. A series other than price (RSI, CVD) is measured in its own ATR.
 
 ## Sliding windows count rows, not clock time (required)
 
@@ -142,15 +156,22 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 
 - Start an ML experiment by specifying the decision row, prediction horizon, eligibility,
   target, simple baseline and success criterion. Record results for every predeclared variant.
-  Use the development dates in [the pivot spec](docs/project/pivot-label-spec.md) for examples
-  and pivot research. September 1, 2026 onward is reserved for final pivot-model evaluation.
+  Use the development dates in `backtest_runner/periods.py` (`check_period` refuses the
+  rest). September 1, 2026 onward is reserved for one final evaluation of the decision model.
 - A provisional HL/LH is visible at the decision row. Barrier resolution, subsequent
   confirmed structure and after-cost trade outcomes are different labels. Keep timeouts,
-  unknown observations and session ends identifiable. Any learned probability passed into
-  a later model must come from an earlier purged training fold and carry its model version.
+  unknown observations and session ends identifiable. There is one trained model, the
+  decision model; if a model's output ever becomes another model's input, it must come from
+  an earlier purged training fold and carry its model version.
+- Never rank, center, or correlate a forecast against its target within one session or trade
+  date when the target is a move inside that session: the move to a later point of the same
+  session falls as the current price rises, for any path, so such a measure rewards every
+  forecast that fades the session's move. Measure over all rows together and take the
+  interval from resampled trade dates
+  ([found](docs/project/yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
 - State the horizon of a test and what a trade costs there. The spread is about a third of
   a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
-  hourly one ([measured](docs/project/roadmap.md#review-of-november-20-2026)).
+  hourly one ([measured](docs/project/roadmap.md#costs-choose-the-timeframe)).
 - State how many independent trade dates a result rests on. Rows that share a window or a
   day are not independent; one year cannot settle an hourly question.
 - Where the order is free, add different information (the book, net flow, the partner
@@ -158,7 +179,7 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
 - Report every policy result for buys and sells apart, and by product. A year in which a
   product trended makes one side look skilled.
 - Evaluate predictive lifts on the same eligible decisions. Evaluate trading policies with
-  one portfolio, explicit costs and latency. See [the replay rules](docs/project/roadmap.md#after-cost-replay).
+  one portfolio, explicit costs and latency. See [how a policy is evaluated](docs/project/roadmap.md#how-a-policy-is-evaluated).
 - Preserve dataset provenance, timestamps, instrument/contract metadata, and execution assumptions.
 - Report data gaps and unavailable inputs; do not invent observations or order flow.
 - Compute features and decisions using only information available at that time.

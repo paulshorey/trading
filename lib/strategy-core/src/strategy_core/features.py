@@ -16,6 +16,7 @@ import numpy as np
 from . import kernels
 from .bars import BaseBars
 from .market import SessionCalendar
+from .normalizer import floored
 from .windows import COMPLETE, Candles, RollingWindow, WindowSpec
 
 
@@ -114,7 +115,12 @@ class WindowFeatures:
     def specs(self) -> list[FeatureSpec]:
         return [FeatureSpec(f"{self.spec.name}.{n}", u, d) for n, u, d in WINDOW_FEATURES]
 
-    def update(self, bars: BaseBars) -> tuple[Candles, dict[str, np.ndarray], np.ndarray]:
+    def update(
+        self, bars: BaseBars, spread_bps: np.ndarray | None = None
+    ) -> tuple[Candles, dict[str, np.ndarray], np.ndarray, np.ndarray]:
+        """The rolling candles of `bars`, their features, the ATR in price units, and the ATR
+        that normalizes: the ATR floored at `spread_bps`, the last sampled spread as of each
+        row (`normalizer`), or the ATR itself without one."""
         c = self.window.update(bars)
         m, cfg = len(c), self.config
         valid = c.status == COMPLETE
@@ -137,12 +143,15 @@ class WindowFeatures:
         s = self.vol
         kernels.ema_prior(c.volume, valid, c.phase, cfg.volume_period, s.ema, s.count, vol_base)
         with np.errstate(divide="ignore", invalid="ignore"):
-            atr_ok = np.where(atr > 0, atr, np.nan)
+            atr_bps = atr / close * 1e4
+            # the spread in price units, as the ATR is
+            norm = atr if spread_bps is None else floored(atr, spread_bps * close / 1e4)
+            atr_ok = np.where(norm > 0, norm, np.nan)
             span = c.high - c.low
             sided = c.buy + c.sell
             values = {
                 "rsi": rsi,
-                "atr_bps": atr / close * 1e4,
+                "atr_bps": atr_bps,
                 "ret_atr": chg / atr_ok,
                 "close_loc": np.where(span > 0, (c.close - c.low) / span, 0.5),
                 "vwap_atr": (c.close - c.vwap) / atr_ok,
@@ -159,4 +168,5 @@ class WindowFeatures:
             c,
             {f"{self.spec.name}.{k}": v for k, v in values.items()},
             np.where(priced, atr, np.nan),
+            np.where(priced, norm, np.nan),
         )

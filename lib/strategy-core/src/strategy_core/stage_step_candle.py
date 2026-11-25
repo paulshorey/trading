@@ -16,11 +16,13 @@ from typing import Any, ClassVar
 import numpy as np
 
 from . import warmup
+from .bars import MISSING
 from .columns import BIGINT, DOUBLE, INTEGER, SMALLINT, Column, Table
 from .engine import MarketChunk
 from .features import WINDOW_FEATURES, WindowFeatures
 from .indicators import AS_OF_FEATURES, FEATURES, CandleIndicators
 from .market import PX
+from .normalizer import last_spread_bps
 from .stage_step_bar import empty_table, second_frame
 from .stages import Stage
 from .timeframes import FAST, SLOW, Timeframe
@@ -68,6 +70,12 @@ def columns(tf: Timeframe) -> tuple[Column, ...]:
         Column("observed", SMALLINT, f"Seconds with trades in the window (of {tf.window_seconds})"),
         Column("delta_high", INTEGER, "Highest running buy - sell volume from the window start"),
         Column("delta_low", INTEGER, "Lowest running buy - sell volume from the window start"),
+        Column(
+            "norm_atr_bps",
+            DOUBLE,
+            "The ATR that normalizes values in ATRs: atr_bps, or the last sampled book spread "
+            "where that is larger (normalizer.py); never a model input",
+        ),
         *(Column(n, DOUBLE, d, u) for n, u, d in ENGINE_FEATURES),
         *(Column(n, DOUBLE, d, u) for n, u, d in FEATURES if n not in dropped),
     )
@@ -140,10 +148,11 @@ class StepCandleStage(Stage):
         "kernels",
         "indicators",
         "features",
+        "normalizer",
         "warmup",
         "state",
     )
-    STATE = ("bias", "window", "indicators", "observed")
+    STATE = ("bias", "window", "indicators", "observed", "book")
 
     def __init__(self, context):
         super().__init__(context)
@@ -153,6 +162,7 @@ class StepCandleStage(Stage):
         self.window = MetricWindow(spec.slots)
         self.indicators = CandleIndicators(spec.slots, cfg.rsi_period)
         self.observed = RollingSum(spec.slots)
+        self.book = np.zeros(3, np.int64)  # the last usable book: has, bid, ask
 
     def settings(self) -> dict[str, Any]:
         cfg = self.context.features
@@ -182,21 +192,30 @@ class StepCandleStage(Stage):
         minutes, metrics = frame["bars"], frame["metrics"]
         if not len(minutes):  # most one-second chunks finish no step row; nothing changes
             return empty_table(self.COLUMNS, self.NULLABLE)
-        candles, engine, atr = self.bias.update(minutes)
+        spread = last_spread_bps(
+            minutes.status,
+            (minutes.status != MISSING) & (metrics["quote_trades"] > 0),
+            metrics["last_bid"],
+            metrics["last_ask"],
+            self.book,
+        )
+        candles, engine, _, norm = self.bias.update(minutes, spread)
         win = self.window.update(minutes, metrics)
         observed = self.observed.update(frame["observed_seconds"])
         session = frame["session"] if "session" in frame else no_session(minutes.end)
-        features = self.indicators.update(candles, win, atr, session)
+        features = self.indicators.update(candles, win, norm, session)
         if self.TF.merged:  # the indicators count rows; a merged row holds several seconds
             complete = candles.status == COMPLETE
             share = observed / self.TF.window_seconds
             features["active_ratio"] = np.where(complete, share, np.nan)
         frame.update(candles=candles, window=win)
-        return self.table(candles, engine, features, win, observed)
+        return self.table(candles, engine, features, win, observed, norm)
 
     @classmethod
-    def table(cls, c, engine, features, win, observed) -> Table:
+    def table(cls, c, engine, features, win, observed, norm) -> Table:
         has_price = np.isfinite(c.close)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            norm_bps = norm / c.analysis()[3] * 1e4  # relative to the price `atr_bps` uses
 
         def fixed(x):
             return np.where(has_price, np.rint(np.where(has_price, x, 0) * PX), 0).astype(np.int64)
@@ -220,11 +239,13 @@ class StepCandleStage(Stage):
             "observed": observed,
             "delta_high": win["delta_high"].astype(np.int64),
             "delta_low": win["delta_low"].astype(np.int64),
+            "norm_atr_bps": norm_bps,
         }
         v |= {k.split(".", 1)[1]: a for k, a in engine.items()}
         v |= {k: a for k, a in features.items() if k in cls.FEATURE_NAMES}
         nulls = {k: ~has_price for k in PRICED}
         nulls |= {"vwap": ~np.isfinite(c.vwap), "start_ns": c.status == WARMUP}
+        nulls |= {"norm_atr_bps": ~np.isfinite(norm_bps)}
         nulls |= {k: ~np.isfinite(v[k]) for k in cls.FEATURE_NAMES}
         return Table(v, {k: nulls[k] for k in cls.NULLABLE})
 
@@ -238,7 +259,7 @@ def step_candle(tf: Timeframe) -> type[StepCandleStage]:
         "INPUTS": (f"bar_{tf.rows}",),
         "COLUMNS": columns(tf),
         "FEATURE_NAMES": feature_columns(tf),
-        "NULLABLE": (*PRICED, "vwap", "start_ns", *feature_columns(tf)),
+        "NULLABLE": (*PRICED, "vwap", "start_ns", "norm_atr_bps", *feature_columns(tf)),
     }
     return type(f"StepCandle_{tf.window}", (StepCandleStage,), attrs)
 

@@ -75,7 +75,7 @@ def test_phase_series_equals_standard_hourly_candles_and_reference_rsi(phase):
     cov = np.array([[T0, T0 + hours * HOUR]], np.int64)
     minutes = aggregate(t, cal.slot_ends(T0, T0 + hours * HOUR, MINUTE), MINUTE, cov, **KW)[0]
     wf = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5))
-    candles, f, _ = wf.update(minutes)
+    candles, f, _, _ = wf.update(minutes)
     sel = candles.phase == phase
     ends = candles.end[sel]
     hourly = aggregate(t, ends, HOUR, cov, **KW)[0]  # independent hourly candles on that grid
@@ -168,7 +168,7 @@ def test_phases_count_trading_time_across_an_early_close():
     cov = np.array([[T0, T0 + 40 * HOUR]], np.int64)
     minutes = aggregate(t, cal.slot_ends(T0, T0 + 40 * HOUR, MINUTE), MINUTE, cov, **KW).bars
     wf = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5))
-    candles, f, _ = wf.update(minutes)
+    candles, f, _, _ = wf.update(minutes)
     i = int(np.flatnonzero(candles.end == T0 + 23 * HOUR + MINUTE)[0])
     assert candles.start[i] == T0 + 17 * HOUR + 16 * MINUTE  # 60 rows back, not 60 minutes
     for k in range(60, len(candles)):  # same phase means exactly 60 rows apart
@@ -182,3 +182,64 @@ def test_phases_count_trading_time_across_an_early_close():
     np.testing.assert_allclose(
         f["1h@1m.rsi"][chain][ok], [np.nan if v is None else v for v in ref], equal_nan=True
     )
+
+
+def test_the_normalizing_atr_is_floored_at_the_last_sampled_spread():
+    """Roadmap decision 23: when the market stops moving the ATR decays toward zero, and a
+    value in ATRs would grow without bound. The normalizer is then the spread."""
+    from strategy_core import normalizer
+
+    atr = np.array([5.0, 0.4, 0.0, np.nan, 3.0, 0.2])
+    spread = np.array([1.0, 1.0, 1.0, 1.0, np.nan, np.nan])
+    # above the spread: the ATR, bit for bit; below it or zero: the spread; undefined stays so;
+    # without a known spread: the ATR
+    out = normalizer.floored(atr, spread)
+    np.testing.assert_array_equal(out, [5.0, 1.0, 1.0, np.nan, 3.0, 0.2])
+    assert out[0] is not None and normalizer.FLOOR == 1.0
+    # the spread is carried from the last row with a usable book, and unknown after missing data
+    status = np.array([2, 1, 1, 0, 1, 2, 1])
+    valid = np.array([True, False, False, False, False, True, False])
+    bid = np.array([1999, 0, 0, 0, 0, 1998, 0]) * PX
+    ask = np.array([2001, 0, 0, 0, 0, 1999, 0]) * PX
+    carry = np.zeros(3, np.int64)
+    got = normalizer.last_spread_bps(status, valid, bid, ask, carry)
+    wide, narrow = 2 / 2000 * 1e4, 1 / 1998.5 * 1e4
+    np.testing.assert_allclose(got, [wide, wide, wide, np.nan, np.nan, narrow, narrow])
+    assert carry.tolist() == [1, 1998 * PX, 1999 * PX]
+    # the next call starts from what was carried
+    again = normalizer.last_spread_bps(
+        status[:2] * 0 + 1, valid[:2] & False, bid[:2], ask[:2], carry
+    )
+    np.testing.assert_allclose(again, [narrow, narrow])
+
+
+def test_values_in_atrs_stay_bounded_when_the_market_stops_moving():
+    cal = calendar((0, 30))
+    busy = random_trades(T0, T0 + 6 * HOUR, seed=2, rate=1.0)
+    # one trade an hour afterwards, at one price: ranges of zero while the ATR decays
+    quiet_at = T0 + 6 * HOUR + np.arange(1, 24) * HOUR
+    last = float(busy.price[-1]) / PX
+    rows = [(int(ts), last, 1, 1, 1_000, last - 0.1, last + 0.1) for ts in quiet_at[:-1]]
+    rows.append((int(quiet_at[-1]), last + 0.3, 1, 1, 1_000, last + 0.2, last + 0.4))  # a move
+    from helpers import trades
+
+    t = Trades.concat([busy, trades(rows)])
+    cov = np.array([[T0, T0 + 30 * HOUR]], np.int64)
+    minutes = aggregate(t, cal.slot_ends(T0, T0 + 30 * HOUR, MINUTE), MINUTE, cov, **KW).bars
+    spread_bps = np.full(len(minutes), 0.2 / last * 1e4)  # the book stayed 0.2 wide
+    plain = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5, atr_period=5))
+    floored = WindowFeatures(BIAS, cal, FeatureConfig(rsi_period=5, atr_period=5))
+    _, raw, atr, _ = plain.update(minutes)
+    _, kept, atr2, norm = floored.update(minutes, spread_bps)
+    np.testing.assert_array_equal(atr, atr2)  # the ATR itself is never floored
+    np.testing.assert_array_equal(raw["1h@1m.atr_bps"], kept["1h@1m.atr_bps"])
+    a, b = raw["1h@1m.ret_atr"], kept["1h@1m.ret_atr"]
+    decayed = np.isfinite(atr) & (atr < 0.2)
+    live = np.isfinite(atr) & (atr > 0.2)
+    assert decayed.sum() > 100 and live.sum() > 100
+    np.testing.assert_array_equal(a[live], b[live])  # nothing changes where the ATR is larger
+    np.testing.assert_array_equal(norm[live], atr[live])
+    # the move of 0.3 after the quiet hours: several decayed ATRs, at most 1.5 spreads
+    assert np.nanmax(np.abs(b[decayed])) <= 0.3 / 0.2 + 1e-9
+    assert np.nanmax(np.abs(a[decayed])) > 2 * np.nanmax(np.abs(b[decayed]))
+    np.testing.assert_allclose(norm[decayed], 0.2, rtol=1e-3)  # the spread, in price units

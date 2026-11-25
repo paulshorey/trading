@@ -6,6 +6,341 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Review fixes to the four open PRs (November 24, 2026)
+
+Paul reviewed PRs #98 to #101 and found defects in each. All are fixed on the top of the stack
+and the four were merged together.
+
+- **The resting limit** (`execution.py`). A break in data coverage while an order rests,
+  before a fill is seen, gives an unknown outcome, counted as `orders_with_unknown_outcome`
+  and never read as an expiry. Only volume from the aggressor that would hit the order
+  counts toward the queue ahead of it. A limit that is marketable on arrival fills then only
+  when the whole order fills within its price; otherwise it rests. A trade received before
+  a late fill can still exit the position.
+- **The target** (`targets.py`, version 2). A trade counts by its own event time, from the
+  decision on and before the forced exit; one received later but stamped earlier no longer
+  settles a target before its decision. A session with no trades settles at the closing
+  mid-price.
+- **The dataset cache** (`dataset.py`, version 2). Its key holds the target and dataset
+  versions, the settings, and each selected session's contract and source files, so a
+  corrected target or file cannot load old rows.
+- **The calibration slope** (`yardstick.py`): fitted forward in time and weighted by date
+  ([spec](yardstick-spec.md#the-slope-fitted-forward-in-time-changed-after-the-run-november-24-2026)).
+- **The ATR floor.** `spread_atr` divided by the bare ATR; it now divides by the floored
+  one. The swing stages froze `atr_price` times a factor, which is zero where the ATR is
+  exactly zero, so a market that had stopped moving left its detector idle. They now freeze
+  `vol_*.norm_atr_price`, the ATR or the spread where that is larger.
+- Label stages stay out of the features the engine computes (`pipeline.py`).
+- From the automated review of the fixes: after an order with an unknown outcome the
+  engine opens nothing more until that session's close; the dataset's cache key also holds
+  each source file's condition and the part of the day it covers; a backtest's warm-up
+  leaves out a partly downloaded session only when it lies outside the stored period (one
+  between whole sessions is stored, as missing rows, and is replayed). The cache key holds
+  every builder of the selected contracts' rows, not one digest a stage. A policy result is
+  also given with each exit priced without a book charged one further stop distance, for
+  buys, sells, and each product too, and carries the count of orders with an unknown
+  outcome. A stop moved to the entry price is never in force before the engine knows of
+  the position.
+
+**Build and checks**
+
+- Migrations `0014_norm_atr_price` and `0015_swing_atr_snapshot` (the swing variants'
+  registered source of the frozen ATR), applied. `research ingest run GC SI --rebuild`
+  rewrote the volatility and swing tables; `ingest plan GC SI`: all 12 contracts `current`.
+- Read back on front sessions (`continuous_vol_1s`, 42.4 million rows): the floor binds on
+  975,927, the count recorded below; `norm_atr_price` is never under `atr_price`; no row
+  has an ATR of exactly zero, so that fix changes only the thin sessions before a contract
+  is the front one.
+- The decision model, rebuilt from its rows (run 7) and its policy (run 8): unchanged, the
+  same 432,513 targets with the same barrier counts, every slope zero, no position opened.
+  Run 9, after the row exactly an hour before the forced exit stopped being eligible (the
+  engine opens nothing then): 432,185 rows, every slope zero, `trees` 0.044 (-0.030 to
+  0.116).
+- Tests: strategy-core 160, backtest-runner 61. New: a limit resting through missing data;
+  queue credit by aggressor side; delayed prints at both ends of a target's interval; a
+  cache key that changes with a target version or a source file; forward blocks with a
+  purged date; fifteen flat minutes then a move, through the candle, volatility, and swing
+  stages.
+
+## Base changes: a continuous CVD, the ATR floor, the roll warm-up (November 24, 2026)
+
+Build-order item 10, step 1 of the process. Three changes to base rows and to what every
+stage reads, made together because each forces a rebuild of every table.
+
+- **`cvd`**, on the rows of every step (`bar_1s`, `bar_10s`, `bar_1m`): buy minus sell volume
+  through the life of a contract. `session_cvd` restarts at each session open; `cvd` never
+  does, so a swing of it can cross the daily break ([decision 41](roadmap.md#decisions)).
+  It is NULL only on a missing row. Both stay stored.
+- **The ATR floor** ([decision 23](roadmap.md#decisions); `strategy_core/normalizer.py`).
+  Every value in ATRs now divides by the larger of the ATR and the last sampled book spread:
+  the window features, the indicators, the statistics, the volatility family, and the frozen
+  ATR of the swings. `atr_bps` and `atr_price` are unchanged, and where the floor does not
+  bind every value is unchanged bit for bit. The normalizer is stored as
+  `candle_*.norm_atr_bps`, which is context and not a model input.
+- **The roll warm-up** (`source.py`): a source knows how many sessions a contract replays
+  after a roll apart from its warm-up list, and a session that was downloaded only in part
+  is left out of a backtest's warm-up, as storage leaves it out. No download held has such
+  a session.
+
+**How many rows the floor changes** (rows where the spread is above the ATR):
+
+| Timeframe | GC, front sessions | SI, front sessions | GC, every stored row | SI, every stored row |
+| --- | ---: | ---: | ---: | ---: |
+| `1m@1s` | 251,389 of 21.1 million (1.2%) | 724,538 (3.4%) | 28% | 33% |
+| `10m@10s` | 5,674 of 2.1 million (0.3%) | 13,703 (0.6%) | 4% | 8% |
+| `1h@1m` | 57 of 350,941 | 254 | 1.5% | 2.0% |
+
+Nearly all of it is in the thinly traded sessions before a contract becomes the front one,
+where the one-minute ATR was as small as a 10^20th of the spread. On front sessions the fast
+timeframe is the one touched: the spread is wider than a one-minute ATR in one row in thirty
+for SI.
+
+**Build and checks**
+
+- Migration `0013_cvd_and_atr_floor`; `research ingest run GC SI --rebuild --workers 8`,
+  run 4, 57 minutes, every table; `ingest plan GC SI` reports all 12 contracts `current`.
+  The database is 288 GB, about 120 GB of it the rewritten rows' dead space
+  (`VACUUM FULL` gives it back; the disk has 3 TB free).
+- `cvd` is set on 351,780 of the 353,100 front minute rows of each product (the rest are
+  missing rows).
+- The first decision model on the rebuilt rows (run 6): unchanged. `trees` 0.051 (-0.027 to
+  0.126), its slope zero in all four months; the yardstick stays flat.
+- Tests: strategy-core 154, backtest-runner 57. New: the floor and the carried spread on
+  hand-built rows; a market that stops moving, where the unfloored value grows and the
+  floored one stays within 1.5 spreads; `cvd` across a session open and missing data.
+
+## A forecast that is no worse than flat (November 24, 2026)
+
+The first decision model forecast boldly and wrongly, so its policy traded noise. Fixed as a
+variant written into the spec before it ran
+([spec and results](yardstick-spec.md#a-forecast-that-is-no-worse-than-flat-variant-frozen-november-24-2026-before-its-run)).
+
+- `yardstick.shrink`: the forecast is multiplied by a slope fitted on the training rows, from
+  forecasts made for each of four blocks of training dates by a model fitted on the others.
+  `yardstick.fit_coarse`: leaves of at least ten trade dates' worth of rows. The yardstick is
+  `trees_coarse_shrunk`; the policy reads the slope with the model.
+- **Result:** the slope is zero in all four months (-0.04 and -0.06 before clipping, where
+  checked). The yardstick forecasts zero, the policy opens no position in any of its sixteen
+  replays, and the result equals staying flat. `coarse` alone leaves the error 9% above
+  `flat`'s.
+- Runs 4 and 5 in `research.run`; 32 minutes for the forecast, 7 for the policy.
+- Tests: a synthetic case where trees learn each session's outcome from a feature that
+  names the session, forecast boldly, and are shrunk to nearly nothing; and one where a real
+  signal keeps its size.
+
+## The first decision model (November 24, 2026)
+
+Build-order item 9, step 6 of the process. The [spec](yardstick-spec.md) holds the settings
+and the [results](yardstick-spec.md#results-november-24-2026): no skill at the bracket's
+horizon, a small one a minute ahead, and every policy cell a loss.
+
+**What was built**
+
+- `strategy_core/targets.py`: the move ahead in R, and the mid-price's move over fixed
+  horizons.
+- `backtest_runner/dataset.py`: the decision dataset, one row a minute, with the engine's
+  741 features read from the stored rows by the engine's names, eligibility, the cost of a
+  round trip in R, and the targets from the DBN files' trades and book. Cached under
+  `data/research/` by everything that determines it (4 minutes to build with 8 workers).
+- `backtest_runner/yardstick.py` (`research yardstick GC SI`): walk-forward `ridge` and
+  `trees`, their skill, what the opening rule would decide row by row, and the horizon map.
+  42 minutes, most of it the map's 35 fits a month.
+- `backtest_runner/policy.py` (`research policy RUN GC SI`): the model as an engine strategy
+  and the replay of the spec's eight cells under two executions. The features and the
+  forecast of a session are computed once and every cell's engine decides on them
+  (`Engine.process(chunk, frame)`): 7 minutes for 8 product-months.
+- `research.run` (migration `0012_research_runs`): each run is written with its frozen
+  settings before it reads anything, and its result when it ends. Runs 1 to 3 are there.
+
+**The first skill measure was biased, and the run caught it**
+([what happened](yardstick-spec.md#a-flaw-in-the-first-skill-measure)). A correlation taken
+within each trade date rewards any forecast that fades the session's move; a forecast of
+"minus the session's return so far" scored 0.65 on it. The measure now ranks all rows
+together. The rule is in AGENTS.md, and a test on a simulated random walk keeps it.
+
+**Checks**
+
+- The dataset's feature names and order equal the engine's (`StageFeatures.specs`).
+- `research verify` on the example GC day: identical features and 18 identical trades, as
+  before the engine changes; 8.8 ms a market second with 741 features.
+- Tests: strategy-core 152, backtest-runner 55; `ruff` passes.
+
+## A 3 ATR swing scale and the structure code (November 24, 2026)
+
+Build-order item 8, step 4 of the process.
+
+- **A scale at 3 ATR on every timeframe** (`fast_atr_3`, `mid_atr_3`, `slow_atr_3`): three
+  more variants of the swing stage, written to the existing tables. Confirmed highs on front
+  sessions in the year held: 139 for GC and 142 for SI on `1h@1m`, 873 and 887 on `10m@10s`,
+  9,255 and 10,971 on `1m@1s`.
+- **`structure`**, one column per scale (migration `0011_structure_code`): the trend and the
+  break of the last confirmed high or low in one code, `3 x (trend + 1) + (break + 1)`, from
+  0 (down and extending) to 8 (up and extending), NULL until the trend is known. It is
+  computed from the row's own columns (`stage_step_pivot.with_structure`). On the slow 3 ATR
+  scale of GC every one of the nine states occurs, from 12,049 minute rows (up with its low
+  broken) to 82,396 (down and inside).
+- The engine holds 741 features (637 before).
+- **Rebuild:** the swing stages' code changed, so all of them were `stale`:
+  `research ingest run GC SI --rebuild --workers 8`, run 3, 7.7 minutes, writing only the
+  swing tables and events (`pivot_1s` 34,416,676 rows, `pivot_10s` 28,292,760, `pivot_1m`
+  4,715,460, events 2,907,672). `ingest plan GC SI` reports all 12 contracts `current`. The
+  database is 165 GB.
+- Tests: the new scale equals the plain-Python reference swings on the fast timeframe; the
+  small test world has no slow swing of 3 ATRs.
+
+## The engine makes position decisions (November 24, 2026)
+
+Build-order item 7, step 6 of the process ([decisions 35 to 39](roadmap.md#decisions);
+[timing model](engine.md#timing-model)).
+
+**What was built** (`strategies.py`, `execution.py`, `engine.py`; none is in a stage's
+identity, so no stored row changed)
+
+- **A decision at every second, in two parts.** `signals` is the decision while flat (open a
+  long, open a short, nothing); `closes` is the decision while a position is open. A closing
+  decision is a market order sent at its decision time: it fills `order_latency` later
+  whatever the bracket says, unless the stop or the target fills first (`Simulator.close`).
+  The position therefore moves one step per decision.
+- **Entries.** A market order, or a limit order at the touch of the book it meets that is
+  cancelled after `wait_s` (`Entry`, `Simulator.rest`). It fills when a trade prints through
+  its price, or, with `passive_fill: queue`, when the size displayed ahead of it and its own
+  have traded at its price. The order's state is kept on the position, so a session
+  processed one second at a time fills it exactly as a whole session does.
+- **The bracket** may have no time limit (`max_hold_s: None`), may be sized by any
+  timeframe's ATR (`atr`; each timeframe's ATR is in the frame's context), and may move its
+  stop to the entry price after a move in favour (`breakeven_atr`), in force once the engine
+  has learned of that trade and its amended order has arrived.
+- **Risk.** With `account_usd`, a position is as many whole contracts as keep its stop's risk
+  within `risk_pct`; a signal whose one contract risks more is not traded and is counted. A
+  session stops opening positions once it has lost `daily_loss_pct` of the account, or
+  `daily_loss_r` R without an account size.
+- **The trend gate** (`strategies.trend_gate`): a long needs no named trend down, a short
+  none up; it never blocks a closing decision.
+- **Costs for the decision.** The strategy also sees `exec.spread_r` and `exec.commission_r`:
+  what a trade decided at that row would cost in R, from the book the engine holds. They are
+  not features and never reach a model.
+
+**Checks**
+
+- Whole sessions and one second at a time give identical features, trades, and summaries in
+  seven cases: the two old ones, closing on the opposite signal, passive entries with each
+  fill rule, a bracket without a time limit on the middle ATR with a gate and a moved stop,
+  and positions sized by risk with a daily limit.
+- Unit tests of each rule on hand-built trades and books: a closing order that the stop
+  beats while it travels; the queue ahead of a passive order carried across chunks; the stop
+  moved only after the amendment arrives; sizing; the gate.
+- Not built: one portfolio across products. An engine runs one product, so the daily limit
+  is per product.
+
+## The withdrawn design removed (November 23, 2026)
+
+Paul withdrew the trained reversal model ([decision 29](roadmap.md#decisions)) and asked for
+everything that served it to be removed. The last commit that has it is `df5a907`.
+
+**Removed**
+
+- The label stages (`stage_pivot_label.py`, `pivot_labels.py`: eighteen stages) and their
+  tests. Migration `0010_remove_pivot_labels` drops `market.pivot_label_1s`, `_10s`, `_1m`,
+  their views, and their registry rows.
+- `benchmark.py` (the swing detectors against hindsight swings, and the reversal models) and
+  `replay.py` (the candidate replay), with `research benchmark` and `research replay`. Their
+  results stay recorded: [labels and benchmark](#pr-f-results-labels-and-benchmark), and the
+  [record of the replays](../archive/replay.md). Their spec is
+  [archived](../archive/pivot-label-spec.md).
+- From the documents: the roadmap was cut to the plan in force, and the model-stage rules of
+  the feature pipeline to one paragraph.
+
+**Kept on purpose**
+
+- `Simulator.rest` and `labels.attempt_limit` (a limit entry resting at a price): build-order
+  item 7 needs them in the engine.
+- `periods.py`: the development period, the test months, and the check that refuses the
+  holdout, which every experiment must call.
+- `swings.released`, which only the label stages called beside the swing stages: `swings.py`
+  is part of every swing stage's identity, so it is not edited for tidiness.
+
+**What changed in storage**
+
+- The fast swing scales no longer keep a row at each label's decision row
+  (`pipeline.STORED_ROWS` is `events+step_ends_10s:v4`), so the three `pivot_1s` stages were
+  `stale` and were rebuilt: `research ingest run GC SI --rebuild --workers 8`, run 2, 5.5
+  minutes, writing only `pivot_1s` and `pivot_event`. `pivot_1s` holds 25,699,173 rows
+  (31,095,900 before); events are unchanged at 2,787,648. `ingest plan GC SI` reports all 12
+  contracts `current`.
+- Tests: strategy-core 132, backtest-runner 45 (the removed tests were those of the removed
+  code); `ruff` passes.
+- Nothing else changed: the 324 fingerprints of every table but `pivot_1s` equal the
+  baseline's. The baseline was taken again (`~/fingerprint-new.txt`, 360 lines; the one
+  before is `~/fingerprint-before-label-removal.txt`).
+
+## Replay of the middle timeframe's candidates (November 23, 2026)
+
+Build-order item 6: step 4's candidates judged by step 6's measure. The spec was committed
+before any code read an outcome, and the result is in
+[replay.md](../archive/replay.md#results-for-the-middle-timeframe-november-23-2026): no group passed.
+
+**What was built**
+
+- `replay.py` takes its settings from a `Spec`: the timeframe of the candidates, the label
+  variants, the brackets, the entry orders, the cost models, and whether the trusted-market
+  eligibility ([decision 23](roadmap.md#decisions)) and the daily loss cap
+  ([decision 19](roadmap.md#decisions)) apply. `fast` is the replay of
+  November 19 with nothing changed; `mid` is new (`--timeframe mid`). Another timeframe is
+  another `Spec`.
+- `Simulator.rest` and `labels.attempt_limit` (`strategy-core`): an entry as a limit order
+  resting at a price until an expiry. It fills on arrival when the book is already at or
+  through its price, else at its price when a trade prints through it. The engine's
+  strategies still send market entries only; this is for would-be trades.
+- `portfolio` applies the daily loss cap and counts the orders it refused and the sessions
+  in which it bound. Results are also given at micro costs, for buys and sells apart, and as
+  one portfolio in each half of the period for policies that fit nothing.
+- `benchmark.py` has the middle stream (`STREAMS["mid"]`), so `research benchmark models`
+  accepts the `mid_*` labels. No middle benchmark was run, and no detector task is defined
+  for the middle scales.
+
+**Checks**
+
+- The fast replay rerun with the new code reproduces the tables of November 19 exactly
+  (see below), so the refactor changed nothing it should not.
+- Tests: strategy-core 158, backtest-runner 68; `ruff` passes. `execution.py` and `labels.py`
+  are in no stage's identity: `ingest plan GC SI` still reports every contract `current`.
+
+## The new machine (November 23, 2026)
+
+The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cores, 64 GB,
+4 TB), following [the handoff](handoff.md#setting-up-a-machine).
+
+- `research catalog --verify`: 622 files, 29.19 GB, no checksum failure, 12 files `degraded`.
+- Migrations `0001` to `0009` applied; 622 files registered. (The old registry listed 1,866:
+  it also held the four products whose files were removed.)
+- `research ingest run GC SI`, run 1, 8 workers: 12 contracts, 858 contract-sessions,
+  70,731,900 second rows, no failure; `ingest plan GC SI` reports all 12 contracts `current`.
+  The database is 151 GB. Log: `~/ingest-new-machine.log`, result `~/ingest-new-machine.json`.
+- **Row counts equal the old machine's** in every table that this log records: 70,731,900 in
+  the second tables, 7,073,190 in the ten-second tables, 21,219,570 `pivot_10s`, 31,095,900
+  `pivot_1s`, 3,536,595 `pivot_1m`, 2,787,648 events (2,403,082 and 384,566), and 5,029,757,
+  915,075, and 197,721 label rows.
+- **The fingerprints could not be compared.** `~/fingerprint-old-machine.txt` is not on this
+  machine, nor are the other evidence files of the first one (`~/*.hash-*.txt`,
+  `~/replay-gc-si.json`). The new fingerprint is `~/fingerprint-new.txt` (576 lines: per
+  table, contract, and variant). Whether the two processors give bit-identical floats is
+  therefore not shown, and will not be: Paul decided the same day that this build is the
+  starting point, so `~/fingerprint-new.txt` is the baseline for later rebuilds.
+- **What stands in for it, in part:** `research replay GC SI` on the rebuilt database gives
+  2,783,418 candidates and reproduces every number of the two tables recorded on November 19
+  ([replay](../archive/replay.md#results-november-19-2026)): the eligible counts, R to four digits,
+  intervals, portfolio fills, net dollars, and drawdowns. Those depend on the fast labels,
+  both ATRs, the slow swings, and every trade and book record of 342 sessions, so those are
+  equal to the precision that changes a tick or a fill. It does not cover the middle
+  timeframe, the statistics and volatility tables, or last-bit differences that change no
+  outcome.
+- `pnpm lint`, `pnpm test`, `pnpm build`, and `research verify` on the example GC day pass.
+
+Two steps of the handoff were wrong and are corrected there: the database needs the role
+`trading` (`createdb trading` alone gives a database the code cannot open), and a new
+PostgreSQL has none of the bulk-load settings; they were applied as the
+[storage page](../../lib/db-research/README.md#local-setup) lists them.
+
 ## One set of stages for every timeframe (November 20, 2026)
 
 Build-order item 5, asked for by Paul: `1m@1s` should not be managed by its own logic. Its
@@ -79,7 +414,7 @@ Build-order item 4. `10m@10s` is a window of 60 rows of ten seconds, between `1m
   the columns are the same, with its continuous view.
 - The engine (`pipeline.StageFeatures`) joins every merged timeframe as of each second, with
   its age (`10m@10s.age_s`): 625 features, 415 before. The `1h@1m` feature names did not change.
-- Label parameters were frozen first ([spec](pivot-label-spec.md#middle-scales-added-november-20-2026-before-any-label-was-computed)):
+- Label parameters were frozen first ([spec](../archive/pivot-label-spec.md#middle-scales-added-november-20-2026-before-any-label-was-computed)):
   a horizon of 240 rows (40 minutes) and a reclaim window of 30 rows.
 
 Decisions made here (derived, reported in the PR):
@@ -255,7 +590,7 @@ records, so the findings carry over; row counts shifted by the week the download
 ## PR F results (labels and benchmark)
 
 Built and measured November 16–17. The parameters were frozen in
-[pivot-label-spec.md](pivot-label-spec.md) before any label was computed. Evidence:
+[pivot-label-spec.md](../archive/pivot-label-spec.md) before any label was computed. Evidence:
 `~/ingest-gc-si-labels.*`.
 
 **In plain words.** The swing detector confirms a high only after price has fallen the full
@@ -355,7 +690,7 @@ sessions, as expected. This pivot-model comparison ends August 31.
 
 `research benchmark context GC SI` asks whether inputs from outside a candidate's own row
 help the reversal models. The sets, the population, and the success rule were written into
-the [spec](pivot-label-spec.md#context-inputs-added-november-17-2026-before-any-run) before
+the [spec](../archive/pivot-label-spec.md#context-inputs-added-november-17-2026-before-any-run) before
 any run. Evidence: `~/context-gc-si.a.json` and `~/context-gc-si.b.json` (and `.log`).
 
 **In plain words.** A candidate is a high that price has started to fall from. Part B gave
@@ -424,8 +759,8 @@ reached the reversal barrier. This measures calibration for that event and popul
 
 Use displacement as the comparator for the next forecast. A future test of incremental
 book or indicator value should include that same displacement in both arms. For
-profitability, use the separate [portfolio replay](roadmap.md#after-cost-replay).
-The [audit specification](pivot-label-spec.md#probability-audit-november-18-2026)
+profitability, use the separate [portfolio replay](roadmap.md#how-a-policy-is-evaluated).
+The [audit specification](../archive/pivot-label-spec.md#probability-audit-november-18-2026)
 records the development-data exposure and resampling rule. Local JSON reports are in
 `data/runs/research/2026-11-18-displacement/`.
 

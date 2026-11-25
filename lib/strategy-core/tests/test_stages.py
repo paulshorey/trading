@@ -49,7 +49,7 @@ def test_warmup_follows_the_parameters():
 
 def test_the_graph_reads_only_earlier_stages():
     check_graph()
-    assert [s.NAME for s in STAGES if not getattr(s, "LABEL", False)] == [
+    assert [s.NAME for s in STAGES] == [
         "bar_1s",
         "bar_10s",
         "bar_1m",
@@ -65,22 +65,25 @@ def test_the_graph_reads_only_earlier_stages():
         "pivot_1s:fast_atr_0p5",
         "pivot_1s:fast_atr_1",
         "pivot_1s:fast_atr_2",
+        "pivot_1s:fast_atr_3",
         "pivot_10s:mid_atr_0p5",
         "pivot_10s:mid_atr_1",
         "pivot_10s:mid_atr_2",
+        "pivot_10s:mid_atr_3",
         "pivot_1m:slow_atr_0p5",
         "pivot_1m:slow_atr_1",
         "pivot_1m:slow_atr_2",
+        "pivot_1m:slow_atr_3",
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
     slow = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")  # trades, and their seconds
-    inputs = [s for s in STAGES if not getattr(s, "LABEL", False)]  # labels: test_pivot_labels
+    inputs = STAGES
     assert {s.NAME: s.INPUTS for s in inputs if s.RESOLUTION == "1m"} == {
         "bar_1m": ("bar_1s",),
         "candle_1h_1m": ("bar_1m",),
         "stats_1h_1m": ("bar_1m", "candle_1h_1m"),  # a declared edge within tier 1
         "vol_1m": ("bar_1m", "candle_1h_1m"),
-        **{f"pivot_1m:slow_atr_{k}": slow for k in ("0p5", "1", "2")},
+        **{f"pivot_1m:slow_atr_{k}": slow for k in ("0p5", "1", "2", "3")},
     }
     # ... and no second stage reads a minute stage
     fast = ("market", "bar_1s", "candle_1m_1s", "vol_1s")
@@ -89,7 +92,7 @@ def test_the_graph_reads_only_earlier_stages():
         "candle_1m_1s": ("bar_1s",),
         "stats_1m_1s": ("bar_1s", "candle_1m_1s"),  # declared edges within tier 1
         "vol_1s": ("bar_1s", "candle_1m_1s"),
-        **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2")},
+        **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2", "3")},
     }
     assert {s.TIER for s in inputs if ":" in s.NAME} == {2}  # swings read tiers 0 and 1 only
     with pytest.raises(ValueError, match="not an earlier stage"):

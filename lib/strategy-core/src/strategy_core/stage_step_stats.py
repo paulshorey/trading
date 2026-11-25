@@ -439,8 +439,8 @@ class StepStatsStage(Stage):
     def table(minutes, candle, window, out, counts, levels) -> Table:
         status = candle.values["status"]
         complete = status == COMPLETE
-        atr = candle.values["atr_bps"]
-        atr = np.where(~candle.nulls["atr_bps"] & (atr > 0), atr, np.nan)
+        atr = candle.values["norm_atr_bps"]  # the ATR floored at the spread (normalizer.py)
+        atr = np.where(~candle.nulls["norm_atr_bps"] & (atr > 0), atr, np.nan)
         close = counts["last_close"].astype(np.float64)
         with np.errstate(divide="ignore", invalid="ignore"):
             px = np.where(complete & (close > 0), close, np.nan)  # the current price

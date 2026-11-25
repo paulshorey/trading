@@ -152,6 +152,12 @@ COLUMNS: tuple[Column, ...] = (
     Column("status", SMALLINT, "As candle_1h_1m: 0 complete, 1 empty, 2 gap, 3 warmup"),
     Column("atr_price", DOUBLE, "ATR(14) in quoted price units, for stops; never a model input"),
     Column(
+        "norm_atr_price",
+        DOUBLE,
+        "The ATR that normalizes, in quoted price units: atr_price, or the last sampled book "
+        "spread where that is larger (candle norm_atr_bps); never a model input",
+    ),
+    Column(
         "atr_usd",
         DOUBLE,
         "ATR(14) in US dollars per contract (tick value / tick size), for sizing; never a model "
@@ -287,6 +293,8 @@ class StepVolStage(Stage):
         )  # fmt: skip
         atr_bps = candle.values["atr_bps"]
         atr_bps = np.where(~candle.nulls["atr_bps"] & (atr_bps > 0), atr_bps, np.nan)
+        norm_bps = candle.values["norm_atr_bps"]
+        norm_bps = np.where(~candle.nulls["norm_atr_bps"] & (norm_bps > 0), norm_bps, np.nan)
         key = session_minute(self.context.calendar, minutes.end, self.TF.step)
         # one sample per minute: the window ending with the minute's last step row
         sample = (c.ordinal % self.TF.per_minute == 0) & np.isfinite(atr_bps)
@@ -302,8 +310,8 @@ class StepVolStage(Stage):
             def bps(x):  # a quoted price distance or average, relative to the current price
                 return x / px * 1e4
 
-            def in_atr(x):
-                return bps(x) / atr_bps
+            def in_atr(x):  # in the ATR floored at the spread (normalizer.py)
+                return bps(x) / norm_bps
 
             bull, bear = bps(k["bull"]), bps(k["bear"])
             pxf = np.where(complete & (close_fixed > 0), close_fixed, np.nan)  # fixed point
@@ -343,11 +351,15 @@ class StepVolStage(Stage):
                 "tr_atr": in_atr(k["tr"]),
                 "parkinson_bps": parkinson(c.high, c.low) * 1e4,
                 "gk_bps": garman_klass(c.open, c.high, c.low, c.close) * 1e4,
-                "spread_atr": candle.values["spread_bps"] / atr_bps,
+                "spread_atr": candle.values["spread_bps"] / norm_bps,
             }
             usd = usd_per_price(chunk.contract)
             context = {"atr_price": np.where(priced, atr, np.nan)}
             context["atr_usd"] = context["atr_price"] * usd
+            # where the floor binds, the spread in price units; elsewhere the ATR, bit for bit
+            raw_bps = np.where(candle.nulls["atr_bps"], np.nan, candle.values["atr_bps"])
+            binds = np.isfinite(norm_bps) & (norm_bps > raw_bps)
+            context["norm_atr_price"] = np.where(binds, norm_bps * px / 1e4, context["atr_price"])
         v: dict[str, np.ndarray] = {
             "slot_ordinal": candle.values["slot_ordinal"],
             "end_ns": minutes.end,

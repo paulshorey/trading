@@ -14,10 +14,10 @@ ratios, oscillators, or time. The same engine runs whole-session backtests and
 second-by-second historical rehearsals. A live feed and broker adapter are planned.
 
 The goal is a trained model that makes the trading decisions from layers of signals on
-several timeframes: indicators, indicators of indicators, reversal and continuation
-probabilities, and structure and divergence ([goal and process](AGENTS.md#goal)). The
+several timeframes: indicators, the swing structure of price and of its derivatives, and
+whether they agree ([goal and process](AGENTS.md#goal)). The
 [roadmap](docs/project/roadmap.md#the-process-and-where-it-stands) shows which steps are
-built, what the first benchmark did and did not show, and the build order.
+built, what the results so far show, and the build order.
 
 ## Workspace
 
@@ -49,7 +49,6 @@ uv run research backtest apps/backtest-runner/examples/gc-day.json
 uv run research verify apps/backtest-runner/examples/gc-day.json # live path = backtest
 uv run research rehearse apps/backtest-runner/examples/gc-day.json --speed 60
 uv run research ingest plan GC SI    # stored one-second rows; one series per product
-uv run research benchmark models GC SI --labels fast_atr_1_q25 fast_atr_1_q50
 pnpm lint && pnpm test && pnpm build
 ```
 

@@ -168,6 +168,8 @@ def test_minutes_equal_the_window_that_ends_with_them_in_any_chunking(sessions):
     np.testing.assert_array_equal(m["observed_seconds"][ok], win["observed"][at][ok])
     np.testing.assert_array_equal(m["session_cvd"][ok], sec["session_cvd"][at][ok])
     np.testing.assert_array_equal(null["session_cvd"], sec_null["session_cvd"][at] | ~ok)
+    np.testing.assert_array_equal(m["cvd"][ok], sec["cvd"][at][ok])  # at the row's last second
+    np.testing.assert_array_equal(null["cvd"], ~ok)
     # the fields both store equal the 1m@1s candle that ends with the minute
     pairs = {k: k for k in ("open", "high", "low", "close", "high_at_ns", "low_at_ns")}
     pairs |= {k: k for k in ("volume", "buy_volume", "sell_volume", "trades")}

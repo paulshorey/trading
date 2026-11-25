@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -47,28 +48,26 @@ def main() -> None:
         help="Replace contracts stored by other code or settings, or missing earlier sessions",
     )
     p = sub.add_parser(
-        "benchmark",
-        help="Pivot benchmark on stored rows before the holdout (pivot-label-spec.md)",
-        description="detectors: swing detectors against hindsight reference swings. models: "
-        "logistic regression against boosted trees on the labeled candidates. Reads front "
-        "sessions of the development period; stores nothing.",
+        "yardstick",
+        help="The first decision model's forecast and horizon map (docs/project/yardstick-spec.md)",
+        description="Builds the decision dataset from stored rows and the DBN files, fits the "
+        "walk-forward forecast of the move ahead, and reports its skill. The run is recorded "
+        "in research.run; models go to data/models/.",
     )
-    p.add_argument("action", choices=("detectors", "models", "context"))
     p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
     p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
     p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
-    p.add_argument("--labels", nargs="*", help="models: label variants, such as fast_atr_1_q25")
+    p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
+    p.add_argument("--rebuild", action="store_true", help="Build the dataset again")
+    p.add_argument("--no-horizons", action="store_true", help="Skip the horizon map")
     p = sub.add_parser(
-        "replay",
-        help="After-cost replay of the stored fast candidates (docs/project/replay.md)",
-        description="Simulates a would-be entry for every stored fast candidate of the "
-        "development period and compares take-all with the displacement rule. Reads stored "
-        "rows and the DBN files; stores nothing.",
+        "policy",
+        help="The first decision model's policy in the engine (docs/project/yardstick-spec.md)",
+        description="Replays every policy cell of the spec on the test months with the models "
+        "of one `research yardstick` run. The run is recorded in research.run.",
     )
+    p.add_argument("model_run", type=int, help="The yardstick run whose models decide")
     p.add_argument("products", nargs="+", help="Product roots, for example GC SI")
-    p.add_argument("--start", type=date.fromisoformat, help="First trade date (YYYY-MM-DD)")
-    p.add_argument("--end", type=date.fromisoformat, help="Last trade date, before the holdout")
-    p.add_argument("--labels", nargs="*", help="Fast label variants, such as fast_atr_1_q25")
     p.add_argument("--workers", type=int, help="Parallel processes (default: cores - 2, at most 8)")
     p = sub.add_parser("serve", help="Local research API for the web UI")
     p.add_argument("--port", type=int, default=8001)
@@ -123,33 +122,26 @@ def main() -> None:
                     result = ingest.summarize(ingest.plan(args.products, **options))
                 else:
                     result = ingest.run(args.products, workers=args.workers, **options)
-        elif args.command == "benchmark":
-            from . import benchmark
+        elif args.command == "yardstick":
+            from . import periods, yardstick
 
-            period = {
-                "start": args.start or benchmark.DEV_START,
-                "end": args.end or benchmark.DEV_END,
-            }
-            if args.action == "detectors":
-                result = benchmark.detectors(args.products, **period)
-            else:
-                result = benchmark.models(
-                    args.products,
-                    labels=args.labels,
-                    log=benchmark.stderr,
-                    context=args.action == "context",
-                    **period,
-                )
-        elif args.command == "replay":
-            from . import benchmark, replay
-
-            result = replay.run(
+            result = yardstick.run(
                 args.products,
-                args.start or benchmark.DEV_START,
-                args.end or benchmark.DEV_END,
-                args.labels,
+                args.start or periods.DEV_START,
+                args.end or periods.DEV_END,
                 args.workers,
-                log=benchmark.stderr,
+                log=lambda line: print(line, file=sys.stderr, flush=True),
+                rebuild=args.rebuild,
+                horizons=not args.no_horizons,
+            )
+        elif args.command == "policy":
+            from . import policy
+
+            result = policy.run(
+                args.model_run,
+                args.products,
+                args.workers,
+                log=lambda line: print(line, file=sys.stderr, flush=True),
             )
         elif args.command == "backtest":
             run = service.backtest(json.loads(args.spec.read_text()), save=not args.no_save)

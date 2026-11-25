@@ -212,6 +212,12 @@ def columns(tf: Timeframe) -> tuple[Column, ...]:
             "Buy - sell volume from the session open through the row's last second; NULL after "
             "missing data",
         ),
+        Column(
+            "cvd",
+            BIGINT,
+            "Buy - sell volume from the contract's first stored second through the row's last "
+            "second: it never restarts at a session open. NULL on a missing row",
+        ),
         Column("observed_seconds", SMALLINT, "Seconds with trades"),
         Column(
             "first_close",
@@ -260,6 +266,7 @@ class StepBarStage(Stage):
             "ordinal": np.zeros(0, np.int64),
             "cvd": np.zeros(0, np.int64),
             "cvd_ok": np.zeros(0, bool),
+            "total": np.zeros(0, np.int64),
         }
 
     def process(self, chunk: MarketChunk, products: dict[str, Any]) -> Table:
@@ -270,6 +277,7 @@ class StepBarStage(Stage):
             "ordinal": np.r_[self.pending_seconds["ordinal"], products["ordinal"]],
             "cvd": np.r_[self.pending_seconds["cvd"], session["cvd"]],
             "cvd_ok": np.r_[self.pending_seconds["cvd_ok"], session["complete"]],
+            "total": np.r_[self.pending_seconds["total"], session["total"]],
         }
         step = self.TF.step
         frame = self.TF.frame(products)
@@ -325,6 +333,7 @@ class StepBarStage(Stage):
                 "ret_count": empty,
                 "cvd": empty,
                 "cvd_ok": np.zeros(0, bool),
+                "total": empty,
             }
         minutes = combine(b, keys, step)  # missing unless all its seconds are covered
         starts = np.flatnonzero(np.r_[True, keys[1:] != keys[:-1]])
@@ -350,6 +359,7 @@ class StepBarStage(Stage):
             "ret_count": np.add.reduceat(ok.astype(np.int64), starts),
             "cvd": seconds["cvd"][starts + count - 1],  # at each row's last second
             "cvd_ok": seconds["cvd_ok"][starts + count - 1],
+            "total": seconds["total"][starts + count - 1],
         }
         missing = minutes.status == MISSING
         if missing.any():  # unknown: nothing of a missing row reaches a window
@@ -357,7 +367,14 @@ class StepBarStage(Stage):
                 getattr(minutes, name)[missing] = 0
             for v in values.values():
                 v[missing] = 0
-            for name in ("observed_seconds", "first_close", "ret2_sum", "ret_count", "cvd"):
+            for name in (
+                "observed_seconds",
+                "first_close",
+                "ret2_sum",
+                "ret_count",
+                "cvd",
+                "total",
+            ):
                 rows[name][missing] = 0
         return rows
 
@@ -384,6 +401,7 @@ class StepBarStage(Stage):
             "delta_high": bars.delta_high,
             "delta_low": bars.delta_low,
             "session_cvd": rows["cvd"],
+            "cvd": rows["total"],
             "observed_seconds": rows["observed_seconds"],
             "first_close": rows["first_close"],
             "ret2_sum": rows["ret2_sum"],

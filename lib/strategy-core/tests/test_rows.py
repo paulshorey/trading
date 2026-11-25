@@ -155,6 +155,21 @@ def test_nulls_follow_status_and_validity(session):
     net = base["buy_volume"][s2] - base["sell_volume"][s2]
     np.testing.assert_array_equal(base["session_cvd"][s2], np.cumsum(net))
     assert not nulls["session_cvd"][s2].any()
+    # the contract's CVD runs on through missing data, where the session's becomes unknown,
+    # and is NULL only on a missing second
+    s1 = np.flatnonzero(~second)
+    np.testing.assert_array_equal(
+        base["cvd"][s1][~missing[s1]],
+        np.cumsum(base["buy_volume"][s1] - base["sell_volume"][s1])[~missing[s1]],
+    )
+    np.testing.assert_array_equal(nulls["cvd"], missing)
+    # one pipeline over both sessions: it does not restart at the second session's open
+    one = builder(cal)
+    whole = join([one.process(c) for c in chunks])["bar_1s"]
+    everything = np.cumsum(whole["buy_volume"] - whole["sell_volume"])
+    np.testing.assert_array_equal(whole["cvd"][~missing], everything[~missing])
+    np.testing.assert_array_equal(np.diff(whole["cvd"][s2]), np.diff(whole["session_cvd"][s2]))
+    assert whole["cvd"][s2][0] != whole["session_cvd"][s2][0]  # the first session's flow is in it
 
 
 def phase_series(candle, phase, n):

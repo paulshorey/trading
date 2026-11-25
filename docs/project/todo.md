@@ -7,44 +7,57 @@ the [build log](build-log.md).
 
 ## Now: the build order
 
-- [ ] **Set up the new machine** and rebuild the database there
-      ([steps](handoff.md#moving-to-the-new-machine)).
-- [ ] **Replay the middle timeframe's candidates** (item 6): give `replay.py` and
-      `benchmark.py` the timeframe, then the replay with the slow bracket, market and
-      resting-limit entries, the daily loss cap, and the micro-cost stress.
-- [ ] **Base changes, in one rebuild** (item 7):
-  - [ ] floor the ATR normalizer at the spread: `*_atr` values grow without bound when the
-        ATR has decayed to almost nothing ([finding](build-log.md#pr-d-results-swings);
-        [decision 23](roadmap.md#decisions-of-november-20-2026));
-  - [ ] a rolling net-flow series without session resets;
-  - [ ] the `source.py` change under [housekeeping](#housekeeping).
-- [ ] **`book_1s`**, merged to every step (item 8): tier 0 from every book event (queue
-      imbalance, order-flow imbalance, time-weighted spread, depletion and refill;
-      [metrics](../research/pivots/2026-11-06-second-scale-and-mbp1.md)), with ingestion's
-      day cache switched to keep book events.
-- [ ] **The scheduled-news table** and its elapsed-time features (item 9).
-- [ ] **Six years of GC and SI** (item 10): the named checks on the untouched years, then
-      the build, judged by [the frozen rules](roadmap.md#how-results-are-judged-on-six-years).
-- [ ] **The yardstick decision model** (item 11): take-or-skip on the value of attempting;
-      nothing stored.
-- [ ] **The event families** (item 12): the failed break; flow (indicators of indicators,
-      swings, divergence); RSI (the same; measure the row-to-row RSI noise and set
-      thresholds above it, [contract](pivot-structure-design.md#swing-sources-price-and-rsi));
-      sequences and agreement across timeframes (`signal_*`); the partner
-      ([pair design](pair-design.md)).
-- [ ] **The four targets** and their benchmark (item 13): turn (stored), continue,
-      direction, and the size of the coming move.
-- [ ] **Stored model stages**, then the second structure pass (item 14).
-- [ ] **More products** (item 15): ES with NQ; YM, RTY, and PL need a storage remedy first
-      ([decision 25](roadmap.md#decisions-of-november-20-2026)).
-- [ ] **The decision model and the final holdout** (item 16). September 1, 2026 onward is
+- [x] **Set up the new machine** and rebuild the database there: done November 23
+      ([what was found](build-log.md#the-new-machine-november-23-2026)).
+- [x] **Replay the middle timeframe's candidates** (item 6): done November 23
+      ([results](../archive/replay.md#results-for-the-middle-timeframe-november-23-2026)).
+- [x] **Remove the withdrawn design** (November 23): the label stages and tables, the
+      benchmark, the candidate replay; the roadmap cut to the current plan
+      ([record](build-log.md#the-withdrawn-design-removed-november-23-2026)).
+- [x] **The engine makes position decisions** (item 7), **the 3 ATR scale and the structure
+      code** (item 8), and **the first decision model** (item 9): done November 24
+      ([results](yardstick-spec.md#results-november-24-2026)).
+- [x] **Make the forecast no worse than `flat`** (November 24): the slope on held-out
+      training dates is zero, so the yardstick stays flat
+      ([results](yardstick-spec.md#results-of-the-variant-november-24-2026)).
+- [x] **Base changes, in one rebuild** (item 10; November 24): a CVD that runs through a
+      contract's life, the ATR normalizer floored at the spread, the roll warm-up count
+      ([record](build-log.md#base-changes-a-continuous-cvd-the-atr-floor-the-roll-warm-up-november-24-2026)).
+- [ ] **Swings and structure of RSI and of CVD**, each sized by its own ATR, and the codes
+      comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
+      each series' row-to-row noise and freeze its floor first
+      ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
+      Read `cvd` by its changes only, never its level: a backtest that starts after a
+      contract's first stored session counts from zero there, so its level differs from the
+      stored one by a constant, and a missing second adds an unknown one. A segment that
+      ends at missing data and values that are differences inside it are unaffected; the
+      spec must state this and a test must shift the level and compare.
+- [ ] **The swing mode** (item 12): positions held across the daily break and across days,
+      as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).
+- [ ] **Six years of GC and SI** (item 13).
+- [ ] **`book_1s`** and **the scheduled-news table** (item 14).
+- [ ] **ES** (item 15), with one-second values stored where they are read.
+- [ ] **More inputs and the named variants** (item 16).
+- [ ] **The final evaluation on the holdout** (item 17). September 1, 2026 onward is
       reserved for one frozen evaluation. Record prior engineering exposure when reporting.
 
 ## Also open
 
 - [ ] **The sliding-clock control.** The same policy on completed minute boundaries and on
       every eligible second, in one portfolio, to measure what the faster clock earns
-      ([rule](roadmap.md#after-cost-replay)). Run it with the first policy that is not flat.
+      ([rule](roadmap.md#how-a-policy-is-evaluated)). Run it with the first policy that is not flat.
+- [ ] **One portfolio across products.** An engine runs one product, so a policy replay
+      gives each product its own position and its own daily loss limit. The rule is one
+      position at a time across the products
+      ([rule](roadmap.md#how-a-policy-is-evaluated)). Build shared portfolio and risk state
+      before the first policy that is not flat is judged on two products.
+- [ ] **The candidate summary assumes market entries.** `service.backtest` replays every
+      signal as an independent market entry; for a strategy with passive entries it is not
+      that strategy's execution. Use the limit path, or label the summary.
+- [ ] **Floor the daily ATR at the spread.** `day_range_ratio`, `day_high_dist`, and
+      `day_low_dist` (`vol_*`) divide by the bare 14-session ATR. On front sessions it is
+      hundreds of spreads, so no row is affected today; the rule still applies. Make it with
+      the next change that rebuilds the volatility tables.
 - [ ] **Session quality policy.** Backtests include degraded sessions with only a report.
       Decide and implement a default: skip, or mark and exclude from ML rows. Examples are
       2025-11-28 (CME outage; NQ, YM, and RTY records flag a possibly wrong book) and the
@@ -87,11 +100,6 @@ the [build log](build-log.md).
 
 ## Housekeeping
 
-- [ ] **At the next `source.py` rebuild**, give `HistoricalSource` the roll warm-up count
-      apart from its warm-up list, and skip warm-up sessions outside the downloaded data, so
-      a download that starts partway through a session cannot make a backtest differ from
-      storage ([edge case](build-log.md#full-scale-checks-after-pr-c2)). `source.py` is in
-      every stage's identity, so do it with the rebuild of the timeframe parameter.
 - [ ] **CI actions.** Update the GitHub Actions that warn about the Node 20 deprecation
       (checkout, setup-node, setup-uv, pnpm), and watch the `ubuntu-latest` move to
       Ubuntu 26.

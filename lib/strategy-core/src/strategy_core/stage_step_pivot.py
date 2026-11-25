@@ -11,9 +11,11 @@ publication differ. A running extreme is confirmed by a reversal of
 `theta = max(K x ATR, FLOOR x spread)` in basis points. It uses the timeframe's ATR(14)
 (`candle_<window>.atr_bps`) and the last sampled book spread, both **as of the latest step row
 completed before the trade's own row** (on `1m@1s`, the previous second: the row of the extreme
-would include trades after it), with that row's ATR in price units (`vol_<rows>.atr_price`) as
-the frozen ATR. The spread is carried from the step rows (`last_bid`, `last_ask`: the last trade
-in the row with a usable book), never across a missing row.
+would include trades after it), with that row's normalizing ATR in price units
+(`vol_<rows>.norm_atr_price`: the ATR, or the spread where that is larger, so it is positive in
+a market that has stopped moving) as the frozen ATR. The spread is carried from the step rows
+(`last_bid`, `last_ask`: the last trade in the row with a usable book), never across a missing
+row.
 
 State is published once per step row, after its last second; a confirmation or breach inside a
 row appears on that row and never earlier. Faster rows read it through an as-of join
@@ -33,14 +35,27 @@ import numpy as np
 
 from . import swings, warmup
 from .bars import MISSING
-from .columns import Table
+from .columns import SMALLINT, Column, Table
 from .engine import MarketChunk
+from .features import Unit
 from .market import PX
+from .normalizer import last_spread_bps
 from .stages import Stage
 from .timeframes import FAST, MIDDLE, SLOW, Timeframe
 
 SPEC = swings.dense_columns()
-COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC))
+# Trend and breaks in one code (roadmap decision 32), from the row's own columns.
+STRUCTURE = Column(
+    "structure",
+    SMALLINT,
+    "3 x (trend + 1) + (break + 1), 0..8: trend as above; break is 1 once price has exceeded "
+    "the latest confirmed high, -1 once it has gone below the latest confirmed low, 0 while "
+    "both hold (the more recent break when neither does). 8 up and extending, 7 up and "
+    "inside, 6 up with its low broken, 5..3 mixed, 2 down with its high broken, 1 down and "
+    "inside, 0 down and extending; NULL until trend is known",
+    Unit.RATIO.value,
+)
+COLUMNS = (*swings.KEY_COLUMNS, *(c for c, _ in SPEC), STRUCTURE)
 FEATURE_COLUMNS = tuple(c.name for c in COLUMNS if c.unit)
 NEVER = -(2**62)  # no step row seen yet
 # Step rows within which a breached level can be reclaimed: a quarter of the hourly window (15
@@ -48,29 +63,28 @@ NEVER = -(2**62)  # no step row seen yet
 RECLAIM_ROWS = {"1m": 15, "10s": 30, "1s": 60}
 
 
+def with_structure(table: Table) -> Table:
+    """The published rows with the `structure` code computed from their own columns."""
+    v, null = table.values, table.nulls
+    up, down = ~null["break_up_age_s"], ~null["break_down_age_s"]
+    newer_up = v["break_up_age_s"] <= v["break_down_age_s"]
+    broke = np.where(up & down, np.where(newer_up, 1, -1), up.astype(np.int64) - down)
+    code = np.where(null["trend"], 0, 3 * (v["trend"] + 1) + broke + 1).astype(np.int64)
+    return Table(v | {STRUCTURE.name: code}, null | {STRUCTURE.name: null["trend"].copy()})
+
+
 def minute_spread(base: Table, carry: np.ndarray) -> np.ndarray:
-    """The last sampled book spread as of each minute row, in bps of its midpoint: from the
-    latest minute with a usable book, in this chunk or carried (`carry`: has, bid, ask; updated
-    in place), and unknown from a missing minute until the next usable book."""
-    status = base.values["status"]
-    m = len(status)
-    index = np.arange(m)
-    valid = ~base.nulls["last_bid"] & ~base.nulls["last_ask"]
-    gap = np.maximum.accumulate(np.where(status == MISSING, index, -1))
-    i = np.maximum.accumulate(np.where(valid, index, -1))
-    fresh = (i >= 0) & (i > gap)
-    known = fresh | ((gap < 0) & bool(carry[0]))
-    at = np.maximum(i, 0)
-    # in quoted prices, as `candle_1m_1s.book_spread_bps` computes the same spread
-    bid = np.where(fresh, base.values["last_bid"][at], carry[1]) / PX
-    ask = np.where(fresh, base.values["last_ask"][at], carry[2]) / PX
-    if fresh[-1]:
-        carry[:] = (1, base.values["last_bid"][i[-1]], base.values["last_ask"][i[-1]])
-    elif gap[-1] >= 0:
-        carry[0] = 0
-    with np.errstate(divide="ignore", invalid="ignore"):
-        spread = (ask - bid) / ((ask + bid) / 2) * 1e4
-    return np.where(known & np.isfinite(spread), spread, np.nan)
+    """The last sampled book spread as of each step row, in bps of its midpoint
+    (`normalizer.last_spread_bps`): from the latest row with a usable book, in this chunk or
+    carried (`carry`: has, bid, ask; updated in place), and unknown from a missing row until
+    the next usable book."""
+    return last_spread_bps(
+        base.values["status"],
+        ~base.nulls["last_bid"] & ~base.nulls["last_ask"],
+        base.values["last_bid"],
+        base.values["last_ask"],
+        carry,
+    )
 
 
 class StepPivotStage(Stage):
@@ -92,6 +106,7 @@ class StepPivotStage(Stage):
         "bars",
         "market",
         "windows",
+        "normalizer",
         "warmup",
         "state",
     )
@@ -114,7 +129,7 @@ class StepPivotStage(Stage):
             "multiplier": self.K,
             "normalizer": f"candle_{self.TF.window}.atr_bps",
             "atr_period": self.context.features.atr_period,
-            "atr_snapshot": f"vol_{self.TF.rows}.atr_price",
+            "atr_snapshot": f"vol_{self.TF.rows}.norm_atr_price",
             "spread": f"bar_{self.TF.rows}.last_bid, last_ask",
             "spread_floor": self.FLOOR,
             "reclaim_window_rows": self.WINDOW,
@@ -135,7 +150,7 @@ class StepPivotStage(Stage):
                 np.zeros((0, swings.NEI), np.int64), np.zeros((0, swings.NEF)), none,
                 self.context.close_delay,
             )  # fmt: skip
-            return swings.dense_table(SPEC, none, none, np.zeros((0, swings.NO)))
+            return with_structure(swings.dense_table(SPEC, none, none, np.zeros((0, swings.NO))))
         tf = self.TF
         width, step = tf.seconds, tf.step
         tables = products["tables"]
@@ -161,7 +176,9 @@ class StepPivotStage(Stage):
             spread = minute_spread(base, self.book)
             now = np.maximum(self.K * swings.as_float(candle, "atr_bps"), self.FLOOR * spread)
             theta = np.r_[theta, now]
-            atr = np.r_[atr, swings.as_float(vol, "atr_price") * PX]
+            # the frozen ATR that swing values are measured in: floored at the spread, so it
+            # is positive even where the ATR itself has decayed to exactly zero
+            atr = np.r_[atr, swings.as_float(vol, "norm_atr_price") * PX]
             self.carry = np.array([theta[-1], atr[-1]])
             self.last_minute = int(done[-1])
         at = np.searchsorted(known, minute - 1)  # the minute completed just before its own
@@ -181,7 +198,7 @@ class StepPivotStage(Stage):
             self.warm = swings.is_warm(out)
         ends = -(-bars.end[ev_i[:, swings.E_ROW]] // step) * step  # each event's step row end
         events[self.NAME] = swings.event_table(ev_i, ev_f, ends, self.context.close_delay)
-        return swings.dense_table(SPEC, done, minute_end, out)
+        return with_structure(swings.dense_table(SPEC, done, minute_end, out))
 
 
 def step_pivot(tf: Timeframe) -> type[StepPivotStage]:
@@ -207,8 +224,9 @@ def scale(base: type[StepPivotStage], k: float) -> type[StepPivotStage]:
     return type(f"{base.__name__}_{name}", (base,), attrs)
 
 
-# Paul's decision of November 3, 2026: 0.5, 1, and 2 ATRs (plan-1h-and-pivots.md, section 6).
-MULTIPLIERS = (0.5, 1.0, 2.0)
+# Paul's decisions: 0.5, 1, and 2 ATRs (November 3, 2026), and 3 ATRs as the swing the trend
+# gate reads (roadmap decisions 30 and 38, November 23 and 24).
+MULTIPLIERS = (0.5, 1.0, 2.0, 3.0)
 
 
 PivotMinuteStage = step_pivot(SLOW)

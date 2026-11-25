@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 import numpy as np
 import pytest
-from backtest_runner import benchmark, catalog, server, service
+from backtest_runner import catalog, periods, server, service
 from backtest_runner.calendars import Session, load_sessions
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import Day, HistoricalSource, instrument_id, to_book, to_trades
@@ -178,6 +178,24 @@ def test_front_contract_by_previous_session_volume_with_warmup_on_roll(monkeypat
         GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(back_days)
     )
     assert [c.contract for c in source.chunks()] == ["GCG7", "GCG7", "GCG7"]  # forward only
+    # the warm-up list may hold fewer sessions than a roll replays (a session not downloaded
+    # whole is left out of it): the count is its own number
+    short = HistoricalSource(
+        GC, files, [], sessions, ExecutionConfig(), cache=FakeCache(days), roll_warmup=1
+    )
+    with pytest.raises(ValueError, match="front contract"):  # nothing before D1 names a front
+        list(short.chunks())
+    two = HistoricalSource(
+        GC, files, sessions[:1], sessions[1:], ExecutionConfig(), cache=FakeCache(days),
+        roll_warmup=2,
+    )  # fmt: skip
+    assert [(c.contract, c.session, c.tradable) for c in two.chunks()] == [
+        ("GCZ6", "2026-09-01 GCZ6 (warmup)", False),
+        ("GCZ6", "2026-09-02 GCZ6", True),
+        ("GCG7", "2026-09-01 GCG7 (warmup)", False),  # the roll replays two sessions
+        ("GCG7", "2026-09-02 GCG7 (warmup)", False),
+        ("GCG7", "2026-09-03 GCG7", True),
+    ]
 
 
 def test_roll_volume_uses_session_assignment_and_records_its_files(monkeypatch):
@@ -526,7 +544,7 @@ SAMPLE_DAYS = [
 @pytest.mark.parametrize("path", sorted(SAMPLE.parent.glob("*.json")), ids=lambda p: p.stem)
 def test_run_examples_use_development_dates(path):
     spec = service.RunSpec.parse(json.loads(path.read_text()))
-    benchmark.check_period(spec.start, spec.end)
+    periods.check_period(spec.start, spec.end)
 
 
 @pytest.mark.skipif(
@@ -588,3 +606,22 @@ def test_api_routes_and_origin_checks(api):
             urlopen(api + path)
         assert error.value.code == 404
         error.value.close()
+
+
+def test_a_warmup_keeps_the_partly_downloaded_sessions_that_storage_keeps():
+    """Storage holds every session from the first to the last fully downloaded one, a partly
+    downloaded one among them as missing rows, and nothing outside them. A warm-up replays the
+    same sessions, so its rows are the stored rows."""
+    from backtest_runner.ingest import ProductData
+
+    _, _, s = load_sessions(service.PRODUCTS["GC"], date(2026, 9, 1), date(2026, 9, 14), 0)
+    half = lambda x: (x.open + x.close) // 2  # noqa: E731
+    ranges = [
+        (half(s[1]), s[3].close),  # the second session in part, then two whole ones
+        (s[4].open, half(s[4])),  # the fifth in part, between whole ones; the sixth not at all
+        (s[6].open, s[7].close),
+    ]
+    data = ProductData(service.PRODUCTS["GC"], {}, ranges)
+    kept = service.stored_warmup(s[:8], data)
+    # only the partial session before the first whole one is left out
+    assert [x.trade_date for x in kept] == [x.trade_date for i, x in enumerate(s[:8]) if i != 1]

@@ -54,3 +54,5 @@ __pycache__/
 # Local credentials
 credentials
 .secrets.sh
+/data/research/
+/data/models/

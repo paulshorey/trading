@@ -1,9 +1,14 @@
 # After-cost replay
 
+**Archived November 23, 2026.** This is the record of a design that was withdrawn
+([decision 29](../project/roadmap.md#decisions)): its code and tables were removed
+([build log](../project/build-log.md#the-withdrawn-design-removed-november-23-2026)). The
+commands named below no longer exist; the last commit that has them is `df5a907`.
+
 `uv run research replay GC SI` answers one question before any model with new inputs is
 fitted: what does acting on the stored fast candidates earn after costs? It applies the
-[replay rules](roadmap.md#after-cost-replay) and is the yardstick every later input set is
-judged by ([decision 6](roadmap.md#design-decisions-november-19-2026)). It reads stored
+[replay rules](../project/roadmap.md#how-a-policy-is-evaluated) and is the yardstick every later input set is
+judged by ([decision 6](../project/roadmap.md#decisions)). It reads stored
 rows and the DBN files and stores nothing (`backtest_runner/replay.py`).
 
 ## What it does
@@ -70,7 +75,7 @@ its `with` group is above zero, with its 95% interval, in both parts of the peri
 both execution settings; with 18 groups per cell, one positive cell alone is expected by
 chance and counts for nothing.
 
-Not built: the [sliding-clock control](roadmap.md#after-cost-replay) (the same policy on
+Not built: the [sliding-clock control](../project/roadmap.md#how-a-policy-is-evaluated) (the same policy on
 minute boundaries). It needs candidates detected on a minute clock, which are not stored.
 
 ## Results (November 19, 2026)
@@ -135,7 +140,7 @@ What this shows:
 
 What it does not show: whether a candidate is worth taking with the book, divergences or
 indicators of indicators as inputs. Those are the next items of the
-[build order](roadmap.md#build-order), and each is judged here: an input set earns its place
+[build order](../project/roadmap.md#build-order), and each is judged here: an input set earns its place
 when a policy using it has a value of attempting above zero on the slow bracket, on the same
 candidates, under both execution settings.
 
@@ -183,7 +188,7 @@ What this shows:
 5. **Four months cannot resolve an edge of this size.** Three-hour trades overlap, so the
    test months hold about 87 independent dates; the interval of a group's mean is ±$140 to
    ±$300 an attempt, against a cost of about $80. More history
-   ([decision 9](roadmap.md#design-decisions-november-19-2026)) is what narrows it.
+   ([decision 9](../project/roadmap.md#decisions)) is what narrows it.
 
 **Correction before the merge.** The first run added the seconds since the minute row to a
 leg's age in clock time, so a candidate in the minute after a closure had the closure added and
@@ -192,5 +197,128 @@ The rerun changed only the `fresh` groups, by at most 245 candidates of a group 
 attempt, and no conclusion (first run: `~/replay-agreement-gc-si.json`).
 
 So the two-timeframe agreement signal of the goal is not available from pivot rules alone.
-It remains to be tested as probabilities from models (build-order items 13 and 14), with the slow
-trend among their inputs.
+It remains to be tested inside the decision model (build-order item 8), with the slow
+trend among its inputs.
+
+## The middle timeframe's candidates (spec frozen November 23, 2026, before its run)
+
+Build-order item 6: step 4 of the process (candidates as events) judged by step 6's measure,
+`uv run research replay GC SI --timeframe mid`. The fast replay above is unchanged and stays
+the default, so that its settings can be rerun as they are on the older years
+([decision 13](../project/roadmap.md#decisions)).
+
+**Question.** Is a `10m@10s` swing candidate worth acting on with the slow bracket, after
+costs: every candidate, and the candidates the slower timeframe agrees with?
+
+**Decision row.** The row of `market.pivot_label_10s` at which a candidate of a label variant
+is first known (`mid_atr_0p5`, `mid_atr_1`, `mid_atr_2`, each at `q25` and `q50`: six
+variants), on a warm front session of January 2 to August 31, 2026. Side: sell at a candidate
+high, buy at a candidate low. **Horizon:** at most 3 hours after the fill; the cost there is
+the spread, about 3% of the stop. **Baseline:** staying flat, which is zero.
+
+| Setting | Value |
+| --- | --- |
+| Bracket | `slow` only: target 1.5 and stop 1.0 ATR of the latest completed `1h@1m` row (the minute row `ordinal // 6`), held at most 3 hours, fixed at the fill |
+| Entries | `market`: as above. `limit` (cell `slow+limit`): a limit order at the candidate's extreme (`ext_px`), sent at the decision. If the book it meets is already at or through its price, it fills there, never worse than its price. Otherwise it rests and fills at its price when a trade prints through it (strictly beyond: there is no queue model). It is cancelled 2,400 scheduled seconds after it arrives (240 middle rows, the label's horizon), or earlier at the last time a 3-hour hold still fits the session. An order that never fills is `expired`: known, no trade, value zero |
+| Executions | `base` and `stressed`, as above (the extra tick applies to marketable orders: market entries, stops, timed exits) |
+| Costs | `full`: GC and SI tick values, $2.50 a contract a side. `micro`: the same fills in ticks at the tick values of MGC ($1) and SIL ($5), and $1.25 a contract a side. The micro books are not in the data, so this is a stress, not a simulation |
+| Eligibility | As above (the slow ATR is defined and the 3-hour hold fits), and [decision 23](../project/roadmap.md#decisions): no file of the session is flagged (`degraded`), the engine holds a usable book at the decision, and that book's spread is at most 0.25 of the stop distance. Decided at the decision row; each reason is counted |
+| Groups | Every candidate, and the provisional ones; each also for buys and sells apart, by product |
+| Periods | The whole development period, January to April, and May to August, each reported apart |
+| Portfolio | One position at a time across the products, one contract a trade, 10 s cooldown. A resting limit order occupies the portfolio until it fills and exits or expires. **Daily loss cap** ([decision 19](../project/roadmap.md#decisions)): $3,000 a trade date at full costs and $300 at micro costs. An order is placed only if the session's net loss so far plus its stop distance in dollars stays inside the cap, and none is placed once the loss has reached it. The report counts the orders refused and the sessions in which it bound. Policies that fit nothing run as one portfolio in each half of the period |
+| Agreement | The rules above (`leg`, `trend`, `fresh` on `slow_atr_0p5`, `slow_atr_1`, `slow_atr_2`, read at the latest completed minute), on both entries |
+| Displacement rule | As above, per cell, chosen at base execution and full costs |
+
+**What counts.** A group counts as a lead only if its value of attempting (net dollars, full
+costs) is above zero with its 95% trade-date interval in both halves of the period, under
+both executions, and its mean is above zero for each product, for buys and for sells, and at
+micro costs. There are 6 label variants, 2 candidate groups, and 2 entries, each with take-all
+and 9 `with` groups: 240 policy cells. A few positive cells are expected by chance and count
+for nothing. This is the exposed year, so even a lead is a hypothesis for the untouched years
+([how results are judged](../project/roadmap.md#how-results-are-judged-on-six-years)).
+
+**Expected before the run:** taking every candidate at the market loses about one spread, as
+the fast candidates did; the limit entry fills only when price comes back through the
+candidate's extreme, which is also when the candidate is failing, so its fills are expected to
+be worse than the market entry's, not better.
+
+**Not run:** a bracket sized by the middle timeframe's own ATR, other multiples or waits, a
+limit at any other price, and the sliding-clock control.
+
+## Results for the middle timeframe (November 23, 2026)
+
+GC and SI, January 2 to August 31, 2026: 171 warm front sessions each, 473,731 candidates over
+the six label variants, about 4 minutes with 6 workers. Evidence: `~/replay-mid-gc-si.json`
+and `.log` on the new Mac. **No group passed**: of the 240 policy cells, none has a value of
+attempting with its 95% interval above zero in both halves, under either execution setting.
+Staying flat remains the rule to beat.
+
+**Every candidate taken, whole period** (per attempt, base execution, full costs; R before
+commission; the limit's value counts an unfilled order as zero):
+
+| Label | Eligible | Market: R | Market: R, stressed | Spread in R | Market: net $ (95%) | Limit: filled | Limit: R per fill | Limit: net $ (95%) | Market: net $, micro |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- | ---: |
+| `mid_atr_0p5_q25` | 184,953 | -0.027 | -0.037 | 0.029 | -83 (-111 to -53) | 89% | -0.022 | -57 (-84 to -31) | -15 |
+| `mid_atr_0p5_q50` | 113,083 | -0.029 | -0.039 | 0.030 | -93 (-123 to -62) | 82% | -0.021 | -56 (-87 to -24) | -17 |
+| `mid_atr_1_q25` | 61,833 | -0.030 | -0.041 | 0.031 | -94 (-140 to -48) | 82% | -0.026 | -64 (-121 to -6) | -18 |
+| `mid_atr_1_q50` | 34,684 | -0.032 | -0.042 | 0.031 | -106 (-149 to -67) | 69% | -0.024 | -46 (-99 to +6) | -20 |
+| `mid_atr_2_q25` | 17,602 | -0.038 | -0.048 | 0.032 | -128 (-235 to -24) | 70% | -0.034 | -66 (-154 to +27) | -24 |
+| `mid_atr_2_q50` | 9,171 | -0.039 | -0.052 | 0.032 | -154 (-232 to -82) | 46% | -0.037 | -77 (-163 to +3) | -30 |
+
+What this shows:
+
+1. **A middle candidate taken at the market loses about one spread**, as a fast one did:
+   -0.027 to -0.039 R against a spread of 0.029 to 0.032 R, with a win rate of 45%.
+   Every interval is below zero. The prediction written before
+   the run held.
+2. **The limit entry gets a better price and the same result.** It fills 0.06 to 0.40 R
+   better than the mid-price at the decision, and its fills still lose 0.021 to 0.037 R each:
+   the price comes back through the candidate's extreme mostly when the candidate is failing.
+   Per attempt it loses less ($46 to $77 against $83 to $154), partly because 11% to 54% of
+   the orders never fill. No interval is above zero. This also held as predicted.
+3. **No agreement rule passed, and the patterns of the fast replay repeat.** The
+   `slow_atr_2` `fresh` groups earned $510 to $722 an attempt from January to April and lost
+   $71 to $110 from May to August (`mid_atr_0p5_q25` and `mid_atr_1_q25`, both entries).
+   Entering with the `slow_atr_1` trend was better than entering against it in 22 of the 24
+   cells in the first half (by $20 to $184) and in all 24 in the second (by $36 to $242). The
+   `with` group itself stays near zero: four of the 216 `with` cells have a positive mean in
+   both halves and both executions, three of them this rule on the limit entry, at $2 to $44
+   an attempt and with intervals that include zero. These are the same dates and the same
+   slow trend as the fast replay, so this repeats that lead and does not confirm it.
+4. **Buys did worse than sells, and the difference is not resolved.** Over the period a buy
+   at a candidate low lost $182 to $271 an attempt at the market and a sell at a candidate
+   high was between -$33 and +$13, for GC and for SI and in each half. The intervals by side
+   are about ±$200 and most include zero, because all the buys of a trade date win or lose
+   together. A falling market would explain it from May to August (the front contracts ended
+   about 3% and 9% lower) but not from January to April, when both ended higher. It is
+   recorded as an observation; results stay split by side so that a policy cannot hide in it.
+5. **The daily loss cap decides what the take-all portfolio is.** Taking every candidate, the
+   cap bound in 71 to 81 of the 84 and 87 trade dates of each half and refused most orders
+   (of the 93,321 candidates of `mid_atr_0p5_q25` in the first half, 240 became orders, 64,144
+   were refused by the cap, and the rest arrived while a position was open). The portfolio
+   made 115 to 415 trades in a half, and its net result ranged from -$73,815 to +$88,240 with
+   daily intervals that include zero in 44 of 48 cells; three of the other four are losses,
+   and the one gain (`mid_atr_0p5_q50`, limit entry, January to April) was +$8,370 with an
+   interval around zero in the second half. From January to April almost every fill was GC (230
+   against 10 for SI in the first row). Measured afterwards: the median hourly ATR was $20.50
+   for GC and $0.76 for SI, so the stop risks about $2,050 on a GC contract and $3,800 on SI,
+   more than the cap by itself. The cap as decided therefore also sets the product mix
+   ([review](../project/roadmap.md#review-of-november-23-2026), point 3). This is a question for
+   the decision model's sizing (item 8), not changed here.
+6. **Micro costs change the scale, not the sign.** Commission is 0.8% of risk on the micros
+   against 0.2% on the full-size contracts; every label's value of attempting stays below
+   zero with its interval (-$15 to -$30 an attempt).
+7. **The displacement rule again mostly stays flat** (0 to 5,097 candidates taken of tens of
+   thousands), and where it trades the result is noise: -$47,205 to +$57,340.
+8. **What was left out is counted.** Of 208,376 `mid_atr_0p5_q25` candidates: 18,085 where
+   the hold did not fit the session, 5,085 in the five flagged sessions of each product, 226
+   with a spread above a quarter of the stop, 22 without a usable book, 5 without an ATR.
+   Among the eligible, 613 exits (0.3%) were priced without a book and one entry met none.
+
+What it does not show: anything about a candidate chosen by the book, net flow, divergences,
+or a model. With 171 trade dates the interval of a group's mean is ±$30 to ±$100 an attempt
+for the large groups and ±$200 by side, against a cost near $80.
+
+**Check of the unchanged fast replay.** `research replay GC SI` was rerun the same day with
+this code on the rebuilt database (`~/replay-fast-new-machine.json`): 2,783,418 candidates,
+and every number of the two tables of November 19 above is reproduced exactly.

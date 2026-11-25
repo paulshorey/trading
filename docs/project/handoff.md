@@ -1,7 +1,7 @@
 # Handoff
 
-Updated November 24, 2026, after the engine learned to make position decisions and the first
-decision model was run. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal, the
+Updated November 25, 2026, after the swings of RSI and of CVD were built and the decision
+model was run with them. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal, the
 six-step process, and the rules. This page says where the work stands and how to continue.
 The [roadmap](roadmap.md) is the current plan, [todo.md](todo.md) lists the tasks, and the
 [build log](build-log.md) records what was built, how it was checked, and what every
@@ -20,7 +20,10 @@ RSI and net flow (CVD) have their own swings and structure on every timeframe
 **No edge has been found.** The first model has no skill over the hours a trade lasts; once
 its forecast is shrunk to what holds outside the sessions it was fitted on, it stays flat. It does find a small predictability one minute ahead, from
 flow, the book at trades, price, and volatility, gone by fifteen minutes
-([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat.
+([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat. The
+swings of RSI and of CVD did not change that: the forecast with them is no better than
+without them, -0.002 (-0.056 to 0.052)
+([result](series-structure-spec.md#result-november-25-2026)).
 
 **The plan** is the roadmap's [decisions](roadmap.md#decisions) 29 to 39 (November 23 and
 24): no model predicts reversals; swings and structure are computed by rule; one model

@@ -198,6 +198,12 @@ For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentat
 changes, check accuracy and links. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
 
+The two Python test suites take about 25 minutes each: run them in the background with
+their output in a file, and never piped through `tail`, which shows nothing until the end.
+Do not edit Python source while a suite, `research yardstick`, `research policy`, or
+`research ingest` is running: their workers import the code again, and a run records and
+checks the hash of the source it started with. Documentation can be edited meanwhile.
+
 ## Local database: agents may write to it
 
 The PostgreSQL database `trading` (`127.0.0.1:5432`, Homebrew `postgresql@18`) is the

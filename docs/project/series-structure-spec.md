@@ -17,12 +17,19 @@ Everything is computed on the aggregated rows of a timeframe, never on single tr
 
 | Series | Its value at a row |
 | --- | --- |
-| RSI | `candle_<window>.rsi`: the RSI of the window that ends with the row |
+| RSI | `candle_<window>.rsi`: the RSI of the window that ends with the row, read to a millionth of a point (so floating-point noise never decides whether two equal values differ) |
 | CVD | `bar_<rows>.cvd`: buying minus selling volume from the contract's first row through this row |
 
 One row gives one value, at the row's close. On `1m@1s` that is a value every second, on
 `10m@10s` every ten seconds, on `1h@1m` every minute. A row without data has no value and
 ends the zigzag's segment, as it does for price.
+
+CVD is read by its changes only, never its level. The level is a count from wherever the
+counting began: a backtest that starts after a contract's first stored session counts from
+zero there, so its level differs from the stored one by a constant. Every feature here is a
+difference inside one segment (a swing, a distance, a threshold), so it is the same either
+way; a test shifts the level and compares. The stored levels (`ext`, `high_level`,
+`low_level`, and an event's `level`) are context for a chart and are never model inputs.
 
 (The zigzag of price is the one exception in the system: it reads the trades inside a row in
 order, so that it knows which level price reached first, and still publishes once a row. It
@@ -73,6 +80,25 @@ On `1m@1s` the rows are stored at the end of every ten-second row, where slower 
 and the decision dataset read them; the engine computes every second.
 
 Nothing stored is rebuilt: the stages are new.
+
+## The test of these inputs (frozen before the run)
+
+The [yardstick](yardstick-spec.md) is rerun on the same dates, rows, target, folds, and
+models as its run 9, with the 708 new features beside the 741 it had (1,449 in all).
+
+| Item | Value |
+| --- | --- |
+| Decision row, target, eligibility, folds | Unchanged: one row a minute, the move ahead in R at the 1.5 slow ATR bracket, test months May to August 2026 |
+| Compared | `trees` on all 1,449 features against `trees` on the 741 without the new ones (`trees_without_series`), fitted in the same run |
+| Measure | The difference of their pooled rank correlations over the test rows, with a 95% interval from resampled trade dates, both forecasts scored on the same resample (`yardstick.paired_difference`) |
+| Success | The interval of the difference is above zero ([what counts](yardstick-spec.md#what-counts)) |
+| Also reported | The yardstick's slopes by month; the horizon map with the new features as a kind of their own (`series`) beside price's swings |
+| Baseline | Run 9: `trees` 0.044 (-0.030 to 0.116) |
+
+**Expected before the run:** no measurable gain. The swings of RSI and of CVD restate the
+price path and the flow the model already reads, and 86 test dates resolve only a large
+difference. The stages stay whatever the result: they are step 5 of the process, and the
+codes that compare the three structures, which are the point of them, are not built yet.
 
 ## Not in this step
 

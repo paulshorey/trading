@@ -12,6 +12,7 @@ from strategy_core.stage_bar_1s import BarStage
 from strategy_core.stage_step_bar import MinuteBarStage
 from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as FEATURE_COLUMNS
 from strategy_core.stage_step_candle import CandleStage, HourCandleStage
+from strategy_core.stage_step_series import BY_TIMEFRAME as SERIES_BY_TIMEFRAME
 from strategy_core.stage_step_stats import HourStatsStage
 from strategy_core.stage_step_vol import VolMinuteStage, VolSecondStage
 from strategy_core.stages import StageContext
@@ -45,6 +46,22 @@ def test_warmup_follows_the_parameters():
     # ... at both resolutions: the same daily chain; the 1m@1s ATR(50) needs only 392 minutes
     seconds = VolSecondStage(StageContext(None, 0, 0, FeatureConfig())).warmup()
     assert seconds == vol
+    # a series' own ATR(14) follows the series: the hourly RSI needs its 109 periods first, then
+    # 109 for its ATR (about 9.5 sessions); CVD exists from the first row
+    context = StageContext(None, 0, 0, FeatureConfig())
+    slow = {s.SOURCE: s(context).warmup() for s in SERIES_BY_TIMEFRAME["1h@1m"]}
+    assert slow == {"rsi": 218 * 3600, "cvd": 109 * 3600}
+    assert warmup.sessions(slow["rsi"], 1, 82_800) == 10
+
+
+def series(rows: str, stream: str) -> list[str]:
+    """The scales of RSI and of CVD of one timeframe, in stage order: they follow price's and
+    read only that timeframe's aggregated rows, never the trades."""
+    return [
+        f"pivot_{source}_{rows}:{stream}_{source}_atr_{k}"
+        for source in ("rsi", "cvd")
+        for k in ("0p5", "1", "2", "3")
+    ]
 
 
 def test_the_graph_reads_only_earlier_stages():
@@ -66,14 +83,17 @@ def test_the_graph_reads_only_earlier_stages():
         "pivot_1s:fast_atr_1",
         "pivot_1s:fast_atr_2",
         "pivot_1s:fast_atr_3",
+        *series("1s", "fast"),
         "pivot_10s:mid_atr_0p5",
         "pivot_10s:mid_atr_1",
         "pivot_10s:mid_atr_2",
         "pivot_10s:mid_atr_3",
+        *series("10s", "mid"),
         "pivot_1m:slow_atr_0p5",
         "pivot_1m:slow_atr_1",
         "pivot_1m:slow_atr_2",
         "pivot_1m:slow_atr_3",
+        *series("1m", "slow"),
     ]
     # the resolutions are independent branches: no minute stage reads a second-resolution candle
     slow = ("market", "bar_1s", "bar_1m", "candle_1h_1m", "vol_1m")  # trades, and their seconds
@@ -84,6 +104,7 @@ def test_the_graph_reads_only_earlier_stages():
         "stats_1h_1m": ("bar_1m", "candle_1h_1m"),  # a declared edge within tier 1
         "vol_1m": ("bar_1m", "candle_1h_1m"),
         **{f"pivot_1m:slow_atr_{k}": slow for k in ("0p5", "1", "2", "3")},
+        **{name: ("bar_1m", "candle_1h_1m") for name in series("1m", "slow")},
     }
     # ... and no second stage reads a minute stage
     fast = ("market", "bar_1s", "candle_1m_1s", "vol_1s")
@@ -93,6 +114,7 @@ def test_the_graph_reads_only_earlier_stages():
         "stats_1m_1s": ("bar_1s", "candle_1m_1s"),  # declared edges within tier 1
         "vol_1s": ("bar_1s", "candle_1m_1s"),
         **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2", "3")},
+        **{name: ("bar_1s", "candle_1m_1s") for name in series("1s", "fast")},
     }
     assert {s.TIER for s in inputs if ":" in s.NAME} == {2}  # swings read tiers 0 and 1 only
     with pytest.raises(ValueError, match="not an earlier stage"):

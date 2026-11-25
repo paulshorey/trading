@@ -36,6 +36,9 @@ once on each group alone (price path, volume and flow, the book at trades, volat
 swings and structure, session and time). It answers what has never been asked here: is
 anything predictable from these inputs, at which horizon, and from which kind of input.
 That is 35 fits, reported as a table of the skill above. None is a candidate policy.
+(Since the swings of RSI and of CVD were added they are a kind of their own, `series`, beside
+price's swings, and the run also fits `trees` without the newest kind and reports the paired
+difference in skill: [the test](series-structure-spec.md#the-test-of-these-inputs-frozen-before-the-run).)
 
 ## Part B: the policy, after costs
 

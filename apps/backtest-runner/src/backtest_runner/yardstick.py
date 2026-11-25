@@ -130,12 +130,17 @@ SESSION = frozenset(
 VOLATILITY = frozenset(
     ["atr_bps", "range_bps", "rv_bps", "rv_atr", "ret_std_bps", "bb_width_bps", "vol_bps", "chop"]
 )
-GROUPS = ("price", "flow", "book", "volatility", "swings", "session")
+GROUPS = ("price", "flow", "book", "volatility", "swings", "series", "session")
+# The newest kind of input: the forecast is fitted with and without it, and the difference in
+# skill is reported with its interval (yardstick-spec.md#what-counts).
+ADDED = "series"
 
 
 def group_of(name: str) -> str:
     """The kind of input a feature is, by the engine's name of it."""
     stage, base = StageFeatures.sources()[name], name.rsplit(".", 1)[-1]
+    if hasattr(BY_NAME[stage], "SOURCE"):  # the swings of RSI and of CVD
+        return "series"
     if hasattr(BY_NAME[stage], "VARIANT"):
         return "swings"
     if base in SESSION:
@@ -355,6 +360,19 @@ def pooled_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray) -> 
     correlation taken date by date rewards any forecast that fades the session's move."""
     if len(y) < MIN_ROWS or np.ptp(forecast) == 0 or np.ptp(y) == 0:
         return {"trade_dates": len(np.unique(day)), "value": None, "interval_95": [None, None]}
+    dates, corr = weighted_correlation(forecast, y, day)
+    rng = np.random.default_rng(SEED)
+    draws = np.array([corr(w) for w in date_weights(rng, dates)])
+    return {
+        "trade_dates": dates,
+        "value": round(corr(np.ones(dates)), 5),
+        "interval_95": [round(float(v), 5) for v in np.nanpercentile(draws, [2.5, 97.5])],
+    }
+
+
+def weighted_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray):
+    """The number of trade dates, and the rank correlation over all rows as a function of a
+    weight per date (how often a resample drew it)."""
     rf, ry = rankdata(forecast), rankdata(y)
     dates, index = np.unique(day, return_inverse=True)
     n = np.bincount(index).astype(float)
@@ -366,16 +384,31 @@ def pooled_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray) -> 
         spread = (aa - a * a / count) * (bb - b * b / count)
         return float((ab - a * b / count) / np.sqrt(spread)) if spread > 0 else np.nan
 
+    return len(dates), corr
+
+
+def date_weights(rng: np.random.Generator, dates: int):
+    """`RESAMPLES` resamples of the trade dates, each as a count per date."""
+    for _ in range(RESAMPLES):
+        yield np.bincount(rng.integers(0, dates, dates), minlength=dates)
+
+
+def paired_difference(a: np.ndarray, b: np.ndarray, y: np.ndarray, day: np.ndarray) -> dict:
+    """The pooled rank correlation of forecast `a` less that of forecast `b`, over the rows both
+    scored, with a 95% interval from resampled trade dates: each resample scores both forecasts
+    on the same dates, so what the dates share cancels."""
+    rows = np.isfinite(a) & np.isfinite(b) & np.isfinite(y)
+    a, b, y, day = a[rows], b[rows], y[rows], day[rows]
+    if len(y) < MIN_ROWS or np.ptp(a) == 0 or np.ptp(b) == 0 or np.ptp(y) == 0:
+        return {"trade_dates": len(np.unique(day)), "value": None, "interval_95": [None, None]}
+    dates, of_a = weighted_correlation(a, y, day)
+    _, of_b = weighted_correlation(b, y, day)
     rng = np.random.default_rng(SEED)
-    draws = np.array(
-        [
-            corr(np.bincount(rng.integers(0, len(dates), len(dates)), minlength=len(dates)))
-            for _ in range(RESAMPLES)
-        ]
-    )
+    draws = np.array([of_a(w) - of_b(w) for w in date_weights(rng, dates)])
+    one = np.ones(dates)
     return {
-        "trade_dates": len(dates),
-        "value": round(corr(np.ones(len(dates))), 5),
+        "trade_dates": dates,
+        "value": round(of_a(one) - of_b(one), 5),
         "interval_95": [round(float(v), 5) for v in np.nanpercentile(draws, [2.5, 97.5])],
     }
 
@@ -570,6 +603,18 @@ def run(
     forecast, _ = walk_forward(x, y, day, usable, fit_trees)
     report("trees", forecast)
     log(f"trees: fitted, {time.time() - started:,.0f} s")
+    # the newest kind of input earns its place when the skill with it is above the skill
+    # without it: the same model on the other features, and the paired difference
+    added = np.array([group_of(n) == ADDED for n in names])
+    if added.any() and not added.all():
+        without, _ = walk_forward(x[:, ~added], y, day, usable, fit_trees)
+        report(f"trees_without_{ADDED}", without)
+        out["added_inputs"] = {
+            "kind": ADDED,
+            "features": int(added.sum()),
+            "trees_less_trees_without": paired_difference(forecast, without, y, day),
+        }
+        log(f"trees without {ADDED}: fitted, {time.time() - started:,.0f} s")
     # one fit of the coarse trees serves them as they are and under every calibration: a
     # calibration only multiplies the forecast
     calibrated, fitted = walk_forward(

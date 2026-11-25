@@ -13,7 +13,14 @@ from backtest_runner.source import DayCache, HistoricalSource, next_front
 from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk
 from strategy_core.market import NS, PRODUCTS
-from strategy_core.pipeline import SPARSE, STEP_STAGES, Pipeline, stored_ordinals, stored_rows
+from strategy_core.pipeline import (
+    SPARSE,
+    SPARSE_STEPS,
+    STEP_STAGES,
+    Pipeline,
+    stored_ordinals,
+    stored_rows,
+)
 from strategy_core.stage_bar_1s import COLUMNS as BASE_COLUMNS
 from strategy_core.stage_step_bar import COLUMNS as MINUTE_COLUMNS
 from strategy_core.stage_step_candle import FAST_FEATURE_COLUMNS as FEATURE_COLUMNS
@@ -26,6 +33,8 @@ from strategy_core.stage_step_pivot import (
     PivotMinuteStage,
 )
 from strategy_core.stage_step_pivot import SCALES as SLOW_SCALES
+from strategy_core.stage_step_series import BY_TIMEFRAME as SERIES_BY_TIMEFRAME
+from strategy_core.stage_step_series import SeriesPivotStage
 from strategy_core.stage_step_stats import COLUMNS as STATS_COLUMNS
 from strategy_core.stage_step_stats import HourStatsStage, SecondStatsStage
 from strategy_core.stage_step_vol import COLUMNS as VOL_COLUMNS
@@ -103,6 +112,7 @@ def world(monkeypatch):
     for stage in (*STEP_STAGES[MIDDLE.name][1:], PivotMiddleStage):  # the middle timeframe's
         monkeypatch.setattr(stage, "warmup", lambda self: 3600)
     monkeypatch.setattr(SecondStatsStage, "warmup", lambda self: 3600)  # a whole prior session
+    monkeypatch.setattr(SeriesPivotStage, "warmup", lambda self: 3600)  # RSI and CVD scales
     cache = FakeCache(
         {d: (day_records(d, r, i), mappings(d)) for i, (d, r) in enumerate(DAYS.items())}
     )
@@ -452,6 +462,12 @@ def test_minute_bounds_follow_the_session_seconds():
         "stats_10m_10s": 10,
         "vol_10s": 10,
         "pivot_10s": 10,
+        "pivot_rsi_1s": 1,  # the swings of RSI and of CVD: a table per series and timeframe
+        "pivot_cvd_1s": 1,
+        "pivot_rsi_10s": 10,
+        "pivot_cvd_10s": 10,
+        "pivot_rsi_1m": 60,
+        "pivot_cvd_1m": 60,
     }
 
 
@@ -486,7 +502,8 @@ def stored_of(rows, stages=None) -> ingest.Stored:
 
 
 NAMES = [cls.NAME for cls in ingest.STAGES]
-SWINGS = [s.NAME for s in (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES)]  # each scale is a stage
+SERIES_SCALES = tuple(s for scales in SERIES_BY_TIMEFRAME.values() for s in scales)
+SWINGS = sorted(s.NAME for s in ingest.STAGES if hasattr(s, "VARIANT"))  # each scale is a stage
 
 
 def without(*stored: str) -> str:
@@ -681,7 +698,7 @@ def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world
             kept = np.array([r[names.index("end_ns")] for r in stored], np.int64)
             # a sparse stage stores some of its rows: what is stored must be rows the backtest
             # computed
-            at = np.isin(ends, kept) if stage in SPARSE else np.ones(len(ends), bool)
+            at = np.isin(ends, kept) if stage in SPARSE | SPARSE_STEPS else np.ones(len(ends), bool)
             assert at.sum() == len(stored) and (len(stored) >= 1380 or not len(ends)), stage
             for j, (name, every) in enumerate(table.values.items()):
                 values = every[at]
@@ -883,7 +900,8 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         after = slices(conn)
         for key, (builder, _, at) in after.items():
             # the statistics and the fast scales read the candle
-            fast = ("candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s")
+            fast = ("candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s", "pivot_rsi_1s",
+                    "pivot_cvd_1s")  # fmt: skip
             if key[0] not in fast:
                 assert (builder, at) == (before[key][0], before[key][2]), key  # untouched
             else:
@@ -925,7 +943,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "stats_10m_10s": 1,
         "vol_10s": 1,
         # their thresholds' ATR(14)
-        **{s.NAME: 1 for s in (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES)},
+        **{s.NAME: 1 for s in (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES, *SERIES_SCALES)},
     }
     with pytest.raises(ValueError, match="candle_1m_1s"):
         ingest.plan(["GC"], data=first, **{**options, "lead": 0})
@@ -976,13 +994,16 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         "stats_1h_1m",
         "vol_1m",
         "pivot_1m",
+        "pivot_rsi_1m",  # the slow scales of RSI and of CVD read the minute rows too
+        "pivot_cvd_1m",
         "pivot_event",  # the slow scales' events are replaced with their rows
     }
     with db.connect(database) as conn:
         after = slices(conn)
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
-            fast = ("bar_1s", "candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s")
+            fast = ("bar_1s", "candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s", "pivot_rsi_1s",
+                    "pivot_cvd_1s")  # fmt: skip
             if key[0] in fast or (
                 key[0].split(":")[0].endswith("10s")  # the middle timeframe is another branch
             ):
@@ -1129,8 +1150,8 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     }
     [plan] = ingest.plan(["GC"], data=first, **options)
     every = (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES)
-    variants = {s.NAME: plan["variants"][s.NAME] for s in every}
-    assert len(set(variants.values())) == 12 and all(variants.values())
+    variants = {s.NAME: plan["variants"][s.NAME] for s in (*every, *SERIES_SCALES)}
+    assert len(set(variants.values())) == 36 and all(variants.values())
     scales = (*SLOW_SCALES, *FAST_SCALES)  # checked row by row below; the middle ones as slow
     assert all(plan["variants"][n] == 0 for n in plan["variants"] if n not in variants)
     dates = [date(2026, 9, 2), date(2026, 9, 3)]
@@ -1327,7 +1348,7 @@ def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     assert {c["action"] for c in now["contracts"]} == {"current"}
     with db.connect(database) as conn:
         retired = dict(conn.execute("SELECT name, retired_at IS NOT NULL FROM market.variant"))
-        assert retired == {"fast_old": True} | {s.VARIANT: False for s in every}
+        assert retired == {"fast_old": True} | {s.VARIANT: False for s in (*every, *SERIES_SCALES)}
         count = "SELECT count(*) FROM market.{} WHERE variant_id = %s"
         copied = conn.execute(count.format("pivot_1s"), (kept,)).fetchone()[0]
         assert conn.execute(count.format("pivot_1s"), (old,)).fetchone()[0] == copied > 4 * 1380

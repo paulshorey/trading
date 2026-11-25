@@ -62,6 +62,13 @@ fingerprint, `~/fingerprint-series.txt`, holds the 432 lines of `~/fingerprint-n
 unchanged and 576 new ones (24 scales, 12 contracts, rows and events). `research verify` on the example day: features and all 18 trades identical between the
 whole session and second by second, at 9.8 ms a market second (8.8 ms with 741 features).
 
+**A fix after review** (November 25). The detector was given a size of zero for every row,
+so the events of these stages stored a leg's volume as 0, 0, 0 where it is unknown: no
+trade is read. They are NULL now (3,634,539 pivot events), and a test requires it. The 24
+stages were rebuilt (run 7). Against the fingerprint before the fix, only their 288 event
+lines differ, with the same counts; every row table is identical, so no feature changed and
+run 11 below stands. `~/fingerprint-series.txt` is the one after the fix.
+
 **The engine** now holds 1,449 features (741 before). Its per-second cost grows with the
 number of features, so a second in which no slower row completes now reuses the last row's
 values instead of joining them again (`StageFeatures.as_of`); the second-by-second

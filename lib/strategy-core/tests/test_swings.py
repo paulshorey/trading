@@ -967,6 +967,10 @@ def test_series_swings_equal_a_plain_python_reference_in_their_own_atr(days, who
     np.testing.assert_array_equal(rows_["end_ns"], base["end_ns"])
     np.testing.assert_array_equal(ev["at_ns"], ev["end_ns"])
     np.testing.assert_array_equal(rows_["state"] == IDLE, ~ready)
+    # no trade is read, so a leg's volume is unknown (NULL), never a false zero
+    _, en = events_of(whole, stage.NAME)
+    for name in ("leg_volume", "leg_buy_volume", "leg_sell_volume"):
+        assert en[name].all(), name
     # the levels are the series' own values
     known = ~rn["ext"]
     assert known.any() == bool(want) and np.isin(rows_["ext"][known], x[np.isfinite(x)]).all()

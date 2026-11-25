@@ -45,6 +45,7 @@ FLOOR = {RSI: 2.5, CVD: 3.0}
 RSI_DECIMALS = 6
 NEVER = -(2**62)  # no step row seen yet
 DROPPED = frozenset({"leg_delta_ratio", "reversal_delta_ratio"})  # a leg's flow: price only
+LEG_VOLUMES = ("leg_volume", "leg_buy_volume", "leg_sell_volume")
 LEVELS = (
     ("ext", swings.O_EXT, "The open leg's running extreme"),
     ("high_level", swings.O_SIDE + swings.S_LEVEL, "The latest confirmed high"),
@@ -219,9 +220,10 @@ class SeriesPivotStage(Stage):
         }
         out, ev_i, ev_f = self.detector.advance(obs, rows)
         self.warm = swings.is_warm(out)
-        events[self.NAME] = swings.event_table(
-            ev_i, ev_f, end[ev_i[:, swings.E_ROW]], self.context.close_delay
-        )
+        table = swings.event_table(ev_i, ev_f, end[ev_i[:, swings.E_ROW]], self.context.close_delay)
+        for name in LEG_VOLUMES:  # no trade is read: a leg's volume is unknown, never zero
+            table.nulls[name] = np.ones(len(table), bool)
+        events[self.NAME] = table
         return with_structure(swings.dense_table(spec, ordinal, end, out))
 
 

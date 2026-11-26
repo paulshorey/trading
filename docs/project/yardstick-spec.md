@@ -139,6 +139,16 @@ dates. This is a change made after seeing a result, so it is recorded as one: th
 measure's number is kept in the report (`within_date_rank_correlation_biased`) and decides
 nothing. The rule is now in [AGENTS.md](../../AGENTS.md#research-principles).
 
+PR #103 corrected two parts of the yardstick after run 11.
+
+- Each bootstrap draw samples whole trade dates with replacement. Both forecasts and the
+  target are ranked over the sampled rows, including ties and repeated dates. Previous
+  reports kept ranks fixed across draws.
+- The dataset still requires all stage slices to exist and all fixed warm-ups to have
+  elapsed. A swing scale becomes ready when it has confirmed both a high and a low in its
+  current segment. Each decision checks all scales at that minute. A later gap can end a
+  segment and subsequent rows remain ineligible until both sides confirm again.
+
 ## Results (November 24, 2026)
 
 GC and SI, January 2 to August 31, 2026; test months May to August, 86 trade dates. Recorded

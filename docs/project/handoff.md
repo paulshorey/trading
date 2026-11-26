@@ -22,7 +22,7 @@ its forecast is shrunk to what holds outside the sessions it was fitted on, it s
 flow, the book at trades, price, and volatility, gone by fifteen minutes
 ([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat. The
 swings of RSI and of CVD did not change that: the forecast with them is no better than
-without them, -0.002 (-0.056 to 0.052)
+without them, -0.002 (-0.057 to 0.052)
 ([result](series-structure-spec.md#result-november-25-2026)).
 
 **The plan** is the roadmap's [decisions](roadmap.md#decisions) 29 to 39 (November 23 and

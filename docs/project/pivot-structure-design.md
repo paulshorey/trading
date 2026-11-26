@@ -203,7 +203,10 @@ What differs for RSI and CVD:
   from wherever counting began: context only, read by its changes, never by its level.
 - **One chronological series.** The stored RSI is per phase, so consecutive rows come from
   different phase states. Read row by row, they form one rolling RSI sampled every step.
-  That is one swing history, not 60; the threshold filters the jitter between phases.
+  The detector can confirm a swing solely because two phases retained different RSI values.
+  The fast 0.5-ATR scale confirmed two pivots per minute after trading stopped in a
+  flat-price test. The choice of RSI series for divergence is open.
+  [Reproduction on the PR](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941).
 - **Own stages.** `pivot_rsi_<rows>` and `pivot_cvd_<rows>` (tier 2; inputs `bar_<rows>` and
   `candle_<window>`), one stage per scale, with their events in `market.pivot_event`.
 

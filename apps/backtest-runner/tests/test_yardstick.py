@@ -4,6 +4,7 @@ from datetime import date
 import numpy as np
 import pytest
 from backtest_runner import dataset, yardstick
+from scipy.stats import spearmanr
 from strategy_core import targets
 from strategy_core.engine import MarketChunk, session_view
 from strategy_core.market import HOUR, NS, PRODUCTS, PX, SessionCalendar
@@ -29,6 +30,12 @@ def test_the_dataset_reads_the_engines_features_by_its_names_and_in_its_order():
     assert "% 60 = 0" in query.replace("%%", "%") and query.count("LEFT JOIN") == len(needed) - 1
     assert ".slot_ordinal / 10 " in query and ".slot_ordinal / 60 " in query
     assert ("vol_1m", 0) in needed and ("pivot_1m", ids["pivot_1m:slow_atr_3"]) in needed
+    swing_scales = sum(table in dataset.SWING_TABLES for table, _ in needed)
+    assert (
+        query.count(".high_age_s IS NOT NULL")
+        == query.count(".low_age_s IS NOT NULL")
+        == swing_scales
+    )
     assert set(yardstick.GATE) <= set(names)
 
 
@@ -136,9 +143,9 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
     chunk = MarketChunk("GCZ6", T0, T0 + 6 * HOUR, t, cover, "s", True, random_book(t, seed=5))
     view = session_view(chunk, cal, dataset.EXECUTION)
     seconds = [600, 900, 1200, 6 * 3600 - 3000, 1500]
-    # ordinal, row end, the slow ATR in price units, two features
+    # ordinal, row end, the slow ATR in price units, swing readiness, two features
     found = [
-        (60 * k, T0 + s * NS, atr, 1.5, None)
+        (60 * k, T0 + s * NS, atr, True, 1.5, None)
         for k, (s, atr) in enumerate(zip(seconds, [2.0, 2.0, None, 2.0, 0.01], strict=True))
     ]
     out = dataset.session_rows(product, cal, view, cover, found, False)
@@ -154,6 +161,13 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
     assert out["cost_r"][0] == pytest.approx(
         (seen.ask - seen.bid + commission) / round(1.5 * 2.0 * PX)
     )
+    # A later reset loses one confirmed side. Earlier decisions survive and the cold
+    # decision remains countable, with its features and no target.
+    reset = [*found[:1], (*found[1][:3], False, *found[1][4:]), *found[2:]]
+    after = dataset.session_rows(product, cal, view, cover, reset, False)
+    assert after["why"].tolist() == [0, dataset.COLD_SWINGS, *out["why"][2:]]
+    assert after["y"][0] == out["y"][0] and np.isnan(after["y"][1])
+    np.testing.assert_array_equal(after["x"], out["x"])
     flagged = dataset.session_rows(product, cal, view, cover, found, True)
     assert flagged["why"].tolist()[:2] == [dataset.FLAGGED] * 2 and np.isnan(flagged["y"]).all()
 
@@ -405,3 +419,25 @@ def test_an_added_input_is_judged_by_the_paired_difference_in_skill():
     # rows only one of them scored are left out
     partial = np.where(day < 30, np.nan, worse)
     assert yardstick.paired_difference(better, partial, y, day)["trade_dates"] == 30
+
+
+def test_bootstrap_reranks_the_pooled_rows_in_each_date_draw(monkeypatch):
+    # Unequal date sizes, ties in the targets and forecasts, draws with missing/repeated dates.
+    rng = np.random.default_rng(11)
+    day = np.repeat([2, 4, 8, 9], [6, 9, 12, 13])
+    y = rng.choice([-1.0, 0.0, 1.0], size=len(day))
+    a, b = rng.integers(6, size=(2, len(day)))
+    monkeypatch.setattr(yardstick, "RESAMPLES", 40)
+    draws = np.random.default_rng(yardstick.SEED).choice(np.unique(day), size=(40, 4))
+    pooled, paired = [], []
+    for draw in draws:
+        rows = np.concatenate([np.flatnonzero(day == d) for d in draw])
+        first = spearmanr(a[rows], y[rows]).statistic
+        pooled.append(first)
+        paired.append(first - spearmanr(b[rows], y[rows]).statistic)
+    assert yardstick.pooled_correlation(a, y, day)["interval_95"] == pytest.approx(
+        np.percentile(pooled, [2.5, 97.5]), abs=5e-6
+    )
+    assert yardstick.paired_difference(a, b, y, day)["interval_95"] == pytest.approx(
+        np.percentile(paired, [2.5, 97.5]), abs=5e-6
+    )

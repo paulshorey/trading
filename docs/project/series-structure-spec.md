@@ -102,13 +102,19 @@ codes that compare the three structures, which are the point of them, are not bu
 
 ### Result (November 25, 2026)
 
-| Forecast (run 11, 86 test dates) | Pooled rank correlation | Squared error against `flat` |
+| Forecast (run 11 rescored, 86 test dates) | Pooled rank correlation | Squared error against `flat` |
 | --- | --- | --- |
 | `trees`, all 1,449 features | 0.042 (-0.033 to 0.121) | 9% higher |
-| `trees_without_series`, the 741 | 0.044 (-0.030 to 0.116) | 12% higher |
-| Difference, paired by trade date | -0.002 (-0.056 to 0.052) | |
+| `trees_without_series`, the 741 | 0.044 (-0.033 to 0.116) | 12% higher |
+| Difference, paired by trade date | -0.002 (-0.057 to 0.052) | |
 | `trees_coarse` | 0.011 (-0.065 to 0.090) | 10% higher |
-| `ridge` | 0.042 (-0.038 to 0.120) | 53% higher |
+| `ridge` | 0.042 (-0.037 to 0.118) | 53% higher |
+
+After review, the intervals above were recomputed by ranking the sampled rows within
+each of 1,000 whole-date draws. The original saved report used fixed ranks. All four
+point estimates reproduced on the run 11 cache (`33c7ef473d92ff73`). All 432,185 eligible
+rows passed the decision-time swing readiness check. The corrected paired difference is
+−0.00235 (95% interval −0.05664 to 0.05219).
 
 **The new inputs add no measurable skill**, as expected before the run. The forecast without
 them reproduces run 9 (0.044), so the comparison is on the same footing. By product `trees`

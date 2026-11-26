@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from backtest_runner import db, ingest, service, store
+from backtest_runner import dataset, db, ingest, service, store
 from backtest_runner.catalog import DbnFile
 from backtest_runner.source import DayCache, HistoricalSource, next_front
 from strategy_core.columns import Table
@@ -644,6 +644,14 @@ def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(
             "GROUP BY 1, 2 ORDER BY 1"
         ).fetchall()
         assert fronts == [(date(2026, 9, 1), "GCZ6", 82_800), (date(2026, 9, 4), "GCG7", 82_800)]
+        # A built swing scale can be cold at some decisions. Its session stays available
+        # to the yardstick, while a missing stage slice or an unsettled indicator excludes it.
+        day = date(2026, 9, 1)
+        vid = dataset.variant_ids(conn)["pivot_rsi_1m:slow_rsi_atr_3"]
+        stages = [("pivot_rsi_1m", vid)]
+        assert dataset.front_sessions(conn, "GC", day, day, stages)[0][-1]
+        assert not dataset.front_sessions(conn, "GC", day, day, [("pivot_rsi_1m", 0)])[0][-1]
+        assert not dataset.front_sessions(conn, "GC", day, day, [*stages, ("vol_1m", 0)])[0][-1]
 
 
 def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world, monkeypatch):

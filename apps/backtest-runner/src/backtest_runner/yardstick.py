@@ -371,18 +371,25 @@ def pooled_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray) -> 
 
 
 def weighted_correlation(forecast: np.ndarray, y: np.ndarray, day: np.ndarray):
-    """The number of trade dates, and the rank correlation over all rows as a function of a
-    weight per date (how often a resample drew it)."""
-    rf, ry = rankdata(forecast), rankdata(y)
+    """Prepare the value ordering once. Each draw ranks the rows it actually sampled,
+    giving all copies of a tied value their shared midrank."""
     dates, index = np.unique(day, return_inverse=True)
-    n = np.bincount(index).astype(float)
-    sums = [np.bincount(index, weights=v) for v in (rf, ry, rf * rf, ry * ry, rf * ry)]
+    forecast_groups = np.unique(forecast, return_inverse=True)[1]
+    target_groups = np.unique(y, return_inverse=True)[1]
+
+    def centered_ranks(groups, row_weight, total):
+        counts = np.bincount(groups, weights=row_weight)
+        # Midrank of a tie minus the pooled mean rank (total + 1) / 2.
+        return (np.cumsum(counts) - (counts + total) / 2)[groups]
 
     def corr(weight: np.ndarray) -> float:
-        count = (n * weight).sum()
-        a, b, aa, bb, ab = ((v * weight).sum() for v in sums)
-        spread = (aa - a * a / count) * (bb - b * b / count)
-        return float((ab - a * b / count) / np.sqrt(spread)) if spread > 0 else np.nan
+        row_weight = weight[index]
+        total = row_weight.sum()
+        a = centered_ranks(forecast_groups, row_weight, total)
+        b = centered_ranks(target_groups, row_weight, total)
+        wa, wb = row_weight * a, row_weight * b
+        spread = (wa * a).sum() * (wb * b).sum()
+        return float((wa * b).sum() / np.sqrt(spread)) if spread > 0 else np.nan
 
     return len(dates), corr
 

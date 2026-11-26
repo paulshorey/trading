@@ -27,6 +27,7 @@ the [build log](build-log.md).
       [decision 41](roadmap.md#decisions); November 24): 24 stages,
       [spec](series-structure-spec.md),
       [record](build-log.md#swings-and-structure-of-rsi-and-of-cvd-november-24-2026).
+- [ ] **Choose the RSI signal for divergence** using the [phase comparison and flat-price tests](series-structure-spec.md#plan-for-the-rsi-signal-used-to-confirm-swings).
 - [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
       divergence at the latest highs and lows, a level one series has broken that another
       holds. Specify them first; they are a new stage, and inputs like any other.

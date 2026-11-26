@@ -133,3 +133,48 @@ terminal, where nothing limits it.
 The codes that compare the three structures (agreement, divergence at the latest highs and
 lows, a level one has broken that another holds). The model already receives the three
 structures; the comparison codes follow as their own stage.
+
+## Plan for the RSI signal used to confirm swings
+
+**Step 5, proposed for the next experiment.** At a constant price, the fast 0.5-ATR
+detector confirmed 60 pivots in 30 minutes. They all occurred at two phases. Each phase's
+own RSI was steady. This happened both with no trades and with one flat-price trade every
+second. A valid RSI swing signal must settle when all 60 phase histories settle.
+[Reproduction and seed](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941).
+
+1. **Compare two definitions.** Keep the current interleaved RSI as the control. Test the
+   equal-weight mean of the latest RSI from each of the 60 phases as the candidate. At
+   ordinal `o`, those are exactly the values at `o − 59 … o`. Each step replaces one
+   phase's old value with its new value. If that phase was steady, its contribution to
+   the mean stays the same. This gives the detector one series that is still on the 0–100
+   RSI scale. The observations in the mean are 0–59 steps old, so confirmation delay is
+   the main cost to measure.
+2. **Specify the streaming calculation.** Use the same rule independently on each contract
+   and timeframe. Average the existing RSI values expressed in integer millionths of a
+   point, with a 60-row ring and an integer sum. Publish the mean only when all 60 slots
+   are valid. A missing value ends the swing segment. Scheduled closures consume no slots.
+   Feed the mean into the existing series ATR and zigzag, with the current floor of 2.5
+   points, all four multipliers, and thresholds frozen from the preceding row. Use a
+   separate variant identity for the experiment.
+3. **Test signal meaning before scoring a model.** Reproduce both flat-price cases and
+   require zero candidate pivots after a full phase cycle at steady phase values. Repeat
+   with different starting phases on all three timeframes. On a sustained rise followed
+   by a sustained fall, confirm the high only after the reversal threshold is crossed.
+   Test a coverage gap, a session close/reopen, price rescaling, checkpoint restoration,
+   and whole-session versus one-step replay against a plain reference.
+4. **Measure the trade-off on development data.** Start with the original 39 GC/SI trade
+   dates (March 2–April 24, 2026). For each product, timeframe and multiplier, report
+   confirmed highs and lows per date, pivot phase during flat stretches, and elapsed
+   scheduled-open time from the extreme to confirmation. Match same-kind candidate and
+   control pivots one-to-one within one window and report their confirmation-time
+   differences, the match rate and both unmatched counts. Recurrent flat-price pivots
+   reject a definition. Inspect the delay and missed moves before choosing a variant for
+   divergence. Lower pivot counts alone do not establish an improvement.
+5. **Evaluate the chosen definition.** Freeze the choice before rerunning the yardstick.
+   Compare the same model and eligible decisions with the original RSI swings, with the
+   replacement, and with RSI swings omitted. Hold price and CVD features fixed. Use the
+   existing purged walk-forward folds, bracket horizon and paired whole-date bootstrap.
+   Report coverage separately and replay a non-flat policy with costs, by product and
+   side. Reserve September 1, 2026 onward for the final evaluation. Version and rebuild
+   the affected RSI stages after the definition is accepted, then build the divergence
+   inputs against that version.

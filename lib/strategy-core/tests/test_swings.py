@@ -149,6 +149,17 @@ def test_every_crossing_of_the_trade_path_counts():
     assert [e["seq"] for e in events] == [0, 0]
 
 
+def test_progress_is_the_deepest_pullback_and_ext_dist_is_where_the_series_stands_now():
+    """Regression (PR #103 review). `progress` remembers the largest pullback since the running
+    extreme, over the frozen threshold: it does not come back down when the series recovers,
+    so it is not the chance that the swing confirms from here. `ext_dist_atr` is the current
+    distance from the extreme, in ATRs."""
+    out, _ = play([[40], [60], [52], [59]], theta=10.0, atr=5.0)
+    assert out["dir"][1:].tolist() == [1, 1, 1] and out["ext_px"][1:].tolist() == [60, 60, 60]
+    assert out["progress"][1:].tolist() == [0.0, 0.8, 0.8]  # 8 of the 10 points, kept at 59
+    assert out["ext_dist_atr"][1:].tolist() == [0.0, 1.6, 0.2]  # now one point from the high
+
+
 def test_higher_low_appears_at_its_confirmation_and_trend_needs_both_classes():
     rows = [[110], [100], [105], [112], [102], [103], [107]]
     out, events = play(rows)

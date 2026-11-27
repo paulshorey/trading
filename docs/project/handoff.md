@@ -21,8 +21,10 @@ RSI and net flow (CVD) have their own swings and structure on every timeframe
 its forecast is shrunk to what holds outside the sessions it was fitted on, it stays flat. It does find a small predictability one minute ahead, from
 flow, the book at trades, price, and volatility, gone by fifteen minutes
 ([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat. The
-swings of RSI and of CVD did not change that: the forecast with them is no better than
-without them, -0.012 (-0.056 to 0.029)
+swings of RSI and of CVD did not change that: on minute-end forecasts at the bracket
+horizon, over 86 trade dates, the forecast with them is not detectably better than without
+them, -0.012 (-0.056 to 0.029); the seconds between minute ends and shorter horizons are
+untested
 ([result](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
 
 **The plan** is the roadmap's [decisions](roadmap.md#decisions) 29 to 39 (November 23 and

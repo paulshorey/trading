@@ -131,9 +131,16 @@ VOLATILITY = frozenset(
     ["atr_bps", "range_bps", "rv_bps", "rv_atr", "ret_std_bps", "bb_width_bps", "vol_bps", "chop"]
 )
 GROUPS = ("price", "flow", "book", "volatility", "swings", "series", "session")
-# The newest kind of input: the forecast is fitted with and without it, and the difference in
-# skill is reported with its interval (yardstick-spec.md#what-counts).
-ADDED = "series"
+# The newest inputs: the forecast is fitted with and without each set, and the difference in
+# skill is reported with its interval (yardstick-spec.md#what-counts). By name: the stage
+# attribute `SOURCE` values that make the set (the swings of RSI and of CVD; of RSI alone).
+ADDED = {"series": ("rsi", "cvd"), "rsi_swings": ("rsi",)}
+
+
+def added(names: list[str], sources: tuple[str, ...]) -> np.ndarray:
+    """Which features come from a swing stage of one of these series."""
+    stage = StageFeatures.sources()
+    return np.array([getattr(BY_NAME[stage[n]], "SOURCE", None) in sources for n in names])
 
 
 def group_of(name: str) -> str:
@@ -612,16 +619,20 @@ def run(
     log(f"trees: fitted, {time.time() - started:,.0f} s")
     # the newest kind of input earns its place when the skill with it is above the skill
     # without it: the same model on the other features, and the paired difference
-    added = np.array([group_of(n) == ADDED for n in names])
-    if added.any() and not added.all():
-        without, _ = walk_forward(x[:, ~added], y, day, usable, fit_trees)
-        report(f"trees_without_{ADDED}", without)
-        out["added_inputs"] = {
-            "kind": ADDED,
-            "features": int(added.sum()),
+    kept_forecasts = {"trees": forecast}
+    out["added_inputs"] = {}
+    for kind, sources in ADDED.items():
+        new = added(names, sources)
+        if not new.any() or new.all():
+            continue
+        without, _ = walk_forward(x[:, ~new], y, day, usable, fit_trees)
+        report(f"trees_without_{kind}", without)
+        kept_forecasts[f"trees_without_{kind}"] = without
+        out["added_inputs"][kind] = {
+            "features": int(new.sum()),
             "trees_less_trees_without": paired_difference(forecast, without, y, day),
         }
-        log(f"trees without {ADDED}: fitted, {time.time() - started:,.0f} s")
+        log(f"trees without {kind}: fitted, {time.time() - started:,.0f} s")
     # one fit of the coarse trees serves them as they are and under every calibration: a
     # calibration only multiplies the forecast
     calibrated, fitted = walk_forward(
@@ -647,9 +658,15 @@ def run(
     folder.mkdir(parents=True, exist_ok=True)
     for month, kept in fitted.items():
         joblib.dump(
-            kept | {"names": names, "settings": settings()}, folder / f"2026-{month:02d}.joblib"
+            kept | {"names": names, "ready": dataset.readiness(names), "settings": settings()},
+            folder / f"2026-{month:02d}.joblib",
         )
     out["models"][YARDSTICK]["artifacts"] = str(folder.relative_to(ROOT))
+    # the forecasts of each row, so that a later run's can be paired with them row for row
+    np.savez_compressed(
+        folder / "forecasts.npz",
+        end=data["end"], product=product, day=day, y=y, usable=usable, **kept_forecasts,
+    )  # fmt: skip
     if horizons:
         out["horizon_map"] = horizon_map(data, usable, log)
     out["elapsed_s"] = round(time.time() - started, 1)

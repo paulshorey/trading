@@ -17,7 +17,7 @@ Everything is computed on the aggregated rows of a timeframe, never on single tr
 
 | Series | Its value at a row |
 | --- | --- |
-| RSI | `candle_<window>.rsi`: the RSI of the window that ends with the row, read to a millionth of a point (so floating-point noise never decides whether two equal values differ) |
+| RSI | The mean of `candle_<window>.rsi` over the last 60 rows, which holds each of the 60 phases' latest RSI once ([why](#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). Each value is read in whole millionths of a point, so floating-point noise never decides whether two equal values differ and the sum is exact |
 | CVD | `bar_<rows>.cvd`: buying minus selling volume from the contract's first row through this row |
 
 One row gives one value, at the row's close. On `1m@1s` that is a value every second, on
@@ -51,6 +51,8 @@ Measured on GC and SI, March 2 to April 24, 2026 (39 trade dates, front sessions
 | `10m@10s` | 7.5 / 7.4 | 0.6 / 0.6 | 111 | 43 |
 | `1h@1m` | 7.4 / 7.4 | 0.6 / 0.6 | 355 | 149 |
 
+(The RSI columns are of the series first built, the stored RSI read row by row. Of the mean
+over the phases, which replaced it, the ATR is about 3.1 points and the change a row 0.06.)
 RSI's ATR is about 7 points on every timeframe and both products (GC / SI above). CVD's
 grows with the timeframe and differs by product, which is why it must be its own.
 
@@ -65,6 +67,10 @@ A running high is confirmed by a fall of `theta` from it, frozen when the high i
 | The smallest swing | An ATR decays toward zero when a market stops moving, and a threshold of nearly nothing would then confirm a swing on the first ordinary change. Price's threshold is at least 2 spreads for that reason. RSI: at least 2.5 points, about twice the change a row makes nine times in ten (1.1 to 1.4 points on all six). CVD: at least 3 typical trades, a typical trade being the volume over the trade count of the latest window that had trades. Both bind rarely where the market is active: at 0.5 ATR the RSI floor binds on about 1% of rows |
 | The ATR that swing values are measured in | The series' ATR, floored at half its smallest swing (1.25 RSI points; 1.5 typical trades), as price's is floored at one spread against a threshold floor of two |
 | Inputs of a row's threshold | The ATR and the floor as of the previous row: a row's own window already holds its value |
+
+**Changed November 26, with the RSI series:** RSI's smallest swing is 0.25 points and its
+normalizing ATR is floored at 0.125, measured again by the same rule
+([below](#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
 
 ## What is stored
 
@@ -134,47 +140,64 @@ The codes that compare the three structures (agreement, divergence at the latest
 lows, a level one has broken that another holds). The model already receives the three
 structures; the comparison codes follow as their own stage.
 
-## Plan for the RSI signal used to confirm swings
+## The RSI series: the mean over the 60 phases (decided November 26, 2026)
 
-**Step 5, proposed for the next experiment.** At a constant price, the fast 0.5-ATR
-detector confirmed 60 pivots in 30 minutes. They all occurred at two phases. Each phase's
-own RSI was steady. This happened both with no trades and with one flat-price trade every
-second. A valid RSI swing signal must settle when all 60 phase histories settle.
-[Reproduction and seed](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941).
+**The flaw.** `candle_<window>.rsi` is 60 separate histories, one per phase, and each can
+rest at its own level. Read row by row as one series, it steps up and down as the rows
+rotate through the phases, whether or not price moves. The window's range of that series
+is its ATR, so a threshold of 0.5 or 1 ATR lies inside the rotation and confirms swings no
+phase made. A review reproduced it at a constant price: the fast 0.5 ATR scale confirmed 60
+pivots in 30 minutes, all at two phases, with no trades and with one flat trade a second
+([reproduction](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941)).
+In the rows first stored, 5% to 11% of the RSI pivots at 0.5 and 1 ATR had their extreme
+exactly 60 rows after the previous one of their kind, on every timeframe, against under 1%
+for price and CVD. About 60% of the window range of that series was rotation: 7.5 points,
+against 3.0 for the mean over the phases.
 
-1. **Compare two definitions.** Keep the current interleaved RSI as the control. Test the
-   equal-weight mean of the latest RSI from each of the 60 phases as the candidate. At
-   ordinal `o`, those are exactly the values at `o − 59 … o`. Each step replaces one
-   phase's old value with its new value. If that phase was steady, its contribution to
-   the mean stays the same. This gives the detector one series that is still on the 0–100
-   RSI scale. The observations in the mean are 0–59 steps old, so confirmation delay is
-   the main cost to measure.
-2. **Specify the streaming calculation.** Use the same rule independently on each contract
-   and timeframe. Average the existing RSI values expressed in integer millionths of a
-   point, with a 60-row ring and an integer sum. Publish the mean only when all 60 slots
-   are valid. A missing value ends the swing segment. Scheduled closures consume no slots.
-   Feed the mean into the existing series ATR and zigzag, with the current floor of 2.5
-   points, all four multipliers, and thresholds frozen from the preceding row. Use a
-   separate variant identity for the experiment.
-3. **Test signal meaning before scoring a model.** Reproduce both flat-price cases and
-   require zero candidate pivots after a full phase cycle at steady phase values. Repeat
-   with different starting phases on all three timeframes. On a sustained rise followed
-   by a sustained fall, confirm the high only after the reversal threshold is crossed.
-   Test a coverage gap, a session close/reopen, price rescaling, checkpoint restoration,
-   and whole-session versus one-step replay against a plain reference.
-4. **Measure the trade-off on development data.** Start with the original 39 GC/SI trade
-   dates (March 2–April 24, 2026). For each product, timeframe and multiplier, report
-   confirmed highs and lows per date, pivot phase during flat stretches, and elapsed
-   scheduled-open time from the extreme to confirmation. Match same-kind candidate and
-   control pivots one-to-one within one window and report their confirmation-time
-   differences, the match rate and both unmatched counts. Recurrent flat-price pivots
-   reject a definition. Inspect the delay and missed moves before choosing a variant for
-   divergence. Lower pivot counts alone do not establish an improvement.
-5. **Evaluate the chosen definition.** Freeze the choice before rerunning the yardstick.
-   Compare the same model and eligible decisions with the original RSI swings, with the
-   replacement, and with RSI swings omitted. Hold price and CVD features fixed. Use the
-   existing purged walk-forward folds, bracket horizon and paired whole-date bootstrap.
-   Report coverage separately and replay a non-flat policy with costs, by product and
-   side. Reserve September 1, 2026 onward for the final evaluation. Version and rebuild
-   the affected RSI stages after the definition is accepted, then build the divergence
-   inputs against that version.
+**The series now.** At row `o`, the mean of the stored RSI over rows `o − 59 … o`: each
+phase's latest value once. Replacing one phase's old value with its new one moves the mean
+by a sixtieth of that phase's change, so it moves only when a phase's RSI does. It has no
+value until 60 rows in a row have one; a missing row ends the segment; closures have no
+rows and take no place in it. It is still on RSI's scale of 0 to 100.
+
+**Measured before the choice** (GC and SI, March 2 to April 24, 2026; a plain zigzag on the
+stored RSI; `/` separates GC and SI; the three timeframes agree to within a few percent, so
+`10m@10s` is shown). Control is the series first built. A second candidate, the mean plus
+the newest row's full change since the same phase, was rejected: it is noisier than the
+control (a change a row of 1.5 points at the 90th percentile, against 1.3).
+
+| | Control | Mean over the phases |
+| --- | ---: | ---: |
+| Own ATR, points | 7.7 / 7.6 | 3.1 / 3.1 |
+| Change a row, 90th percentile, points | 1.35 / 1.36 | 0.124 / 0.124 |
+| Pivots repeating 60 rows apart, at 0.5 and 1 ATR | 5.7%, 5.3% / 6.1%, 5.4% | 0.0% |
+| Confirmed highs a date at 0.5, 1, 2, 3 ATRs (GC) | 120, 34, 7.5, 3.3 | 26, 17, 10, 6.4 |
+| Rows from the extreme to its confirmation, median (GC) | 10, 31, 140, 365 | 33, 52, 107, 170 |
+
+Matched one to one with a control pivot of the same kind within one window, the mean's
+pivots at 0.5, 1, 2, and 3 ATRs find a partner 100%, 94%, 64%, and 46% of the time (GC,
+`10m@10s`; SI and the other timeframes alike). The matched extreme is 15 to 30 rows later,
+half a window, which is the cost of averaging rows up to 59 old. The confirmation is about
+30 rows later at 0.5 and 1 ATR, the same at 2, and about 100 rows earlier at 3, because the
+mean's ATR is smaller. The control's extra pivots at 0.5 ATR (four in five) have no partner
+in the mean.
+
+**The smallest swing, measured again.** The rule of the first spec, twice the change a row
+makes nine times in ten, gives 0.25 points (0.245 to 0.252 on all six). The 2.5 points of
+the control would bind on 99.8% of rows at 0.5 ATR and make that scale a fixed threshold;
+0.25 binds on none in an active market. Values in ATRs divide by the ATR floored at 0.125.
+
+**Checked in tests.** Both reproductions, from two starting phases: no RSI scale confirms
+anything once every phase has settled and one cycle has passed. On every timeframe, 60
+steady phases give one constant value from any starting phase. The reference zigzag, any
+chunking, checkpoints, price and size scaling, and a gap are tested as before.
+
+**The model test, frozen before its run.** The same rows, target, folds, and model as run
+11. Three forecasts are compared on the rows all three scored, paired by trade date
+(`yardstick.paired_difference`): `trees` with these RSI swings; `trees` with the RSI swings
+first built (run 11's data, fitted again to keep each row's forecast); and
+`trees_without_rsi_swings`, with price's and CVD's swings kept. Success for the RSI swings
+is an interval of "with" less "without" above zero. Expected: no measurable difference
+among the three; the fix is about what the signal means, and the model test only checks it
+did no harm. No policy is replayed while the yardstick's slope is zero.
+

@@ -2,9 +2,17 @@
 derived series on each timeframe, measured in the series' own ATR
 (docs/project/series-structure-spec.md; roadmap decision 41).
 
-A series has one value per step row, at the row's close: the RSI of the window ending with the
-row (`candle_<window>.rsi`), or the contract's running buy - sell volume through the row
-(`bar_<rows>.cvd`). Nothing here reads a single trade. A row without a value ends the segment.
+A series has one value per step row, at the row's close: the RSI of the timeframe (below), or
+the contract's running buy - sell volume through the row (`bar_<rows>.cvd`). Nothing here reads
+a single trade. A row without a value ends the segment.
+
+**RSI is the mean over the 60 phases.** `candle_<window>.rsi` is 60 separate histories, one per
+phase, and each can rest at its own level, so read row by row it steps up and down as the rows
+rotate through the phases, whether or not price moves: a zigzag on it confirms swings that no
+phase made. The series is therefore the mean of the stored RSI over rows `o - 59 ... o`, which
+holds every phase's latest value exactly once: it moves only when a phase's RSI changes. The
+values are summed as whole millionths of a point, so the mean is exact in any chunking. It has
+no value until 60 rows in a row have one.
 
 **Its own ATR.** As price's is computed, with the series in place of price: the true range of
 the window of 60 rows ending at a row is the highest minus the lowest value in the window,
@@ -39,10 +47,11 @@ from .timeframes import FAST, MIDDLE, SLOTS, SLOW, Timeframe
 RSI, CVD = "rsi", "cvd"
 # The smallest swing, in units of the series (spec): RSI points, or typical trades. Values in
 # ATRs divide by the ATR floored at half of it.
-FLOOR = {RSI: 2.5, CVD: 3.0}
-# RSI is read to a millionth of a point: two values that are equal but for floating-point noise
-# must compare equal, or the noise decides whether an extreme is refreshed.
-RSI_DECIMALS = 6
+FLOOR = {RSI: 0.25, CVD: 3.0}
+# RSI is read in whole millionths of a point: two values that are equal but for floating-point
+# noise must be equal, or the noise decides whether an extreme is refreshed; and whole numbers
+# add up exactly, in any order.
+RSI_UNITS = 1e6
 NEVER = -(2**62)  # no step row seen yet
 DROPPED = frozenset({"leg_delta_ratio", "reversal_delta_ratio"})  # a leg's flow: price only
 LEG_VOLUMES = ("leg_volume", "leg_buy_volume", "leg_sell_volume")
@@ -102,13 +111,14 @@ class SeriesPivotStage(Stage):
         "warmup",
         "state",
     )
-    STATE = ("detector", "atr", "tail", "carry", "unit", "last_row")
+    STATE = ("detector", "atr", "tail", "ring", "carry", "unit", "last_row")
 
     def __init__(self, context):
         super().__init__(context)
         self.detector = swings.Detector(swings.ADDITIVE, self.WINDOW, self.TF.seconds)
         self.atr = kernels.PhaseState(SLOTS, prev="nan", atr="zero", count="count")
         self.tail = np.full(SLOTS - 1, np.nan)  # the series' last 59 values
+        self.ring = np.full(SLOTS - 1, np.nan)  # RSI: the last 59 rows' stored values, millionths
         self.carry = np.full(2, np.nan)  # the latest row's theta and normalizing ATR
         self.unit = np.full(1, np.nan)  # the latest known typical trade (CVD)
         self.last_row = NEVER  # its index counter
@@ -120,6 +130,11 @@ class SeriesPivotStage(Stage):
             "variant": self.VARIANT,
             "stream": self.TF.stream,
             "source": self.SOURCE,
+            "series": (
+                "mean of candle rsi over rows o-59..o (each phase once), in whole millionths"
+                if self.SOURCE == RSI
+                else "bar cvd at the row's close"
+            ),
             "multiplier": self.K,
             "atr": "its own: Wilder average of the window's true range of the series, per phase",
             "atr_period": self.context.features.atr_period,
@@ -133,8 +148,8 @@ class SeriesPivotStage(Stage):
         own periods first. The structure itself has no finite warm-up (`warm`)."""
         cfg = self.context.features
         periods = warmup.wilder(cfg.atr_period) + 1
-        if self.SOURCE == RSI:
-            periods += warmup.wilder(cfg.rsi_period, 1)
+        if self.SOURCE == RSI:  # ... and one window of rows for the mean over the phases
+            periods += warmup.wilder(cfg.rsi_period, 1) + 1
         return periods * self.TF.window_seconds
 
     def series(self, base: Table, candle: Table) -> tuple[np.ndarray, np.ndarray]:
@@ -142,8 +157,14 @@ class SeriesPivotStage(Stage):
         size of the smallest step worth a swing (NaN while unknown)."""
         missing = base.values["status"] == MISSING
         if self.SOURCE == RSI:
-            x = np.round(swings.as_float(candle, "rsi"), RSI_DECIMALS)
-            return np.where(missing, np.nan, x), np.ones(len(x))
+            raw = np.where(missing, np.nan, np.round(swings.as_float(candle, "rsi") * RSI_UNITS))
+            full = np.r_[self.ring, raw]
+            view = np.lib.stride_tricks.sliding_window_view(full, SLOTS)
+            whole = np.isfinite(view).all(axis=1)
+            with np.errstate(invalid="ignore"):
+                x = np.where(whole, view.sum(axis=1) / (SLOTS * RSI_UNITS), np.nan)
+            self.ring = full[-(SLOTS - 1) :].copy()
+            return x, np.ones(len(x))
         x = np.where(missing, np.nan, swings.as_float(base, "cvd"))
         volume, trades = candle.values["volume"], candle.values["trades"]
         with np.errstate(divide="ignore", invalid="ignore"):

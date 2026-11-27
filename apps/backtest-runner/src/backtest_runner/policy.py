@@ -72,6 +72,8 @@ class ModelPolicy:
     bracket: Bracket = BRACKET
     entry: Entry = field(default_factory=lambda: ENTRIES["cross"])
     name: str = "model"
+    # features that must have a value for the model to decide; None: those its artifact names
+    ready: tuple[str, ...] | None = None
     loaded: dict = field(default_factory=dict, compare=False, repr=False)
 
     def __post_init__(self):
@@ -87,6 +89,20 @@ class ModelPolicy:
 
     def required(self) -> tuple[str, ...]:
         return (*self.model()["names"], *self.gate)
+
+    def decides(self, f, rows: int) -> np.ndarray:
+        """Whether the model may decide at each row: every feature its training rows were
+        required to have is there (the swing scales' confirmed high and low). On any other row
+        the model was never fitted, so it opens nothing and closes nothing; the bracket and the
+        forced exit still act."""
+        names = self.ready
+        if names is None:
+            kept = self.model()
+            names = kept["ready"] if "ready" in kept else dataset.readiness(kept["names"])
+        out = np.ones(rows, bool)
+        for name in names:
+            out &= np.isfinite(f[name])
+        return out
 
     def forecast(self, f) -> np.ndarray:
         """The model's forecast of the move ahead in R at each row."""
@@ -108,20 +124,22 @@ class ModelPolicy:
         forecast = self.forecast(f)
         cost, narrow = self.cost(f)
         long_ok, short_ok = trend_gate(f, self.gate, len(forecast))
+        ready = self.decides(f, len(forecast))
         with np.errstate(invalid="ignore"):
-            buy = narrow & long_ok & (forecast > cost)
-            sell = narrow & short_ok & (forecast < -cost)
+            buy = ready & narrow & long_ok & (forecast > cost)
+            sell = ready & narrow & short_ok & (forecast < -cost)
         return np.where(buy, 1, np.where(sell, -1, 0)).astype(np.int8)
 
     def closes(self, f) -> tuple[np.ndarray, np.ndarray]:
         forecast = self.forecast(f)
         if self.close == "hold":
             return np.zeros(len(forecast), bool), np.zeros(len(forecast), bool)
+        ready = self.decides(f, len(forecast))
         with np.errstate(invalid="ignore"):
             if self.close == "turn":
-                return forecast <= 0, forecast >= 0
+                return ready & (forecast <= 0), ready & (forecast >= 0)
             cost, _ = self.cost(f)
-            return forecast < -cost, forecast > cost
+            return ready & (forecast < -cost), ready & (forecast > cost)
 
     def params(self) -> dict:
         return {k: v for k, v in asdict(self).items() if k != "loaded"}

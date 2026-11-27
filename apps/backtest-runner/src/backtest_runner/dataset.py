@@ -53,6 +53,21 @@ SWING_TABLES = sorted(
     {store.STAGE_TABLE[s] for s, events in store.STAGE_EVENTS.items() if events == "pivot_event"}
 )
 SESSIONS_PER_TASK = 4
+
+
+def readiness(names: list[str]) -> list[str]:
+    """The features that must have a value for a row to be a decision row: the age of the
+    latest confirmed high and low of every swing scale (`COLD_SWINGS` is the same test on the
+    stored rows). A model is fitted only on rows that pass, so it may decide only on such rows."""
+    sources = StageFeatures.sources()
+    return [
+        n
+        for n in names
+        if n.endswith((".high_age_s", ".low_age_s"))
+        and store.STAGE_EVENTS.get(sources.get(n, "")) == "pivot_event"
+    ]
+
+
 CACHE = ROOT / "data/research/yardstick"
 
 

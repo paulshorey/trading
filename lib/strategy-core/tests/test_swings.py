@@ -855,6 +855,18 @@ def test_the_structure_code_combines_the_trend_with_the_break_of_the_last_high_o
 SERIES = tuple(s for scales in SERIES_BY_TIMEFRAME.values() for s in scales)
 
 
+def phase_mean(rsi):
+    """The RSI series in plain Python: the mean of the stored RSI over the last 60 rows, each
+    phase's latest value once, in whole millionths of a point; no value until all 60 have one."""
+    units = [None if math.isnan(v) else round(v * 1e6) for v in rsi.tolist()]
+    out = np.full(len(units), np.nan)
+    for i in range(59, len(units)):
+        window = units[i - 59 : i + 1]
+        if None not in window:
+            out[i] = sum(window) / (60 * 1e6)
+    return out
+
+
 def series_inputs(whole, stage):
     """A series scale's inputs from the stored rows: its value at each step row, and the size
     of its smallest step there (one RSI point, or the typical trade of the latest window that
@@ -863,8 +875,8 @@ def series_inputs(whole, stage):
     candle, cn = join(whole, f"candle_{stage.TF.window}")
     missing = base["status"] == MISSING
     if stage.SOURCE == RSI:
-        x = np.where(missing, np.nan, np.round(nan_null(candle, cn, "rsi"), 6))
-        return base, x, np.ones(len(x))
+        raw = np.where(missing, np.nan, nan_null(candle, cn, "rsi"))
+        return base, phase_mean(raw), np.ones(len(raw))
     x = np.where(missing, np.nan, nan_null(*join(whole, f"bar_{stage.TF.rows}"), "cvd"))
     unit, last = np.full(len(x), np.nan), np.nan
     for i, (v, n) in enumerate(
@@ -953,7 +965,7 @@ def test_series_swings_equal_a_plain_python_reference_in_their_own_atr(days, who
     )
     assert got == want
     # ten short sessions hold few slow swings: the fast and middle scales carry the test
-    least = {"1s": (300, 20), "10s": (30, 1), "1m": (1, -1)}[stage.TF.rows]
+    least = {"1s": (100, 20), "10s": (10, 1), "1m": (-1, -1)}[stage.TF.rows]
     assert len(want) > least[stage.K > 1], len(want)
     at = (ev["ext_ordinal"][pivot] - first).astype(np.int64)
     np.testing.assert_array_equal(ev["theta"][pivot], theta[at])
@@ -1078,3 +1090,75 @@ def test_cvd_swings_read_changes_only_so_a_shifted_level_changes_no_feature(days
             null = ea.nulls.get(name, np.zeros(len(ea), bool))
             want = ea.values[name][~null] + (shift if name == "level" else 0)
             np.testing.assert_array_equal(eb.values[name][~null], want, err_msg=name)
+
+
+def flat_market(tail_trades: bool, shift: int):
+    """The review's reproduction (PR #103): 6,000 seconds of a random walk with a trade every
+    second, then an hour in which price does not move, with no trades or with one a second at
+    the last price. The walk starts `shift` seconds into the session: at another phase."""
+    cal = calendar((0, 9660 / 3600))
+    start = int(cal.opens[0]) + shift * S
+    walk = 10000 + np.cumsum(np.random.default_rng(1).choice([-1, 0, 1], 6000))
+    rows = [
+        (start + k * S + S // 2, float(p) / 10, 1, 1 if k % 2 else -1) for k, p in enumerate(walk)
+    ]
+    if tail_trades:
+        rows += [(start + k * S + S // 2, float(walk[-1]) / 10, 1, 1) for k in range(6000, 9600)]
+    t = trades(rows)
+    cov = np.array([[int(cal.opens[0]), int(cal.closes[0])]], np.int64)
+    return cal, session_chunks(cal, t, cov)
+
+
+@pytest.mark.parametrize("tail_trades", [False, True], ids=["no_trades", "flat_trades"])
+@pytest.mark.parametrize("shift", [0, 17])
+def test_rsi_swings_settle_when_every_phase_of_the_rsi_has_settled(tail_trades, shift):
+    """Each phase's RSI rests at its own level once price stops moving. Read row by row those
+    levels look like reversals; the mean over the 60 phases is constant, so after one full
+    cycle no RSI scale confirms anything. (Before, the 0.5 ATR scale confirmed 60 pivots in the
+    last half hour.)"""
+    cal, chunks = flat_market(tail_trades, shift)
+    p = Pipeline(cal, feed_latency=0, close_delay=CONFIG.close_delay,
+                 stages=tuple(s for s in STAGES if s.RESOLUTION == "1s"))  # fmt: skip
+    parts = [p.process(c) for c in chunks]
+    candle, cn = join(parts, "candle_1m_1s")
+    rsi = nan_null(candle, cn, "rsi")
+    first = int(candle["slot_ordinal"][0])
+    settled = shift + 6000 + 60 + 60  # the last move's window has passed, then a full cycle
+    by_phase = rsi[settled : settled + 3420].reshape(-1, 60)
+    assert np.ptp(by_phase, axis=0).max() < 1e-9  # every phase is steady ...
+    assert np.ptp(by_phase[0]) > 1.0  # ... at its own level: the rotation the old series read
+    for stage in (s for s in SERIES if s.SOURCE == RSI and s.TF.rows == "1s"):
+        ev, _ = events_of(parts, stage.NAME)
+        late = ev["slot_ordinal"] - first >= settled
+        assert (ev["kind"] <= LOW).sum() > 5, stage.NAME  # it did find swings while price moved
+        assert not late.any(), (stage.NAME, int(late.sum()))
+
+
+@pytest.mark.parametrize("tf", ["1m@1s", "10m@10s", "1h@1m"])
+def test_the_rsi_series_is_constant_under_any_rotation_of_steady_phases(tf):
+    """On every timeframe, from any starting phase: 60 phases each steady at its own level give
+    one constant value, and a move in one phase moves the mean by a sixtieth of it."""
+    stage = next(s for s in SERIES_BY_TIMEFRAME[tf] if s.SOURCE == RSI and s.K == 0.5)
+    levels = np.random.default_rng(5).uniform(20, 80, 60)
+    for start in (0, 23, 59):
+        n = 600
+        ordinal = np.arange(start + 1, start + 1 + n, dtype=np.int64)
+        rsi = levels[ordinal % 60].copy()
+        rsi[400:] += np.where(ordinal[400:] % 60 == 7, 6.0, 0.0)  # one phase steps up 6 points
+        end = ordinal * stage.TF.seconds * S
+        tables = {
+            f"bar_{stage.TF.rows}": Table(
+                {"slot_ordinal": ordinal, "end_ns": end, "status": np.full(n, 2, np.int8)}, {}
+            ),
+            f"candle_{stage.TF.window}": Table({"end_ns": end, "rsi": rsi}, {}),
+        }
+        products = {"tables": tables}
+        instance = builder(calendar((0, 1))).stages[stage.NAME]
+        x, _ = instance.series(tables[f"bar_{stage.TF.rows}"], tables[f"candle_{stage.TF.window}"])
+        assert np.isnan(x[:59]).all() and np.ptp(x[59:400]) == 0
+        assert x[59] == pytest.approx(levels.mean(), abs=1e-6)
+        after = x[400 + 60 :]
+        assert np.ptp(after) == 0 and after[0] - x[399] == pytest.approx(0.1, abs=1e-6)
+        instance = builder(calendar((0, 1))).stages[stage.NAME]
+        instance.process(None, products)
+        assert not len(products["events"][stage.NAME])

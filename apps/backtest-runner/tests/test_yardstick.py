@@ -172,6 +172,37 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
     assert flagged["why"].tolist()[:2] == [dataset.FLAGGED] * 2 and np.isnan(flagged["y"]).all()
 
 
+def test_the_model_decides_only_on_rows_it_could_have_been_fitted_on():
+    """Regression (PR #103 review): training leaves out a row where a swing scale has no
+    confirmed high or low yet, but the policy opened on a +1 R forecast there. Such a row now
+    opens nothing and closes nothing; the artifact names the features that decide it."""
+    from backtest_runner import policy
+
+    names = ["1m@1s.rsi", "1h@1m.slow_rsi_atr_1.high_age_s", "1h@1m.slow_rsi_atr_1.low_age_s",
+             "1m@1s.fast_atr_1.low_age_s", "1m@1s.session_elapsed_s"]  # fmt: skip
+    assert dataset.readiness(names) == names[1:4]
+    f = {
+        policy.FORECAST: np.array([1.0, 1.0, -1.0, -1.0]),
+        "exec.spread_r": np.full(4, 0.06),
+        "exec.commission_r": np.full(4, 0.01),
+        names[1]: np.array([60.0, np.nan, 60.0, 60.0]),  # no confirmed RSI high in row 1
+        names[2]: np.array([60.0, 60.0, 60.0, 60.0]),
+        names[3]: np.array([5.0, 5.0, 5.0, np.nan]),  # no confirmed price low in row 3
+    }
+    for close in policy.CLOSES:
+        model = policy.ModelPolicy("unused.joblib", close=close, gate=(), ready=tuple(names[1:4]))
+        assert model.signals(f).tolist() == [1, 0, -1, 0]
+        long_exit, short_exit = model.closes(f)
+        assert not long_exit[[1, 3]].any() and not short_exit[[1, 3]].any()
+    turn = policy.ModelPolicy("unused.joblib", close="turn", gate=(), ready=tuple(names[1:4]))
+    assert turn.closes(f)[0].tolist() == [False, False, True, False]
+    # an artifact carries the list; one written before it did has it derived from its names
+    with_list = policy.ModelPolicy("x", gate=(), loaded={"names": names, "ready": names[1:2]})
+    derived = policy.ModelPolicy("x", gate=(), loaded={"names": names})
+    assert with_list.signals(f).tolist() == [1, 0, -1, -1]
+    assert derived.signals(f).tolist() == [1, 0, -1, 0]
+
+
 def test_the_holdout_is_refused():
     with pytest.raises(ValueError, match="holdout"):
         yardstick.run(["GC"], date(2026, 8, 1), date(2026, 9, 1))
@@ -186,17 +217,16 @@ def test_the_policy_opens_beyond_the_cost_and_closes_by_its_rule():
         "exec.commission_r": np.full(7, 0.01),
         "slow": np.array([-1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     }
-    gated = policy.ModelPolicy("unused.joblib", gate=("slow",))
-    free = policy.ModelPolicy("unused.joblib", gate=())
+    gated = policy.ModelPolicy("unused.joblib", ready=(), gate=("slow",))
+    free = policy.ModelPolicy("unused.joblib", ready=(), gate=())
     # beyond the cost of 0.04 R: a buy, a sell; inside it: nothing; a spread over a quarter of
     # R, or no usable book: nothing. The slow trend is down in the first two rows: no long
     assert free.signals(f).tolist() == [1, -1, 0, 0, 0, 0, 0]
     assert gated.signals(f).tolist() == [0, -1, 0, 0, 0, 0, 0]
-    assert policy.ModelPolicy("unused.joblib", threshold=0.25, gate=()).signals(f).tolist() == [
-        1, -1, 1, -1, 0, 0, 0,
-    ]  # fmt: skip
+    cheap = policy.ModelPolicy("unused.joblib", ready=(), threshold=0.25, gate=())
+    assert cheap.signals(f).tolist() == [1, -1, 1, -1, 0, 0, 0]
     hold, turn, opposite = (
-        policy.ModelPolicy("unused.joblib", close=c, gate=("slow",)).closes(f)
+        policy.ModelPolicy("unused.joblib", ready=(), close=c, gate=("slow",)).closes(f)
         for c in policy.CLOSES
     )
     assert not hold[0].any() and not hold[1].any()
@@ -212,7 +242,7 @@ def test_the_policy_opens_beyond_the_cost_and_closes_by_its_rule():
         policy.BRACKET.max_hold_s is None and policy.BRACKET.target_atr == policy.BRACKET.stop_atr
     )
     with pytest.raises(ValueError, match="close must be"):
-        policy.ModelPolicy("unused.joblib", close="flip")
+        policy.ModelPolicy("unused.joblib", ready=(), close="flip")
 
 
 def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():

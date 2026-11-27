@@ -234,8 +234,11 @@ flat forecast and no policy was replayed. Each row's forecasts are kept in
 
 **Replaying an earlier run.** Run 11's models read the RSI scales first built, which this
 code no longer computes, and they are never given the renamed ones in their place.
-`research policy 11` now stops before it starts and says so (`policy.incompatible`); to
-replay run 11, check out commit `6916ed8`, the code it was fitted with. Runs 9 and 12
+`research policy 11` now stops before it starts and says so (`policy.incompatible`), and
+points here. To replay run 11, check out commit `6916ed8`, the code it was fitted with: its
+source digest equals the `code_sha256` of run 11's row in `research.run`. A model is judged
+by the columns it reads, not by every name of its dataset: a fit leaves out a column that
+had no value in training. Runs 9 and 12
 replay. From now on an artifact records its commit, whether the tree had uncommitted
 changes, and the dataset file its rows came from.
 

@@ -223,7 +223,16 @@ def test_a_saved_model_is_checked_against_the_engine_before_it_is_replayed(tmp_p
     joblib.dump({"names": [*names, *old]}, retired)
     why = policy.incompatible(retired)
     assert "run-7/2026-06.joblib reads 3 features" in why and "from 2 scales or stages" in why
-    assert "1h@1m.gone" in why and "research.run" in why  # no commit recorded: where to look
+    assert "1h@1m.gone" in why and policy.REPLAY_NOTE in why  # no commit recorded: where to look
+    # a fit leaves out a column without a training value: only the columns it reads count, as
+    # in the forecast itself. A retired name among the unused ones does not stop the replay ...
+    unused = folder / "2026-07.joblib"
+    joblib.dump({"names": [*names, *old], "columns": list(range(40)), "ready": names[:2]}, unused)
+    assert policy.incompatible(unused) is None
+    assert policy.used(joblib.load(unused)) == names
+    # ... and one among those it reads does
+    joblib.dump({"names": [*names, *old], "columns": [0, 40], "ready": []}, unused)
+    assert "reads 1 features" in policy.incompatible(unused)
     joblib.dump(
         {"names": names, "ready": old[:1], "source": {"commit": "abc123", "dirty": True}}, retired
     )

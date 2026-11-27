@@ -30,7 +30,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import QuantileTransformer
-from strategy_core import targets
+from strategy_core import targets, venue_clock
 from strategy_core.pipeline import BY_NAME, StageFeatures
 
 from . import dataset, db
@@ -518,7 +518,11 @@ def horizon_map(data: dict, usable: np.ndarray, log) -> dict:
     aims["bracket"] = data["y"]
     out: dict = {"features": {g: len(c) for g, c in columns.items()}, "skill": {}}
     for aim, target in aims.items():
-        known = usable & np.isfinite(target) if aim != "bracket" else usable
+        known = (
+            ((data["why"] == dataset.ELIGIBLE) & np.isfinite(target))
+            if aim != "bracket"
+            else usable
+        )
         out["skill"][aim] = {}
         for group, cols in columns.items():
             forecast, _ = walk_forward(x[:, cols], target, day, known, fit_trees)
@@ -585,7 +589,7 @@ def source_revision() -> dict:
 
 
 def code_digest() -> str:
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(venue_clock.edition_digest().encode())
     for base in (ROOT / "lib/strategy-core/src", ROOT / "apps/backtest-runner/src"):
         for path in sorted(base.rglob("*.py")):
             digest.update(str(path.relative_to(ROOT)).encode())
@@ -663,7 +667,7 @@ def run(
         log(f"trees without {kind}: fitted, {time.time() - started:,.0f} s")
         # the same comparison on the mid-price's move over the short horizon
         move = data["moves"][:, dataset.HORIZONS_S.index(ADDED_HORIZON_S)]
-        known = usable & np.isfinite(move)
+        known = (data["why"] == dataset.ELIGIBLE) & np.isfinite(move)
         both, _ = walk_forward(x, move, day, known, fit_trees)
         fewer, _ = walk_forward(x[:, ~new], move, day, known, fit_trees)
         scored = known & np.isfinite(both) & np.isfinite(fewer)  # the test months' rows
@@ -702,6 +706,7 @@ def run(
             | {
                 "names": names,
                 "ready": dataset.readiness(names),
+                "venue_clock_revision": venue_clock.EDITION,
                 "settings": settings(),
                 # what reproduces it: the commit its code was (with uncommitted changes or
                 # not), the hash of that code, and the dataset file its rows came from

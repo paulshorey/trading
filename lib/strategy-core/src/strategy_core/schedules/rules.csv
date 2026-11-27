@@ -1,0 +1,137 @@
+event,profile,venue,zone,local_time,calendar,anchor,source,valid_from,valid_through
+globex_open,all,Globex,America/Chicago,17:00,product,market_open,https://www.cmegroup.com/trading-hours.html,2016-01-01,2027-12-31
+globex_close,all,Globex,America/Chicago,16:00,product,market_close,https://www.cmegroup.com/trading-hours.html,2016-01-01,2027-12-31
+nyse_open,all,NYSE,America/New_York,09:30,NYSE,market_open,https://www.nyse.com/markets/hours-calendars,2016-01-01,2027-12-31
+nyse_imbalance,all,NYSE,America/New_York,15:50,NYSE,close_minus_10m,https://www.nyse.com/markets/hours-calendars,2025-11-01,2027-12-31
+nyse_close,all,NYSE,America/New_York,16:00,NYSE,market_close,https://www.nyse.com/markets/hours-calendars,2016-01-01,2027-12-31
+gc_settle_start,metals,CME,America/New_York,13:29,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+gc_settle_end,metals,CME,America/New_York,13:30,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+si_settle_start,metals,CME,America/New_York,13:24,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+si_settle_end,metals,CME,America/New_York,13:25,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+pl_settle_start,metals,CME,America/New_York,13:03,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+pl_settle_end,metals,CME,America/New_York,13:05,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+pa_settle_start,metals,CME,America/New_York,12:58,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+pa_settle_end,metals,CME,America/New_York,13:00,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+hg_settle_start,metals,CME,America/New_York,12:59,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+hg_settle_end,metals,CME,America/New_York,13:00,metal_settlement,,https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/457085528/Daily+Settlement+Time+Details,2025-11-01,2026-12-31
+gc_spread_start,metals,CME,America/New_York,13:15,metal_settlement,,https://www.cmegroup.com/content/dam/cmegroup/notices/ser/2026/06/ser-9637r.pdf,2025-11-01,2026-12-31
+gc_tas_end,metals,CME,America/New_York,13:30,regular_metals,,https://www.cmegroup.com/markets/metals/precious/gold/specs,2025-11-01,2026-12-31
+gc_floor_reference,metals,COMEX reference,America/New_York,08:20,regular_metals,,https://www.cmegroup.com/tools-information/lookups/advisories/ser/SER-7040R.html,2025-11-01,2026-12-31
+si_floor_reference,metals,COMEX reference,America/New_York,08:25,regular_metals,,https://www.cmegroup.com/tools-information/lookups/advisories/ser/SER-7040R.html,2025-11-01,2026-12-31
+hg_floor_reference,metals,COMEX reference,America/New_York,08:10,regular_metals,,https://www.cmegroup.com/tools-information/lookups/advisories/ser/SER-7040R.html,2025-11-01,2026-12-31
+index_settle_start,equities,CME,America/Chicago,14:59:30,index_settlement,,https://www.cmegroup.com/notices/ser/2020/09/SER-8591.pdf,2025-11-01,2026-12-31
+index_settle_end,equities,CME,America/Chicago,15:00,index_settlement,,https://www.cmegroup.com/notices/ser/2020/09/SER-8591.pdf,2025-11-01,2026-12-31
+lbma_gold_am,metals,LBMA,Europe/London,10:30,bullion,,https://www.ice.com/iba/lbma-precious-metals,2025-11-01,2026-12-31
+lbma_gold_pm,metals,LBMA,Europe/London,15:00,bullion,,https://www.ice.com/iba/lbma-precious-metals,2025-11-01,2026-12-31
+lbma_silver,metals,LBMA,Europe/London,12:00,bullion,,https://www.ice.com/iba/lbma-precious-metals,2025-11-01,2026-12-31
+lbma_platinum_am,metals,LBMA,Europe/London,09:45,bullion,,https://www.ice.com/iba/lbma-precious-metals,2025-11-01,2026-12-31
+lbma_platinum_pm,metals,LBMA,Europe/London,14:00,bullion,,https://www.ice.com/iba/lbma-precious-metals,2025-11-01,2026-12-31
+london_participation_start,metals,London reference,Europe/London,08:00,bullion,,https://www.lbma.org.uk/market-standards/about-loco-london,2025-11-01,2026-12-31
+london_participation_end,metals,London reference,Europe/London,17:00,bullion,,https://www.lbma.org.uk/market-standards/about-loco-london,2025-11-01,2026-12-31
+gc_london_am_start,metals,CME,Europe/London,10:30,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+gc_london_am_end,metals,CME,Europe/London,10:32,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+gc_london_pm_start,metals,CME,Europe/London,15:00,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+gc_london_pm_end,metals,CME,Europe/London,15:02,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+si_london_start,metals,CME,Europe/London,12:00,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+si_london_end,metals,CME,Europe/London,12:02,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+hg_london_start,metals,CME,Europe/London,12:34,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+hg_london_end,metals,CME,Europe/London,12:35,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+gc_asia_start,metals,CME,Asia/Shanghai,15:25,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+gc_asia_end,metals,CME,Asia/Shanghai,15:30,regular_metals,,https://www.cmegroup.com/markets/metals-marker-prices.html,2025-11-01,2026-12-31
+shfe_night_order,metals,SHFE,Asia/Shanghai,20:55,SHFE_AU,night_minus_5m,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_night_match,metals,SHFE,Asia/Shanghai,20:59,SHFE_AU,night_minus_1m,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_night_open,metals,SHFE,Asia/Shanghai,21:00,SHFE_AU,market_open,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_night_close,metals,SHFE,Asia/Shanghai,02:30,SHFE_AU,night_close,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_day_order,metals,SHFE,Asia/Shanghai,08:55,SHFE_AU,day_minus_5m,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_day_match,metals,SHFE,Asia/Shanghai,08:59,SHFE_AU,day_minus_1m,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_day_open,metals,SHFE,Asia/Shanghai,09:00,SHFE_AU,day_open,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_pause,metals,SHFE,Asia/Shanghai,10:15,SHFE_AU,pause_start,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_resume,metals,SHFE,Asia/Shanghai,10:30,SHFE_AU,pause_end,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_lunch,metals,SHFE,Asia/Shanghai,11:30,SHFE_AU,break_start,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_afternoon,metals,SHFE,Asia/Shanghai,13:30,SHFE_AU,break_end,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+shfe_close,metals,SHFE,Asia/Shanghai,15:00,SHFE_AU,market_close,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+sge_day_open,metals,SGE,Asia/Shanghai,09:00,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_silver_am,metals,SGE,Asia/Shanghai,09:45,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_gold_am,metals,SGE,Asia/Shanghai,10:15,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_silver_pm,metals,SGE,Asia/Shanghai,14:30,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_gold_pm,metals,SGE,Asia/Shanghai,15:00,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_day_close,metals,SGE,Asia/Shanghai,15:30,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_night_admin,metals,SGE,Asia/Shanghai,19:45,sge,night,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_night_match,metals,SGE,Asia/Shanghai,19:50,sge,night,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_night_match_end,metals,SGE,Asia/Shanghai,19:59,sge,night,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_night_open,metals,SGE,Asia/Shanghai,20:00,sge,night,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_night_close,metals,SGE,Asia/Shanghai,02:30,sge,overnight_end,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+tokyo_open,all,Tokyo Stock Exchange,Asia/Tokyo,09:00,JPX,market_open,https://www.jpx.co.jp/english/equities/trading/domestic/01.html,2016-01-01,2027-12-31
+tokyo_lunch,all,Tokyo Stock Exchange,Asia/Tokyo,11:30,JPX,break_start,https://www.jpx.co.jp/english/equities/trading/domestic/01.html,2016-01-01,2027-12-31
+tokyo_afternoon,all,Tokyo Stock Exchange,Asia/Tokyo,12:30,JPX,break_end,https://www.jpx.co.jp/english/equities/trading/domestic/01.html,2016-01-01,2027-12-31
+tokyo_close,all,Tokyo Stock Exchange,Asia/Tokyo,15:30,JPX,market_close,https://www.jpx.co.jp/english/equities/trading/domestic/01.html,2024-11-05,2027-12-31
+fomc_statement,all,Federal Reserve,America/New_York,14:00,published,,https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm,2025-11-01,2026-12-31
+fomc_press,all,Federal Reserve,America/New_York,14:30,published,,https://www.federalreserve.gov/newsevents/pressreleases/monetary20240809a.htm,2025-11-01,2026-12-31
+payrolls,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+cpi,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+ppi,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+eci,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+productivity,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+import_export,all,BLS,America/New_York,08:30,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+jolts,all,BLS,America/New_York,10:00,published,,https://www.bls.gov/schedule/,2025-11-01,2026-12-31
+boe_mpc,all,Bank of England,Europe/London,12:00,published,,https://www.bankofengland.co.uk/news/2025/september/monetary-policy-committee-dates-for-2026,2025-11-01,2026-12-31
+ecb_decision,all,ECB,Europe/Berlin,14:15,published,,https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html,2025-11-01,2026-12-31
+ecb_press,all,ECB,Europe/Berlin,14:45,published,,https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html,2025-11-01,2026-12-31
+pce,all,BEA,America/New_York,08:30,published,,https://www.bea.gov/news/schedule,2025-11-01,2026-12-31
+gdp,all,BEA,America/New_York,08:30,published,,https://www.bea.gov/news/schedule,2025-11-01,2026-12-31
+retail,all,Census,America/New_York,08:30,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+durables,all,Census,America/New_York,08:30,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+housing_starts,all,Census,America/New_York,08:30,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+trade_balance,all,Census,America/New_York,08:30,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+factory_orders,all,Census,America/New_York,10:00,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+new_home_sales,all,Census,America/New_York,10:00,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+construction,all,Census,America/New_York,10:00,published,,https://www.census.gov/economic-indicators/calendar-listview-2026.html,2025-11-01,2026-12-31
+fed_production,all,Federal Reserve,America/New_York,09:15,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+fomc_projections,all,Federal Reserve,America/New_York,14:00,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+fomc_minutes,all,Federal Reserve,America/New_York,14:00,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+beige_book,all,Federal Reserve,America/New_York,14:00,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+fed_balance_sheet,all,Federal Reserve,America/New_York,16:30,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+fed_speech,all,Federal Reserve,America/New_York,,published,,https://www.federalreserve.gov/newsevents/calendar.htm,2025-11-01,2026-12-31
+treasury_bid_deadline,all,Treasury,America/New_York,13:00,published,,https://treasurydirect.gov/auctions/announcements-data-results/,2025-11-01,2026-12-31
+cot_publication,all,CFTC,America/New_York,15:30,published,,https://www.cftc.gov/MarketReports/CommitmentsofTraders/ReleaseSchedule/index.htm,2025-11-01,2026-12-31
+adp_monthly,all,ADP,America/New_York,08:15,published,,https://adpemploymentreport.com/,2025-11-01,2026-12-31
+adp_weekly,all,ADP,America/New_York,08:15,published,,https://adpemploymentreport.com/,2025-11-01,2026-12-31
+jobless_claims,all,Department of Labor,America/New_York,08:30,published,,https://www.dol.gov/ui/data.pdf,2025-11-01,2026-12-31
+ism_manufacturing,all,ISM,America/New_York,10:00,published,,https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/,2025-11-01,2026-12-31
+ism_services,all,ISM,America/New_York,10:00,published,,https://www.ismworld.org/supply-management-news-and-reports/reports/ism-pmi-reports/,2025-11-01,2026-12-31
+us_pmi,all,S&P Global,America/New_York,09:45,published,,https://www.pmi.spglobal.com/Public/Release/ReleaseDates,2025-11-01,2026-12-31
+michigan_sentiment,all,University of Michigan,America/New_York,10:00,published,,https://www.sca.isr.umich.edu/,2025-11-01,2026-12-31
+consumer_confidence,all,Conference Board,America/New_York,10:00,published,,https://www.conference-board.org/topics/consumer-confidence,2025-11-01,2026-12-31
+lpr,metals,CFETS,Asia/Shanghai,09:00,published,,https://www.chinamoney.org.cn/english/bmklpr/,2025-11-01,2026-12-31
+rmb_fix,metals,CFETS,Asia/Shanghai,09:15,published,,https://www.chinamoney.org.cn/english/bmklpr/,2025-11-01,2026-12-31
+china_pmi,metals,NBS,Asia/Shanghai,09:30,published,,https://www.stats.gov.cn/english/,2025-11-01,2026-12-31
+china_inflation,metals,NBS,Asia/Shanghai,09:30,published,,https://www.stats.gov.cn/english/,2025-11-01,2026-12-31
+china_activity,metals,NBS,Asia/Shanghai,10:00,published,,https://www.stats.gov.cn/english/,2025-11-01,2026-12-31
+china_gdp,metals,NBS,Asia/Shanghai,10:00,published,,https://www.stats.gov.cn/english/,2025-11-01,2026-12-31
+china_private_pmi,metals,S&P Global,Asia/Shanghai,09:45,published,,https://www.pmi.spglobal.com/Public/Release/ReleaseDates,2025-11-01,2026-12-31
+wmr_start,metals,WMR,Europe/London,15:57:30,wmr,,https://www.lseg.com/en/ftse-russell/benchmarks/wmr-fx-benchmarks,2026-01-01,2026-12-31
+wmr_fix,metals,WMR,Europe/London,16:00,wmr,,https://www.lseg.com/en/ftse-russell/benchmarks/wmr-fx-benchmarks,2026-01-01,2026-12-31
+wmr_end,metals,WMR,Europe/London,16:02:30,wmr,,https://www.lseg.com/en/ftse-russell/benchmarks/wmr-fx-benchmarks,2026-01-01,2026-12-31
+lme_open,metals,LME,Europe/London,01:00,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_close,metals,LME,Europe/London,19:00,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_ring_open,metals,LME,Europe/London,11:40,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_ring_close,metals,LME,Europe/London,17:00,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_first,metals,LME,Europe/London,12:00,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_first_end,metals,LME,Europe/London,12:05,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_second,metals,LME,Europe/London,12:30,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_second_end,metals,LME,Europe/London,12:35,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_afternoon,metals,LME,Europe/London,15:10,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_afternoon_end,metals,LME,Europe/London,15:15,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+lme_cu_kerb_end,metals,LME,Europe/London,16:50,lme,,https://www.lme.com/en/trading/trading-venues/trading-times,2025-11-01,2026-12-31
+osaka_open,metals,Osaka Exchange,Asia/Tokyo,08:45,osaka,,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+osaka_day_cont_end,metals,Osaka Exchange,Asia/Tokyo,15:40,osaka,,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+osaka_close,metals,Osaka Exchange,Asia/Tokyo,15:45,osaka,,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+osaka_night_open,metals,Osaka Exchange,Asia/Tokyo,17:00,osaka,night,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+osaka_night_cont_end,metals,Osaka Exchange,Asia/Tokyo,05:55,osaka,overnight_end,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+osaka_night_close,metals,Osaka Exchange,Asia/Tokyo,06:00,osaka,overnight_end,https://www.jpx.co.jp/english/derivatives/rules/trading-hours/index.html,2026-01-01,2026-12-31
+sge_delivery_tender,metals,SGE,Asia/Shanghai,15:00,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_equalizer_tender,metals,SGE,Asia/Shanghai,15:31,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_delivery_match,metals,SGE,Asia/Shanghai,15:40,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+sge_admin_close,metals,SGE,Asia/Shanghai,15:45,sge,,https://en.sge.com.cn/h5_trading_ProductsIntroduce,2025-11-01,2026-12-31
+shfe_copper_night_close,metals,SHFE,Asia/Shanghai,01:00,SHFE_CU,night_close,https://www.shfe.com.cn/eng/reports/CalendarHolidays/TradingHours/,2025-11-01,2026-12-31
+tokyo_close,all,Tokyo Stock Exchange,Asia/Tokyo,15:00,JPX,market_close,https://www.jpx.co.jp/english/equities/trading/domestic/01.html,2016-01-01,2024-11-04

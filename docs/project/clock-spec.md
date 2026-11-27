@@ -77,3 +77,59 @@ hours are trained together ([decision 42](roadmap.md#decisions)).
 
 **Result:** no detectable gain at either horizon
 ([run 13](results.md#do-the-clock-and-session-inputs-add-skill)).
+
+## Dated venue clocks
+
+Run 13 above describes the original nine inputs at commit `539416a`. The current
+model keeps five of them and adds signed seconds to each named venue event, plus a
+short-session flag based on the configured products' regular 23-hour session. Negative
+seconds mean the event is ahead. Each decision reads occurrences inside its own open
+futures interval. For repeated events it reads the nearest known occurrence, choosing
+the earlier one on a tie. An absent, inapplicable or unpublished event yields a missing
+value. The engine and the minute-end training dataset call the same function with UTC
+row ends. The sparse stage and its historical database rows retain their original identity.
+
+[Rules](../../lib/strategy-core/src/strategy_core/schedules/rules.csv) give the venue,
+instrument group, IANA zone, normal local time, effective dates and source. GC, SI, PL
+and MGC share the named metals events, including **separate** settlement windows for gold,
+silver and platinum. ES, NQ, RTY and YM read equity-index settlement, cash-market
+boundaries and common macro events. Globex uses the instrument's product calendar.
+Floor and London participation references are conventions. Settlement and benchmark
+windows describe scheduled calculation times.
+
+[Published dates](../../lib/strategy-core/src/strategy_core/schedules/published.csv)
+are versioned inputs. Each date carries its scheduled local time, source and earliest
+verified availability (`known_at`). For a current publisher page without a historical
+publication stamp, the snapshot uses its retrieval date. This deliberately leaves gaps in
+historical training coverage, particularly for Census releases, Fed speeches, private
+surveys and Chinese fixings. Add archived publisher announcements to improve coverage.
+The file contains timing information only. Contract-specific expirations, delivery dates
+and index roll periods require a separate contract or index calendar.
+
+The package uses the pinned tzdata wheel to resolve each actual source-local date and
+time. Venue calendars select holiday hours and overnight dates. An ordinary Shanghai
+Friday night belongs to the following Monday's trading date. The session-based NYSE,
+Tokyo and Globex calendars cover 2016–27, subject to the effective bounds of each rule.
+The detailed metals and publication calendars cover portions of the 2025–26 research
+archive. Dates outside a rule's coverage stay missing. The 2026 LME Christmas and
+New Year's Eve exceptions need a dated exchange notice before they are used.
+
+Materialize any covered range by **venue trading date** after applying migration 0018:
+
+```sh
+uv run research clocks GC SI PL MGC ES NQ RTY YM --start 2025-11-01 --end 2026-12-31
+```
+
+`market.clock_rule` stores local rules by edition and effective start date.
+`market.clock_occurrence` stores the venue trading date, actual local date and time,
+scheduled instant and publication availability as PostgreSQL timestamps with time zone.
+Join the two on `revision`, `event` and `rule_valid_from = valid_from`. UTC instants
+can be formatted in the rule's source zone for display. Rerunning a batch fills missing
+records idempotently. A changed rule, calendar mapping, source file or relevant package
+version creates another edition. Dataset caches, saved backtests and model artifacts carry
+that edition. Previously trained artifacts can be replayed at their training revision.
+
+The next comparison uses GC and SI on the existing development dates and walk-forward
+folds, with the bracket and one-minute targets, `trees` with and without all clock
+columns, and paired intervals resampled by trade date. Success requires a positive
+lower bound at the bracket horizon. The final holdout stays reserved.

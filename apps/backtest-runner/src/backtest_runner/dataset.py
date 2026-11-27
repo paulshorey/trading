@@ -17,7 +17,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import date
 
 import numpy as np
-from strategy_core import targets
+from strategy_core import targets, venue_clock
 from strategy_core.engine import session_view
 from strategy_core.execution import ExecutionConfig
 from strategy_core.market import NS, PX
@@ -147,7 +147,7 @@ def plan(ids: dict[str, int]) -> tuple[list[str], str, list[tuple[str, int]]]:
         f" AND {first}.slot_ordinal %% {ROW_SECONDS} = 0"
         f" AND {first}.end_ns > %s AND {first}.end_ns <= %s ORDER BY {first}.slot_ordinal"
     )
-    return names, query, sorted(set(needed))
+    return [*names, *(spec.name for spec in venue_clock.SPECS)], query, sorted(set(needed))
 
 
 def session_rows(product, calendar, view, coverage, found, flagged: bool) -> dict:
@@ -225,6 +225,8 @@ def build_sessions(root: str, sessions: list[tuple], query: str, url: str | None
                 raise ValueError(f"No MBP-1 records for {symbol} on {day}: are its files present?")
             view = session_view(chunk, calendar, EXECUTION)
             part = session_rows(product, calendar, view, chunk.coverage, found, flagged)
+            events = venue_clock.feature_values(root, calendar, part["end"])
+            part["x"] = np.column_stack([part["x"], *events.values()]).astype(np.float32)
             part["day"] = np.full(len(found), (day - date(2000, 1, 1)).days, np.int32)
             parts.append(part)
     return {"root": root, "parts": parts}
@@ -242,13 +244,14 @@ def settings() -> dict:
         "spread_limit_r": SPREAD_LIMIT,
         "horizons_s": list(HORIZONS_S),
         "row_seconds": ROW_SECONDS,
+        "venue_clock_revision": venue_clock.EDITION,
         "close_delay_ms": EXECUTION.close_delay_ms,
         "flat_before_close_s": EXECUTION.flat_before_close_s,
         "commission_per_contract": EXECUTION.commission_per_contract,
     }
 
 
-VERSION = 4  # of how rows, eligibility, and costs are made here: part of the cache identity
+VERSION = 5  # of how rows, eligibility, and costs are made here: part of the cache identity
 SOURCES_QUERY = """
     SELECT s.contract_id, s.trade_date, s.source_files FROM market.ingest_slice s
     WHERE s.contract_id = ANY(%s)"""

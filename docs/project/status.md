@@ -37,8 +37,8 @@ over the free year, and the clock becomes an input
 
 The [build order](roadmap.md#build-order), reordered November 27:
 
-1. The clock and session inputs: done ([result](results.md#do-the-clock-and-session-inputs-add-skill): no
-   detectable gain on two metals).
+1. The original clock and session inputs: tested ([result](results.md#do-the-clock-and-session-inputs-add-skill): no
+   detectable gain on two metals). [Dated venue rules](clock-spec.md#dated-venue-clocks) now supply the training and replay clocks.
 2. Whether the minute-end result holds between minute ends.
 3. One-second values stored only where they are read, so that many products fit the disk.
 4. More products on the free year, one of each kind of market first.

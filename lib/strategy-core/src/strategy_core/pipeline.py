@@ -25,13 +25,14 @@ from typing import Any, ClassVar
 
 import numpy as np
 
+from . import venue_clock
 from .bars import AggregationReport
 from .columns import Table
 from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
 from .stage_bar_1s import BarStage
-from .stage_clock import ClockStage
+from .stage_clock import ClockStage, root_of
 from .stage_step_bar import MinuteBarStage, step_bar
 from .stage_step_candle import CandleStage, HourCandleStage, step_candle
 from .stage_step_pivot import BY_TIMEFRAME as PRICE_SCALES
@@ -235,8 +236,19 @@ class StageFeatures:
         self.last_end = {name: np.zeros(0, np.int64) for name in self.STEPWISE}
 
     @staticmethod
-    def names(stage: str) -> list[str]:
-        return [c.name for c in BY_NAME[stage].COLUMNS if c.unit]
+    def columns(stage: str):
+        # Run 13 used provisional shared floor hours and a sample-dependent short flag.
+        # Keep its stored rows reproducible. New models only see the venue-specific rules.
+        retired = (
+            {"main_open_s", "main_close_s", "in_main", "session_short"}
+            if stage == ClockStage.NAME
+            else set()
+        )
+        return [c for c in BY_NAME[stage].COLUMNS if c.unit and c.name not in retired]
+
+    @classmethod
+    def names(cls, stage: str) -> list[str]:
+        return [c.name for c in cls.columns(stage)]
 
     @classmethod
     def read(cls, table: Table, stage: str) -> dict[str, np.ndarray]:
@@ -257,20 +269,23 @@ class StageFeatures:
             return [
                 FeatureSpec(f"{self.PREFIX[name]}.{c.name}", Unit(c.unit), c.description)
                 for name in names
-                for c in BY_NAME[name].COLUMNS
-                if c.unit
+                for c in self.columns(name)
             ]
 
         out = of(self.SECONDLY)
         for timeframe, group in self.STEPWISE.items():  # each timeframe's features, then its age
             out += [*of(group), self.AGES[timeframe]]
-        return out
+        return [*out, *venue_clock.SPECS]
 
     @classmethod
     def sources(cls) -> dict[str, str]:
         """The stage each feature comes from, by name (a timeframe's age from its candle)."""
         out = {f"{cls.PREFIX[name]}.{n}": name for name in cls.stages() for n in cls.names(name)}
-        return out | {cls.AGES[tf].name: group[0] for tf, group in cls.STEPWISE.items()}
+        return (
+            out
+            | {cls.AGES[tf].name: group[0] for tf, group in cls.STEPWISE.items()}
+            | {spec.name: ClockStage.NAME for spec in venue_clock.SPECS}
+        )
 
     def update(self, chunk: MarketChunk) -> FeatureFrame:
         rows = self.pipeline.process(chunk)
@@ -288,6 +303,11 @@ class StageFeatures:
             found = self.as_of(timeframe, group, rows, ends)
             context[f"atr:{timeframe}"] = found.pop(self.ATR)
             features |= found
+        features.update(
+            venue_clock.feature_values(
+                root_of(chunk.contract), self.pipeline.context.calendar, ends
+            )
+        )
         candles = FAST_TF.frame(rows.products)["candles"]
         return FeatureFrame(ends, features, {"close": candles.close} | context)
 

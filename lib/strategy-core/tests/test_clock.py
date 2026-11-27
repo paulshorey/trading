@@ -104,4 +104,5 @@ def test_the_clock_is_a_pure_function_of_its_rows_and_declares_units():
     assert ClockStage in STAGES and ClockStage.NAME in SPARSE_STEPS
     assert ClockStage(StageContext(CAL, 0, 0, None)).warmup() == 0 and ClockStage.STATE == ()
     names = [n for n in StageFeatures.sources() if n.startswith("clock.")]
-    assert names == [f"clock.{name}" for name, _, _ in FEATURES]
+    assert "clock.tod_sin" in names and "clock.main_open_s" not in names
+    assert "clock.nyse_open_s" in names

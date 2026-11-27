@@ -23,6 +23,7 @@ import joblib
 import numpy as np
 from psycopg.types.json import Jsonb
 from psycopg.types.range import DateRange
+from strategy_core import venue_clock
 from strategy_core.engine import Engine
 from strategy_core.features import FeatureFrame
 from strategy_core.market import PRODUCTS
@@ -86,7 +87,9 @@ class ModelPolicy:
 
     def model(self) -> dict:
         if not self.loaded:
-            self.loaded.update(joblib.load(ROOT / self.artifact))
+            kept = joblib.load(ROOT / self.artifact)
+            check_clock_edition(kept)
+            self.loaded.update(kept)
         return self.loaded
 
     def required(self) -> tuple[str, ...]:
@@ -163,12 +166,22 @@ def readiness(kept: dict) -> list[str]:
     return list(kept["ready"]) if "ready" in kept else dataset.readiness(kept["names"])
 
 
+def check_clock_edition(kept):
+    revision = kept.get("venue_clock_revision")
+    if revision and revision != venue_clock.EDITION:
+        raise ValueError(f"Model requires venue clock edition {revision} from its training commit.")
+
+
 def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
     """Why a saved model cannot be replayed by this code, or None when it can: the features it
     reads, to forecast and to decide, must all be ones the engine computes. A model fitted on a
     retired definition (its variant has another name now) is never given the new one in its
     place: that would be another experiment. The message says how to find the code it needs."""
     kept = joblib.load(artifact)
+    try:
+        check_clock_edition(kept)
+    except ValueError as error:
+        return str(error)
     offered = set(StageFeatures.sources()) if offered is None else offered
     missing = sorted({n for n in (*used(kept), *readiness(kept)) if n not in offered})
     if not missing:

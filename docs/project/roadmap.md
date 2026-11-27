@@ -87,7 +87,7 @@ version.
 | 5. Swings and structure of derived series | `pivot_rsi_*`, `pivot_cvd_*` | The same zigzag on RSI and on CVD, each in its own ATR ([definition](series-structure-spec.md)) | The codes that compare the three structures |
 | 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | A first model, fitted walk-forward and replayed in the engine | Skill: it has none at the horizon traded ([results](results.md)) |
 
-The engine holds 1,458 features. Base rows and indicator stages hold one row per scheduled
+The engine holds 1,590 features. Base rows and indicator stages hold one row per scheduled
 slot and contract. Swing rows of the fast timeframe and all events are sparse: stored where
 something reads them.
 

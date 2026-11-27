@@ -3,7 +3,7 @@ name = "strategy-core"
 version = "0.2.0"
 description = "Shared market data, feature, strategy, and execution logic for backtests and live sessions"
 requires-python = ">=3.13"
-dependencies = ["numba>=0.68", "numpy>=2.3"]
+dependencies = ["numba>=0.68", "numpy>=2.3", "pandas>=3.1", "pandas-market-calendars==5.6.0", "tzdata==2026.6"]
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]

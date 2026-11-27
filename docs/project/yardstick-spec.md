@@ -19,7 +19,7 @@ forecasts zero and trades nothing ([results](results.md)).
 | Setting | Value |
 | --- | --- |
 | Decision rows | Every `1m@1s` row (every second) of a warm front session, January 2 to August 31, 2026 (171 trade dates a product), with every timeframe's features as of that second ([decision 38](roadmap.md#decisions)). Training reads one row a minute (the second that ends the minute): neighbours share 59 of 60 window rows and almost all of their label |
-| Features | Every feature the engine holds at the row (1,458), read as the engine reads them. No price level, contract, or product identity |
+| Features | Every feature the engine holds at the row (1,590), read as the engine reads them. No price level, contract, or product identity |
 | Splits | Test months May to August 2026 (`periods.TEST_MONTHS`). The model that scores a month is fitted on all earlier sessions of both products except the last one before the month. On six years: by quarter, as [frozen](roadmap.md#how-results-are-judged) |
 
 **Eligibility** is decided at the row and counted by reason:

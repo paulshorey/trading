@@ -11,6 +11,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
+from strategy_core import venue_clock
 from strategy_core.bars import aggregate
 from strategy_core.engine import ChunkResult, Engine, MarketChunk, split_by_second
 from strategy_core.execution import ExecutionConfig, Simulator
@@ -30,7 +31,7 @@ RUN_ID_LENGTH = 24
 
 
 def code_digest() -> str:
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(venue_clock.edition_digest().encode())
     for base in (ROOT / "lib/strategy-core/src", ROOT / "apps/backtest-runner/src"):
         for path in sorted(base.rglob("*.py")):
             digest.update(str(path.relative_to(ROOT)).encode())
@@ -253,6 +254,7 @@ def provenance(p: Prepared) -> dict:
             for name, f in sorted(p.source.used_files.items())
         },
         "code_sha256": LOADED_CODE_SHA256,
+        "venue_clock_revision": venue_clock.EDITION,
         "packages": {
             name: version(name)
             for name in ("numpy", "numba", "databento", "pandas_market_calendars")

@@ -137,7 +137,7 @@ Ingestion, its failures, and adding files: [ingestion.md](ingestion.md).
   `data/databento/mbp-1/`, 27 GB, gitignored.
 - **Database:** PostgreSQL 18 (Homebrew), database `trading`, 375 GB; migrations to `0017`;
   `ingest plan GC SI` reports every contract `current`.
-- **Baseline:** `~/tmp_trading/fingerprint-series.txt` has 1,008 lines. A rebuild by the
+- **Baseline:** `~/tmp_trading/fingerprint-series.txt` has 1,020 lines. A rebuild by the
   same code must reproduce it.
 - **Model runs:** `research.run`; the latest yardstick run is 13. Models and each row's
   forecasts are in `data/models/yardstick/run-<n>/`.

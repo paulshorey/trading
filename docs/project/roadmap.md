@@ -251,8 +251,9 @@ and 34 (replaced by 35), 19 (replaced by 36).
     statistics, and volatility rows are stored only where something reads them (every
     ten-second row's end, every decision and event row). `bar_1s` stays complete, and the
     engine computes every second either way.
-26. **The new machine's build is the starting point.** `~/fingerprint-new.txt` is the
-    baseline for later rebuilds.
+26. **The new machine's build is the starting point.** Its original fingerprint is at
+    `~/tmp_trading/fingerprint-new.txt`. Compare new rebuilds with
+    `~/tmp_trading/fingerprint-series.txt`.
 27. **Costs.** Full-size commission is $2.50 a contract a side and micro commission $1.25
     (the broker will be TradeStation). An entry is ineligible when the spread is more than a
     quarter of the stop distance.

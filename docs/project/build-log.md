@@ -1190,22 +1190,21 @@ sessions, inside the 40-session lead.
    slices; only the new stage may be new.
 6. **Pilot** on a throwaway `trading_test_*` database: build GC 2026-07-20..08-05 with `main`
    (a detached worktree with `uv sync --frozen`), migrate with the branch, require `ingest plan`
-   to show only `add` for the new stage, run it, recompute it independently from the stored
-   rows (adapt `~/ingest-gc-si-b2.reference.py`), mark it stale and `--rebuild` it alone
+   to show only `add` for the new stage, run it, and write a reference script that recomputes
+   it independently from the stored rows. Mark it stale and `--rebuild` it alone
    (byte-identical by `md5(string_agg(...))`), then drop the database.
 7. **Open the PR ready for review,** and apply the migration to `trading` only after Codex has
    reviewed the code head: an applied migration cannot change. Then
-   `ingest run GC SI --workers 8`, a fresh plan (`current`), the SQL checks (adapt
-   `~/ingest-gc-si-b2.validation.sql`: coverage, keys equal the candle table, the continuous
-   view, warm, NULL rates at each roll's first front session and in September, bounds), the
-   full-year reference, `research verify`, `pnpm lint && pnpm test && pnpm build`, the docs,
-   and a prompt merge.
+   `ingest run GC SI --workers 8`, a fresh plan (`current`), the SQL checks (coverage, keys
+   equal the candle table, the continuous view, warm, NULL rates at each roll's first front
+   session and in September, bounds), the full-year reference, `research verify`,
+   `pnpm lint && pnpm test && pnpm build`, the docs, and a prompt merge.
 
-Practical notes: a worktree's `node_modules` can be stale (`pnpm install --frozen-lockfile
---config.confirmModulesPurge=false`); session scratch folders can vanish when a session is
-interrupted, so keep scripts and evidence under `~/ingest-<name>.*`; `research verify` takes
-about 6 minutes; `~/.agents/skills/git-management/scripts/pr-context.py` reports whether
-Codex's review covers the head.
+Keep each run's validation scripts and evidence in a separate directory under `~/tmp_trading/`.
+If the worktree's `node_modules` is stale, run `pnpm install --frozen-lockfile
+--config.confirmModulesPurge=false`. `research verify` takes about 6 minutes.
+`~/.agents/skills/git-management/scripts/pr-context.py` reports whether Codex's review covers
+the head.
 
 ## PR D: swings
 

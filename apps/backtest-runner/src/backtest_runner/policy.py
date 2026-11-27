@@ -97,10 +97,7 @@ class ModelPolicy:
         required to have is there (the swing scales' confirmed high and low). On any other row
         the model was never fitted, so it opens nothing and closes nothing; the bracket and the
         forced exit still act."""
-        names = self.ready
-        if names is None:
-            kept = self.model()
-            names = kept["ready"] if "ready" in kept else dataset.readiness(kept["names"])
+        names = readiness(self.model()) if self.ready is None else self.ready
         out = np.ones(rows, bool)
         for name in names:
             out &= np.isfinite(f[name])
@@ -111,7 +108,7 @@ class ModelPolicy:
         if FORECAST in f:
             return f[FORECAST]
         kept = self.model()
-        names = [kept["names"][i] for i in kept["columns"]]
+        names = used(kept)
         x = np.column_stack([f[n] for n in names]).astype(np.float32)
         return kept["model"].predict(x) if len(x) else np.zeros(0)
 
@@ -150,6 +147,22 @@ class ModelPolicy:
 STRATEGIES["model"] = ModelPolicy
 
 
+REPLAY_NOTE = "docs/project/series-structure-spec.md (Replaying an earlier run)"
+
+
+def used(kept: dict) -> list[str]:
+    """The features a fitted model reads to forecast: a fit leaves out a column that had no
+    value on its training rows, so these can be fewer than the dataset's names."""
+    names = kept["names"]
+    return [names[i] for i in kept["columns"]] if "columns" in kept else list(names)
+
+
+def readiness(kept: dict) -> list[str]:
+    """The features that must have a value for the model to decide: those its artifact names,
+    or for one written before it did, those of its dataset's names."""
+    return list(kept["ready"]) if "ready" in kept else dataset.readiness(kept["names"])
+
+
 def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
     """Why a saved model cannot be replayed by this code, or None when it can: the features it
     reads, to forecast and to decide, must all be ones the engine computes. A model fitted on a
@@ -157,8 +170,7 @@ def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
     place: that would be another experiment. The message says how to find the code it needs."""
     kept = joblib.load(artifact)
     offered = set(StageFeatures.sources()) if offered is None else offered
-    needed = [*kept["names"], *kept.get("ready", [])]
-    missing = sorted({n for n in needed if n not in offered})
+    missing = sorted({n for n in (*used(kept), *readiness(kept)) if n not in offered})
     if not missing:
         return None
     families = sorted({n.rsplit(".", 1)[0] for n in missing})
@@ -166,7 +178,7 @@ def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
     where = (
         f"commit {source['commit']}" + (" with uncommitted changes" if source.get("dirty") else "")
         if source.get("commit")
-        else "the commit of its `research.run` row (code_sha256; the artifact names none)"
+        else f"the artifact names no commit; {REPLAY_NOTE} lists the commit of each earlier run"
     )
     return (
         f"{artifact.parent.name}/{artifact.name} reads {len(missing)} features this code does "

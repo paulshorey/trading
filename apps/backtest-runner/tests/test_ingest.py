@@ -232,6 +232,7 @@ def in_memory(cache, data, symbol: str, dates: list[date]):
     return parts
 
 
+@pytest.mark.slow
 def test_ingest_plans_builds_extends_and_repairs(database, world):
     cache, data = world
     logs = []
@@ -603,6 +604,7 @@ def test_diff_rules():
     assert action == "needs_rebuild"  # the first session lacks candles and is not a repair
 
 
+@pytest.mark.slow
 def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(database, world):
     """Regression (PR #63 review). Two downloads with a hole between them: sessions in the hole
     are stored as rows without coverage, so a contract's index counter never jumps, and the
@@ -654,6 +656,7 @@ def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(
         assert not dataset.front_sessions(conn, "GC", day, day, [*stages, ("vol_1m", 0)])[0][-1]
 
 
+@pytest.mark.slow
 def test_a_backtest_warmed_for_the_lead_computes_the_stored_rows(database, world, monkeypatch):
     """A backtest's default warm-up is the lead storage gives each contract, so from a roll on it
     computes exactly the stored rows of every stage, even when that lead reaches back before the
@@ -822,6 +825,7 @@ def test_incomplete_range_openings_keep_a_front_and_explicit_contracts_keep_part
     assert p["unresolved_sessions"] == ["2026-09-01", "2026-09-02"] and rolls == []
 
 
+@pytest.mark.slow
 def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypatch):
     """Regression (PR #63 review): stored sessions are replaced one at a time, each in one
     transaction, so a build that fails partway leaves the rest on their previous rows."""
@@ -862,6 +866,7 @@ def test_a_failed_rebuild_keeps_every_session_readable(database, world, monkeypa
         assert builders == 2  # replaced sessions next to old ones, each whole
 
 
+@pytest.mark.slow
 def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     """A stage built by other code is rebuilt with the stages that read it (`vol_1s` reads
     `candle_1m_1s`), leaving the rows of the stages they do not depend on untouched; a stage
@@ -961,6 +966,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
     assert g7["action"] == "needs_rebuild" and "lead of 2 sessions" in g7["reason"]
 
 
+@pytest.mark.slow
 def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
     """Minute tables count minutes: a stale `bar_1m` is replaced session by session at its own
     resolution (no duplicate keys, no leftovers), together with `candle_1h_1m`, `stats_1h_1m`,
@@ -1044,6 +1050,7 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         np.testing.assert_array_equal(stored, want[k][~is_null], err_msg=k)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("stage", "columns", "defined", "per", "every"),
     [
@@ -1140,6 +1147,7 @@ def assert_stored(got: list[tuple], columns: list[str], tables: list[Table], kee
         np.testing.assert_array_equal(stored, want[~null], err_msg=k)
 
 
+@pytest.mark.slow
 def test_swing_scales_are_stages_of_their_own_in_shared_tables(database, world):
     """PR D. Each swing scale is a variant: a stage with its own builder, checkpoint, and session
     records, writing rows keyed by `variant_id` into its resolution's table and its events into

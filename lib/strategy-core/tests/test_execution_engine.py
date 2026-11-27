@@ -319,6 +319,7 @@ CASES = {
 }
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("case", CASES)
 def test_whole_session_and_second_by_second_runs_are_identical(case):
     cal = calendar((0, 2.5), (3, 6))

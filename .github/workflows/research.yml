@@ -39,5 +39,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: uv sync --frozen
       - run: pnpm lint
-      - run: pnpm test
+      # The fast tests only. The slow ones (second-by-second replays, ingest rebuilds) run on
+      # the developer's machine before a PR merges: `pnpm test` (AGENTS.md).
+      - run: pnpm test:fast
       - run: pnpm build

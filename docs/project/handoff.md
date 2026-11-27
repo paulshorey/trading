@@ -41,8 +41,8 @@ reports every contract `current`, and the database holds one year of GC and SI o
 timeframes (357 GB with the dead space of the last rebuild; about 210 GB of rows, 38 GB of
 them the swings of RSI and of CVD).
 `~/fingerprint-series.txt` is the baseline that later rebuilds are compared with, taken
-after the RSI scales were rebuilt on the mean over the phases (migrations to `0016`; 1,296
-lines, the retired RSI scales' among them; its lines for the
+after the RSI scales were rebuilt on the mean over the phases (migrations to `0016`; 1,008
+lines since the retired RSI scales' rows were deleted; its lines for the
 tables that existed before are those of `~/fingerprint-new.txt`, unchanged). One year of MBP-1 for
 GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
 in cloud storage; they return, with NQ and five more years of GC and SI, later.

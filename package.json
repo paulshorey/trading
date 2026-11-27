@@ -8,6 +8,7 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
+    "test:fast": "uv run --no-sync pytest -q -m 'not slow'",
     "lint": "uv run --no-sync ruff check . && uv run --no-sync ruff format --check .",
     "dev": "turbo run dev",
     "deps:install": "pnpm install --frozen-lockfile && uv sync --frozen",

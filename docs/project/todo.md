@@ -30,9 +30,9 @@ the [build log](build-log.md).
 - [x] **The RSI series for swings and divergence** (November 27): the mean over the 60
       phases, chosen by the phase comparison and the flat-price tests
       ([decided](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
-- [ ] **Delete the rows of the retired RSI scales** (`<stream>_rsi_atr_<k>`: about half of
-      each `pivot_rsi_*` table and 4.6 million events). Nothing reads them. Needs Paul's
-      agreement, then a `VACUUM`.
+- [x] **Delete the rows of the retired RSI scales** (November 27, with Paul's agreement):
+      61.3 million rows of `<stream>_rsi_atr_<k>` and 4.6 million of their events, then a
+      `VACUUM`. The variants stay registered as retired: a name is never reused.
 - [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
       divergence at the latest highs and lows, a level one series has broken that another
       holds. Specify them first; they are a new stage, and inputs like any other.

@@ -83,7 +83,8 @@ with none ([measurements, the choice, and run 12](series-structure-spec.md#the-r
 and run 11 below are of the first RSI series. `research verify` again
 finds features and all 18 trades identical. The fingerprint (`~/fingerprint-series.txt`,
 1,296 lines) holds every earlier line unchanged, CVD's included, and 288 new ones for the
-new RSI scales.
+new RSI scales. The retired scales' rows were then deleted with Paul's agreement (61.3
+million rows, 4.6 million events) and their 288 lines taken out of the baseline: 1,008.
 
 **The model decides only on rows it was fitted on** (found in review). Training leaves out
 a row where a swing scale has no confirmed high or low yet; the policy opened on a forecast

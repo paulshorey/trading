@@ -194,8 +194,17 @@ example `uv run research backtest SPEC`. Do not install dependencies inside buil
 test, dev, or start scripts (they use `uv run --no-sync`).
 
 For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentation
-changes, check accuracy and links. Keep documentation short, avoid duplicated
+changes, check accuracy and links; they need no test run. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
+
+**The PR check on GitHub is deliberately small**: lint, `pnpm test:fast` (every test not
+marked `slow`), and the build. The slow tests, which replay sessions second by second and
+rebuild a test database, run on the developer's machine, which is faster and holds the
+market data. So before a PR that changes Python code is marked ready, the agent responsible
+for it runs `pnpm test` (everything) on that machine and writes the result on the PR, with
+`uv run research verify apps/backtest-runner/examples/gc-day.json` when the engine, a
+stage, or execution changed. A PR that changes only documentation or comments needs
+neither. Mark a new test `@pytest.mark.slow` when it takes more than about ten seconds.
 
 The two Python test suites take about 25 minutes each: run them in the background with
 their output in a file, and never piped through `tail`, which shows nothing until the end.

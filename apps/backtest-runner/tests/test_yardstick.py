@@ -322,6 +322,7 @@ def test_training_dates_are_cut_into_blocks_with_a_date_left_out_on_each_side():
     assert np.unique(day[cut[0][0]] - first).tolist() == [3, 4, 5, 6, 7]
 
 
+@pytest.mark.slow
 def test_shrinking_stops_a_forecast_claiming_what_it_does_not_know():
     """Each session has its own level in the target, and one feature that names the session.
     Trees learn the sessions they saw and forecast boldly; outside them the forecast is

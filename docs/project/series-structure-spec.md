@@ -229,6 +229,6 @@ flat forecast and no policy was replayed. Each row's forecasts are kept in
 any size or timeframe has its extreme exactly 60 rows after the previous one of its kind
 (0.0%; 5% to 11% before at 0.5 and 1 ATR), and the swing counts equal those measured before
 the build. The new scales are `<stream>_rsi_mean_atr_<k>`; the first ones,
-`<stream>_rsi_atr_<k>`, are retired and no view or dataset reads them. Their rows are still
-in the RSI tables and `market.pivot_event` (about half of each RSI table; 4.6 million
-events) until Paul agrees to delete them.
+`<stream>_rsi_atr_<k>`, are retired. Their rows (61.3 million, and 4.6 million events) were
+deleted on November 27 with Paul's agreement; the names stay registered and are never
+reused.

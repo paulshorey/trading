@@ -388,6 +388,7 @@ def run_both_ways(calendar, chunks, config):
     return whole, stepwise
 
 
+@pytest.mark.slow
 def test_opening_trades_within_the_close_delay_and_closure_trades_are_kept(monkeypatch):
     """Regression (PR #62 review): a trade received during [open, open + close_delay) belongs
     to the first second, and a trade during the preceding closure is reported, not dropped."""
@@ -421,6 +422,7 @@ def test_opening_trades_within_the_close_delay_and_closure_trades_are_kept(monke
     assert whole.reports[chunk.session].outside_schedule == 1
 
 
+@pytest.mark.slow
 def test_days_without_the_contract_are_missing_not_quiet(monkeypatch):
     """Regression (PR #62 review): a file that does not list the contract leaves its day
     uncovered (missing slots) and is reported, instead of looking like a day without trades."""

@@ -1,7 +1,7 @@
 # The clock and session inputs: spec
 
 Frozen November 27, 2026, before the stage is built and before the model is run with it.
-Build-order item 1 of the [roadmap](roadmap.md#build-order), step 1 of the process,
+Step 1 of the process,
 [decision 43](roadmap.md#decisions).
 
 ## In plain words
@@ -74,3 +74,6 @@ of two metals. The first run's horizon map gave the session inputs alone no skil
 horizon. The inputs are built anyway: they are cheap, they let the model condition every
 other input on the time of day, and they matter more once products with different main
 hours are trained together ([decision 42](roadmap.md#decisions)).
+
+**Result:** no detectable gain at either horizon
+([run 13](results.md#do-the-clock-and-session-inputs-add-skill)).

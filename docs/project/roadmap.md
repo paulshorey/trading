@@ -80,14 +80,14 @@ version.
 
 | Step | Stages | Built | Missing |
 | --- | --- | --- | --- |
-| 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m` | From trades, with a CVD that runs through each contract's life | The book between trades (`book_1s`); the clock and session inputs |
+| 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`, `clock_1s` | From trades, with a CVD that runs through each contract's life | The book between trades (`book_1s`) |
 | 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Three timeframes, rows counted by index, indicators per phase | A session-long window for a view of several days |
 | 3. Indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price | Indicators of indicators, beyond the swings of RSI |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with the `structure` code | The current pullback over the threshold as its own feature |
 | 5. Swings and structure of derived series | `pivot_rsi_*`, `pivot_cvd_*` | The same zigzag on RSI and on CVD, each in its own ATR ([definition](series-structure-spec.md)) | The codes that compare the three structures |
 | 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | A first model, fitted walk-forward and replayed in the engine | Skill: it has none at the horizon traded ([results](results.md)) |
 
-The engine holds 1,449 features. Base rows and indicator stages hold one row per scheduled
+The engine holds 1,458 features. Base rows and indicator stages hold one row per scheduled
 slot and contract. Swing rows of the fast timeframe and all events are sparse: stored where
 something reads them.
 
@@ -310,7 +310,8 @@ Reordered November 27, 2026 (Paul: no more years are bought; many products on th
 year; the clock as an input). Each item names the step of the process it advances. What is
 done is in the [build log](build-log.md).
 
-1. **The clock and session inputs** (step 1; [decision 43](#decisions)). A stage computed
+1. **The clock and session inputs: done** (November 27;
+   [record](build-log.md#the-clock-and-session-inputs-november-27-2026)). (step 1; [decision 43](#decisions)). A stage computed
    from the calendar alone, so it rebuilds nothing: time of day in the exchange's local
    time as a cycle, seconds since the session opened and until it closes and until the
    forced exit, seconds to and from the open and close of the product's main market hours,

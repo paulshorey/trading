@@ -666,9 +666,10 @@ def run(
         known = usable & np.isfinite(move)
         both, _ = walk_forward(x, move, day, known, fit_trees)
         fewer, _ = walk_forward(x[:, ~new], move, day, known, fit_trees)
+        scored = known & np.isfinite(both) & np.isfinite(fewer)  # the test months' rows
         out["added_inputs"][kind][f"at_{ADDED_HORIZON_S}s"] = {
-            "trees": pooled_correlation(both[known], move[known], day[known]),
-            "trees_without": pooled_correlation(fewer[known], move[known], day[known]),
+            "trees": pooled_correlation(both[scored], move[scored], day[scored]),
+            "trees_without": pooled_correlation(fewer[scored], move[scored], day[scored]),
             "trees_less_trees_without": paired_difference(both, fewer, move, day),
         }
         log(f"{kind} at {ADDED_HORIZON_S} s: fitted, {time.time() - started:,.0f} s")

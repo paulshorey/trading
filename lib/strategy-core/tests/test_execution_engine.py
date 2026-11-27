@@ -319,6 +319,50 @@ CASES = {
 }
 
 
+def test_a_short_session_whole_and_second_by_second_are_identical():
+    """The PR check's replay: fifteen minutes, long enough to complete rows of every timeframe
+    and to trade, whole and one second at a time. The longer sessions and the other entries and
+    closing rules are the slow test below."""
+    cal = calendar((0, 0.25))
+    features = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    config = ExecutionConfig(
+        feed_latency_ms=3, close_delay_ms=80, order_latency_ms=40, cooldown_s=5,
+        flat_before_close_s=60,
+    )  # fmt: skip
+    t = random_trades(T0, T0 + HOUR // 4, seed=21, rate=1.5, recv_jitter_ns=150_000_000)
+    book = random_book(t, seed=22, recv_jitter_ns=150_000_000)
+    params = {
+        "use_bias": False,
+        "trigger_rsi": 40.0,
+        "trigger_delta": -1.0,
+        "bias_ret_atr": 0.0,
+        "bias_rsi": 0.0,
+        "max_bias_age_s": 4000.0,
+        "bracket": {"target_atr": 1.0, "stop_atr": 1.0, "max_hold_s": 60, "atr": "1m@1s"},
+    }
+    o, c = int(cal.opens[0]), int(cal.closes[0])
+    known = [r.ts_recv + config.feed_latency for r in (t, book)]
+    inside = [(k >= o + config.close_delay) & (k < c + config.close_delay) for k in known]
+    session = session_chunk(cal, t.take(inside[0]), o, c, book.take(inside[1]))
+    whole, whole_frame = run(
+        cal, make_strategy("bias_pullback", params), [session], config, features
+    )
+    seconds = split_by_second(session, cal, config)
+    stepwise, step_frame = run(
+        cal, make_strategy("bias_pullback", params), seconds, config, features
+    )
+    assert len(seconds) == 900 and len(whole_frame.end) == 900
+    for name, values in whole_frame.features.items():
+        np.testing.assert_array_equal(step_frame.features[name], values, err_msg=name)
+    for name, values in whole_frame.context.items():
+        np.testing.assert_array_equal(step_frame.context[name], values, err_msg=name)
+    assert whole["trades"] == stepwise["trades"] and len(whole["trades"]) >= 1
+    assert whole["summary"] == stepwise["summary"] and whole["quality"] == stepwise["quality"]
+    # rows of the slower timeframes completed inside it, so their features were carried
+    assert np.isfinite(whole_frame.features["10m@10s.age_s"]).sum() > 800
+    assert np.isfinite(whole_frame.features["1h@1m.age_s"]).sum() > 800
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("case", CASES)
 def test_whole_session_and_second_by_second_runs_are_identical(case):

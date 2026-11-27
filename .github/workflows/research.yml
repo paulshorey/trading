@@ -6,6 +6,11 @@ on:
   pull_request:
     paths-ignore: ["archive/**"]
   workflow_dispatch:
+    inputs:
+      full:
+        description: Run every test, the slow ones too (about an hour)
+        type: boolean
+        default: false
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -42,4 +47,7 @@ jobs:
       # The fast tests only. The slow ones (second-by-second replays, ingest rebuilds) run on
       # the developer's machine before a PR merges: `pnpm test` (AGENTS.md).
       - run: pnpm test:fast
+        if: ${{ !inputs.full }}
+      - run: pnpm test
+        if: ${{ inputs.full }}
       - run: pnpm build

@@ -156,5 +156,9 @@ def main() -> None:
                 args.sessions,
             )
         print(json.dumps(result, indent=2, allow_nan=False))
+        if args.command == "verify":  # the report is printed either way; a failure exits 1
+            failed = service.verify_failures(result)
+            if failed:
+                parser.exit(1, f"Error: verify failed: {'; '.join(failed)}\n")
     except (ValueError, TypeError, KeyError, OSError, RuntimeError, psycopg.Error) as error:
         parser.exit(1, f"Error: {error}\n")

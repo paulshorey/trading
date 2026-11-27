@@ -394,6 +394,20 @@ def verify(body: dict, sessions: int | None = 1) -> dict:
     }
 
 
+def verify_failures(result: dict) -> list[str]:
+    """Why a `verify` result is not a pass: features or trades differ between the whole session
+    and second by second, or nothing was compared. Empty for a pass."""
+    out = []
+    if not result["seconds"]:
+        out.append("no trading second was compared")
+    if not result["identical_features"]:
+        names = result["mismatched_features"]
+        out.append(f"{len(names)} features differ (first: {names[0] if names else '?'})")
+    if not result["identical_trades"]:
+        out.append("the trades differ")
+    return out
+
+
 def rehearse(
     body: dict, speed: float, on_event: Callable[[str], None], sessions: int | None = 1
 ) -> dict:

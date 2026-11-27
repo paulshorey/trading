@@ -200,13 +200,19 @@ changes, check accuracy and links; they need no test run. Keep documentation sho
 instructions, and distinguish implemented behavior from planned capabilities.
 
 **The PR check on GitHub is deliberately small**: lint, `pnpm test:fast` (every test not
-marked `slow`), and the build. The slow tests, which replay sessions second by second and
-rebuild a test database, run on the developer's machine, which is faster and holds the
-market data. So before a PR that changes Python code is marked ready, the agent responsible
-for it runs `pnpm test` (everything) on that machine and writes the result on the PR, with
-`uv run research verify apps/backtest-runner/examples/gc-day.json` when the engine, a
-stage, or execution changed. A PR that changes only documentation or comments needs
-neither. Mark a new test `@pytest.mark.slow` when it takes more than about ten seconds.
+marked `slow`, with one short whole-session against second-by-second replay), and the
+build. The slow tests, which replay long sessions second by second and rebuild a test
+database, run on the developer's machine, which is faster and holds the market data. So
+before a PR that changes Python code is marked ready, the agent responsible for it runs
+`pnpm test` (everything) on that machine, and when the engine, a stage, or execution changed
+also `uv run research verify apps/backtest-runner/examples/gc-day.json`. Both fail loudly:
+`pnpm test` errors when PostgreSQL cannot be reached, where a bare `pytest` would skip
+those tests, and `verify` exits 1 when features or trades differ or nothing was compared.
+Write on the PR the commit tested, the counts passed and skipped, and why anything was
+skipped; a later push needs the run again unless it changed only documentation. A PR that
+changes only documentation or comments needs neither. Mark a new test `@pytest.mark.slow`
+when it takes more than about ten seconds. The whole suite can also be run on GitHub by
+hand: the workflow's "Run workflow" with `full` ticked.
 
 The two Python test suites take about 25 minutes each: run them in the background with
 their output in a file, and never piped through `tail`, which shows nothing until the end.

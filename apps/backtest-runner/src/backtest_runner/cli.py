@@ -22,6 +22,10 @@ def main() -> None:
     p.add_argument("spec", type=Path)
     p.add_argument("--speed", type=float, default=60.0, help="1 = real time; 0 = no waiting")
     p.add_argument("--sessions", type=int, default=1)
+    p = sub.add_parser("clocks", help="Store dated clock occurrences by venue trade date")
+    p.add_argument("products", nargs="+")
+    p.add_argument("--start", type=date.fromisoformat, required=True)
+    p.add_argument("--end", type=date.fromisoformat, required=True)
     p = sub.add_parser("db", help="PostgreSQL: status, migrate, or register downloaded files")
     p.add_argument("action", choices=("status", "migrate", "register"))
     p = sub.add_parser(
@@ -89,6 +93,11 @@ def main() -> None:
                     "unconfigured_parents": catalog.unconfigured_parents(),
                 }
             )
+        elif args.command == "clocks":
+            from . import clock_archive, db
+
+            with db.connect() as conn:
+                result = clock_archive.materialize(conn, args.products, args.start, args.end)
         elif args.command == "db":
             from . import db
 

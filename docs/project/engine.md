@@ -20,7 +20,7 @@ timing assumptions.
 
 The engine reads three timeframes (`1m@1s`, `10m@10s`, `1h@1m`; a window of 60 rows of
 one step, see [rows and index counters](../sliding-windows/README.md#rows-and-index-counters)).
-It holds 1,449 features: the windows, indicators, and swings of price, RSI, and CVD.
+It holds 1,590 features: the windows, indicators, swings of price, RSI, and CVD, and the clock.
 
 - **Decision, `1m@1s`:** a decision is taken every second, from the fast window, reading
   the latest completed row of the slower timeframes with its age.

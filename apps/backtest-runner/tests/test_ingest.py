@@ -469,6 +469,7 @@ def test_minute_bounds_follow_the_session_seconds():
         "pivot_cvd_10s": 10,
         "pivot_rsi_1m": 60,
         "pivot_cvd_1m": 60,
+        "clock_1s": 1,
     }
 
 
@@ -955,6 +956,7 @@ def test_stages_are_versioned_written_and_warmed_on_their_own(database, world):
         "candle_10m_10s": 1,
         "stats_10m_10s": 1,
         "vol_10s": 1,
+        "clock_1s": 0,
         # their thresholds' ATR(14)
         **{s.NAME: 1 for s in (*MIDDLE_SCALES, *SLOW_SCALES, *FAST_SCALES, *SERIES_SCALES)},
     }
@@ -1017,7 +1019,7 @@ def test_a_stale_minute_stage_is_rebuilt_alone(database, world):
         assert after.keys() == before.keys()
         for key, (builder, at) in after.items():
             fast = ("bar_1s", "candle_1m_1s", "stats_1m_1s", "vol_1s", "pivot_1s", "pivot_rsi_1s",
-                    "pivot_cvd_1s")  # fmt: skip
+                    "pivot_cvd_1s", "clock_1s")  # fmt: skip
             if key[0] in fast or (
                 key[0].split(":")[0].endswith("10s")  # the middle timeframe is another branch
             ):

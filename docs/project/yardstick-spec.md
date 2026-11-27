@@ -19,7 +19,7 @@ forecasts zero and trades nothing ([results](results.md)).
 | Setting | Value |
 | --- | --- |
 | Decision rows | Every `1m@1s` row (every second) of a warm front session, January 2 to August 31, 2026 (171 trade dates a product), with every timeframe's features as of that second ([decision 38](roadmap.md#decisions)). Training reads one row a minute (the second that ends the minute): neighbours share 59 of 60 window rows and almost all of their label |
-| Features | Every feature the engine holds at the row (1,449), read as the engine reads them. No price level, contract, or product identity |
+| Features | Every feature the engine holds at the row (1,590), read as the engine reads them. No price level, contract, or product identity |
 | Splits | Test months May to August 2026 (`periods.TEST_MONTHS`). The model that scores a month is fitted on all earlier sessions of both products except the last one before the month. On six years: by quarter, as [frozen](roadmap.md#how-results-are-judged) |
 
 **Eligibility** is decided at the row and counted by reason:
@@ -93,8 +93,9 @@ above, once on all features and once on each group alone (price path, volume and
 book at trades, volatility, swings and structure, session and time). It answers: is anything
 predictable from these inputs, at which horizon, and from which kind of input. That is 35
 fits, reported as a table of the skill above. Since the swings of RSI and of CVD were added
-they are a kind of their own, `series`, and the run also fits `trees` without that kind
-(`trees_without_series`) and reports the paired difference in skill. With 1,449 features
+they are a kind of their own, `series`, as the clock inputs are (`clock`). The run also fits
+`trees` without the newest kind (`yardstick.ADDED`, now `clock`) and reports the paired
+difference in skill, at the bracket and at one minute. With 1,458 features
 the map takes more than two hours, so `--no-horizons` skips it; run `research yardstick GC SI`
 from a terminal for the full map.
 

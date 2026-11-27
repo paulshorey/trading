@@ -9,6 +9,30 @@ record behind it. Add a section when a stage, a rebuild, or an experiment is fin
 withdrawn reversal design has its own record in
 [build-log-withdrawn.md](../archive/build-log-withdrawn.md).
 
+## The clock and session inputs (November 27, 2026)
+
+[Decision 43](roadmap.md#decisions); [spec](clock-spec.md), frozen before the build.
+
+**Built** (`stage_clock.py`): `clock_1s`, nine inputs computed from the calendar and the
+product alone: the time of day in New York time as a point on a circle, the seconds until
+the session closes and the share of it passed, whether the session is a short one, the
+seconds since the product's main market hours opened and closed and whether the row is
+inside them, and the day of the week. Main hours are 08:20 to 13:30 for the metals and
+09:30 to 16:00 for equity indices. The stage keeps no state; it learns the product from the
+contract symbol, so no shared module changed and no other stage was rebuilt. It is stored at
+ten-second ends (migration `0017`). The engine holds 1,458 features.
+
+**Checked.** Hand-checked times across a daylight-saving change, main hours by product, a
+short session, and that it is a pure function of its rows. `ingest run GC SI` added the
+stage to all 12 contracts (7,073,190 rows; every contract `current`); 22.5% of rows are
+inside the metals' main hours, which is 5 hours 10 minutes of 23. `pnpm test` at `4d387ce`:
+266 passed, none skipped.
+
+**The model with and without them** (run 13): no detectable gain, -0.005 (-0.030 to 0.022)
+at the bracket and -0.0008 (-0.0037 to 0.0021) at one minute
+([results](results.md#do-the-clock-and-session-inputs-add-skill)). Two metals with the
+same main hours do not test what the inputs are for.
+
 ## Swings and structure of RSI and of CVD (November 24, 2026)
 
 Build-order item 11, step 5 of the process ([decision 41](roadmap.md#decisions);

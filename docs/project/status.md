@@ -37,7 +37,8 @@ over the free year, and the clock becomes an input
 
 The [build order](roadmap.md#build-order), reordered November 27:
 
-1. The clock and session inputs.
+1. The original clock and session inputs: tested ([result](results.md#do-the-clock-and-session-inputs-add-skill): no
+   detectable gain on two metals). [Dated venue rules](clock-spec.md#dated-venue-clocks) now supply the training and replay clocks.
 2. Whether the minute-end result holds between minute ends.
 3. One-second values stored only where they are read, so that many products fit the disk.
 4. More products on the free year, one of each kind of market first.
@@ -46,9 +47,14 @@ The [build order](roadmap.md#build-order), reordered November 27:
 
 ## Open questions for Paul
 
-1. **Which products, and where are their files?** PL, ES, YM, and RTY are in Paul's cloud
-   storage, NQ is not downloaded. The plan wants other kinds of market too (energy, rates,
-   a currency).
+1. **Which products, in what order?** Every CME product's latest year is free. Proposed to
+   Paul on November 27, not yet confirmed: ES and NQ first, then CL; 6E, 6J, and ZN
+   downloaded but never trained on, as held-out products; grains later (their sessions have
+   a midday break); micros only for pricing fills. Rates are left out of training because
+   their price moves in whole ticks at these timeframes; the rule proposed is to train a
+   product on a timeframe only where its typical range is many spreads wide. For each
+   stage, fit one pooled model, one per kind of market, and one leaving a kind out, and let
+   that decide what is pooled.
 2. **Is the free year a moving window?** If a newer month becomes free each month, history
    grows at no cost by downloading as it does.
 3. **The evaluation for many products** in the roadmap is proposed, not confirmed: two
@@ -67,7 +73,7 @@ Smaller than a build-order item, or waiting for one.
 
 - **The current pullback over the frozen threshold** as its own feature beside `progress`
   (the deepest pullback). It needs the swing stages rebuilt; do it with the comparison codes.
-- **The horizon map with all 1,449 features** was not rerun: it takes over two hours. Run
+- **The horizon map with all 1,458 features** was not rerun: it takes over two hours. Run
   `uv run research yardstick GC SI` from a terminal.
 - **The sliding-clock control:** the same policy deciding at minute ends and at every
   second, with the first policy that is not flat.
@@ -129,11 +135,11 @@ Ingestion, its failures, and adding files: [ingestion.md](ingestion.md).
 
 - **Data:** one year of MBP-1 for GC and SI (2025-11-09 to 2026-11-05) in
   `data/databento/mbp-1/`, 27 GB, gitignored.
-- **Database:** PostgreSQL 18 (Homebrew), database `trading`, 375 GB; migrations to `0016`;
+- **Database:** PostgreSQL 18 (Homebrew), database `trading`, 375 GB; migrations to `0017`;
   `ingest plan GC SI` reports every contract `current`.
-- **Baseline:** `~/tmp_trading/fingerprint-series.txt` has 1,008 lines. A rebuild by the
+- **Baseline:** `~/tmp_trading/fingerprint-series.txt` has 1,020 lines. A rebuild by the
   same code must reproduce it.
-- **Model runs:** `research.run`; the latest yardstick run is 12. Models and each row's
+- **Model runs:** `research.run`; the latest yardstick run is 13. Models and each row's
   forecasts are in `data/models/yardstick/run-<n>/`.
 - **Services:** UI on 4400 and API on 4401 under `~/git/local-dev`.
 - `DATABENTO_API_KEY` is exported by `~/.secrets.sh`; the code does not use it yet.

@@ -70,3 +70,21 @@ def test_a_database_from_before_the_baseline_is_refused_with_its_remedy(database
         conn.commit()
         with pytest.raises(ValueError, match="folded into 0001_baseline"):
             db.migrate(conn)
+
+
+def test_clock_archive_preserves_rules_and_dated_instants_on_retry(database):
+    from backtest_runner.clock_archive import materialize
+
+    day = date(2026, 3, 16)
+    with db.connect(database) as conn:
+        db.migrate(conn)
+        result = materialize(conn, ["SI", "ES"], day, day)
+        assert result["stored"]["SI"] > result["stored"]["ES"] > 0
+        assert result["inserted"] == sum(result["stored"].values())
+        assert materialize(conn, ["ES", "SI"], day, day)["inserted"] == 0
+        found = conn.execute("""
+            SELECT o.product, r.source_zone, o.source_local_time::text,
+                   (o.scheduled_at AT TIME ZONE 'UTC')::text
+            FROM market.clock_occurrence o JOIN market.clock_rule r USING (revision,event)
+            WHERE o.event='lbma_gold_pm'""").fetchall()
+        assert found == [("SI", "Europe/London", "15:00:00", "2026-03-16 15:00:00")]

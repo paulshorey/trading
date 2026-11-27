@@ -1262,12 +1262,18 @@ source = { editable = "lib/strategy-core" }
 dependencies = [
     { name = "numba" },
     { name = "numpy" },
+    { name = "pandas" },
+    { name = "pandas-market-calendars" },
+    { name = "tzdata" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "numba", specifier = ">=0.68" },
     { name = "numpy", specifier = ">=2.3" },
+    { name = "pandas", specifier = ">=3.1" },
+    { name = "pandas-market-calendars", specifier = "==5.6.0" },
+    { name = "tzdata", specifier = "==2026.6" },
 ]
 
 [[package]]

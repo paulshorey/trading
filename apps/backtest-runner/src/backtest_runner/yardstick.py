@@ -30,7 +30,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import QuantileTransformer
-from strategy_core import targets
+from strategy_core import targets, venue_clock
 from strategy_core.pipeline import BY_NAME, StageFeatures
 
 from . import dataset, db
@@ -131,17 +131,25 @@ SESSION = frozenset(
 VOLATILITY = frozenset(
     ["atr_bps", "range_bps", "rv_bps", "rv_atr", "ret_std_bps", "bb_width_bps", "vol_bps", "chop"]
 )
-GROUPS = ("price", "flow", "book", "volatility", "swings", "series", "session")
+GROUPS = ("price", "flow", "book", "volatility", "swings", "series", "session", "clock")
 # The newest inputs: the forecast is fitted with and without each set, and the difference in
-# skill is reported with its interval (yardstick-spec.md#what-counts). By name: the stage
-# attribute `SOURCE` values that make the set (the swings of RSI and of CVD; of RSI alone).
-ADDED = {"series": ("rsi", "cvd"), "rsi_swings": ("rsi",)}
+# skill is reported with its interval (yardstick-spec.md#what-counts). Each set is the features
+# of the stages that pass its test. Earlier sets (the swings of RSI and of CVD: runs 11 and 12)
+# are no longer refitted; `added` still answers for them.
+SETS = {
+    "clock": lambda stage: stage.NAME == "clock_1s",
+    "series": lambda stage: getattr(stage, "SOURCE", None) in ("rsi", "cvd"),
+    "rsi_swings": lambda stage: getattr(stage, "SOURCE", None) == "rsi",
+}
+ADDED = ("clock",)
+# the newest set is also judged where the first run found its only predictability
+ADDED_HORIZON_S = 60
 
 
-def added(names: list[str], sources: tuple[str, ...]) -> np.ndarray:
-    """Which features come from a swing stage of one of these series."""
+def added(names: list[str], kind: str) -> np.ndarray:
+    """Which features belong to a set of `SETS`."""
     stage = StageFeatures.sources()
-    return np.array([getattr(BY_NAME[stage[n]], "SOURCE", None) in sources for n in names])
+    return np.array([bool(SETS[kind](BY_NAME[stage[n]])) for n in names])
 
 
 def group_of(name: str) -> str:
@@ -149,6 +157,8 @@ def group_of(name: str) -> str:
     stage, base = StageFeatures.sources()[name], name.rsplit(".", 1)[-1]
     if hasattr(BY_NAME[stage], "SOURCE"):  # the swings of RSI and of CVD
         return "series"
+    if stage == "clock_1s":
+        return "clock"
     if hasattr(BY_NAME[stage], "VARIANT"):
         return "swings"
     if base in SESSION:
@@ -508,7 +518,11 @@ def horizon_map(data: dict, usable: np.ndarray, log) -> dict:
     aims["bracket"] = data["y"]
     out: dict = {"features": {g: len(c) for g, c in columns.items()}, "skill": {}}
     for aim, target in aims.items():
-        known = usable & np.isfinite(target) if aim != "bracket" else usable
+        known = (
+            ((data["why"] == dataset.ELIGIBLE) & np.isfinite(target))
+            if aim != "bracket"
+            else usable
+        )
         out["skill"][aim] = {}
         for group, cols in columns.items():
             forecast, _ = walk_forward(x[:, cols], target, day, known, fit_trees)
@@ -575,7 +589,7 @@ def source_revision() -> dict:
 
 
 def code_digest() -> str:
-    digest = hashlib.sha256()
+    digest = hashlib.sha256(venue_clock.edition_digest().encode())
     for base in (ROOT / "lib/strategy-core/src", ROOT / "apps/backtest-runner/src"):
         for path in sorted(base.rglob("*.py")):
             digest.update(str(path.relative_to(ROOT)).encode())
@@ -639,8 +653,8 @@ def run(
     # without it: the same model on the other features, and the paired difference
     kept_forecasts = {"trees": forecast}
     out["added_inputs"] = {}
-    for kind, sources in ADDED.items():
-        new = added(names, sources)
+    for kind in ADDED:
+        new = added(names, kind)
         if not new.any() or new.all():
             continue
         without, _ = walk_forward(x[:, ~new], y, day, usable, fit_trees)
@@ -651,6 +665,18 @@ def run(
             "trees_less_trees_without": paired_difference(forecast, without, y, day),
         }
         log(f"trees without {kind}: fitted, {time.time() - started:,.0f} s")
+        # the same comparison on the mid-price's move over the short horizon
+        move = data["moves"][:, dataset.HORIZONS_S.index(ADDED_HORIZON_S)]
+        known = (data["why"] == dataset.ELIGIBLE) & np.isfinite(move)
+        both, _ = walk_forward(x, move, day, known, fit_trees)
+        fewer, _ = walk_forward(x[:, ~new], move, day, known, fit_trees)
+        scored = known & np.isfinite(both) & np.isfinite(fewer)  # the test months' rows
+        out["added_inputs"][kind][f"at_{ADDED_HORIZON_S}s"] = {
+            "trees": pooled_correlation(both[scored], move[scored], day[scored]),
+            "trees_without": pooled_correlation(fewer[scored], move[scored], day[scored]),
+            "trees_less_trees_without": paired_difference(both, fewer, move, day),
+        }
+        log(f"{kind} at {ADDED_HORIZON_S} s: fitted, {time.time() - started:,.0f} s")
     # one fit of the coarse trees serves them as they are and under every calibration: a
     # calibration only multiplies the forecast
     calibrated, fitted = walk_forward(
@@ -680,6 +706,7 @@ def run(
             | {
                 "names": names,
                 "ready": dataset.readiness(names),
+                "venue_clock_revision": venue_clock.EDITION,
                 "settings": settings(),
                 # what reproduces it: the commit its code was (with uncommitted changes or
                 # not), the hash of that code, and the dataset file its rows came from

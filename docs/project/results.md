@@ -14,6 +14,7 @@ August 2026, development dates only).
 
 | Question | Answer in one line | Trade dates | Run |
 | --- | --- | ---: | --- |
+| Do the clock and session inputs add skill? | No detectable gain, at the bracket or at one minute | 86 | 13 |
 | Do the RSI swings built as the mean over the phases add skill? | No detectable gain | 86 | 12 |
 | Do the first RSI swings and the CVD swings add skill? | No detectable gain | 86 | 11 |
 | How should the RSI series be read? | As the mean over the last 60 rows: no rotation noise | 39 | none |
@@ -27,6 +28,39 @@ August 2026, development dates only).
 
 See also: [roadmap](roadmap.md) for the plan and what each result means for it, and
 [build-log](build-log.md) for how things were built.
+
+## Do the clock and session inputs add skill?
+
+**Asked** ([spec](clock-spec.md), frozen before the build): does the model forecast better
+with the nine clock inputs (time of day, session progress, main market hours, day of the
+week) than without them? Same rows, target, folds, and model as run 12.
+
+**Result (November 27, 2026; run 13, 86 test dates, GC and SI).**
+
+| Forecast | Pooled rank correlation | Squared error against `flat` |
+| --- | --- | --- |
+| `trees`, with the clock inputs (1,458 features) | 0.027 (-0.044 to 0.106) | 13% higher |
+| `trees_without_clock` (the 1,449 of run 12) | 0.032 (-0.048 to 0.112) | 12% higher |
+
+| Difference with less without, paired by trade date | Value (95% interval) |
+| --- | --- |
+| At the bracket horizon | -0.005 (-0.030 to 0.022) |
+| At one minute | -0.0008 (-0.0037 to 0.0021) |
+
+**No detectable gain, at either horizon, as expected before the run.** `trees` without the
+clock inputs reproduces run 12 exactly (0.0322). By product `trees` is 0.056 for GC and
+-0.003 for SI; by month -0.101, 0.009, 0.150, 0.143. `ridge` is 0.005 (-0.072 to 0.081) and
+`trees_coarse` -0.006 (-0.088 to 0.076). All calibration slopes are zero, so the yardstick
+is still the flat forecast.
+
+**What this does and does not show.** Two metals with the same main hours, 86 dates,
+minute-end rows. It does not test what the inputs are for: letting one model tell apart
+products whose main hours differ. That needs products of another kind in the data.
+
+**A reporting error, not in the result above.** The run also printed each forecast's own
+correlation at one minute; those two numbers were computed over rows without a forecast
+and are wrong, so they are not reported. The paired difference filters such rows and is
+right. The code is fixed. Evidence: `research.run` 13, `~/tmp_trading/yardstick-clock.json`.
 
 ## Do the swings of RSI and CVD add skill?
 

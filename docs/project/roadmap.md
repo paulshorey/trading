@@ -158,11 +158,13 @@ parameter, one set of stages, the machine's baseline).
     the seconds before a close with those after the reopen.
 12. **GC and SI are the proof of concept.** Everything is built for any number of products
     and pairs. Disk space is not a design constraint.
-13. **No more years are bought; the free year is used for more products** (Paul, November
-    27, replacing the plan to download five more years of GC and SI, which costs money). The
-    most recent year of every product is free, so the model is trained on many products
-    over that one year ([decision 42](#decisions)). September 1, 2026 onward stays the final
-    holdout, and paper trading is the test after it.
+13. **One year of every product first; more years only if it looks promising** (Paul,
+    November 27). The most recent year of every CME product is included in the data plan,
+    as a one-time download, so the model is trained on many products over that year
+    ([decision 42](#decisions)). Five more years are bought only if the one-year result
+    passes [the gate](plan.md#the-gate-is-it-promising). September 1, 2026 onward is held
+    out for every product, and a few months of new data, downloaded just before live
+    trading, are the final test.
 14. **Intraday first.** Positions are flat before each close. Holding across days comes as a
     switch beside it ([decision 40](#decisions)).
 15. **Scheduled news is an input:** a table of release times known in advance gives every
@@ -258,12 +260,13 @@ parameter, one set of stages, the machine's baseline).
     model is given all three structures and what they say about each other, and it decides
     whether they must agree; no rule requires it.
 
-42. **Many products, one year each** (Paul, November 27). The model is one model for every
-    product, with no product identity among its inputs, so every product added is more
-    training data for the same model. Products are added across kinds of market (metals,
-    equity indices, energy, rates, currencies) before more of one kind, because products of
-    one kind move together and add fewer independent days. What this changes in how a
-    result is judged is [below](#how-results-are-judged).
+42. **Many products, one year each; time is held out, not products** (Paul, November 27).
+    The model is one model for every product, with no product identity among its inputs, so
+    every product added is more training data for the same model. Every product is trained
+    on. Products are added by kind of market (metals, equity indices, energy, currencies),
+    because products of one kind move together and add fewer independent days
+    ([measured](plan.md#what-the-products-are-worth-as-evidence)). What this changes in how
+    a result is judged is [below](#how-results-are-judged).
 43. **The clock is an input** (Paul, November 27). Every decision row carries where it is in
     time: the time of day, the time since the session opened and until it closes, the time
     to and from the opening and closing of the product's main market hours, and the day of
@@ -275,28 +278,24 @@ moved a set number of ATRs in favour ([named in the spec](yardstick-spec.md#name
 ## How results are judged
 
 Rewritten November 27, 2026, for one year of many products, before any product is added,
-so that no split is chosen after seeing a result. **Proposed; Paul has not confirmed the
-numbers marked so.**
+so that no split is chosen after seeing a result. The full specification is step A4 of the
+[plan](plan.md#steps).
 
 - **The unit of evidence is still the trade date.** Products trade on the same days and
   respond to the same news, so rows of different products on one date are not independent.
   Every interval resamples whole trade dates, with all products' rows of a date together.
-  More products narrow an interval only as far as they are not moving together: products of
-  five different kinds are worth perhaps two to three times the dates of one, never five.
-- **Three kinds of data.** *Development*: every product's rows from January 2 to August 31,
-  2026, walked forward by month as now (test months May to August). *Final holdout in
-  time*: September 1, 2026 onward, for every product, evaluated once. *Held-out products*
-  (proposed): two products, of kinds also present in development, that no model is fitted
-  on and nobody looks at until the final evaluation. A model that has learned something
-  general about markets should work on a product it never saw; one year gives no other way
-  to test that.
-- **A claim needs more than one product.** A result is reported pooled, by product, by kind
-  of market, and for buys and sells apart. It counts when it is above zero with its
-  interval pooled, and at or above zero for most products and for every kind (proposed: at
-  least three kinds present). One good product or side is a lead, not a result.
-- **Leave one kind out.** Beside the walk-forward fit, the model is fitted without each
-  kind of market in turn and scored on it. A model that only works on the kind it was
-  fitted on has learned that market's year, not a pattern.
+  More products narrow an interval only as far as they are not moving together.
+- **Time is held out, not products** (Paul, November 27). *Development*: every product's
+  rows from January 2 to August 31, 2026, walked forward by month (test months May to
+  August). *Holdout*: September 1, 2026 onward, for every product, evaluated once, at
+  [the gate](plan.md#the-gate-is-it-promising). *Final test*: months of new data
+  downloaded just before live trading, which nothing has seen.
+- **A claim needs more than one kind of market.** A result is reported pooled, by kind, by
+  product, and for buys and sells apart. One good product, kind, or side is a lead, not a
+  result.
+- **Three fits on the same rows:** one model for all products; one model per kind; and one
+  fitted without each kind in turn and scored on it. A model that only works on the kind
+  it was fitted on has learned that market's year, not a pattern.
 - **What is reported**, for every policy: net R and drawdown in one portfolio under the
   daily limit, at base and stressed execution; the result per trade date with a 95%
   interval from resampled trade dates; and the number of independent trade dates.
@@ -306,49 +305,13 @@ numbers marked so.**
 
 ## Build order
 
-Reordered November 27, 2026 (Paul: no more years are bought; many products on the free
-year; the clock as an input). Each item names the step of the process it advances. What is
-done is in the [build log](build-log.md).
-
-1. **The clock and session inputs: done** (November 27;
-   [record](build-log.md#the-clock-and-session-inputs-november-27-2026)). (step 1; [decision 43](#decisions)). A stage computed
-   from the calendar alone, so it rebuilds nothing: time of day in the exchange's local
-   time as a cycle, seconds since the session opened and until it closes and until the
-   forced exit, seconds to and from the open and close of the product's main market hours,
-   whether the row is inside them, the day of the week, and early-close days. The main
-   hours are a property of each product. Judged like any input, by the decision model with
-   and without it.
-2. **Does the minute-end result hold between minute ends?** (step 6.) The dataset has one
-   row a minute, at its last second, where every slower timeframe has just completed a row.
-   Add rows at the other ten-second ends, which are stored, with the minute-end rows as the
-   control.
-3. **Store one-second values only where they are read** (steps 1 to 3;
-   [decision 25](#decisions)). The database holds 375 GB for two products today. Without
-   this, eight products do not fit the disk.
-4. **More products on the free year** ([decision 42](#decisions)). In this order: one
-   product of each new kind of market first (an equity index, then energy, rates, a
-   currency), then more of a kind. Each needs its tick size and value, costs, calendar, and
-   main hours in the product table, its files validated, and an ingest of a few hours. The
-   evaluation above is switched on before the first one is scored.
-5. **The book between trades** (`book_1s`, step 1), judged at the one-minute horizon and by
-   the quality of entries, and **the scheduled-news table** ([decision 15](#decisions)).
-6. **The codes that compare the structures of price, RSI, and CVD** (step 5;
-   [decision 41](#decisions)): what each series had confirmed when price confirmed a higher
-   high or a lower low, the age of each confirmation, and "still waiting" kept apart from
-   "confirmed and disagreeing", since RSI and CVD confirm later than price. With the
-   current pullback over the threshold as a feature, which also needs the swing stages
-   rebuilt.
-7. **One portfolio across products** (step 6): one position at a time and one daily limit
-   shared by every product, needed as soon as a model trades more than one.
-8. **The swing mode** (step 6; [decision 40](#decisions)): positions held across the daily
-   break and across days, as a switch for training and trading alike. A stop is then judged
-   by the first trades after the reopen, a position is closed before its contract stops
-   being the front one, and the target follows price across sessions.
-9. **More inputs, each judged by the decision model:** structure across timeframes in one
-   code, the [pair stage](pair-design.md), indicators of indicators last, and the variants
-   the [spec](yardstick-spec.md) names.
-10. **The final evaluation** of the decision model on the holdout in time and on the
-    held-out products, once. Then paper trading on the live feed, and live trading after it.
+The order of work, step by step, with what each step needs and when it is done, is the
+[working plan](plan.md). In short: make room for many products (check the new files,
+decide which product trains on which timeframe, store one-second values only where they
+are read, freeze how many products are judged); equity indices; energy and currencies; new
+information (the book between trades, the codes comparing price, RSI, and CVD); then
+[the gate](plan.md#the-gate-is-it-promising) that decides whether more years are bought.
+What is done is in the [build log](build-log.md).
 
 ### How a policy is evaluated
 

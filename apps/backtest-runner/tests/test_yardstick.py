@@ -52,6 +52,10 @@ def test_every_feature_belongs_to_one_kind_of_input():
     assert yardstick.group_of("10m@10s.mid_cvd_atr_1.progress") == "series"
     assert yardstick.group_of("1m@1s.session_elapsed_s") == "session"
     assert yardstick.group_of("1h@1m.age_s") == "session"
+    assert yardstick.group_of("clock.tod_sin") == "clock"
+    assert yardstick.added(names, "clock").sum() == 9
+    assert yardstick.added(names, "rsi_swings").sum() == 372
+    assert yardstick.added(names, "series").sum() == 708
 
 
 def test_a_month_is_scored_by_a_model_fitted_before_its_last_earlier_session():

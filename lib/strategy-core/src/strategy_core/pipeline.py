@@ -31,6 +31,7 @@ from .engine import MarketChunk
 from .features import FeatureConfig, FeatureFrame, FeatureSpec, Unit
 from .market import NS, SessionCalendar
 from .stage_bar_1s import BarStage
+from .stage_clock import ClockStage
 from .stage_step_bar import MinuteBarStage, step_bar
 from .stage_step_candle import CandleStage, HourCandleStage, step_candle
 from .stage_step_pivot import BY_TIMEFRAME as PRICE_SCALES
@@ -67,6 +68,7 @@ STEP_STAGES: dict[str, tuple[type[Stage], ...]] = {
 STAGES: tuple[type[Stage], ...] = (
     *(STEP_STAGES[tf.name][0] for tf in TIMEFRAMES),
     *(s for tf in TIMEFRAMES for s in STEP_STAGES[tf.name][1:]),
+    ClockStage,
     *(s for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]),
 )
 BY_NAME = {s.NAME: s for s in STAGES}
@@ -84,7 +86,7 @@ STEP_ROWS = min(tf.seconds for tf in MERGED)
 STORED_ROWS = f"events+step_ends_{STEP_ROWS}s:v4"
 # The fast scales of RSI and of CVD are stored at the last second of every step row only: where
 # a slower row and the decision dataset read them. The engine computes every second.
-SPARSE_STEPS = frozenset(s.NAME for s in SERIES_SCALES[FAST_TF.name])
+SPARSE_STEPS = frozenset({*(s.NAME for s in SERIES_SCALES[FAST_TF.name]), ClockStage.NAME})
 STORED_STEPS = f"step_ends_{STEP_ROWS}s:v1"
 
 
@@ -184,6 +186,7 @@ class StageFeatures:
     # rows per second, joined row by row: the one-second timeframe's
     SECONDLY = (
         *(s.NAME for s in STEP_STAGES[FAST_TF.name][1:]),
+        ClockStage.NAME,
         *(s.NAME for s in STEP_SCALES[FAST_TF.name]),
     )
     # rows per completed step row of each merged timeframe, joined as of each second; the
@@ -198,6 +201,7 @@ class StageFeatures:
     HOURLY = STEPWISE[SLOW.name]
     PREFIX: ClassVar[dict[str, str]] = {
         **{s.NAME: tf.name for tf in TIMEFRAMES for s in STEP_STAGES[tf.name][1:]},
+        ClockStage.NAME: "clock",
         **{s.NAME: f"{tf.name}.{s.VARIANT}" for tf in TIMEFRAMES for s in STEP_SCALES[tf.name]},
     }
     AGES: ClassVar[dict[str, FeatureSpec]] = {

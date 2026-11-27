@@ -80,6 +80,7 @@ def test_the_graph_reads_only_earlier_stages():
         "candle_1h_1m",
         "stats_1h_1m",
         "vol_1m",
+        "clock_1s",
         "pivot_1s:fast_atr_0p5",
         "pivot_1s:fast_atr_1",
         "pivot_1s:fast_atr_2",
@@ -114,6 +115,7 @@ def test_the_graph_reads_only_earlier_stages():
         "candle_1m_1s": ("bar_1s",),
         "stats_1m_1s": ("bar_1s", "candle_1m_1s"),  # declared edges within tier 1
         "vol_1s": ("bar_1s", "candle_1m_1s"),
+        "clock_1s": ("bar_1s",),  # the calendar and the product; no price is read
         **{f"pivot_1s:fast_atr_{k}": fast for k in ("0p5", "1", "2", "3")},
         **{name: ("bar_1s", "candle_1m_1s") for name in series("1s", "fast")},
     }

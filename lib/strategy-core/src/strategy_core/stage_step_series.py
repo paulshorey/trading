@@ -47,6 +47,8 @@ from .timeframes import FAST, MIDDLE, SLOTS, SLOW, Timeframe
 RSI, CVD = "rsi", "cvd"
 # The series' name in a variant's name. A variant's name never changes meaning: the RSI scales
 # first stored (`<stream>_rsi_atr_<k>`) read the stored RSI row by row, so these have another.
+# What a variant's registered settings say of its series, where it is not the stored value
+SERIES = {RSI: {"series": "mean of candle rsi over rows o-59..o: each phase once, in millionths"}}
 LABEL = {RSI: "rsi_mean", CVD: "cvd"}
 # The smallest swing, in units of the series (spec): RSI points, or typical trades. Values in
 # ATRs divide by the ATR floored at half of it.
@@ -133,11 +135,7 @@ class SeriesPivotStage(Stage):
             "variant": self.VARIANT,
             "stream": self.TF.stream,
             "source": self.SOURCE,
-            "series": (
-                "mean of candle rsi over rows o-59..o (each phase once), in whole millionths"
-                if self.SOURCE == RSI
-                else "bar cvd at the row's close"
-            ),
+            **SERIES.get(self.SOURCE, {}),
             "multiplier": self.K,
             "atr": "its own: Wilder average of the window's true range of the series, per phase",
             "atr_period": self.context.features.atr_period,

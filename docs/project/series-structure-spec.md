@@ -201,3 +201,34 @@ is an interval of "with" less "without" above zero. Expected: no measurable diff
 among the three; the fix is about what the signal means, and the model test only checks it
 did no harm. No policy is replayed while the yardstick's slope is zero.
 
+**Result (November 27; run 12, 86 test dates, 223,579 test rows scored by all three).**
+
+| Forecast | Pooled rank correlation | Squared error against `flat` |
+| --- | --- | --- |
+| `trees`, with these RSI swings | 0.032 (-0.048 to 0.112) | 12% higher |
+| `trees`, with the RSI swings first built (run 11's rows, fitted again) | 0.042 (-0.033 to 0.121) | |
+| `trees_without_rsi_swings` | 0.028 (-0.052 to 0.106) | 12% higher |
+| `trees_without_series` (neither RSI's nor CVD's swings) | 0.044 (-0.033 to 0.116) | 12% higher |
+
+| Difference, paired by trade date | Value (95% interval) |
+| --- | --- |
+| These RSI swings less none | 0.004 (-0.042 to 0.045) |
+| These less the first built | -0.010 (-0.059 to 0.037) |
+| The first built less none | 0.014 (-0.035 to 0.066) |
+| RSI's and CVD's swings less neither | -0.012 (-0.056 to 0.029) |
+
+No difference is measurable, as expected: every interval spans zero. The fix changes what
+the RSI swings mean, and it did no measurable harm or good to the model. `trees` is 0.067
+for GC and -0.002 for SI; by month -0.134, 0.011, 0.174, 0.136. `ridge` fell to 0.003
+(-0.074 to 0.078) from 0.042, inside its interval. `trees_coarse` is 0.015 (-0.071 to
+0.096). All four calibration slopes are zero in every month, so the yardstick is still the
+flat forecast and no policy was replayed. Each row's forecasts are kept in
+`data/models/yardstick/run-12/forecasts.npz`. Evidence: `~/yardstick-rsi-mean.json`.
+
+**Stored** (ingest run 8, all 12 contracts `current`). On the dates above, no RSI pivot at
+any size or timeframe has its extreme exactly 60 rows after the previous one of its kind
+(0.0%; 5% to 11% before at 0.5 and 1 ATR), and the swing counts equal those measured before
+the build. The new scales are `<stream>_rsi_mean_atr_<k>`; the first ones,
+`<stream>_rsi_atr_<k>`, are retired and no view or dataset reads them. Their rows are still
+in the RSI tables and `market.pivot_event` (about half of each RSI table; 4.6 million
+events) until Paul agrees to delete them.

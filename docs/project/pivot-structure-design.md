@@ -185,7 +185,7 @@ is measured, and its threshold. RSI and CVD are built as specified in
 | Source  | Observations                                                  | Distance                    | Threshold `θ`, frozen when the extreme is set          |
 | ------- | ------------------------------------------------------------- | --------------------------- | ------------------------------------------------------ |
 | `price` | Released trades, in order; published per step row             | `10⁴ × ln(H / p)` (log-bps) | `max(k × ATR_bps, 2 × spread_bps)`                     |
-| `rsi`   | The window's RSI at each step row's close: one value per row  | `H − p` in RSI points       | `max(k × the RSI's own ATR, 2.5 points)`               |
+| `rsi`   | The mean of the last 60 rows' RSI (each phase once), per row  | `H − p` in RSI points       | `max(k × the RSI's own ATR, 0.25 points)`              |
 | `cvd`   | Running buy − sell volume at each step row's close            | `H − p` in contracts        | `max(k × the CVD's own ATR, 3 typical trades)`         |
 
 `k` is 0.5, 1, 2, or 3 for every source. A series' own ATR is computed as price's is, with
@@ -202,11 +202,14 @@ What differs for RSI and CVD:
   (`Unit.INDEX`): a low at 28 differs from one at 45. A CVD level is a count of contracts
   from wherever counting began: context only, read by its changes, never by its level.
 - **One chronological series.** The stored RSI is per phase, so consecutive rows come from
-  different phase states. Read row by row, they form one rolling RSI sampled every step.
-  The detector can confirm a swing solely because two phases retained different RSI values.
-  The fast 0.5-ATR scale confirmed two pivots per minute after trading stopped in a
-  flat-price test. The choice of RSI series for divergence is open.
-  [Reproduction on the PR](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941).
+  different phase states, each resting at its own level. Read row by row, a detector
+  confirms swings solely because two phases hold different values: the fast 0.5 ATR scale
+  confirmed two pivots a minute after trading stopped
+  ([reproduction](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941)).
+  So the series is the mean of the last 60 rows' RSI, each phase once
+  ([decided](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
+  The rule for any indicator kept per phase: average it over the phases before a zigzag
+  reads it.
 - **Own stages.** `pivot_rsi_<rows>` and `pivot_cvd_<rows>` (tier 2; inputs `bar_<rows>` and
   `candle_<window>`), one stage per scale, with their events in `market.pivot_event`.
 

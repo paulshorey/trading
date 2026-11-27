@@ -27,7 +27,12 @@ the [build log](build-log.md).
       [decision 41](roadmap.md#decisions); November 24): 24 stages,
       [spec](series-structure-spec.md),
       [record](build-log.md#swings-and-structure-of-rsi-and-of-cvd-november-24-2026).
-- [ ] **Choose the RSI signal for divergence** using the [phase comparison and flat-price tests](series-structure-spec.md#plan-for-the-rsi-signal-used-to-confirm-swings).
+- [x] **The RSI series for swings and divergence** (November 27): the mean over the 60
+      phases, chosen by the phase comparison and the flat-price tests
+      ([decided](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
+- [ ] **Delete the rows of the retired RSI scales** (`<stream>_rsi_atr_<k>`: about half of
+      each `pivot_rsi_*` table and 4.6 million events). Nothing reads them. Needs Paul's
+      agreement, then a `VACUUM`.
 - [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
       divergence at the latest highs and lows, a level one series has broken that another
       holds. Specify them first; they are a new stage, and inputs like any other.

@@ -8,7 +8,7 @@
 
 Researched November 5, 2026 (web search plus Databento's cost API for this account). Nothing
 here is implemented or measured on GC or SI; every "may contribute" below is a hypothesis to
-test. The [early-confirmation update](2026-11-05-early-confirmation-update.md) defined how to
+test. The [early-confirmation update](../../archive/research/2026-11-05-early-confirmation-update.md) defined how to
 _score_ pivot predictions against a random-walk baseline. This paper asks the other
 question: which inputs could carry information the price path does not already contain.
 It changes no recorded decision. Four proposals need Paul's decision
@@ -182,7 +182,7 @@ flag saying why, never NaN, infinity, or an invented zero.
 Conventions: "Have" means the ingredient is already stored in `bar_1s`/`bar_1m` or a tier-1
 stage (names as in `metrics.py` and `indicators.py`). "Planned" means it is in the
 [pivot/structure contract](../../project/pivot-structure-design.md) or the
-[early-confirmation update](2026-11-05-early-confirmation-update.md). "New" means not yet designed.
+[early-confirmation update](../../archive/research/2026-11-05-early-confirmation-update.md). "New" means not yet designed.
 Every metric is a ratio, a log ratio, a distance in ATR or basis points, a count, or a time,
 and follows the row-window rules: rolling windows over rows `o − 59 … o`, same-phase
 comparisons at `o − 60`, `o − 120`, …. "Leg" is the current swing since the last confirmed
@@ -279,7 +279,7 @@ A1, A7, and C3 cover what it tries to measure.
   over every row dilutes the signal.
 - **Score against the random-walk baseline.** At a given progress, a low holds with a known
   probability if price is random
-  ([early-confirmation update, section 2](2026-11-05-early-confirmation-update.md#2-two-random-walk-baselines-every-model-must-beat)).
+  ([early-confirmation update, section 2](../../archive/research/2026-11-05-early-confirmation-update.md#2-two-random-walk-baselines-every-model-must-beat)).
   A metric is useful only if it moves that probability, measured as Brier skill over the
   baseline.
 - **Add families one at a time.** Price only, then + aggression (A), + absorption (B), +
@@ -311,7 +311,7 @@ A small event study that runs before PR F, without new storage or data:
    baseline as an offset. Fit quintile edges and the model on November–March, purge one
    session, and score only April–August (Brier skill and quintile rates). Fixed parameters: N = 60 rows for B1, B2, and B7 (B1's earlier slope over the
    leg's rows before those, at least 30), p = 5 for A3, 20 earlier same-phase periods for
-   D3's baseline, and the 60-row `1m@1s` window extremes for F1. Labels follow the [PR F label](../../project/plan-1h-and-pivots.md#35-labels-and-benchmark-pr-f)
+   D3's baseline, and the 60-row `1m@1s` window extremes for F1. Labels follow the [PR F label](../../archive/plan-1h-and-pivots-original.md#35-labels-and-benchmark-pr-f)
    at its defaults: reversal barrier R = 1, invalidation buffer C = 0.25 (both in θ), and
    horizon K = 300 second rows. The target is reversal (1) against invalidation or timeout
    (0); session-end and unknown outcomes are excluded and counted. The baseline offset is the

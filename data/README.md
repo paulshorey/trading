@@ -26,5 +26,5 @@ uv run research db register        # record files in market.source_file
 uv run research ingest plan GC SI  # extend stored rows with the new sessions
 ```
 
-See [historical data](../docs/project/data.md) for what the files contain and how they were
+See [historical data](../docs/project/ingestion.md#the-data-on-this-machine) for what the files contain and how they were
 verified, and [ingestion](../docs/project/ingestion.md) for the rows built from them.

@@ -1,10 +1,11 @@
 # Paired products: reading two markets at once
 
-Status: design, not implemented. On November 6, 2026, Paul decided that stages may read two
-products at once, starting with the pairs GC + SI and ES + NQ
+Not built. This is a design: no pair stage, pair table, or partner setting exists in the code.
+On November 6, 2026, Paul decided that stages may read two products at once, starting with
+the pairs GC + SI and ES + NQ
 ([research, section 8](../research/pivots/2026-11-05-order-flow-predictors.md#8-decisions)).
-The technical details below are derived from that decision and from the existing pipeline
-rules ([feature pipeline](feature-pipeline.md)).
+The details below follow from that decision and from the pipeline rules
+([feature pipeline](feature-pipeline.md)). Only GC and SI data are on this machine.
 
 ## Why
 
@@ -33,67 +34,52 @@ No row is ever matched by clock time.
 
 Pair rows describe the **partner** relative to the **target**, the product being traded:
 `GC|SI`, `SI|GC`, `ES|NQ`, and `NQ|ES`. A model that trades GC reads GC's own stages plus
-the `GC|SI` rows. Storing both directions doubles the rows. That is small next to the second
-tables ([decision 5](plan-1h-and-pivots.md#6-decisions)). In
-exchange, every feature has a single meaning from the trader's side.
+the `GC|SI` rows. Storing both directions doubles the rows, which is small next to the second
+tables ([decision 5](../archive/plan-1h-and-pivots-original.md#6-decisions)), and gives every feature one meaning
+from the trader's side.
 
 ## Rolls and warm-up
 
-GC and SI roll on different months, so the pair's contracts change whenever either product
-rolls. Each combination of contracts is built and stored separately, keyed
-`(target_contract_id, partner_contract_id, slot_ordinal, end_ns)`, just as single-product
-rows are keyed by contract:
+GC and SI roll on different months, so each combination of contracts is built and stored
+separately, keyed `(target_contract_id, partner_contract_id, slot_ordinal, end_ns)`:
 
 - A combination is built for every session where it is the front pair, and for its lead
-  sessions before that. It starts at the later of the two contracts' first lead session.
-- Within a combination, each leg's values come from one delivery month. A roll of either
-  leg starts a new combination, which was already warmed by its lead sessions. Delivery
-  months are never mixed.
-- The pair stage's own warm-up is derived from its parameters, like every stage's. The pair
-  planner derives the lead it needs (the longest leg input's warm-up plus the pair
-  warm-up). Forty sessions is the floor, not a cap: if the derived lead is longer, the
-  planner extends the leg contracts' spans and asks for the rebuild, as the single-product
-  planner does.
+  sessions before that, starting at the later of the two contracts' first lead session. A
+  roll of either leg starts a new combination, already warmed by its lead sessions.
+  Delivery months are never mixed.
+- The pair stage's warm-up is derived from its parameters, like every stage's: the longest leg
+  input's warm-up plus the pair warm-up. Forty sessions is the floor, not a cap.
 - `market.continuous_pair_1m` (and later `_1s`) takes every session's rows from the
-  combination (front target, front partner), mirroring the single-product continuous views.
+  combination (front target, front partner).
 
 ## Read rules for pair stages
 
 These extend the [read rules](feature-pipeline.md#tiers-calculations-in-dependency-order):
 
 1. A pair stage reads only single-product stages of the same resolution, at the same
-   `slot_ordinal`, of the two contracts of its combination. Rule 2 still holds: a value
-   fixed inside a row (such as a frozen pivot threshold) is read from row `o − 1`.
-2. Both legs publish row `o` at its close, under the same trade-assignment timing, so pair
-   row `o` is published when both legs' row `o` has closed. Live, both products arrive on
-   one Databento subscription, and the pair row waits for the slower leg.
+   `slot_ordinal`, of the two contracts of its combination. A value fixed inside a row (such
+   as a frozen swing threshold) is read from row `o − 1`.
+2. Pair row `o` is published when both legs' row `o` has closed, under the same
+   trade-assignment timing. Live, both products arrive on one Databento subscription.
 3. Missing partner data makes every partner feature NULL. A quiet (covered, no-trade)
-   partner row is not missing: it keeps every value its own stages define there, with
-   carried prices as in [decision 1](plan-1h-and-pivots.md#6-decisions), plus the
-   partner's status and age. Each pair feature can still be NULL under its own declared
-   condition (no sided volume, flat returns, the target not at an extreme). Missing data
-   is never filled in or inferred.
-4. Single-product stages never read pair stages, so a single-product rebuild never depends
-   on another product. A pair stage becomes stale when either leg's input stage changes.
-5. Across delivery months of one product: still never.
+   partner row is not missing: it keeps every value its own stages define, plus the partner's
+   status and age. Missing data is never filled in or inferred.
+4. Single-product stages never read pair stages. A pair stage becomes stale when either
+   leg's input stage changes.
 
 ## Code shape
 
 - `PairChunk(target, partner)`: two `MarketChunk`s covering the same `(start, end]`.
-- `PairStage`: like `Stage`, but with inputs named by leg (`target:candle_1h_1m`,
-  `partner:vol_1m`). `process(pair_chunk, target_products, partner_products)` returns the
-  pair rows.
-- `PairPipeline`: runs each leg's existing `Pipeline`, then the pair stages in order. The
-  `Engine` takes an optional partner. Strategy features are the target's features plus the
-  pair stage's features. A second-resolution decision reads `pair_1m` only through an as-of
-  join on availability: the latest completed pair minute, with its age, as for `1h@1m`
-  inputs. Execution and fills still concern the target only.
+- `PairStage`: like `Stage`, with inputs named by leg (`target:candle_1h_1m`,
+  `partner:vol_1m`).
+- `PairPipeline`: runs each leg's existing `Pipeline`, then the pair stages. The `Engine`
+  takes an optional partner; a second-resolution decision reads `pair_1m` as the latest
+  completed pair minute, with its age. Execution and fills still concern the target only.
 - Run specs gain `partner: SI`. `uv run research verify SPEC` checks that per-second and
-  whole-session chunking give identical pair rows, as for single products.
-- Ingest: `uv run research ingest pairs GC:SI ES:NQ` builds pair rows from stored leg rows.
-  The plan refuses if a leg's input stages are not current for the sessions it needs.
-- Scale invariance: a new test multiplies each leg's prices by different factors (and each
-  leg's sizes separately). Every pair feature must stay unchanged.
+  whole-session chunking give identical pair rows. `uv run research ingest pairs GC:SI ES:NQ`
+  builds pair rows from stored leg rows and refuses if a leg's input stages are not current.
+- Scale invariance: a test multiplies each leg's prices by different factors (and each leg's
+  sizes separately); every pair feature must stay unchanged.
 
 ## First stage: `pair_1m`
 
@@ -103,30 +89,45 @@ normalized by each leg's own ATR or is a ratio. Every ATR-normalized column is N
 a "flat volatility" state, whenever the target's or the partner's ATR is zero (stored as 0,
 not NULL, for a fully flat lookback):
 
-| Column                | Definition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Unit    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
-| `partner_ret_atr`     | Partner's `1h@1m` window return ÷ partner's ATR                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ATR     |
-| `rel_ret_atr`         | Sum of the target's common-sample minute returns (see `ret_corr_1h`) in target ATR − the same for the partner in partner ATR, so both legs cover the same minutes; NULL below 30 common returns                                                                                                                                                                                                                                                                                                        | ATR     |
-| `ret_corr_1h`         | Correlation of the two legs' minute returns over their common sample: the returns ending at the same `slot_ordinal` that both legs define inside the window (at most 59; each leg's returns start at its first observed close, as in `stats_1h_1m`). NULL with an "insufficient overlap" state below 30 common returns, and with a "flat" state when either leg's common returns have zero variance                                                                                                    | ratio   |
-| `beta_resid_atr`      | Each leg's minute returns divided by its own ATR (both in bps), on the same common sample as `ret_corr_1h`. β = cov(target, partner) ÷ var(partner) (ordinary least squares with an intercept, i.e. mean-centered). Residual = the sum of the target's common normalized returns − β × the sum of the partner's (the intercept is not subtracted), so both legs cover the same minutes. NULL below 30 common returns, and with a "flat" state when the partner's normalized returns have zero variance | ATR     |
-| `nonconf_low_atr`     | When the target is within 0.1 ATR of its window low: partner's distance above its own window low, in partner ATR; NULL otherwise                                                                                                                                                                                                                                                                                                                                                                       | ATR     |
-| `nonconf_high_atr`    | Mirror for highs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ATR     |
-| `partner_delta_ratio` | Partner's window (buy − sell) ÷ (buy + sell), as `delta_ratio`; NULL when the window has no sided volume                                                                                                                                                                                                                                                                                                                                                                                               | ratio   |
-| `partner_status`      | Partner row status (complete, quiet, missing)                                                                                                                                                                                                                                                                                                                                                                                                                                                          | context |
-| `partner_age_s`       | Scheduled-open seconds from the partner's latest trade (`bar_1m.last_at_ns`, carried in the pair stage) to the row's end; reset at gaps and session opens                                                                                                                                                                                                                                                                                                                                              | seconds |
+| Column                | Definition (details below the table)                                         | Unit    |
+| --------------------- | ---------------------------------------------------------------------------- | ------- |
+| `partner_ret_atr`     | Partner's `1h@1m` window return over the partner's ATR                       | ATR     |
+| `rel_ret_atr`         | Target's common-sample return in target ATR minus the partner's in its ATR   | ATR     |
+| `ret_corr_1h`         | Correlation of the two legs' minute returns over their common sample         | ratio   |
+| `beta_resid_atr`      | Target's return not explained by the partner, on the common sample           | ATR     |
+| `nonconf_low_atr`     | Target near its window low: the partner's distance above its own low         | ATR     |
+| `nonconf_high_atr`    | Mirror for highs                                                             | ATR     |
+| `partner_delta_ratio` | Partner's window (buy − sell) ÷ (buy + sell)                                 | ratio   |
+| `partner_status`      | Partner row status (complete, quiet, missing)                                | context |
+| `partner_age_s`       | Scheduled-open seconds since the partner's latest trade (`bar_1m.last_at_ns`) | seconds |
 
-The 0.1-ATR band and the use of window extremes (rather than confirmed pivots) are a first
-version. After PR D, P3 replaces them with the partner's pivot state.
+- **Common sample.** The minute returns ending at the same `slot_ordinal` that both legs define
+  inside the window (at most 59; each leg's returns start at its first observed close, as in
+  `stats_1h_1m`). `rel_ret_atr`, `ret_corr_1h`, and `beta_resid_atr` are NULL below 30 common
+  returns; `ret_corr_1h` has an "insufficient overlap" state then and a "flat" state when
+  either leg's common returns have zero variance.
+- **`rel_ret_atr`** is the sum of the target's common-sample minute returns in target ATR minus
+  the same for the partner in partner ATR, so both legs cover the same minutes.
+- **`beta_resid_atr`**: each leg's minute returns are divided by its own ATR (both in bps) on the
+  common sample. β = cov(target, partner) ÷ var(partner) (least squares with an intercept).
+  The residual is the sum of the target's common normalized returns − β × the sum of the
+  partner's (the intercept is not subtracted). NULL, with a "flat" state, when the partner's
+  normalized returns have zero variance.
+- **`nonconf_*_atr`:** set when the target is within 0.1 ATR of its window low (high), in
+  partner ATR; NULL otherwise.
+- **`partner_delta_ratio`** is NULL when the window has no sided volume. `partner_age_s` resets
+  at gaps and session opens.
 
-## Pull requests
+The 0.1-ATR band and the use of window extremes (rather than confirmed swings) are a first
+version; the partner's swing state replaces them (step 3 below).
 
-- **P1:** the framework (pair registry and calendar check, `PairChunk`, `PairStage`,
-  `PairPipeline`, engine and spec support, verify, ingest, the combination builder), stage
-  `pair_1m`, its migration and continuous view, and the scale-invariance test for pairs.
-- **P2:** `pair_1s`, the same features on `1m@1s` rows.
-- **P3, after PRs D and E:** partner pivot state and events: confirmations, higher lows and
-  lower highs, breaches and reclaims, and true non-confirmation at confirmed pivots.
+## Order of work
 
-P1 touches the pipeline and the engine but no single-product stage, so it can be built
-alongside PR D. Whichever merges second renumbers its migration before applying it to
-`trading`.
+1. The framework (pair registry and calendar check, `PairChunk`, `PairStage`, `PairPipeline`,
+   engine and spec support, verify, ingest, the combination builder), stage `pair_1m`, its
+   migration and continuous view, and the scale-invariance test for pairs. It touches the
+   pipeline and the engine but no single-product stage.
+2. `pair_1s`: the same features on `1m@1s` rows.
+3. Partner swing state and events, from the rule-based swings of the partner: confirmations,
+   higher lows and lower highs, breaches and reclaims, and true non-confirmation at
+   confirmed swings. This replaces the first version's 0.1-ATR band and window extremes.

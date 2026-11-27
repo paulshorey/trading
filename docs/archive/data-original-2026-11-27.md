@@ -1,5 +1,8 @@
 # Historical data
 
+Historical: the full text of data.md, since merged into ingestion.md as it stood on November 27, 2026, before it was
+shortened. Kept so that no recorded detail is lost; links in it may no longer resolve.
+
 Status: the DBN file catalog, contract selection, session calendars, one-second and
 one-minute base bars, and per-session quality checks are implemented
 (`apps/backtest-runner`). PostgreSQL holds the file catalog, and `research ingest` stores

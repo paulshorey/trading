@@ -234,7 +234,7 @@ minutes.
 - Futures keep actual contract identities. Warm up a new contract's states before
   trading it, or reset them explicitly at the roll. A product's continuous series takes
   each session from its front contract with that contract's own states, never a merge
-  of contracts ([continuous series](../project/ingestion.md#continuous-series-per-product)).
+  of contracts ([continuous series](../project/ingestion.md#continuous-series)).
 
 ## 8. Backtesting
 
@@ -251,7 +251,7 @@ minutes.
 
 - Train one model for all contracts and phases. Every row's features and outcome come
   from one contract; rows from all contracts' front sessions are pooled, and no row
-  spans a roll ([training across contracts](../project/handoff.md#training-across-contracts-decided-november-2-2026)).
+  spans a roll ([training across contracts](../project/ingestion.md#continuous-series)).
 - Train one model, not 60. Each decision row holds the current phase's features,
   their statuses, and their ages. Store the phase as provenance; using it as an
   input is a separate experiment.

@@ -1,50 +1,54 @@
 # Pivot and market-structure contract
 
-Proposed November 3, 2026, following the review of PR #66. Implemented for the price source in
-PR D on November 16, 2026 (`strategy_core/swings.py`;
-[what was built](plan-1h-and-pivots.md#36-implemented-in-pr-d-price-swings)); the RSI source,
-tier 3, and the benchmark are not built. Read the
-[agent handoff](pivot-detection-handoff.md) and [research](../research/pivots/2026-11-03-reviewed-findings.md).
-The [stage/minute/pivot plan](plan-1h-and-pivots.md#3-pivot-and-structure-design)
-governs the observations (the trade path), thresholds and their inputs, segments, price
-domain, ages, storage, and labels. This contract governs structure semantics: classes,
-trend, provisional relations, breaches, and their field names. Where both cover a point,
-they must agree; an _epoch_ here is a plan _segment_.
+This contract defines the swings and structure that the code stores for price, RSI, and
+CVD (`strategy_core/swings.py`, `stage_step_pivot.py`, `stage_step_series.py`). The swings
+are computed by rule only: no model predicts a reversal. The
+[design notes](plan-1h-and-pivots.md#3-pivot-and-structure-design) govern the observations
+(the trade path), thresholds and their inputs, segments, price domain, ages, and storage.
+This contract governs structure semantics: classes, trend, provisional relations, breaches,
+and their field names. Where both cover a point, they agree; an _epoch_ here is a design-note
+_segment_. The [research](../archive/research/2026-11-03-reviewed-findings.md) behind the
+design is kept for reference.
 
 ## One chronological swing history per contract, stream, and scale
 
-| Family | Detector observations                           | Threshold normalizer                | Initial multipliers |
-| ------ | ----------------------------------------------- | ----------------------------------- | ------------------- |
-| Fast   | Released trades; state published per second row | Available same-contract `1m@1s` ATR | 0.5, 1, 2           |
-| Slow   | Released trades; state published per minute row | Available same-contract `1h@1m` ATR | 0.5, 1, 2           |
+A swing history is kept for each contract, each timeframe (stream), and each scale. A scale
+is a multiple of that timeframe's ATR:
 
-These six scales follow the [recorded decisions](plan-1h-and-pivots.md#6-decisions).
-Name them by stream and multiplier, such as `fast_atr_0p5` and `slow_atr_2`. Each scale
-is a variant row (`variant_id`) whose registry entry holds its stream, multiplier,
-reclaim window `W` (it changes which reclaim events the detector emits), threshold
-normalizer (initially ATR(14) from the tier-1 candle; later variants may use the
-[volatility tier](plan-1h-and-pivots.md#7-volatility-tier-atr-family)), and spread floor;
-include the registry version in provenance. Each has its own state,
-but **no phase key**. Never compare pivots across contracts, streams, or scales.
+| Timeframe | Detector observations                             | Threshold normalizer                    | Multipliers      |
+| --------- | ------------------------------------------------- | --------------------------------------- | ---------------- |
+| `1m@1s`   | Released trades; state published per second row   | Available same-contract `1m@1s` ATR     | 0.5, 1, 2, 3     |
+| `10m@10s` | Released trades; state published per 10-second row | Available same-contract `10m@10s` ATR | 0.5, 1, 2, 3     |
+| `1h@1m`   | Released trades; state published per minute row   | Available same-contract `1h@1m` ATR     | 0.5, 1, 2, 3     |
+
+That is four multiples on three timeframes, twelve scales. Name them by timeframe and
+multiplier, such as `fast_atr_0p5`, `mid_atr_1`, and `slow_atr_2`. Each scale is a variant
+row (`variant_id`) whose registry entry holds its stream, multiplier, reclaim window `W`
+(it changes which reclaim events the detector emits), threshold normalizer (ATR(14) from the
+tier-1 candle; later variants may use the
+[volatility family](plan-1h-and-pivots.md#7-the-volatility-family)), and spread floor;
+the registry version is part of provenance. Each scale has its own state, but **no phase
+key**. Never compare pivots across contracts, timeframes, or scales.
 
 The threshold determines the minimum reversal magnitude. Sampling determines which
-observations can trigger it and when. A large threshold often produces longer swings,
-but does not guarantee an hour/day duration. `1m@1s` and `1h@1m` identify the ATR
-context and the publication cadence, not a promise about the duration of the swing.
+observations can trigger it and when. A large threshold often produces longer swings, but
+does not guarantee an hour or day duration. `1m@1s` and `1h@1m` identify the ATR context
+and the publication cadence, not a promise about the duration of the swing.
 
-ATR still follows the existing per-phase indicator rules. A candidate's threshold inputs
-come from the previous completed row, never the row its extreme falls in: for fast
-scales the previous second's `1m@1s` ATR and last sampled spread; for slow scales the
-latest previously completed minute's `1h@1m` ATR and that minute's last sampled spread. That does not create
-60 swing histories: the detector consumes every released trade in one sequence. Slow state is stored only in `pivot_1m`; second decision rows read it
-through an as-of join on `available_at <= decision_at`, holding the latest
-completed-minute state and reporting its age/source ordinal. Do not reprocess
-that held state or emit its confirmation again on every second.
+ATR still follows the per-phase indicator rules. A candidate's threshold inputs come from
+the previous completed row, never the row its extreme falls in: for fast scales the
+previous second's `1m@1s` ATR and last sampled spread; for slow scales the latest
+previously completed minute's `1h@1m` ATR and that minute's last sampled spread. That does
+not create 60 swing histories: the detector consumes every released trade in one sequence.
+Slow state is stored only in `pivot_1m`; second decision rows read it through an as-of join
+on `available_at <= decision_at`, holding the latest completed-minute state and reporting
+its age and source ordinal. Do not reprocess that held state or emit its confirmation
+again on every second.
 
 The stored detector replays the engine's released trades in order
-([plan 3.1](plan-1h-and-pivots.md#31-input-stream)), because a bar's high, low, or close
-cannot show every crossing. A close-stream detector (one observation per bar close) is a
-benchmark baseline only; it is not stored and must not be called exact.
+([design notes 3.1](plan-1h-and-pivots.md#31-input-stream)), because a bar's high, low, or
+close cannot show every crossing. A detector that reads one observation per bar close is
+not exact and is not stored.
 
 ## Directional change and availability
 
@@ -69,9 +73,10 @@ establishes a direction before claiming a completed incoming/outgoing swing; the
 initial seed is not a confirmed pivot. Retain exact fixed-point reference prices in
 data context and normalized values in features.
 
-The published candidate `progress` is the opposite excursion divided by its frozen
-threshold, clipped to `[0, 1]`. A crossing can overshoot 1; retain that displacement
-on the confirmation event. Publish post-update state, so after confirmation the old
+The published candidate `progress` is the deepest pullback since the running extreme,
+divided by the frozen threshold, clipped to `[0, 1]`. It is not a probability. The
+current distance from the extreme, in ATRs, is `ext_dist_atr`. A crossing can overshoot 1;
+retain that displacement on the confirmation event. Publish post-update state, so after confirmation the old
 candidate is gone and the new leg starts at zero progress. The event retains the
 confirmed candidate's reference, threshold, progress, extreme ordinal/time,
 confirmation ordinal/time, and `available_at`. Never write the new classification
@@ -157,7 +162,7 @@ two sets of sums for the open leg: through its running extreme, and since that e
 When a strict new extreme replaces the running one, the since-extreme sums fold into the
 through-extreme sums; on confirmation the since-extreme sums seed the new leg. Each leg
 records its start and extreme ordinals and its sums of volume, sided volume, and buy −
-sell volume. Tier 3 forms ratios from them; raw sums are data context, not features.
+sell volume. Ratios formed from them (such as `leg_delta_ratio`) are features; raw sums are data context.
 
 ## Coverage, closures, and resets are part of the state contract
 
@@ -207,7 +212,7 @@ What differs for RSI and CVD:
   confirmed two pivots a minute after trading stopped
   ([reproduction](https://github.com/paulshorey/trading/pull/103#issuecomment-7182430941)).
   So the series is the mean of the last 60 rows' RSI, each phase once
-  ([decided](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
+  ([decided](results.md#how-should-the-rsi-series-be-read)).
   The rule for any indicator kept per phase: average it over the phases before a zigzag
   reads it.
 - **Own stages.** `pivot_rsi_<rows>` and `pivot_cvd_<rows>` (tier 2; inputs `bar_<rows>` and
@@ -216,125 +221,39 @@ What differs for RSI and CVD:
 More sources (MACD histogram, other oscillators) can be added as stages that declare the
 same three things.
 
-## Tier 3: structure signals
+## Failed breaks (sweeps)
 
-These combine structure (tier 2) with indicators and volatility (tier 1) in the
-[pipeline's](feature-pipeline.md) third tier (`signal_1s`, `signal_1m`). Per-scale signals
-are variant rows like the scales; cross-scale summaries are one row per slot. All are
-normalized, NULL when an input is undefined, and available with the row that publishes
-them.
+After a breach of a confirmed low (`break_down`), a trade back
+above that low within `W` scheduled-open rows, before a new low is confirmed, is a
+reclaim (`reclaim_low`; `reclaim_high` for highs): the classic stop-run that reverses. Its
+event stores `depth_atr`, the deepest observation beyond the level from the breach through
+the reclaim, in the ATR snapshot of the breached pivot. Within one trade, breaches and
+reclaims are evaluated against the references known before that trade, and only then
+confirmations: a trade that both reclaims the old low and confirms a new, lower low emits
+the reclaim first. `W` is a scale parameter and part of that scale's identity (60 rows for
+the `1m@1s` scales, 30 for `10m@10s`, 15 for `1h@1m`). Breaches and reclaims need the trade
+order inside a row, so the detector, which replays the trades, emits them as events.
+Nothing reconstructs paths from aggregated rows.
 
-Persistence: values about the open candidate (pullback quality) update every row. Values
-fixed by an event (divergences at a confirmed pivot, the latest sweep) **hold** on every
-later row until the next event of the same kind replaces them or an epoch reset clears
-them, and each has an age column (`*_event_age_s`, in scheduled-open rows) so a model sees
-how fresh it is. The event tables hold the one-time pulses.
+## Storage
 
-ATR snapshots: every value "in ATR" about a leg uses the ATR frozen with that leg's ending
-extreme (for the open leg, its running extreme's snapshot), as stored on the event. No
-leg value uses the publication row's current ATR.
+Persist the scale/configuration/builder identity, contract, epoch, candidate and comparator
+IDs, normalized distances and deltas, progress, confirmed classes, trend, provisional
+flags, breach references and ages, and coverage and readiness. Raw levels belong in event
+and data context. Declare units: distances and deltas in `Unit.ATR`, threshold in
+`Unit.BPS`, progress and trend in `Unit.RATIO`, booleans in `Unit.FLAG`, and elapsed time
+in `Unit.SECONDS`. Use NULL when undefined. Row ordinals and IDs are metadata, and elapsed
+wall time is kept apart from scheduled-open age. Every scale's state is checkpointed in
+shared strategy-core code. Future-looking labels are stored apart from features.
 
-**Pullback quality**, for the open candidate and for each confirmed low (mirrored for
-highs). The _impulse_ is the last completed leg toward the comparator's opposite pivot,
-and the _pullback_ is the leg from that pivot to the candidate low. A leg's duration is
-its row count, inclusive: `end ordinal − start ordinal + 1`, where start and end are the
-rows of its starting and ending extreme trades. A leg inside one row has duration 1, so
-no ratio below divides by zero:
+## Not built
 
-- `pullback_depth`: pullback size ÷ impulse size, clipped to 0–2 (a retracement ratio;
-  above 1 means the low is no longer higher).
-- `pullback_time_log`: `log(pullback rows ÷ impulse rows)`, clipped to ±3.
-- `pullback_volume_log`: `log` of volume per row in the pullback ÷ in the impulse, clipped
-  to ±3 (light volume on pullbacks is the classic healthy-trend pattern).
-
-The unclipped ratios are stored on the events as context, not features.
-
-- `pullback_delta_ratio` and `impulse_delta_ratio`: buy − sell over sided volume in each
-  leg.
-- `speed_ratio_log`: `log` of the pullback's speed ÷ the impulse's speed (size per row of
-  duration), clipped to ±3. Sizes (`leg_atr`, `prev_leg_atr`, in ATR) and durations
-  (`leg_age_s`, in seconds) stay separate features with their own units.
-
-**Divergence at confirmed pivots**, compared with the previous same-kind pivot:
-
-- `low_cvd_change_ratio`: the change in cumulative buy − sell volume between the two lows,
-  ÷ sided volume between them (−1 to 1). Price making a lower low while this rises is
-  absorption, a classic bullish divergence; mirror for highs (`high_cvd_change_ratio`).
-- `low_rsi_change`, `high_rsi_change`: the change in the tier-1 RSI between the two
-  pivots' extreme rows, in RSI points ÷ 100 (`Unit.RATIO`, −1 to 1). Each value was
-  available at its row, so the comparison is causal once the newer pivot confirms.
-- **Structural divergence** (with RSI structure, below): `rsi_low_class`, the class of
-  the RSI low matched to each confirmed price low (+1 higher low, −1 lower low, 0 equal,
-  NULL when none matches), and `rsi_high_class` for highs. The match is the latest
-  confirmed RSI low, of the declared RSI variant, whose extreme row lies between the price
-  low's preceding confirmed high and the price low's confirmation. A price lower low
-  with an RSI higher low is the classic bullish divergence; a price higher high with an
-  RSI lower high, the bearish one. Each pairing of price and RSI variants is declared in
-  the summary's variant set.
-
-**Failed breaks (sweeps).** After `break_down` of a confirmed low, a trade back above
-that low within `W` scheduled-open rows, before a new low is confirmed, is a `reclaim`.
-Within one trade, breaches and reclaims are evaluated against the references known
-before that trade, and only then confirmations: a trade that both reclaims the old low
-and confirms a new, lower low emits the reclaim first. It is
-the classic stop-run below a low that reverses. The fields are `reclaim_age_s` and
-`sweep_depth_atr`: the distance from the breached low to the lowest trade from the
-breaching trade through the reclaiming trade, in the ATR snapshot of the breached low's
-event. Highs mirror this. `W` is a
-pivot-variant parameter, part of that variant's identity (initially 60 rows for fast
-scales and 15 for slow). Breaches and
-reclaims need the trade order inside a row, so the pivot detector (tier 2), which replays
-the trades, detects them and emits `breach` and `reclaim` events with their depth and
-ordinals. Tier 3 reads those events; it never reconstructs paths from aggregated rows.
-
-**Location:** `range_pos`, the current price within the latest confirmed low–high range,
-clipped to 0 (at or below the low) through 1 (at or above the high). A breach is measured
-separately: `beyond_high_atr` and `beyond_low_atr`, the distance beyond the latest
-confirmed high or low in the high's or low's ATR snapshot, 0 inside the range.
-
-**Across scales** (one row per slot): each summary declares the variant set it covers, as
-part of its identity, so adding a scale never silently changes it; a new version that
-includes the scale rebuilds the summary rows. Initially the set is the six scales of the
-fixed grid. The summaries are the number of fast scales with `trend = +1` and with
-`trend = −1`, the same for slow scales (as of the latest completed minute on second
-rows), and the number of scales with a provisional HL or LH. A model learns the
-interactions, such as a fast higher low inside a slow uptrend, from these and the
-per-scale fields; no combination is hard-coded.
-
-**Later variants**, judged by the benchmark and added as variant rows:
-
-- A time-or-magnitude confirmation that also confirms after `N` rows without a new extreme
-  once the reversal reaches a smaller fraction of θ. It catches quiet, sideways turns
-  that pure directional change confirms late.
-- Equal-high and equal-low zones with a tolerance in ATR (double tops and bottoms).
-- Thresholds normalized by time-of-day or directional ATR.
-
-## Build and store the fixed grid before comparing predictive quality
-
-After the planned stage/version work and minute/hourly inputs, implement the
-deterministic detector and structure together, validate synthetic/recorded fixtures,
-then pilot and materialize all six scales. `pivot_1s` stores fast state per second and
-`pivot_1m` stores slow state per minute; second rows join slow state as of its
-availability instead of storing copies; the sparse pivot-event table retains native
-source ordinals and the immutable confirmed history. Do not emit duplicate slow events
-when dense second rows repeat the minute state. Follow the related plan's stage
-boundaries; no need to rebuild unrelated second-row calculations to add pivot storage.
-
-Persist scale/configuration/builder identity, contract, epoch, candidate/comparator IDs,
-normalized distances and deltas, progress, confirmed classes, trend, provisional flags,
-breach references/ages, and coverage/readiness. Raw levels belong in event/data context.
-Declare units: distances/deltas in `Unit.ATR`, threshold in `Unit.BPS`, progress/trend
-in `Unit.RATIO`, booleans in `Unit.FLAG`, and elapsed time in `Unit.SECONDS`. Use NULL
-when undefined. Retain row ordinals/IDs as metadata and separate elapsed wall time
-from scheduled-open age. Persist/checkpoint every scale's state in shared strategy-core.
-
-The benchmark then compares stored variants and challengers, using the independent
-reference labels and chronological validation in the research. It governs quality
-claims and later selection/promotion, not whether deterministic metrics may be stored.
-An ML model can receive the predeclared scales; choosing scales or expanding the grid
-using test outcomes would still leak evaluation information. Store future-looking
-labels separately from contemporaneous features. Keep the fixed initial grid version
-for reproducibility if later versions add or retire scales.
+The comparison of the structure of price, RSI, and CVD (for example a price lower low
+against an RSI higher low, or cumulative-delta change between two lows) is planned as
+comparison codes ([roadmap decision 41](roadmap.md#decisions)). No stage computes it yet.
+The earlier design of `signal_*` stages (pullback quality, divergences, cross-scale
+counts) was never built and is dropped. The reversal benchmark was withdrawn on
+November 23, 2026.
 
 ## Required implementation examples and checks
 
@@ -352,19 +271,15 @@ for reproducibility if later versions add or retire scales.
 | Missing interval, quiet interval, roll, closure                   | Distinct behavior from the state table above                                                   |
 | Lows HL, HL, EL, LL, LL                                           | `low_run` = 1, 2, 0, −1, −2                                                                    |
 | Break below a confirmed low, back above it within `W`             | One `reclaim` with its age and sweep depth; none if a new low confirms first or after `W` rows |
-| Price LL while cumulative delta rises between lows                | `low_change_atr` < 0 and `low_cvd_change_ratio` > 0 (bullish divergence)                       |
 | One trade reclaims the breached low and confirms the new low      | Reclaim emitted, then the new low (an LL) confirms; both in that trade's row                   |
 | Confirmation trade's volume                                       | Counted in the new leg only; each trade belongs to exactly one leg                             |
-| Impulse and pullback both inside one second                       | Each leg has duration 1 row; time ratio 1; speeds and volume per row defined                   |
 | Breach to 99.8, extend to 99.5, reclaim above 100 at a low of 100 | `sweep_depth_atr` uses 0.5 (the deepest trade before the reclaim)                              |
 | Six consecutive higher lows                                       | `low_run` = 6 on the event; `low_run_ratio` = 1                                                |
 | RSI 40 → 55 → 49 with θ = 5 points                                | RSI high at 55 confirmed on the 49 row; its level 55 is a feature, its change ÷ 100 a ratio    |
-| Price lower low; matched RSI low higher                           | `rsi_low_class` = +1 on the price low's confirmation row (bullish divergence)                  |
 | RSI NULL (incomplete window)                                      | RSI epoch ends; RSI structure restarts when RSI is defined again                               |
 
-Prove price/size scale invariance, prefix invariance, checkpoint continuation, and
-whole-session versus incremental parity. Test threshold equality/overshoot, repeated
+Prove price and size scale invariance, prefix invariance, checkpoint continuation, and
+whole-session versus incremental parity. Test threshold equality and overshoot, repeated
 breaches, stale scale inputs, initial warm-up, epoch resets, and source-row as-of joins.
-Use throwaway databases to validate schema/event uniqueness before any local migration
-or backfill. Benchmark results must still report missed turns, false alarms, timing,
-candidate failures, coverage, and uncertainty; no profitability gate is required.
+Use throwaway databases to validate schema and event uniqueness before any local migration
+or backfill.

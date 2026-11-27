@@ -54,19 +54,19 @@ pnpm lint && pnpm test && pnpm build
 
 Market data is not in git: one year of Databento MBP-1 for GC and SI lives in
 `data/databento/mbp-1/` (27 GB).
-See [historical data](docs/project/data.md) for the layout and verification.
+See [the data and ingestion](docs/project/ingestion.md) for the layout and verification.
 
 ## Documentation
 
 - [Engine: backtests and live sessions](docs/project/engine.md): timing, fills, speed, verification.
 - [Sliding-window candles](docs/sliding-windows/README.md) and their [design](docs/sliding-windows/design.md).
-- [Historical data](docs/project/data.md), the [roadmap](docs/project/roadmap.md) (the
+- [The data and ingestion](docs/project/ingestion.md), the [roadmap](docs/project/roadmap.md) (the
   steps of the process and the build order), the
-  [handoff notes](docs/project/handoff.md) with the current state and next steps, the
+  [status](docs/project/status.md) with the current state and next steps, the
   [build log](docs/project/build-log.md) of what was built and found, and the
-  prioritized [to-do list](docs/project/todo.md).
+  prioritized [open items](docs/project/status.md#open-items).
 - [Ingestion](docs/project/ingestion.md), the [trade-metrics reference](docs/project/trade-metrics-reference.md) it implements, and the [storage contract](lib/db-research/README.md).
-- [Research UI](docs/project/metric-explorer.md).
+- [Research UI](apps/research-web/README.md).
 
 ## Local services and private phone access
 

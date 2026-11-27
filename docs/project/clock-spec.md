@@ -1,7 +1,8 @@
 # The clock and session inputs: spec
 
-Frozen November 27, 2026, before the stage is built and before the model is run with it.
-Step 1 of the process,
+The [dated venue clocks](#dated-venue-clocks) are the inputs used by training and
+replay. The original experiment specification below was frozen on November 27,
+2026 before run 13. It records step 1 of the process and
 [decision 43](roadmap.md#decisions).
 
 ## In plain words
@@ -81,7 +82,9 @@ hours are trained together ([decision 42](roadmap.md#decisions)).
 ## Dated venue clocks
 
 Run 13 above describes the original nine inputs at commit `539416a`. The current
-model keeps five of them and adds signed seconds to each named venue event, plus a
+model keeps the two time-of-day inputs, session time remaining, session fraction
+and the weekday of the interval's local close. This weekday can differ from the CME
+order trade date on a holiday. The model adds signed seconds to each named venue event, plus a
 short-session flag based on the configured products' regular 23-hour session. Negative
 seconds mean the event is ahead. Each decision reads occurrences inside its own open
 futures interval. For repeated events it reads the nearest known occurrence, choosing
@@ -93,7 +96,8 @@ row ends. The sparse stage and its historical database rows retain their origina
 instrument group, IANA zone, normal local time, effective dates and source. GC, SI, PL
 and MGC share the named metals events, including **separate** settlement windows for gold,
 silver and platinum. ES, NQ, RTY and YM read equity-index settlement, cash-market
-boundaries and common macro events. Globex uses the instrument's product calendar.
+boundaries and common macro events. The edition has 46 shared event clocks,
+87 metals clocks and two equity-index settlement clocks. Globex uses the instrument's product calendar.
 Floor and London participation references are conventions. Settlement and benchmark
 windows describe scheduled calculation times.
 
@@ -101,8 +105,10 @@ windows describe scheduled calculation times.
 are versioned inputs. Each date carries its scheduled local time, source and earliest
 verified availability (`known_at`). For a current publisher page without a historical
 publication stamp, the snapshot uses its retrieval date. This deliberately leaves gaps in
-historical training coverage, particularly for Census releases, Fed speeches, private
-surveys and Chinese fixings. Add archived publisher announcements to improve coverage.
+historical training coverage. On the 470,100 GC/SI decision rows from January 2 through
+August 31, 2026, 111 of the 133 applicable named clocks have a value on at least one
+row. The 22 without a usable occurrence include retail sales, ISM releases, jobless
+claims, Fed speeches and the RMB fixing. Add archived publisher announcements to improve coverage.
 The file contains timing information only. Contract-specific expirations, delivery dates
 and index roll periods require a separate contract or index calendar.
 
@@ -132,7 +138,7 @@ records idempotently. A changed rule, calendar mapping, source file or relevant 
 version creates another edition. Dataset caches, saved backtests and model artifacts carry
 that edition. Previously trained artifacts can be replayed at their training revision.
 
-The next comparison uses GC and SI on the existing development dates and walk-forward
+Local research run 15 evaluates GC and SI on the existing development dates and walk-forward
 folds, with the bracket and one-minute targets, `trees` with and without all clock
 columns, and paired intervals resampled by trade date. Success requires a positive
 lower bound at the bracket horizon. The final holdout stays reserved.

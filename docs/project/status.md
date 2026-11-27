@@ -35,36 +35,20 @@ over the free year, and the clock becomes an input
 
 ## Next
 
-The [build order](roadmap.md#build-order), reordered November 27:
-
-1. The original clock and session inputs: tested ([result](results.md#do-the-clock-and-session-inputs-add-skill): no
-   detectable gain on two metals). [Dated venue rules](clock-spec.md#dated-venue-clocks) now supply the training and replay clocks.
-2. Whether the minute-end result holds between minute ends.
-3. One-second values stored only where they are read, so that many products fit the disk.
-4. More products on the free year, one of each kind of market first.
-5. The book between trades and the scheduled-news table.
-6. The codes that compare the structures of price, RSI, and CVD.
+The [working plan](plan.md) lists the steps in order, each written to be handed to an
+agent. Running now: the model with and without the dated market clocks (step 0.1).
+Nothing else starts until Paul confirms the plan.
 
 ## Open questions for Paul
 
-1. **Which products, in what order?** Every CME product's latest year is free. Proposed to
-   Paul on November 27, not yet confirmed: ES and NQ first, then CL; 6E, 6J, and ZN
-   downloaded but never trained on, as held-out products; grains later (their sessions have
-   a midday break); micros only for pricing fills. Rates are left out of training because
-   their price moves in whole ticks at these timeframes; the rule proposed is to train a
-   product on a timeframe only where its typical range is many spreads wide. For each
-   stage, fit one pooled model, one per kind of market, and one leaving a kind out, and let
-   that decide what is pooled.
-2. **Is the free year a moving window?** If a newer month becomes free each month, history
-   grows at no cost by downloading as it does.
-3. **The evaluation for many products** in the roadmap is proposed, not confirmed: two
-   held-out products, and a result counting only on at least three kinds of market
-   ([how results are judged](roadmap.md#how-results-are-judged)).
-4. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
+The decisions that shape the plan are listed in it, each with a recommendation
+([open decisions](plan.md#open-decisions)). Older questions still open:
+
+1. **Session quality.** A flagged session is ineligible for entries (decision 23); whether
    its rows also stay out of indicator history is open.
-5. **The live contract** (full-size or micro), which sets the cost model. Until it is
+2. **The live contract** (full-size or micro), which sets the cost model. Until it is
    chosen, results are reported at both.
-6. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
+3. **The largest loss from a peak** that would make a policy unacceptable. The daily limit
    is a percentage (decision 36); a drawdown limit is not set.
 
 ## Open items

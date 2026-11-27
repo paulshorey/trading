@@ -1,8 +1,9 @@
 # Project: Trading research
 
 Read this page, then the [status](docs/project/status.md): where the work stands, what is
-next, and how to work here. The [roadmap](docs/project/roadmap.md) is the plan and the
-build order; [results](docs/project/results.md) records what every experiment found.
+next, and how to work here. The [roadmap](docs/project/roadmap.md) holds the goal, the
+decisions, and how a result is judged; the [working plan](docs/project/plan.md) is the
+order of work, step by step; [results](docs/project/results.md) records what every experiment found.
 
 ## Goal
 

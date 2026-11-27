@@ -8,7 +8,7 @@ per-product continuous views; and the stage records, variants, and column regist
 ([ingestion](../../docs/project/ingestion.md), [feature pipeline](../../docs/project/feature-pipeline.md)).
 It replaced migrations 0001–0004, folded on November 4, 2026; the local `trading` database,
 which applied those, was rebuilt on it from the DBN files on November 4 with Paul's
-authorization ([results](../../docs/project/build-log.md#baseline-rebuild-gc-and-si)). Later changes are new
+authorization ([results](../../docs/project/build-log.md)). Later changes are new
 numbered files: `0002_minute_rows` adds the minute stages' tables `market.bar_1m` and
 `market.candle_1h_1m` and their continuous views (PR B1); `0003_hour_stats` adds
 `market.stats_1h_1m`, the hourly window statistics, and its view (PR B2); `0004_minute_volatility`
@@ -135,7 +135,7 @@ from the research (CVD, spread, top-of-book size and imbalance at trades, and so
   be normalized (see `strategy_core.features.Unit`).
 - Measured (November 4, 2026, compacted): about 281 bytes per `bar_1s` row and 849 per
   `candle_1m_1s` row with indexes; GC and SI with a 40-session lead used 80.84 GB, about
-  40 GB per product-year ([measured](../../docs/project/ingestion.md#measured)). With
+  40 GB per product-year ([measured](../../docs/archive/ingestion-history.md)). With
   `vol_1s` (307 bytes per row) the database was 102 GB on November 5, 2026, about 50 GB
   per product-year.
 

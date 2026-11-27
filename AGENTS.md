@@ -1,7 +1,8 @@
 # Project: Trading research
 
-Read this page, then the [handoff](docs/project/handoff.md): where the work stands and what
-to do next. The [roadmap](docs/project/roadmap.md) is the map and the build order.
+Read this page, then the [status](docs/project/status.md): where the work stands, what is
+next, and how to work here. The [roadmap](docs/project/roadmap.md) is the plan and the
+build order; [results](docs/project/results.md) records what every experiment found.
 
 ## Goal
 
@@ -10,11 +11,11 @@ then live, for futures (crypto may follow). The model does not read raw prices. 
 layers of pre-processed signals, built to remove noise and keep what predicts, on several
 timeframes at once.
 
-The central signal: on a faster and a slower timeframe, how likely is it that price has
-recently reversed and is now continuing? When both say "reversed up, continuing up", that is
-a buy; the mirror is a sell. That is read from each timeframe's confirmed swing highs and
-lows and where price now stands against them, never from a model's guess about the current
-bar. The model combines this with other signals, above all whether the swings of RSI and of
+The central signal: on a faster and a slower timeframe, has price reversed and is it now
+continuing? When both say "reversed up, continuing up", that is a buy; the mirror is a sell.
+That is read from each timeframe's confirmed swing highs and lows and where price now
+stands against them. The swings are computed by rule: nothing predicts whether the current
+bar is a turning point. The model combines this with other signals, above all whether the swings of RSI and of
 volume flow (CVD) agree with price's or diverge from them.
 
 ## The process (required order)
@@ -70,13 +71,15 @@ position across sessions is planned as a switch, with intraday the default
 
 Do not skip a step because an early experiment on it was flat. Record the result, then
 build the next input the process names and test again
-([what has been tested](docs/project/roadmap.md#what-the-results-so-far-do-and-do-not-show)).
+([what has been tested](docs/project/results.md)).
 
 ## Data and scope
 
 GC (gold) and SI (silver) are the proof of concept: one year of MBP-1 for each is in
-`data/databento/mbp-1/`, and five more years will be added. Other products (ES, NQ, YM,
-RTY, PL) come later, so build everything for any number of products and pairs. Compute and store
+`data/databento/mbp-1/`. No more years are bought: the most recent year of every product
+is free, so the model is trained on many products over that one year, across kinds of
+market (metals, equity indices, energy, rates, currencies). Build everything for any
+number of products and pairs. Compute and store
 everything per contract, so products can be added; each product also reads as one permanent series
 (`market.continuous_*`) that takes every session's rows from its front contract. Never
 merge trades or prices of different delivery months. Products that move together (GC with
@@ -169,12 +172,13 @@ numbered files in `lib/db-research/migrations/` (`uv run research db migrate`).
   session falls as the current price rises, for any path, so such a measure rewards every
   forecast that fades the session's move. Measure over all rows together and take the
   interval from resampled trade dates
-  ([found](docs/project/yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
+  ([found](docs/project/results.md#a-flaw-in-the-first-skill-measure)).
 - State the horizon of a test and what a trade costs there. The spread is about a third of
   a typical one-minute move in GC, a tenth of a fifteen-minute move, and a twentieth of an
   hourly one ([measured](docs/project/roadmap.md#costs-choose-the-timeframe)).
 - State how many independent trade dates a result rests on. Rows that share a window or a
-  day are not independent; one year cannot settle an hourly question.
+  day are not independent, and neither are rows of different products on one date: take
+  intervals from resampled trade dates, with every product's rows of a date together.
 - Where the order is free, add different information (the book, net flow, the partner
   product, time of day) before another transform of the price path.
 - Report every policy result for buys and sells apart, and by product. A year in which a

@@ -191,5 +191,5 @@ candles and the research comparison are next.
   closures, backtesting, ML, and validation.
 - [Background and sources](sources.md): where the idea came from, what the archived
   implementation did, and supporting research.
-- [Engine](../project/engine.md) and [research UI](../project/metric-explorer.md): how
+- [Engine](../project/engine.md) and [research UI](../../apps/research-web/README.md): how
   these outputs drive backtests and how to inspect them.

@@ -4,7 +4,7 @@
 > files. Steps 1, 2, and 4 of [Effort](#effort) are implemented (MBP-1 is the only source,
 > book events reach the engine, and fills use the book the order meets); step 3 (`book_1s`)
 > and step 5 (live) are next. Unlike the recommendation below, the TBBO files were not
-> kept: the storage figures here are superseded by [data](../../project/data.md), and a
+> kept: the storage figures here are superseded by [data](../../project/ingestion.md), and a
 > full session of MBP-1 trades was checked against the rows stored from TBBO instead of the
 > one-hour comparison. The text below is kept as written.
 

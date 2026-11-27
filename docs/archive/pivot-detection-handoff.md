@@ -1,8 +1,10 @@
+> Historical, superseded. Swings are computed by rule, not predicted by a model; see [pivot-structure-design.md](../project/pivot-structure-design.md).
+
 **Next-agent handoff: early confirmation of temporary price pivots**
 
 Prepared November 3, 2026. Read [AGENTS.md](../../AGENTS.md), the current
-[project handoff](handoff.md), and the [reviewed research](../research/pivots/2026-11-03-reviewed-findings.md)
-before starting. The PR #66 follow-up adds a [pivot and structure contract](pivot-structure-design.md)
+[project handoff](../project/handoff.md), and the [reviewed research](../research/pivots/2026-11-03-reviewed-findings.md)
+before starting. The PR #66 follow-up adds a [pivot and structure contract](../project/pivot-structure-design.md)
 for confirmed higher/lower highs/lows, provisional relations, and fixed-scale storage.
 Read that contract for the current implementation sequence. This task implemented no
 detector, model, labeling pipeline, or database change. No GC/SI detection accuracy or
@@ -18,7 +20,7 @@ research was not restricted by language.
 | Read                                                                                    | Purpose                                                                                                                                        |
 | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Reviewed findings](../research/pivots/2026-11-03-reviewed-findings.md)                 | Primary engineering assessment: method comparison, sources, label semantics, codebase fit, and proposed benchmark                              |
-| [Pivot and structure contract](pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                                               |
+| [Pivot and structure contract](../project/pivot-structure-design.md)                               | Follow-up definitions, six fixed scales, provisional HL/LH, breaches, and storage-first sequence                                               |
 | [Early-confirmation update](../research/pivots/2026-11-05-early-confirmation-update.md) | November 5 follow-up: random-walk baselines, stopping rule, foundation-model evidence, proposed PRs F0 and G                                   |
 | [Order-flow predictors](../research/pivots/2026-11-05-order-flow-predictors.md)         | November 5: inventory of flow, absorption, location, and cross-market metrics; data options and costs; first event study                       |
 | [Second scale and MBP-1](../research/pivots/2026-11-06-second-scale-and-mbp1.md)        | November 6: second and sub-second metrics, latency limits, MBP-1 against TBBO (cost, equality check, effort); MBP-1 was adopted on November 15 |
@@ -68,8 +70,8 @@ establish an advantage for this dataset and task.
 
 **The next task follows the concrete pivot/structure contract.**
 
-Use the [contract](pivot-structure-design.md) and the related
-[stage/minute/pivot plan](plan-1h-and-pivots.md): stage/version
+Use the [contract](../project/pivot-structure-design.md) and the related
+[stage/minute/pivot plan](../project/plan-1h-and-pivots.md): stage/version
 work, minute/hourly inputs, then the deterministic pivot/structure stage and its fixed
 grid, followed by benchmarking and outcome labels. Finalize implementation details
 within that workstream. This documentation follow-up performs no schema/data changes
@@ -94,7 +96,7 @@ Resolve these distinctions explicitly:
 
 The detector replays the engine's released trades in order and publishes state per
 second row (fast scales) and per minute row (slow scales), with rolling ATR providing
-context ([plan 3.1](plan-1h-and-pivots.md#31-input-stream)). Thresholds determine reversal magnitude; neither a threshold nor a bar size
+context ([plan 3.1](../project/plan-1h-and-pivots.md#31-input-stream)). Thresholds determine reversal magnitude; neither a threshold nor a bar size
 guarantees swing duration. Conventional indicators over rolling candles use separate phase state
 and same-phase history at ordinal differences of 60; adjacent `1m@1s` candles share
 59/60 observations. Do not treat their outputs as independent confirmation votes.
@@ -132,13 +134,13 @@ data quality as separate fields. Version any eventual persisted detector state.
 | [windows.py](../../lib/strategy-core/src/strategy_core/windows.py), [sliding-window design](../sliding-windows/design.md)                                                                              | Overlap and phase contracts                                                        |
 | [features.py](../../lib/strategy-core/src/strategy_core/features.py), [indicators.py](../../lib/strategy-core/src/strategy_core/indicators.py)                                                         | Normalized feature definitions and calculation paths                               |
 | [pipeline.py](../../lib/strategy-core/src/strategy_core/pipeline.py), [stages.py](../../lib/strategy-core/src/strategy_core/stages.py), [state.py](../../lib/strategy-core/src/strategy_core/state.py) | Stages, the pipeline, and checkpoint integration                                   |
-| [engine.py](../../lib/strategy-core/src/strategy_core/engine.py), [engine timing](engine.md#timing-model)                                                                                              | Whole-session/incremental parity and actual availability                           |
+| [engine.py](../../lib/strategy-core/src/strategy_core/engine.py), [engine timing](../project/engine.md#timing-model)                                                                                              | Whole-session/incremental parity and actual availability                           |
 | [labels.py](../../lib/strategy-core/src/strategy_core/labels.py)                                                                                                                                       | Existing fill-anchored trade outcomes; it is not an extreme-anchored pivot labeler |
 | [test_windows_features.py](../../lib/strategy-core/tests/test_windows_features.py), [test_rows.py](../../lib/strategy-core/tests/test_rows.py)                                                         | Existing invariance, phase, state, and row tests                                   |
 
 The current main at preparation time, `bfece3398946ebf8abc7b5900920a5109f46a2d5`, records
 the first GC/SI ingest as completed. This documentation task did not query the database
-or repeat ingestion. Before any experiment, read the current [ingestion handoff](build-log.md#rebuild-with-stages-gc-and-si),
+or repeat ingestion. Before any experiment, read the current [ingestion handoff](../project/build-log.md),
 check catalog/coverage/builder compatibility and `uv run research ingest status`, and
 inspect degraded sessions. Do not assume current database state from this snapshot.
 

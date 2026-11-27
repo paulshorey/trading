@@ -25,8 +25,8 @@ unit is the smallest step worth a swing: one RSI point, or one typical trade (th
 the trade count of the latest window that had trades). Values "in ATRs" divide by the ATR
 floored at half the threshold's floor, so they stay bounded when the ATR has decayed.
 
-Each scale (`<stream>_rsi_atr_<k>`, `<stream>_cvd_atr_<k>`) is a stage of its own writing to its
-timeframe's table for the series under its `variant_id`, with its events in
+Each scale (`<stream>_rsi_mean_atr_<k>`, `<stream>_cvd_atr_<k>`) is a stage of its own writing
+to its timeframe's table for the series under its `variant_id`, with its events in
 `market.pivot_event`. The detector and the structure are those of the price scales
 (`swings.Detector` in additive mode, `stage_step_pivot.with_structure`).
 """
@@ -45,6 +45,9 @@ from .stages import Stage
 from .timeframes import FAST, MIDDLE, SLOTS, SLOW, Timeframe
 
 RSI, CVD = "rsi", "cvd"
+# The series' name in a variant's name. A variant's name never changes meaning: the RSI scales
+# first stored (`<stream>_rsi_atr_<k>`) read the stored RSI row by row, so these have another.
+LABEL = {RSI: "rsi_mean", CVD: "cvd"}
 # The smallest swing, in units of the series (spec): RSI points, or typical trades. Values in
 # ATRs divide by the ATR floored at half of it.
 FLOOR = {RSI: 0.25, CVD: 3.0}
@@ -249,9 +252,9 @@ class SeriesPivotStage(Stage):
 
 
 def scale(tf: Timeframe, source: str, k: float) -> type[SeriesPivotStage]:
-    """One scale of a timeframe's series: `<stream>_<source>_atr_<k>`, a stage of its own."""
+    """One scale of a timeframe's series: `<stream>_<label>_atr_<k>`, a stage of its own."""
     table = f"pivot_{source}_{tf.rows}"
-    name = f"{tf.stream}_{source}_atr_{k:g}".replace(".", "p")
+    name = f"{tf.stream}_{LABEL[source]}_atr_{k:g}".replace(".", "p")
     spec = SPECS[source]
     attrs = {
         "TF": tf,

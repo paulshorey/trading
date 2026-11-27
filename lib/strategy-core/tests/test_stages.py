@@ -46,11 +46,12 @@ def test_warmup_follows_the_parameters():
     # ... at both resolutions: the same daily chain; the 1m@1s ATR(50) needs only 392 minutes
     seconds = VolSecondStage(StageContext(None, 0, 0, FeatureConfig())).warmup()
     assert seconds == vol
-    # a series' own ATR(14) follows the series: the hourly RSI needs its 109 periods first, then
+    # a series' own ATR(14) follows the series: the hourly RSI needs its 109 periods first, one
+    # more window for the mean over the phases, then
     # 109 for its ATR (about 9.5 sessions); CVD exists from the first row
     context = StageContext(None, 0, 0, FeatureConfig())
     slow = {s.SOURCE: s(context).warmup() for s in SERIES_BY_TIMEFRAME["1h@1m"]}
-    assert slow == {"rsi": 218 * 3600, "cvd": 109 * 3600}
+    assert slow == {"rsi": 219 * 3600, "cvd": 109 * 3600}
     assert warmup.sessions(slow["rsi"], 1, 82_800) == 10
 
 
@@ -58,8 +59,8 @@ def series(rows: str, stream: str) -> list[str]:
     """The scales of RSI and of CVD of one timeframe, in stage order: they follow price's and
     read only that timeframe's aggregated rows, never the trades."""
     return [
-        f"pivot_{source}_{rows}:{stream}_{source}_atr_{k}"
-        for source in ("rsi", "cvd")
+        f"pivot_{source}_{rows}:{stream}_{label}_atr_{k}"
+        for source, label in (("rsi", "rsi_mean"), ("cvd", "cvd"))
         for k in ("0p5", "1", "2", "3")
     ]
 

@@ -17,7 +17,8 @@ minus sell volume through it (`bar_<rows>.cvd`). No trade is read. The zigzag of
 the one stage that reads the trades inside a row, to know which level was reached first.
 
 **Built** (`stage_step_series.py`): 24 stages, one per timeframe, series, and multiple
-(`<stream>_rsi_atr_<k>`, `<stream>_cvd_atr_<k>`, k of 0.5, 1, 2, 3), in the six tables of
+(`<stream>_rsi_atr_<k>`, since renamed `<stream>_rsi_mean_atr_<k>`, and
+`<stream>_cvd_atr_<k>`, k of 0.5, 1, 2, 3), in the six tables of
 migration `0016` with their events in `market.pivot_event`. Each computes the series' own
 ATR (per phase, the Wilder average of the window's true range of the series), freezes a
 threshold of k ATRs when an extreme is set, floored at 2.5 RSI points or 3 typical trades,

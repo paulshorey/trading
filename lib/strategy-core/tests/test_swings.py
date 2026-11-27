@@ -1000,7 +1000,7 @@ def test_series_columns_are_normalized_and_a_cvd_level_is_never_a_feature():
         for name in ("ext", "high_level", "low_level"):
             assert columns[name].unit == (Unit.INDEX.value if source == RSI else "")
     sources = StageFeatures.sources()
-    assert "1h@1m.slow_rsi_atr_3.high_level" in sources
+    assert "1h@1m.slow_rsi_mean_atr_3.high_level" in sources
     assert "1h@1m.slow_cvd_atr_3.progress" in sources
     assert not [n for n in sources if "_cvd_" in n and n.endswith(("level", ".ext", ".theta"))]
 

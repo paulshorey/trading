@@ -76,6 +76,10 @@ All the fast scales keep the same seconds, so any scale can be joined to any oth
 Any other second is recomputed by the engine from the DBN files; `market.pivot_event` still
 holds every confirmed swing, breach, and reclaim.
 
+The fast scales of RSI and of CVD (`market.pivot_rsi_1s`, `market.pivot_cvd_1s`) keep the
+first of those only, the last second of every ten-second row, not the event seconds
+(`pipeline.STORED_STEPS`, [spec](series-structure-spec.md#what-is-stored)).
+
 Applied to `trading` on November 19, 2026: `TRUNCATE market.pivot_1s`, then
 `research ingest run GC SI --rebuild --workers 8` (run 4: the three fast scales, their
 events, and their six label variants for 12 contracts and 858 contract-sessions, in
@@ -577,8 +581,8 @@ stored stages.
 ## Next
 
 1. **Structure signals** and other new inputs for the reversal question
-   ([roadmap](roadmap.md#build-order)); **RSI swings** (`pivot_rsi_1s`, `pivot_rsi_1m`) on the same
-   detector.
+   ([roadmap](roadmap.md#build-order)), among them the codes comparing the structures of price,
+   RSI, and CVD.
 2. Let backtests read stored rows when the builder matches the run: the values are already
    equal, and the warm-up takes about a third of a year's run.
 3. Load Databento `definition` records into `market.contract` (expirations).

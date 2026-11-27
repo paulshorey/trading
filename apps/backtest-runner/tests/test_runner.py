@@ -388,6 +388,7 @@ def run_both_ways(calendar, chunks, config):
     return whole, stepwise
 
 
+@pytest.mark.slow
 def test_opening_trades_within_the_close_delay_and_closure_trades_are_kept(monkeypatch):
     """Regression (PR #62 review): a trade received during [open, open + close_delay) belongs
     to the first second, and a trade during the preceding closure is reported, not dropped."""
@@ -421,6 +422,7 @@ def test_opening_trades_within_the_close_delay_and_closure_trades_are_kept(monke
     assert whole.reports[chunk.session].outside_schedule == 1
 
 
+@pytest.mark.slow
 def test_days_without_the_contract_are_missing_not_quiet(monkeypatch):
     """Regression (PR #62 review): a file that does not list the contract leaves its day
     uncovered (missing slots) and is reported, instead of looking like a day without trades."""
@@ -625,3 +627,38 @@ def test_a_warmup_keeps_the_partly_downloaded_sessions_that_storage_keeps():
     kept = service.stored_warmup(s[:8], data)
     # only the partial session before the first whole one is left out
     assert [x.trade_date for x in kept] == [x.trade_date for i, x in enumerate(s[:8]) if i != 1]
+
+
+def test_verify_exits_with_an_error_when_the_runs_differ_or_nothing_was_compared(
+    monkeypatch, tmp_path, capsys
+):
+    """Regression (PR #105 review): `research verify` printed `identical_features: false` and
+    exited 0, so a script that checks the command's success saw a pass."""
+    import sys
+
+    from backtest_runner import cli, service
+
+    spec = tmp_path / "spec.json"
+    spec.write_text("{}")
+    passing = {
+        "seconds": 82800, "identical_features": True, "mismatched_features": [],
+        "identical_trades": True, "trades": 3,
+    }  # fmt: skip
+    assert service.verify_failures(passing) == []
+    cases = {
+        "features": passing | {"identical_features": False, "mismatched_features": ["1m@1s.rsi"]},
+        "trades": passing | {"identical_trades": False},
+        "nothing": passing | {"seconds": 0},
+    }
+    monkeypatch.setattr(sys, "argv", ["research", "verify", str(spec)])
+    monkeypatch.setattr(service, "verify", lambda body, sessions: passing)
+    cli.main()  # a pass returns normally
+    assert '"identical_features": true' in capsys.readouterr().out
+    for name, result in cases.items():
+        assert service.verify_failures(result), name
+        monkeypatch.setattr(service, "verify", lambda body, sessions, result=result: result)
+        with pytest.raises(SystemExit) as stopped:
+            cli.main()
+        seen = capsys.readouterr()
+        assert stopped.value.code == 1, name
+        assert "verify failed" in seen.err and '"seconds"' in seen.out  # the report is kept

@@ -26,7 +26,9 @@ one row per experiment run with its frozen settings and its result; `0013_cvd_an
 adds `cvd` to the step rows and `norm_atr_bps` to the window tables;
 `0014_norm_atr_price` adds `norm_atr_price` to the volatility tables, the normalizing ATR in
 price units that the swing stages freeze; `0015_swing_atr_snapshot` records that source in
-the swing variants' registered parameters.
+the swing variants' registered parameters; `0016_series_swings` adds the swing tables of RSI
+and of CVD, `market.pivot_rsi_<rows>` and `market.pivot_cvd_<rows>` for each timeframe (one
+row per step row and scale; the fast ones at ten-second ends), and their views.
 Runs and ML rows come next.
 
 ## Local setup

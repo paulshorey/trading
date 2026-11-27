@@ -36,6 +36,9 @@ once on each group alone (price path, volume and flow, the book at trades, volat
 swings and structure, session and time). It answers what has never been asked here: is
 anything predictable from these inputs, at which horizon, and from which kind of input.
 That is 35 fits, reported as a table of the skill above. None is a candidate policy.
+(Since the swings of RSI and of CVD were added they are a kind of their own, `series`, beside
+price's swings, and the run also fits `trees` without the newest kind and reports the paired
+difference in skill: [the test](series-structure-spec.md#the-test-of-these-inputs-frozen-before-the-run).)
 
 ## Part B: the policy, after costs
 
@@ -135,6 +138,16 @@ The corrected measure ranks all rows together and takes its interval from resamp
 dates. This is a change made after seeing a result, so it is recorded as one: the first
 measure's number is kept in the report (`within_date_rank_correlation_biased`) and decides
 nothing. The rule is now in [AGENTS.md](../../AGENTS.md#research-principles).
+
+PR #103 corrected two parts of the yardstick after run 11.
+
+- Each bootstrap draw samples whole trade dates with replacement. Both forecasts and the
+  target are ranked over the sampled rows, including ties and repeated dates. Previous
+  reports kept ranks fixed across draws.
+- The dataset still requires all stage slices to exist and all fixed warm-ups to have
+  elapsed. A swing scale becomes ready when it has confirmed both a high and a low in its
+  current segment. Each decision checks all scales at that minute. A later gap can end a
+  segment and subsequent rows remain ineligible until both sides confirm again.
 
 ## Results (November 24, 2026)
 

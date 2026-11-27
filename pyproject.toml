@@ -21,7 +21,10 @@ dev = ["pytest>=9.2", "ruff>=0.17"]
 
 [tool.pytest.ini_options]
 testpaths = ["lib/strategy-core/tests", "apps/backtest-runner/tests"]
-addopts = ["--import-mode=importlib", "-ra"]
+addopts = ["--import-mode=importlib", "-ra", "--strict-markers"]
+markers = [
+    "slow: takes more than about ten seconds; left out of `pnpm test:fast` and of the PR check",
+]
 
 [tool.ruff]
 line-length = 100

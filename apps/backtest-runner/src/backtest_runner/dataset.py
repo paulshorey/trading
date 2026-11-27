@@ -1,8 +1,7 @@
 """The decision dataset of the first decision model (docs/project/yardstick-spec.md, Part A).
 
-One row for the second that ends each minute of every warm front session of the development
-period: the features the engine holds at that second, read from the stored rows (which equal
-what the engine computes), whether the row is eligible for a decision, and its targets. The
+One row per minute end of each development front session with settled indicators: the
+engine's features at that second, read from storage, the row's eligibility and its targets. The
 targets look into the future and are computed from the DBN files' trades and book: the move
 ahead in R, and the mid-price's move over a few fixed horizons as a diagnostic.
 
@@ -39,15 +38,36 @@ SPREAD_LIMIT = 0.25  # of R: a wider book at the decision is not traded (decisio
 HORIZONS_S = (60, 300, 900, 3_600)  # the horizon map's diagnostic targets
 ROW_SECONDS = 60  # a training row is the second that ends each minute
 EXECUTION = ExecutionConfig()  # the base timing: when a second closes and its book is read
-ELIGIBLE, NO_ATR, NO_ROOM, FLAGGED, NO_BOOK, WIDE = range(6)
+ELIGIBLE, NO_ATR, NO_ROOM, FLAGGED, NO_BOOK, WIDE, COLD_SWINGS = range(7)
 INELIGIBLE = {
+    COLD_SWINGS: "swings_not_warm_at_decision",
     NO_ATR: "no_atr",
     NO_ROOM: "too_close_to_the_forced_exit",
     FLAGGED: "session_data_flagged",
     NO_BOOK: "no_usable_book_at_the_decision",
     WIDE: "spread_too_wide_for_the_stop",
 }
+# Swing readiness is path dependent. Check both confirmed sides on the decision row;
+# the other stages' warm-up is determined by the sessions preceding this one.
+SWING_TABLES = sorted(
+    {store.STAGE_TABLE[s] for s, events in store.STAGE_EVENTS.items() if events == "pivot_event"}
+)
 SESSIONS_PER_TASK = 4
+
+
+def readiness(names: list[str]) -> list[str]:
+    """The features that must have a value for a row to be a decision row: the age of the
+    latest confirmed high and low of every swing scale (`COLD_SWINGS` is the same test on the
+    stored rows). A model is fitted only on rows that pass, so it may decide only on such rows."""
+    sources = StageFeatures.sources()
+    return [
+        n
+        for n in names
+        if n.endswith((".high_age_s", ".low_age_s"))
+        and store.STAGE_EVENTS.get(sources.get(n, "")) == "pivot_event"
+    ]
+
+
 CACHE = ROOT / "data/research/yardstick"
 
 
@@ -59,19 +79,20 @@ def variant_ids(conn) -> dict[str, int]:
 
 def front_sessions(conn, product: str, start: date, end: date, stages: list[tuple[str, int]]):
     """Front sessions of the period with stored rows: trade date, contract id and symbol, first
-    and last second ordinal, open, close, and whether every named stage (table, variant id)
-    was warm in it."""
+    and last second ordinal, open, close, and whether all stages were built and all
+    stages with a session-count warm-up had settled by its start."""
     rows = conn.execute(
         """SELECT f.trade_date, f.contract_id, f.contract, f.first_ordinal, f.last_ordinal,
                   f.open_ns, f.close_ns,
-                  (SELECT count(*) FILTER (WHERE s.warm) FROM market.stage_slice s
+                  (SELECT count(*) FILTER (WHERE s.warm OR s.stage = ANY(%s::text[]))
+                   FROM market.stage_slice s
                    WHERE s.contract_id = f.contract_id AND s.trade_date = f.trade_date
                      AND (s.stage, s.variant_id) IN
                          (SELECT * FROM unnest(%s::text[], %s::bigint[])))
            FROM market.front_session f
            WHERE f.product = %s AND f.trade_date BETWEEN %s AND %s AND f.first_ordinal IS NOT NULL
            ORDER BY 1""",
-        ([s for s, _ in stages], [v for _, v in stages], product, start, end),
+        (SWING_TABLES, [s for s, _ in stages], [v for _, v in stages], product, start, end),
     ).fetchall()
     return [(*r[:7], r[7] == len(stages)) for r in rows]
 
@@ -79,11 +100,11 @@ def front_sessions(conn, product: str, start: date, end: date, stages: list[tupl
 def plan(ids: dict[str, int]) -> tuple[list[str], str, list[tuple[str, int]]]:
     """The features in the engine's order and by its names, the query that reads them for one
     contract and session at the seconds that end a minute, and the stages (table, variant id)
-    that must be warm. At such a second every slower timeframe's latest completed row ends at
-    the same instant, so its age is zero."""
+    that must have been built. Every slower timeframe also completes a row then."""
     names: list[str] = []
     select: list[str] = []
     joins: list[str] = []
+    swing_ready: list[str] = []
     needed: list[tuple[str, int]] = []
     groups = {FAST.name: StageFeatures.SECONDLY} | dict(StageFeatures.STEPWISE)
     per_row = {FAST.name: 1, MIDDLE.name: MIDDLE.seconds, SLOW.name: SLOW.seconds}
@@ -94,6 +115,8 @@ def plan(ids: dict[str, int]) -> tuple[list[str], str, list[tuple[str, int]]]:
             table = store.STAGE_TABLE[stage]
             variant = ids.get(stage, 0)
             needed.append((table, variant))
+            if table in SWING_TABLES:
+                swing_ready.extend(f"{alias}.{side}_age_s IS NOT NULL" for side in ("high", "low"))
             columns = StageFeatures.names(stage)
             names += [f"{StageFeatures.PREFIX[stage]}.{n}" for n in columns]
             select += [f'{alias}."{n}"' for n in columns]
@@ -115,8 +138,10 @@ def plan(ids: dict[str, int]) -> tuple[list[str], str, list[tuple[str, int]]]:
     atr = next(
         f"t{i}" for i, (table, _) in enumerate(needed) if table == f"vol_{SLOW.rows}"
     )  # the slow timeframe's ATR in price units: context, the unit of R
+    ready = " AND ".join(swing_ready) or "TRUE"
     query = (
-        f"SELECT {first}.slot_ordinal, {first}.end_ns, {atr}.atr_price, {', '.join(select)} "
+        f"SELECT {first}.slot_ordinal, {first}.end_ns, {atr}.atr_price, ({ready}), "
+        f"{', '.join(select)} "
         + " ".join(joins)
         + f" WHERE {first}.contract_id = %s AND {first}.slot_ordinal BETWEEN %s AND %s"
         f" AND {first}.slot_ordinal %% {ROW_SECONDS} = 0"
@@ -127,11 +152,11 @@ def plan(ids: dict[str, int]) -> tuple[list[str], str, list[tuple[str, int]]]:
 
 def session_rows(product, calendar, view, coverage, found, flagged: bool) -> dict:
     """One session's rows from the query's result: eligibility, the cost of a round trip in R,
-    and the targets. `found` holds slot ordinal, row end, the slow ATR in price units, then the
+    and the targets. `found` holds the ordinal, row end, slow ATR, swing readiness, then the
     features (None for NULL)."""
     end = np.array([r[1] for r in found], np.int64)
     block = np.array([r[2:] for r in found], dtype=np.float64)  # NULL becomes NaN
-    atr, x = block[:, 0], block[:, 1:].astype(np.float32)
+    atr, swings_ready, x = block[:, 0], block[:, 1].astype(bool), block[:, 2:].astype(np.float32)
     n = len(end)
     until = calendar.close_after(end) - EXECUTION.flat_before_close
     decision = end + EXECUTION.close_delay
@@ -141,6 +166,7 @@ def session_rows(product, calendar, view, coverage, found, flagged: bool) -> dic
     why = np.where(
         ~defined, NO_ATR, np.where(end + ENTRY_CUTOFF_S * NS < until, ELIGIBLE, NO_ROOM)
     ).astype(np.int8)
+    why[(why == ELIGIBLE) & ~swings_ready] = COLD_SWINGS
     if flagged:
         why[why == ELIGIBLE] = FLAGGED
     reference = np.zeros(n, np.int64)
@@ -222,7 +248,7 @@ def settings() -> dict:
     }
 
 
-VERSION = 3  # of how rows, eligibility, and costs are made here: part of the cache identity
+VERSION = 4  # of how rows, eligibility, and costs are made here: part of the cache identity
 SOURCES_QUERY = """
     SELECT s.contract_id, s.trade_date, s.source_files FROM market.ingest_slice s
     WHERE s.contract_id = ANY(%s)"""
@@ -384,10 +410,11 @@ def cached(
     if path.exists() and meta.exists() and not rebuild:
         log(f"Dataset: reading {path.relative_to(ROOT)}")
         with np.load(path) as stored:
-            return {k: stored[k] for k in ARRAYS} | json.loads(meta.read_text())
+            found = {k: stored[k] for k in ARRAYS} | json.loads(meta.read_text())
+        return found | {"cache_key": key}
     data = build(products, start, end, workers, url, log, selection)
     CACHE.mkdir(parents=True, exist_ok=True)
     np.savez(path, **{k: data[k] for k in ARRAYS})
     meta.write_text(json.dumps({k: v for k, v in data.items() if k not in ARRAYS}))
     log(f"Dataset: wrote {path.relative_to(ROOT)}")
-    return data
+    return data | {"cache_key": key}

@@ -4,6 +4,7 @@ from datetime import date
 import numpy as np
 import pytest
 from backtest_runner import dataset, yardstick
+from scipy.stats import spearmanr
 from strategy_core import targets
 from strategy_core.engine import MarketChunk, session_view
 from strategy_core.market import HOUR, NS, PRODUCTS, PX, SessionCalendar
@@ -29,6 +30,12 @@ def test_the_dataset_reads_the_engines_features_by_its_names_and_in_its_order():
     assert "% 60 = 0" in query.replace("%%", "%") and query.count("LEFT JOIN") == len(needed) - 1
     assert ".slot_ordinal / 10 " in query and ".slot_ordinal / 60 " in query
     assert ("vol_1m", 0) in needed and ("pivot_1m", ids["pivot_1m:slow_atr_3"]) in needed
+    swing_scales = sum(table in dataset.SWING_TABLES for table, _ in needed)
+    assert (
+        query.count(".high_age_s IS NOT NULL")
+        == query.count(".low_age_s IS NOT NULL")
+        == swing_scales
+    )
     assert set(yardstick.GATE) <= set(names)
 
 
@@ -41,6 +48,8 @@ def test_every_feature_belongs_to_one_kind_of_input():
     assert yardstick.group_of("10m@10s.imbalance_vw") == "book"
     assert yardstick.group_of("1h@1m.atr5_bps") == "volatility"
     assert yardstick.group_of("1h@1m.slow_atr_3.structure") == "swings"
+    assert yardstick.group_of("1h@1m.slow_rsi_mean_atr_3.structure") == "series"
+    assert yardstick.group_of("10m@10s.mid_cvd_atr_1.progress") == "series"
     assert yardstick.group_of("1m@1s.session_elapsed_s") == "session"
     assert yardstick.group_of("1h@1m.age_s") == "session"
 
@@ -134,9 +143,9 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
     chunk = MarketChunk("GCZ6", T0, T0 + 6 * HOUR, t, cover, "s", True, random_book(t, seed=5))
     view = session_view(chunk, cal, dataset.EXECUTION)
     seconds = [600, 900, 1200, 6 * 3600 - 3000, 1500]
-    # ordinal, row end, the slow ATR in price units, two features
+    # ordinal, row end, the slow ATR in price units, swing readiness, two features
     found = [
-        (60 * k, T0 + s * NS, atr, 1.5, None)
+        (60 * k, T0 + s * NS, atr, True, 1.5, None)
         for k, (s, atr) in enumerate(zip(seconds, [2.0, 2.0, None, 2.0, 0.01], strict=True))
     ]
     out = dataset.session_rows(product, cal, view, cover, found, False)
@@ -152,8 +161,85 @@ def test_a_session_gives_eligibility_cost_and_targets_for_each_row():
     assert out["cost_r"][0] == pytest.approx(
         (seen.ask - seen.bid + commission) / round(1.5 * 2.0 * PX)
     )
+    # A later reset loses one confirmed side. Earlier decisions survive and the cold
+    # decision remains countable, with its features and no target.
+    reset = [*found[:1], (*found[1][:3], False, *found[1][4:]), *found[2:]]
+    after = dataset.session_rows(product, cal, view, cover, reset, False)
+    assert after["why"].tolist() == [0, dataset.COLD_SWINGS, *out["why"][2:]]
+    assert after["y"][0] == out["y"][0] and np.isnan(after["y"][1])
+    np.testing.assert_array_equal(after["x"], out["x"])
     flagged = dataset.session_rows(product, cal, view, cover, found, True)
     assert flagged["why"].tolist()[:2] == [dataset.FLAGGED] * 2 and np.isnan(flagged["y"]).all()
+
+
+def test_the_model_decides_only_on_rows_it_could_have_been_fitted_on():
+    """Regression (PR #103 review): training leaves out a row where a swing scale has no
+    confirmed high or low yet, but the policy opened on a +1 R forecast there. Such a row now
+    opens nothing and closes nothing; the artifact names the features that decide it."""
+    from backtest_runner import policy
+
+    slow = "1h@1m.slow_rsi_mean_atr_1"
+    names = ["1m@1s.rsi", f"{slow}.high_age_s", f"{slow}.low_age_s",
+             "1m@1s.fast_atr_1.low_age_s", "1m@1s.session_elapsed_s"]  # fmt: skip
+    assert dataset.readiness(names) == names[1:4]
+    f = {
+        policy.FORECAST: np.array([1.0, 1.0, -1.0, -1.0]),
+        "exec.spread_r": np.full(4, 0.06),
+        "exec.commission_r": np.full(4, 0.01),
+        names[1]: np.array([60.0, np.nan, 60.0, 60.0]),  # no confirmed RSI high in row 1
+        names[2]: np.array([60.0, 60.0, 60.0, 60.0]),
+        names[3]: np.array([5.0, 5.0, 5.0, np.nan]),  # no confirmed price low in row 3
+    }
+    for close in policy.CLOSES:
+        model = policy.ModelPolicy("unused.joblib", close=close, gate=(), ready=tuple(names[1:4]))
+        assert model.signals(f).tolist() == [1, 0, -1, 0]
+        long_exit, short_exit = model.closes(f)
+        assert not long_exit[[1, 3]].any() and not short_exit[[1, 3]].any()
+    turn = policy.ModelPolicy("unused.joblib", close="turn", gate=(), ready=tuple(names[1:4]))
+    assert turn.closes(f)[0].tolist() == [False, False, True, False]
+    # an artifact carries the list; one written before it did has it derived from its names
+    with_list = policy.ModelPolicy("x", gate=(), loaded={"names": names, "ready": names[1:2]})
+    derived = policy.ModelPolicy("x", gate=(), loaded={"names": names})
+    assert with_list.signals(f).tolist() == [1, 0, -1, -1]
+    assert derived.signals(f).tolist() == [1, 0, -1, 0]
+
+
+def test_a_saved_model_is_checked_against_the_engine_before_it_is_replayed(tmp_path):
+    """Regression (PR #103 review): run 11's models read the RSI scales first built, which
+    have other names now, and replay failed on a KeyError inside a worker. A model is checked
+    before anything starts, and is never given a renamed scale in place of the one it read."""
+    import joblib
+    from backtest_runner import policy
+    from strategy_core.pipeline import StageFeatures
+
+    names = list(StageFeatures.sources())[:40]
+    folder = tmp_path / "run-7"
+    folder.mkdir()
+    current = folder / "2026-05.joblib"
+    joblib.dump({"names": names, "ready": names[:2]}, current)
+    assert policy.incompatible(current) is None
+    retired = folder / "2026-06.joblib"
+    old = ["1m@1s.fast_rsi_atr_0p5.ext", "1m@1s.fast_rsi_atr_0p5.progress", "1h@1m.gone.x"]
+    joblib.dump({"names": [*names, *old]}, retired)
+    why = policy.incompatible(retired)
+    assert "run-7/2026-06.joblib reads 3 features" in why and "from 2 scales or stages" in why
+    assert "1h@1m.gone" in why and policy.REPLAY_NOTE in why  # no commit recorded: where to look
+    # a fit leaves out a column without a training value: only the columns it reads count, as
+    # in the forecast itself. A retired name among the unused ones does not stop the replay ...
+    unused = folder / "2026-07.joblib"
+    joblib.dump({"names": [*names, *old], "columns": list(range(40)), "ready": names[:2]}, unused)
+    assert policy.incompatible(unused) is None
+    assert policy.used(joblib.load(unused)) == names
+    # ... and one among those it reads does
+    joblib.dump({"names": [*names, *old], "columns": [0, 40], "ready": []}, unused)
+    assert "reads 1 features" in policy.incompatible(unused)
+    joblib.dump(
+        {"names": names, "ready": old[:1], "source": {"commit": "abc123", "dirty": True}}, retired
+    )
+    why = policy.incompatible(retired)  # a feature needed only to decide counts too
+    assert "reads 1 features" in why and "commit abc123 with uncommitted changes" in why
+    revision = yardstick.source_revision()
+    assert set(revision) == {"commit", "dirty"} and len(revision["commit"]) == 40
 
 
 def test_the_holdout_is_refused():
@@ -170,17 +256,16 @@ def test_the_policy_opens_beyond_the_cost_and_closes_by_its_rule():
         "exec.commission_r": np.full(7, 0.01),
         "slow": np.array([-1.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     }
-    gated = policy.ModelPolicy("unused.joblib", gate=("slow",))
-    free = policy.ModelPolicy("unused.joblib", gate=())
+    gated = policy.ModelPolicy("unused.joblib", ready=(), gate=("slow",))
+    free = policy.ModelPolicy("unused.joblib", ready=(), gate=())
     # beyond the cost of 0.04 R: a buy, a sell; inside it: nothing; a spread over a quarter of
     # R, or no usable book: nothing. The slow trend is down in the first two rows: no long
     assert free.signals(f).tolist() == [1, -1, 0, 0, 0, 0, 0]
     assert gated.signals(f).tolist() == [0, -1, 0, 0, 0, 0, 0]
-    assert policy.ModelPolicy("unused.joblib", threshold=0.25, gate=()).signals(f).tolist() == [
-        1, -1, 1, -1, 0, 0, 0,
-    ]  # fmt: skip
+    cheap = policy.ModelPolicy("unused.joblib", ready=(), threshold=0.25, gate=())
+    assert cheap.signals(f).tolist() == [1, -1, 1, -1, 0, 0, 0]
     hold, turn, opposite = (
-        policy.ModelPolicy("unused.joblib", close=c, gate=("slow",)).closes(f)
+        policy.ModelPolicy("unused.joblib", ready=(), close=c, gate=("slow",)).closes(f)
         for c in policy.CLOSES
     )
     assert not hold[0].any() and not hold[1].any()
@@ -196,7 +281,7 @@ def test_the_policy_opens_beyond_the_cost_and_closes_by_its_rule():
         policy.BRACKET.max_hold_s is None and policy.BRACKET.target_atr == policy.BRACKET.stop_atr
     )
     with pytest.raises(ValueError, match="close must be"):
-        policy.ModelPolicy("unused.joblib", close="flip")
+        policy.ModelPolicy("unused.joblib", ready=(), close="flip")
 
 
 def test_a_cell_report_counts_dates_without_a_trade_and_pairs_products():
@@ -275,6 +360,7 @@ def test_training_dates_are_cut_into_blocks_with_a_date_left_out_on_each_side():
     assert np.unique(day[cut[0][0]] - first).tolist() == [3, 4, 5, 6, 7]
 
 
+@pytest.mark.slow
 def test_shrinking_stops_a_forecast_claiming_what_it_does_not_know():
     """Each session has its own level in the target, and one feature that names the session.
     Trees learn the sessions they saw and forecast boldly; outside them the forecast is
@@ -379,3 +465,49 @@ def test_the_slope_weighs_each_trade_date_once_or_each_row_once():
     assert yardstick.slope_of(forecast, y, day, by_date=False) == pytest.approx(0.26)
     assert yardstick.slope_of(-forecast, y, day, by_date=True) == 0.0  # never below zero
     assert yardstick.slope_of(np.full(100, np.nan), y, day, by_date=True) == 0.0
+
+
+def test_an_added_input_is_judged_by_the_paired_difference_in_skill():
+    """Two forecasts of one target on the same dates: the difference of their pooled rank
+    correlations, with an interval from resampling the dates both were scored on."""
+    rng = np.random.default_rng(3)
+    day = np.repeat(np.arange(60), 200)
+    signal = rng.normal(size=len(day))
+    shared = np.repeat(rng.normal(size=60), 200)  # what every row of a date has in common
+    y = signal + shared + rng.normal(size=len(day))
+    better, worse = signal + 0.5 * rng.normal(size=len(day)), signal + 3 * rng.normal(size=len(day))
+    found = yardstick.paired_difference(better, worse, y, day)
+    alone = [yardstick.pooled_correlation(f, y, day)["value"] for f in (better, worse)]
+    assert found["trade_dates"] == 60
+    assert found["value"] == pytest.approx(alone[0] - alone[1], abs=2e-5)
+    assert 0 < found["interval_95"][0] < found["value"] < found["interval_95"][1]
+    # pairing cancels what the dates share: the interval is narrower than either forecast's own
+    own = yardstick.pooled_correlation(better, y, day)["interval_95"]
+    assert found["interval_95"][1] - found["interval_95"][0] < own[1] - own[0]
+    same = yardstick.paired_difference(better, better, y, day)
+    assert same["value"] == 0 and same["interval_95"] == [0, 0]
+    # rows only one of them scored are left out
+    partial = np.where(day < 30, np.nan, worse)
+    assert yardstick.paired_difference(better, partial, y, day)["trade_dates"] == 30
+
+
+def test_bootstrap_reranks_the_pooled_rows_in_each_date_draw(monkeypatch):
+    # Unequal date sizes, ties in the targets and forecasts, draws with missing/repeated dates.
+    rng = np.random.default_rng(11)
+    day = np.repeat([2, 4, 8, 9], [6, 9, 12, 13])
+    y = rng.choice([-1.0, 0.0, 1.0], size=len(day))
+    a, b = rng.integers(6, size=(2, len(day)))
+    monkeypatch.setattr(yardstick, "RESAMPLES", 40)
+    draws = np.random.default_rng(yardstick.SEED).choice(np.unique(day), size=(40, 4))
+    pooled, paired = [], []
+    for draw in draws:
+        rows = np.concatenate([np.flatnonzero(day == d) for d in draw])
+        first = spearmanr(a[rows], y[rows]).statistic
+        pooled.append(first)
+        paired.append(first - spearmanr(b[rows], y[rows]).statistic)
+    assert yardstick.pooled_correlation(a, y, day)["interval_95"] == pytest.approx(
+        np.percentile(pooled, [2.5, 97.5]), abs=5e-6
+    )
+    assert yardstick.paired_difference(a, b, y, day)["interval_95"] == pytest.approx(
+        np.percentile(paired, [2.5, 97.5]), abs=5e-6
+    )

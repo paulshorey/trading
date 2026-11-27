@@ -40,8 +40,10 @@ once, for any timeframe. The state of each step is in the
    when price has moved the threshold (about 3 ATR) away from it, and a confirmed swing
    never changes. From the confirmed highs and lows and the current price: higher or lower
    highs and lows, the trend they make, which levels the current price has broken, and how
-   far the open move has come toward confirming the next swing (`progress`, the pullback so
-   far over the threshold: on a random walk, the chance it confirms). No model predicts a
+   far the open move has come toward confirming the next swing: `progress`, the deepest
+   pullback since the running extreme over the threshold, which does not come back down
+   when the move recovers, and `ext_dist_atr`, the distance from that extreme now, in ATRs.
+   Neither is a probability. No model predicts a
    reversal: the swings are computed by rule only (Paul, November 23, 2026).
 5. **Swings and structure of derived series, and their agreement with price.** The same
    zigzag and structure on RSI, on net volume flow (CVD), and on other indicators, then
@@ -194,8 +196,29 @@ example `uv run research backtest SPEC`. Do not install dependencies inside buil
 test, dev, or start scripts (they use `uv run --no-sync`).
 
 For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentation
-changes, check accuracy and links. Keep documentation short, avoid duplicated
+changes, check accuracy and links; they need no test run. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
+
+**The PR check on GitHub is deliberately small**: lint, `pnpm test:fast` (every test not
+marked `slow`, with one short whole-session against second-by-second replay), and the
+build. The slow tests, which replay long sessions second by second and rebuild a test
+database, run on the developer's machine, which is faster and holds the market data. So
+before a PR that changes Python code is marked ready, the agent responsible for it runs
+`pnpm test` (everything) on that machine, and when the engine, a stage, or execution changed
+also `uv run research verify apps/backtest-runner/examples/gc-day.json`. Both fail loudly:
+`pnpm test` errors when PostgreSQL cannot be reached, where a bare `pytest` would skip
+those tests, and `verify` exits 1 when features or trades differ or nothing was compared.
+Write on the PR the commit tested, the counts passed and skipped, and why anything was
+skipped; a later push needs the run again unless it changed only documentation. A PR that
+changes only documentation or comments needs neither. Mark a new test `@pytest.mark.slow`
+when it takes more than about ten seconds. The whole suite can also be run on GitHub by
+hand: the workflow's "Run workflow" with `full` ticked.
+
+The two Python test suites take about 25 minutes each: run them in the background with
+their output in a file, and never piped through `tail`, which shows nothing until the end.
+Do not edit Python source while a suite, `research yardstick`, `research policy`, or
+`research ingest` is running: their workers import the code again, and a run records and
+checks the hash of the source it started with. Documentation can be edited meanwhile.
 
 ## Local database: agents may write to it
 

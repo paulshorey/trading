@@ -23,15 +23,29 @@ the [build log](build-log.md).
 - [x] **Base changes, in one rebuild** (item 10; November 24): a CVD that runs through a
       contract's life, the ATR normalizer floored at the spread, the roll warm-up count
       ([record](build-log.md#base-changes-a-continuous-cvd-the-atr-floor-the-roll-warm-up-november-24-2026)).
-- [ ] **Swings and structure of RSI and of CVD**, each sized by its own ATR, and the codes
-      comparing the three structures (item 11, [decision 41](roadmap.md#decisions)): measure
-      each series' row-to-row noise and freeze its floor first
-      ([contract](pivot-structure-design.md#swing-sources-price-and-rsi)).
-      Read `cvd` by its changes only, never its level: a backtest that starts after a
-      contract's first stored session counts from zero there, so its level differs from the
-      stored one by a constant, and a missing second adds an unknown one. A segment that
-      ends at missing data and values that are differences inside it are unaffected; the
-      spec must state this and a test must shift the level and compare.
+- [x] **Swings and structure of RSI and of CVD**, each sized by its own ATR (item 11,
+      [decision 41](roadmap.md#decisions); November 24): 24 stages,
+      [spec](series-structure-spec.md),
+      [record](build-log.md#swings-and-structure-of-rsi-and-of-cvd-november-24-2026).
+- [x] **The RSI series for swings and divergence** (November 27): the mean over the 60
+      phases, chosen by the phase comparison and the flat-price tests
+      ([decided](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
+- [x] **Delete the rows of the retired RSI scales** (November 27, with Paul's agreement):
+      61.3 million rows of `<stream>_rsi_atr_<k>` and 4.6 million of their events, then a
+      `VACUUM`. The variants stay registered as retired: a name is never reused.
+- [ ] **The current pullback over the frozen threshold**, as a feature of its own beside
+      `progress` (the deepest pullback): the "how close is this swing to confirming now"
+      that decision 31 meant. `ext_dist_atr` over the multiple gives it only where the
+      threshold's floor does not bind. A new column means a rebuild of the swing stages, so
+      do it with the comparison codes.
+- [ ] **Does the minute-end result hold between minute ends?** The dataset has one row a
+      minute, at its last second, where every slower timeframe has just completed a row.
+      Add one predeclared second a minute, rotating through the offsets, with the
+      minute-end rows as the control, and compare the model with and without the swing
+      inputs on it.
+- [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
+      divergence at the latest highs and lows, a level one series has broken that another
+      holds. Specify them first; they are a new stage, and inputs like any other.
 - [ ] **The swing mode** (item 12): positions held across the daily break and across days,
       as a switch for training and trading alike ([decision 40](roadmap.md#decisions)).
 - [ ] **Six years of GC and SI** (item 13).

@@ -17,6 +17,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -25,6 +26,7 @@ from psycopg.types.range import DateRange
 from strategy_core.engine import Engine
 from strategy_core.features import FeatureFrame
 from strategy_core.market import PRODUCTS
+from strategy_core.pipeline import StageFeatures
 from strategy_core.strategies import STRATEGIES, Bracket, Entry, trend_gate
 from strategy_core.timeframes import SLOW
 
@@ -72,6 +74,8 @@ class ModelPolicy:
     bracket: Bracket = BRACKET
     entry: Entry = field(default_factory=lambda: ENTRIES["cross"])
     name: str = "model"
+    # features that must have a value for the model to decide; None: those its artifact names
+    ready: tuple[str, ...] | None = None
     loaded: dict = field(default_factory=dict, compare=False, repr=False)
 
     def __post_init__(self):
@@ -88,12 +92,23 @@ class ModelPolicy:
     def required(self) -> tuple[str, ...]:
         return (*self.model()["names"], *self.gate)
 
+    def decides(self, f, rows: int) -> np.ndarray:
+        """Whether the model may decide at each row: every feature its training rows were
+        required to have is there (the swing scales' confirmed high and low). On any other row
+        the model was never fitted, so it opens nothing and closes nothing; the bracket and the
+        forced exit still act."""
+        names = readiness(self.model()) if self.ready is None else self.ready
+        out = np.ones(rows, bool)
+        for name in names:
+            out &= np.isfinite(f[name])
+        return out
+
     def forecast(self, f) -> np.ndarray:
         """The model's forecast of the move ahead in R at each row."""
         if FORECAST in f:
             return f[FORECAST]
         kept = self.model()
-        names = [kept["names"][i] for i in kept["columns"]]
+        names = used(kept)
         x = np.column_stack([f[n] for n in names]).astype(np.float32)
         return kept["model"].predict(x) if len(x) else np.zeros(0)
 
@@ -108,26 +123,68 @@ class ModelPolicy:
         forecast = self.forecast(f)
         cost, narrow = self.cost(f)
         long_ok, short_ok = trend_gate(f, self.gate, len(forecast))
+        ready = self.decides(f, len(forecast))
         with np.errstate(invalid="ignore"):
-            buy = narrow & long_ok & (forecast > cost)
-            sell = narrow & short_ok & (forecast < -cost)
+            buy = ready & narrow & long_ok & (forecast > cost)
+            sell = ready & narrow & short_ok & (forecast < -cost)
         return np.where(buy, 1, np.where(sell, -1, 0)).astype(np.int8)
 
     def closes(self, f) -> tuple[np.ndarray, np.ndarray]:
         forecast = self.forecast(f)
         if self.close == "hold":
             return np.zeros(len(forecast), bool), np.zeros(len(forecast), bool)
+        ready = self.decides(f, len(forecast))
         with np.errstate(invalid="ignore"):
             if self.close == "turn":
-                return forecast <= 0, forecast >= 0
+                return ready & (forecast <= 0), ready & (forecast >= 0)
             cost, _ = self.cost(f)
-            return forecast < -cost, forecast > cost
+            return ready & (forecast < -cost), ready & (forecast > cost)
 
     def params(self) -> dict:
         return {k: v for k, v in asdict(self).items() if k != "loaded"}
 
 
 STRATEGIES["model"] = ModelPolicy
+
+
+REPLAY_NOTE = "docs/project/series-structure-spec.md (Replaying an earlier run)"
+
+
+def used(kept: dict) -> list[str]:
+    """The features a fitted model reads to forecast: a fit leaves out a column that had no
+    value on its training rows, so these can be fewer than the dataset's names."""
+    names = kept["names"]
+    return [names[i] for i in kept["columns"]] if "columns" in kept else list(names)
+
+
+def readiness(kept: dict) -> list[str]:
+    """The features that must have a value for the model to decide: those its artifact names,
+    or for one written before it did, those of its dataset's names."""
+    return list(kept["ready"]) if "ready" in kept else dataset.readiness(kept["names"])
+
+
+def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
+    """Why a saved model cannot be replayed by this code, or None when it can: the features it
+    reads, to forecast and to decide, must all be ones the engine computes. A model fitted on a
+    retired definition (its variant has another name now) is never given the new one in its
+    place: that would be another experiment. The message says how to find the code it needs."""
+    kept = joblib.load(artifact)
+    offered = set(StageFeatures.sources()) if offered is None else offered
+    missing = sorted({n for n in (*used(kept), *readiness(kept)) if n not in offered})
+    if not missing:
+        return None
+    families = sorted({n.rsplit(".", 1)[0] for n in missing})
+    source = kept.get("source") or {}
+    where = (
+        f"commit {source['commit']}" + (" with uncommitted changes" if source.get("dirty") else "")
+        if source.get("commit")
+        else f"the artifact names no commit; {REPLAY_NOTE} lists the commit of each earlier run"
+    )
+    return (
+        f"{artifact.parent.name}/{artifact.name} reads {len(missing)} features this code does "
+        f"not compute, from {len(families)} scales or stages (first: {families[0]}). It was "
+        f"fitted on other definitions; replay it with the code that made it: {where}"
+    )
 
 
 def month_dates(month: int) -> tuple[date, date]:
@@ -332,6 +389,9 @@ def run(
         artifact = folder / f"2026-{month:02d}.joblib"
         if not artifact.exists():
             raise ValueError(f"No model for 2026-{month:02d} in {folder}: run `research yardstick`")
+        problem = incompatible(artifact)
+        if problem:  # before any worker starts or a run is recorded
+            raise ValueError(problem)
         tasks += [(p, month, str(artifact.relative_to(ROOT))) for p in products]
     start, end = month_dates(TEST_MONTHS[0])[0], month_dates(TEST_MONTHS[-1])[1]
     with db.connect(url) as conn:  # recorded before anything is read

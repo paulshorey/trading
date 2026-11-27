@@ -38,7 +38,7 @@ volatility (ATR) tier, including bullish and bearish ATR.
 | A   | 0–1  | Stages and tiers, per-stage versions and checkpoints, column and variant registries, summation order, empty-window policy, drawdown/drawup and high/low-order fields, derived lead (40 to start) | every stage     |
 | B   | 0–1  | `bar_1m`, `candle_1h_1m` (the `1h@1m` stage, B1), and the hourly-only metrics as stage `stats_1h_1m` (B2)                                                                                        | new tables only |
 | C   | 1    | Volatility family: `vol_1s`, `vol_1m`, including bullish/bearish and adverse-excursion ATR ([section 7](#7-volatility-tier-atr-family))                                                          | new tables only |
-| D   | 2    | Swing detector and structure of price: `pivot_1s`, `pivot_1m`, `pivot_event` (done); of RSI: `pivot_rsi_1s`, `pivot_rsi_1m` (next, same detector)                                               | new tables only |
+| D   | 2    | Swing detector and structure of price: `pivot_1s`, `pivot_1m`, `pivot_event` (done); of RSI and CVD: `pivot_rsi_*`, `pivot_cvd_*` (done, same detector)                                          | new tables only |
 | E   | 3    | Structure signals: `signal_1s`, `signal_1m` ([contract](pivot-structure-design.md#tier-3-structure-signals))                                                                                     | new tables only |
 | F   | —    | Pivot outcome labels and the benchmark (future-looking, stored apart from inputs)                                                                                                                | new tables only |
 
@@ -199,10 +199,10 @@ safeguard, if either is ever undefined, the segment ends exactly as for missing 
 
 ### 3.3 Structure: higher lows and lower highs
 
-The same detector and structure layer also run on the RSI series
-([swing sources](pivot-structure-design.md#swing-sources-price-and-rsi)): RSI pivots with
-thresholds in RSI points (5, 10, 20), their higher lows and lower highs, and in tier 3
-the structural divergences between price and RSI.
+The same detector and structure layer also run on the RSI and CVD series
+([swing sources](pivot-structure-design.md#swing-sources-price-rsi-and-cvd)), each with
+thresholds in multiples of its own ATR ([spec](series-structure-spec.md)). The structural
+divergences between price and these series are planned.
 
 The [pivot/structure contract](pivot-structure-design.md) defines the exact classes, trend,
 provisional relations, breaches, and their field names; this section summarizes them.
@@ -378,10 +378,8 @@ Sections 3.1–3.4 and the [contract](pivot-structure-design.md) are implemented
   ignores them, and the continuous views leave them out. Registering it again clears the mark.
 - **The engine** reads every scale: `1m@1s.<scale>.<feature>` row by row, and
   `1h@1m.<scale>.<feature>` as of the latest completed minute (415 features in all).
-- **Not built yet:** RSI swings. The detector already handles a series measured by plain
-  differences (the contract's RSI example is a test), but `pivot_rsi_1s` needs about 40 GB
-  more than the disk has, and its thresholds wait for the measurement of row-to-row RSI noise
-  the contract asks for.
+- **RSI and CVD swings** were built later, on November 24, 2026
+  ([spec](series-structure-spec.md)).
 
 ## 4. Extensibility: stages
 

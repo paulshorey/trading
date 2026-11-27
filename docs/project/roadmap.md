@@ -83,9 +83,9 @@ is one stored table with its own version.
 | --- | --- | --- | --- |
 | 1. Base rows | `bar_1s`, `bar_10s`, `bar_1m`; planned `book_1s` | Built from trades, with a CVD that runs through each contract's life | The book between trades: the data reaches the engine, no stage reads it |
 | 2. Sliding windows | `candle_1m_1s`, `candle_10m_10s`, `candle_1h_1m` | Built on three timeframes, with row counting and per-phase indicators; a timeframe is a parameter | A session-long window for a view of several days |
-| 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 741 features with the swings) | Nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
+| 3. Indicators, then indicators of indicators | `candle_*`, `stats_*`, `vol_*` | Indicators and volatility on price are built (the engine holds 1,449 features with the swings of price, RSI, and CVD) | Besides the swings of RSI (step 5), nothing is computed on an indicator. Many features restate the same price path ([review](#review-of-november-23-2026), point 6) |
 | 4. Swings and structure of price | `pivot_1s`, `pivot_10s`, `pivot_1m`, `pivot_event` | An ATR zigzag at 0.5, 1, 2, and 3 ATR on each timeframe, with `progress`, `trend`, the class of the last high and low, the age of each break, and the `structure` code | Nothing planned |
-| 5. Swings and structure of derived series | Planned `pivot_rsi_*`, `pivot_cvd_*`, `signal_*` | Not built. The swing code already takes a source in its own units | Swings of RSI and of CVD, each sized by its own ATR; codes comparing the three structures |
+| 5. Swings and structure of derived series | `pivot_rsi_*`, `pivot_cvd_*` (`stage_step_series.py`); planned `signal_*` | The zigzag and structure of RSI and of CVD on each timeframe, at 0.5, 1, 2, and 3 of the series' own ATR ([spec](series-structure-spec.md)) | Codes comparing the three structures; swings of other indicators |
 | 6. Decision model | `targets.py`, `dataset.py`, `yardstick.py`, `policy.py`; `research.run` | The engine makes position decisions. A first model is fitted walk-forward and replayed in the engine as the yardstick: it has no skill at the bracket's horizon ([results](yardstick-spec.md#results-november-24-2026)) | Inputs that give it skill; one portfolio across products; the swing mode |
 
 Base rows and indicator stages hold one row per scheduled slot and contract. Swing rows of
@@ -267,7 +267,12 @@ and 34 (replaced by 35), 19 (replaced by 36).
     threshold away from the extreme and never changed afterwards. The scales at 0.5, 1, and
     2 ATR stay; the model reads all of them.
 31. **The confidence of an unconfirmed swing is arithmetic:** the pullback so far divided by
-    the threshold (2 of 3 ATR: 67%; 2.5 of 3: 83%). This is the stored `progress`.
+    the threshold (2 of 3 ATR: 67%; 2.5 of 3: 83%). Corrected November 27: the stored
+    `progress` is the *deepest* pullback since the running extreme over the threshold, so
+    it stays at 0.8 after a move has recovered to within a point of its extreme, and it is
+    not a probability. Where the move stands now is `ext_dist_atr`, in ATRs; the current
+    pullback over the frozen threshold is not stored as its own feature yet
+    ([to-do](todo.md)).
 32. **Structure is a code computed from confirmed swings and the current price:** higher or
     lower highs and lows, and whether the current price has broken the last confirmed low
     or high.
@@ -368,12 +373,14 @@ floored at the spread, the roll warm-up count. What each built and found is in t
 [build log](build-log.md).
 
 11. **The second pass: swings and structure of RSI and of CVD** (step 5;
-    [decision 41](#decisions)), on every timeframe, with the swing code that price uses.
-    Each series gets its own ATR: per phase, the Wilder average of the series' true range
-    over its window, as price's ATR is. A swing is confirmed by a multiple of that ATR, with
-    a floor above the series' row-to-row noise, frozen in a spec first. Then the codes that
-    compare the three structures: where they agree, where one diverges, and where one has
-    broken a level the others hold. They are inputs; the model decides what they are worth.
+    [decision 41](#decisions)). The swings are built
+    ([spec](series-structure-spec.md),
+    [record](build-log.md#swings-and-structure-of-rsi-and-of-cvd-november-24-2026)): on
+    every timeframe, with the swing code that price uses, each series in its own ATR, at the
+    multiples price uses, with a smallest swing above the series' row-to-row noise. Still to
+    build: the codes that compare the three structures, where they agree, where one
+    diverges, and where one has broken a level the others hold. They are inputs; the model
+    decides what they are worth.
 12. **The swing mode** (step 6; [decision 40](#decisions)). In the engine: a position may
     stay open through a close; a stop is then judged by the first trades after the reopen,
     which is where a gap is paid; a position is closed before its contract stops being the

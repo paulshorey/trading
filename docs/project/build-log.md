@@ -6,6 +6,132 @@ record behind it. "This PR" in a section means the PR it names (the heading or t
 the text), not the one that created this page. Add a section here when a stage, a rebuild,
 or an experiment is finished.
 
+## Swings and structure of RSI and of CVD (November 24, 2026)
+
+Build-order item 11, step 5 of the process ([decision 41](roadmap.md#decisions);
+[spec](series-structure-spec.md), frozen before the build and before the model run).
+
+**What a series is.** One value per aggregated row of a timeframe, at the row's close: the
+RSI of the window that ends there (`candle_<window>.rsi`) or the contract's running buy
+minus sell volume through it (`bar_<rows>.cvd`). No trade is read. The zigzag of price stays
+the one stage that reads the trades inside a row, to know which level was reached first.
+
+**Built** (`stage_step_series.py`): 24 stages, one per timeframe, series, and multiple
+(`<stream>_rsi_atr_<k>`, since renamed `<stream>_rsi_mean_atr_<k>`, and
+`<stream>_cvd_atr_<k>`, k of 0.5, 1, 2, 3), in the six tables of
+migration `0016` with their events in `market.pivot_event`. Each computes the series' own
+ATR (per phase, the Wilder average of the window's true range of the series), freezes a
+threshold of k ATRs when an extreme is set, floored at 2.5 RSI points or 3 typical trades,
+and runs the detector and the structure code that price uses. Values in ATRs divide by the
+series' ATR floored at half that smallest swing. RSI is read to a millionth of a point, so
+that floating-point noise never decides whether two equal values differ (found by the
+price-scaling test: two rows differed). The fast tables hold the last second of every
+ten-second row; the engine computes every second.
+
+**How the thresholds were chosen** (GC and SI, March 2 to April 24, 2026, 39 trade dates).
+RSI's own ATR is about 7 points on every timeframe and both products; CVD's is 24, 111, and
+355 contracts for GC and 8, 43, and 149 for SI, which is why each needs its own. At the same
+multiple of its own ATR each series makes about as many swings as price, so price's
+multiples are used and a swing of one series compares with a swing of another. Confirmed
+highs a trade date in the stored rows, GC then SI:
+
+| Timeframe | Multiple | Price | RSI | CVD |
+| --- | ---: | ---: | ---: | ---: |
+| `1m@1s` | 0.5 | 895 / 566 | 1,122 / 978 | 521 / 413 |
+| | 1 | 292 / 273 | 338 / 324 | 213 / 196 |
+| | 2 | 81 / 94 | 78 / 81 | 80 / 78 |
+| | 3 | 37 / 44 | 36 / 39 | 43 / 44 |
+| `10m@10s` | 0.5 | 120 / 112 | 120 / 121 | 62 / 55 |
+| | 1 | 31 / 31 | 34 / 34 | 22 / 22 |
+| | 2 | 7.8 / 7.8 | 7.5 / 7.5 | 7.6 / 8.2 |
+| | 3 | 3.7 / 3.4 | 3.3 / 3.3 | 4.1 / 4.5 |
+| `1h@1m` | 0.5 | 21 / 20 | 19 / 21 | 10 / 10 |
+| | 1 | 5.6 / 5.0 | 5.9 / 5.4 | 3.6 / 3.9 |
+| | 2 | 1.3 / 1.1 | 1.3 / 1.1 | 1.2 / 1.6 |
+| | 3 | 0.6 / 0.6 | 0.6 / 0.5 | 0.7 / 0.7 |
+
+They agree with the counts a plain zigzag gave before the build (in the spec), except that
+the spec's count for price at 3 slow ATRs (1.3) was too high; the stored 0.6 is right.
+
+**Checked.** Each scale equals a plain-Python reference (own ATR, threshold, zigzag) on the
+test world, in any chunking and from checkpoints; features are unchanged when all prices or
+all sizes are multiplied; shifting CVD's level by a constant changes no feature, only the
+stored levels (a backtest that starts later counts from another zero); a backtest warmed for
+the lead computes the stored rows. `ingest run GC SI` added the stages to all 12 contracts
+without rebuilding any other (858 sessions, run 6; every contract `current`). The new
+fingerprint, `~/fingerprint-series.txt`, holds the 432 lines of `~/fingerprint-new.txt`
+unchanged and 576 new ones (24 scales, 12 contracts, rows and events). `research verify` on the example day: features and all 18 trades identical between the
+whole session and second by second, at 9.8 ms a market second (8.8 ms with 741 features).
+
+**A fix after review** (November 25). The detector was given a size of zero for every row,
+so the events of these stages stored a leg's volume as 0, 0, 0 where it is unknown: no
+trade is read. They are NULL now (3,634,539 pivot events), and a test requires it. The 24
+stages were rebuilt (run 7). Against the fingerprint before the fix, only their 288 event
+lines differ, with the same counts; every row table is identical, so no feature changed and
+run 11 below stands. `~/fingerprint-series.txt` is the one after the fix.
+
+**The RSI series was wrong, and is replaced** (November 26 and 27; found in review). The
+stored RSI is one history per phase. Read row by row it steps as the rows rotate through
+the phases, and the zigzag confirmed swings no phase had made: 60 pivots in 30 minutes at
+a constant price, and 5% to 11% of the stored pivots at 0.5 and 1 ATR repeating exactly 60
+rows apart. The series is now the mean of the last 60 rows' RSI, each phase once, with its
+smallest swing measured again at 0.25 points; the scales are renamed
+`<stream>_rsi_mean_atr_<k>` and rebuilt (run 8), and the first ones are retired with their
+rows left in place. Both flat-price reproductions are tests. The stored pivots no longer
+repeat (0.0%). On minute-end forecasts at the bracket horizon, over 86 trade dates, no
+difference is detectable between the model with these RSI swings, with the first ones, or
+with none; shorter horizons, the seconds between minute ends, and results after costs were
+not tested ([measurements, the choice, and run 12](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). The table of swing counts above
+and run 11 below are of the first RSI series. `research verify` again
+finds features and all 18 trades identical. The fingerprint (`~/fingerprint-series.txt`,
+1,296 lines) holds every earlier line unchanged, CVD's included, and 288 new ones for the
+new RSI scales. The retired scales' rows were then deleted with Paul's agreement (61.3
+million rows, 4.6 million events) and their 288 lines taken out of the baseline: 1,008.
+
+**The model decides only on rows it was fitted on** (found in review). Training leaves out
+a row where a swing scale has no confirmed high or low yet; the policy opened on a forecast
+there. It now opens and closes nothing on such a row, and the artifact names the features
+that decide it (`ModelPolicy.decides`, `dataset.readiness`). Run 11's forecast was zero
+throughout, so nothing recorded changes.
+
+**Three corrections from a second review** (November 27). `progress` is the deepest
+pullback since the running extreme over the threshold, not the chance of confirmation: the
+project instructions and decision 31 said otherwise, and a test now shows it staying at 0.8
+after a recovery to one point from the high. Run 12's result is stated for what it tested.
+A saved model is checked against the engine's features before it is replayed, so run 11
+(fitted on the first RSI scales) stops with its reason instead of a KeyError in a worker,
+and new artifacts record their commit and dataset file.
+
+**The engine** now holds 1,449 features (741 before). Its per-second cost grows with the
+number of features, so a second in which no slower row completes now reuses the last row's
+values instead of joining them again (`StageFeatures.as_of`); the second-by-second
+equivalence test takes 190 s against 183 s before the stages were added.
+
+**The model, with and without them** (November 25; [the test](series-structure-spec.md#the-test-of-these-inputs-frozen-before-the-run)).
+
+| Forecast (run 11 rescored, 86 test dates) | Pooled rank correlation | Squared error against `flat` |
+| --- | --- | --- |
+| `trees`, all 1,449 features | 0.042 (-0.033 to 0.121) | 9% higher |
+| `trees_without_series`, the 741 | 0.044 (-0.033 to 0.116) | 12% higher |
+| Difference, paired by trade date | -0.002 (-0.057 to 0.052) | |
+| `trees_coarse` | 0.011 (-0.065 to 0.090) | 10% higher |
+| `ridge` | 0.042 (-0.037 to 0.118) | 53% higher |
+
+Review corrected the intervals by reranking each date resample. Run 11's saved report retains
+its original intervals. [Rescoring details](series-structure-spec.md#result-november-25-2026).
+
+**The new inputs add no measurable skill**, as expected before the run. The forecast without
+them reproduces run 9 (0.044), so the comparison is on the same footing. By product `trees`
+is 0.082 for GC and 0.000 for SI; by month -0.101, 0.097, 0.151, and 0.069. All four
+calibration slopes are zero in every month, so the yardstick is still the flat forecast and
+the policy was not replayed. Evidence: `~/yardstick-series.json`.
+
+**The horizon map was not rerun.** With 1,449 features and a seventh kind of input it takes
+more than two hours; the first attempt (run 10, left unfinished in `research.run`) was
+stopped by the session's time limit on the last of its five horizons, before anything was
+saved. Run 11 used `--no-horizons`. To get the map, run `research yardstick GC SI` from a
+terminal, where nothing limits it.
+
 ## Review fixes to the four open PRs (November 24, 2026)
 
 Paul reviewed PRs #98 to #101 and found defects in each. All are fixed on the top of the stack

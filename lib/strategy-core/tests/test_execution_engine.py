@@ -319,6 +319,72 @@ CASES = {
 }
 
 
+def test_a_short_session_whole_and_second_by_second_are_identical():
+    """The PR check's replay. Both engines take the same twelve hours in one chunk, so that
+    every timeframe's indicators and swings have values; then fifteen minutes are run whole in
+    one and a second at a time in the other, and everything is compared. The longer sessions
+    and the other entries and closing rules are the slow test below."""
+    cal = calendar((0, 12), (12.5, 12.75))
+    features = FeatureConfig(rsi_period=3, atr_period=3, volume_period=3)
+    config = ExecutionConfig(
+        feed_latency_ms=3, close_delay_ms=80, order_latency_ms=40, cooldown_s=5,
+        flat_before_close_s=60,
+    )  # fmt: skip
+    end = int(cal.closes[1])
+    t = random_trades(T0, end, seed=21, rate=1.5, recv_jitter_ns=150_000_000)
+    book = random_book(t, seed=22, recv_jitter_ns=150_000_000)
+    params = {
+        "use_bias": False,
+        "trigger_rsi": 40.0,
+        "trigger_delta": -1.0,
+        "bias_ret_atr": 0.0,
+        "bias_rsi": 0.0,
+        "max_bias_age_s": 4000.0,
+        "bracket": {"target_atr": 1.0, "stop_atr": 1.0, "max_hold_s": 60, "atr": "1m@1s"},
+    }
+    warm, short = [], None
+    for o, c in zip(cal.opens.tolist(), cal.closes.tolist(), strict=True):
+
+        def inside(r, o=o, c=c):
+            known = r.ts_recv + config.feed_latency
+            return r.take((known >= o + config.close_delay) & (known < c + config.close_delay))
+
+        warm, short = [short] if short else [], session_chunk(cal, inside(t), o, c, inside(book))
+    engines = [
+        Engine(GC, cal, make_strategy("bias_pullback", params), config, features) for _ in "ab"
+    ]
+    for engine in engines:  # the same history, whole, in both
+        for chunk in warm:
+            engine.process(chunk)
+    whole_frame = engines[0].process(short).frame
+    seconds = split_by_second(short, cal, config)
+    step_frame = FeatureFrame.concat([engines[1].process(s).frame for s in seconds])
+    whole, stepwise = (e.finish() for e in engines)
+    assert len(seconds) == 900 and len(whole_frame.end) == 900
+    assert set(step_frame.features) == set(whole_frame.features)
+    for name, values in whole_frame.features.items():
+        np.testing.assert_array_equal(step_frame.features[name], values, err_msg=name)
+    for name, values in whole_frame.context.items():
+        np.testing.assert_array_equal(step_frame.context[name], values, err_msg=name)
+    assert whole["trades"] == stepwise["trades"]
+    assert whole["summary"] == stepwise["summary"] and whole["quality"] == stepwise["quality"]
+    opened = int(cal.opens[1])
+    assert sum(int(x["entry_ns"]) >= opened for x in whole["trades"]) >= 1  # it traded there
+    # what is compared has values: the slow timeframe's indicators and the swings of price,
+    # of RSI, and of CVD on it, carried from each completed minute row to the seconds after
+    f = whole_frame.features
+    slow = ("1h@1m.rsi", "1h@1m.slow_atr_0p5.progress", "1h@1m.slow_rsi_mean_atr_0p5.progress",
+            "1h@1m.slow_cvd_atr_0p5.progress", "10m@10s.mid_rsi_mean_atr_0p5.ext")  # fmt: skip
+    for name in slow:
+        assert np.isfinite(f[name]).all(), name
+    age, rsi = f["1h@1m.age_s"], f["1h@1m.rsi"]
+    assert age[0] > 1800  # the first seconds read the row completed before the closure
+    assert (age[59::60] == 0).all() and (age == 0).sum() == 15  # then one a minute,
+    held = rsi[59:899].reshape(14, 60)  # ... each held through the 59 seconds after it
+    assert (np.ptp(held, axis=1) == 0).all() and len(np.unique(held[:, 0])) > 10
+
+
+@pytest.mark.slow
 @pytest.mark.parametrize("case", CASES)
 def test_whole_session_and_second_by_second_runs_are_identical(case):
     cal = calendar((0, 2.5), (3, 6))

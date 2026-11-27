@@ -1,7 +1,7 @@
 # Handoff
 
-Updated November 24, 2026, after the engine learned to make position decisions and the first
-decision model was run. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal, the
+Updated November 27, 2026, after the swings of RSI and of CVD were built, the RSI series
+was corrected in review, and the decision model was run with them. Read [AGENTS.md](../../AGENTS.md) first: it holds the goal, the
 six-step process, and the rules. This page says where the work stands and how to continue.
 The [roadmap](roadmap.md) is the current plan, [todo.md](todo.md) lists the tasks, and the
 [build log](build-log.md) records what was built, how it was checked, and what every
@@ -13,13 +13,19 @@ experiment found.
 base rows, windows and indicators on three timeframes, rule-based swings at four sizes with
 a structure code, an engine that takes a decision every second, and a first decision model
 fitted walk-forward and replayed in that engine
-([state of each step](roadmap.md#the-process-and-where-it-stands)). Step 5, the swings of RSI
-and net flow and their agreement with price, is not built.
+([state of each step](roadmap.md#the-process-and-where-it-stands)). Step 5 is half built:
+RSI and net flow (CVD) have their own swings and structure on every timeframe
+([spec](series-structure-spec.md)); the codes that compare them with price's are not.
 
 **No edge has been found.** The first model has no skill over the hours a trade lasts; once
 its forecast is shrunk to what holds outside the sessions it was fitted on, it stays flat. It does find a small predictability one minute ahead, from
 flow, the book at trades, price, and volatility, gone by fifteen minutes
-([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat.
+([results](yardstick-spec.md#results-november-24-2026)). Staying flat is the rule to beat. The
+swings of RSI and of CVD did not change that: on minute-end forecasts at the bracket
+horizon, over 86 trade dates, the forecast with them is not detectably better than without
+them, -0.012 (-0.056 to 0.029); the seconds between minute ends and shorter horizons are
+untested
+([result](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)).
 
 **The plan** is the roadmap's [decisions](roadmap.md#decisions) 29 to 39 (November 23 and
 24): no model predicts reversals; swings and structure are computed by rule; one model
@@ -27,17 +33,19 @@ decides buy, sell, or nothing at every second; the slower timeframes forbid a tr
 their trend; the bracket is 1.5 slow ATRs each way with no time limit; risk is a percentage
 of the account.
 
-**The next tasks** ([build order](roadmap.md#build-order)): item 11, the zigzag and structure
-of RSI and of CVD, each sized by its own ATR ([decision 41](roadmap.md#decisions)); item 12,
-the swing mode ([decision 40](roadmap.md#decisions)); then six years of data
+**The next tasks** ([build order](roadmap.md#build-order)): the rest of item 11, the codes
+that compare the structures of price, RSI, and CVD ([decision 41](roadmap.md#decisions));
+item 12, the swing mode ([decision 40](roadmap.md#decisions)); then six years of data
 ([how](#next-steps)).
 
 **The state of this machine** (November 24): lint and tests pass, `ingest plan GC SI`
 reports every contract `current`, and the database holds one year of GC and SI on three
-timeframes (288 GB with the dead space of the last rebuild; about 170 GB of rows).
-`~/fingerprint-new.txt` is the baseline that later rebuilds are compared with, taken after
-the review fixes of November 24 (migrations to `0015`; against the baseline before them,
-only the volatility and swing tables differ). One year of MBP-1 for
+timeframes (357 GB with the dead space of the last rebuild; about 210 GB of rows, 38 GB of
+them the swings of RSI and of CVD).
+`~/fingerprint-series.txt` is the baseline that later rebuilds are compared with, taken
+after the RSI scales were rebuilt on the mean over the phases (migrations to `0016`; 1,008
+lines since the retired RSI scales' rows were deleted; its lines for the
+tables that existed before are those of `~/fingerprint-new.txt`, unchanged). One year of MBP-1 for
 GC and SI is in `data/databento/mbp-1/` (27 GB). Paul keeps the files of PL, ES, YM, and RTY
 in cloud storage; they return, with NQ and five more years of GC and SI, later.
 
@@ -89,9 +97,9 @@ Engine: backtests and rehearsals      research ingest → PostgreSQL `trading`
                                         candle_1m_1s, candle_1h_1m, stats_1h_1m, vol_1s,
                                         vol_1m (tier 1)
                                         pivot_1s, pivot_10s, pivot_1m,
+                                        pivot_rsi_*, pivot_cvd_*,
                                         pivot_event (tier 2)
-                                        planned: pivot_rsi_*, pivot_flow_*,
-                                        signal_*, book_1s, pair_1m
+                                        planned: signal_*, book_1s, pair_1m
                                       market.continuous_*                  (per product)
                                                   │
                                                   ▼
@@ -238,7 +246,7 @@ code, in under an hour for the year held. Done for this machine on November 23
    ```
 
 4. **Compare with the baseline:** `scripts/db-fingerprint.sh > ~/fingerprint.txt` and `diff`
-   it with `~/fingerprint-new.txt`. Row counts and integer columns must match; if a float
+   it with `~/fingerprint-series.txt`. Row counts and integer columns must match; if a float
    column differs, find out by how much and record it before going on.
 5. **Check the rest:** `pnpm lint && pnpm test && pnpm build`, `uv run research verify
    apps/backtest-runner/examples/gc-day.json`, and the local services
@@ -273,14 +281,17 @@ fits, and reports; `research policy RUN GC SI` replays the policy cells with tha
 models. Both write `research.run`. Measure skill over all rows together, never within a
 trade date ([why](yardstick-spec.md#a-flaw-in-the-first-skill-measure)).
 
-**11. The second pass** ([decision 41](roadmap.md#decisions)). The base rows now carry
-`cvd`, a running total that never restarts, and values in ATRs divide by the floored
-normalizer (`normalizer.py`, `candle_*.norm_atr_bps`). For each of RSI and CVD: its own ATR,
-per phase, as the Wilder average of the series' true range over its window; the swing code
-with that ATR in place of price's ([contract](pivot-structure-design.md#swing-sources-price-and-rsi));
-a floor above the series' row-to-row noise, measured and frozen in a spec first; then the
-codes that compare the three structures. They are new stages, so nothing stored is rebuilt.
-RSI has one value a row, where price and CVD have one a trade.
+**11. The second pass** ([decision 41](roadmap.md#decisions)). Built: the swings and
+structure of RSI and of CVD on every timeframe (`stage_step_series.py`,
+[spec](series-structure-spec.md)). Each series has one value per aggregated row of its
+timeframe, at the row's close, and its own ATR; no trade is read. CVD is `bar_<rows>.cvd`.
+RSI is the mean of the last 60 rows' `candle_<window>.rsi`, each phase once: read row by
+row, the 60 phase histories make swings of their own ([why](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). Any indicator kept per
+phase is averaged over the phases before a zigzag reads it. The zigzag of price is the one stage that reads the trades inside a row,
+to know which level was reached first. Still to build: the codes that compare the three
+structures (a new stage reading `pivot_*`, `pivot_rsi_*`, and `pivot_cvd_*`; nothing stored
+is rebuilt). The engine now holds 1,449 features; a second in which no slower row completes
+reuses the last one's values (`StageFeatures.as_of`).
 
 **The one-minute finding points at entries.** The book between trades (item 14) is judged
 there: does it raise the one-minute skill, and does a rule that uses it get better fills

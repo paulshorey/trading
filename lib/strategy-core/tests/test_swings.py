@@ -11,6 +11,7 @@ import pytest
 from helpers import T0, calendar, trades
 from strategy_core import swings, warmup
 from strategy_core.bars import MISSING, assignment_times
+from strategy_core.columns import Table
 from strategy_core.engine import MarketChunk, split_by_second
 from strategy_core.features import FeatureConfig, Unit
 from strategy_core.market import MINUTE, NS, PX
@@ -24,6 +25,8 @@ from strategy_core.stage_step_pivot import (
 from strategy_core.stage_step_pivot import FAST_SCALES as FAST
 from strategy_core.stage_step_pivot import SCALES as SLOW
 from strategy_core.stage_step_pivot import scale as slow_scale
+from strategy_core.stage_step_series import BY_TIMEFRAME as SERIES_BY_TIMEFRAME
+from strategy_core.stage_step_series import CVD, FLOOR, RSI, SPECS
 from strategy_core.state import from_bytes, to_bytes
 from strategy_core.swings import (
     ACTIVE,
@@ -144,6 +147,17 @@ def test_every_crossing_of_the_trade_path_counts():
     _, events = play([[96], [100], [99, 105, 100]])
     assert kinds(events) == [(LOW, 96.0, 1), (HIGH, 105.0, 2)]
     assert [e["seq"] for e in events] == [0, 0]
+
+
+def test_progress_is_the_deepest_pullback_and_ext_dist_is_where_the_series_stands_now():
+    """Regression (PR #103 review). `progress` remembers the largest pullback since the running
+    extreme, over the frozen threshold: it does not come back down when the series recovers,
+    so it is not the chance that the swing confirms from here. `ext_dist_atr` is the current
+    distance from the extreme, in ATRs."""
+    out, _ = play([[40], [60], [52], [59]], theta=10.0, atr=5.0)
+    assert out["dir"][1:].tolist() == [1, 1, 1] and out["ext_px"][1:].tolist() == [60, 60, 60]
+    assert out["progress"][1:].tolist() == [0.0, 0.8, 0.8]  # 8 of the 10 points, kept at 59
+    assert out["ext_dist_atr"][1:].tolist() == [0.0, 1.6, 0.2]  # now one point from the high
 
 
 def test_higher_low_appears_at_its_confirmation_and_trend_needs_both_classes():
@@ -846,3 +860,316 @@ def test_the_structure_code_combines_the_trend_with_the_break_of_the_last_high_o
     both = Table(table.values, table.nulls | {"trend": np.zeros(n, bool)})
     assert with_structure(both).values["structure"][6] == 3  # both broken: the low more recently
     assert STRUCTURE.role == "feature" and len(with_structure(table)) == n
+
+
+# The swings of RSI and of CVD (docs/project/series-structure-spec.md)
+SERIES = tuple(s for scales in SERIES_BY_TIMEFRAME.values() for s in scales)
+
+
+def phase_mean(rsi):
+    """The RSI series in plain Python: the mean of the stored RSI over the last 60 rows, each
+    phase's latest value once, in whole millionths of a point; no value until all 60 have one."""
+    units = [None if math.isnan(v) else round(v * 1e6) for v in rsi.tolist()]
+    out = np.full(len(units), np.nan)
+    for i in range(59, len(units)):
+        window = units[i - 59 : i + 1]
+        if None not in window:
+            out[i] = sum(window) / (60 * 1e6)
+    return out
+
+
+def series_inputs(whole, stage):
+    """A series scale's inputs from the stored rows: its value at each step row, and the size
+    of its smallest step there (one RSI point, or the typical trade of the latest window that
+    had trades)."""
+    base, _ = join(whole, f"bar_{stage.TF.rows}")
+    candle, cn = join(whole, f"candle_{stage.TF.window}")
+    missing = base["status"] == MISSING
+    if stage.SOURCE == RSI:
+        raw = np.where(missing, np.nan, nan_null(candle, cn, "rsi"))
+        return base, phase_mean(raw), np.ones(len(raw))
+    x = np.where(missing, np.nan, nan_null(*join(whole, f"bar_{stage.TF.rows}"), "cvd"))
+    unit, last = np.full(len(x), np.nan), np.nan
+    for i, (v, n) in enumerate(
+        zip(candle["volume"].tolist(), candle["trades"].tolist(), strict=True)
+    ):
+        last = v / n if n else last
+        unit[i] = last
+    return base, x, unit
+
+
+def reference_series(x, phase, unit, k, floor, period):
+    """A series' own ATR in plain Python, and from it each row's threshold and normalizing
+    ATR: the true range of the 60 rows ending at a row, widened to the value 60 rows earlier,
+    averaged per phase as Wilder's."""
+    prev, atr, count = [math.nan] * 60, [0.0] * 60, [0] * 60
+    theta, norm = np.full(len(x), np.nan), np.full(len(x), np.nan)
+    for i in range(len(x)):
+        w, p = x[max(0, i - 59) : i + 1], int(phase[i])
+        if i < 59 or np.isnan(w).any():
+            prev[p] = math.nan
+            continue
+        hi, lo = float(w.max()), float(w.min())
+        if not math.isnan(prev[p]):
+            hi, lo = max(hi, prev[p]), min(lo, prev[p])
+        prev[p], count[p] = float(x[i]), count[p] + 1
+        atr[p] = atr[p] + (hi - lo) / period if count[p] <= period else (
+            atr[p] * (period - 1) + (hi - lo)
+        ) / period  # fmt: skip
+        if count[p] >= period:
+            small = floor * unit[i]
+            theta[i] = k * atr[p] if math.isnan(small) else max(k * atr[p], small)
+            norm[i] = atr[p] if math.isnan(small) else max(atr[p], small / 2)
+    return theta, norm
+
+
+def reference_zigzag(x, ready, theta):
+    """Directional change on one value per row: [(kind, extreme row, level, confirming row)]."""
+    out, active, direction, hi, lo = [], False, 0, None, None
+    for j in range(len(x)):
+        if not ready[j]:
+            active = False
+            continue
+        if not active:
+            active, direction, hi, lo = True, 0, None, None
+        here = (float(x[j]), j, float(theta[j]))
+        if hi is None:
+            hi = lo = here
+            continue
+        if direction >= 0 and here[0] > hi[0]:
+            hi = here
+        if direction <= 0 and here[0] < lo[0]:
+            lo = here
+        if direction >= 0 and hi[0] - here[0] >= hi[2]:
+            out.append((HIGH, hi[1], hi[0], j))
+            direction, lo = -1, here
+        elif direction <= 0 and here[0] - lo[0] >= lo[2]:
+            out.append((LOW, lo[1], lo[0], j))
+            direction, hi = 1, here
+    return out
+
+
+@pytest.mark.parametrize("stage", SERIES, ids=lambda s: s.VARIANT)
+def test_series_swings_equal_a_plain_python_reference_in_their_own_atr(days, whole, stage):
+    """Each scale of RSI and of CVD: one observation per step row (the row's stored value), a
+    threshold of k of the series' own ATR floored at its smallest swing, both as of the row
+    before. No trade is read."""
+    base, x, unit = series_inputs(whole, stage)
+    ordinal = base["slot_ordinal"]
+    now, norm_now = reference_series(
+        x, ordinal % 60, unit, stage.K, FLOOR[stage.SOURCE], SMALL.atr_period
+    )
+    theta, norm = np.r_[np.nan, now[:-1]], np.r_[np.nan, norm_now[:-1]]
+    ready = np.isfinite(x) & (theta > 0) & (norm > 0)
+    want = reference_zigzag(x, ready, theta)
+    ev, _ = events_of(whole, stage.NAME)
+    pivot = ev["kind"] <= LOW
+    first = int(ordinal[0])
+    got = list(
+        zip(
+            ev["kind"][pivot].tolist(),
+            (ev["ext_ordinal"][pivot] - first).tolist(),
+            ev["level"][pivot].tolist(),
+            (ev["slot_ordinal"][pivot] - first).tolist(),
+            strict=True,
+        )
+    )
+    assert got == want
+    # ten short sessions hold few slow swings: the fast and middle scales carry the test
+    least = {"1s": (100, 20), "10s": (10, 1), "1m": (-1, -1)}[stage.TF.rows]
+    assert len(want) > least[stage.K > 1], len(want)
+    at = (ev["ext_ordinal"][pivot] - first).astype(np.int64)
+    np.testing.assert_array_equal(ev["theta"][pivot], theta[at])
+    np.testing.assert_array_equal(ev["atr"][pivot], norm[at])
+    # the threshold is never under the smallest swing, and is the floor where the ATR is small
+    small = FLOOR[stage.SOURCE] * np.r_[np.nan, unit[:-1]][at]
+    assert (ev["theta"][pivot] >= small).all()
+    # one row per step row, published at its end; events at their row's close
+    rows_, rn = join(whole, stage.NAME)
+    np.testing.assert_array_equal(rows_["slot_ordinal"], ordinal)
+    np.testing.assert_array_equal(rows_["end_ns"], base["end_ns"])
+    np.testing.assert_array_equal(ev["at_ns"], ev["end_ns"])
+    np.testing.assert_array_equal(rows_["state"] == IDLE, ~ready)
+    # no trade is read, so a leg's volume is unknown (NULL), never a false zero
+    _, en = events_of(whole, stage.NAME)
+    for name in ("leg_volume", "leg_buy_volume", "leg_sell_volume"):
+        assert en[name].all(), name
+    # the levels are the series' own values
+    known = ~rn["ext"]
+    assert known.any() == bool(want) and np.isin(rows_["ext"][known], x[np.isfinite(x)]).all()
+    if stage.SOURCE == RSI:
+        assert ((rows_["ext"][known] >= 0) & (rows_["ext"][known] <= 100)).all()
+
+
+def test_series_columns_are_normalized_and_a_cvd_level_is_never_a_feature():
+    units = {u.value for u in Unit}
+    for source, spec in SPECS.items():
+        columns = {c.name: c for c, _ in spec}
+        assert all(c.unit in units for c in columns.values() if c.unit)
+        assert not {"ext_px", "theta_bps", "leg_delta_ratio", "reversal_delta_ratio"} & set(columns)
+        assert not columns["theta"].unit
+        for name in ("ext", "high_level", "low_level"):
+            assert columns[name].unit == (Unit.INDEX.value if source == RSI else "")
+    sources = StageFeatures.sources()
+    assert "1h@1m.slow_rsi_mean_atr_3.high_level" in sources
+    assert "1h@1m.slow_cvd_atr_3.progress" in sources
+    assert not [n for n in sources if "_cvd_" in n and n.endswith(("level", ".ext", ".theta"))]
+
+
+def test_series_swings_are_identical_in_any_chunking_and_scale_invariant(days, whole):
+    cal, t, cov, chunks = days
+    seconds = [s for c in chunks for s in split_by_second(c, cal, CONFIG)]
+    p = builder(cal)
+    stepwise = [p.process(c) for c in regroup(seconds, [1, 7, 59, 61, 300, 1, 1000])]
+    parts = regroup(seconds, [6631])
+    first = builder(cal)
+    head = [first.process(c) for c in parts[:4]]
+    saved = {name: from_bytes(to_bytes(first.export(name))) for name in first.stages}
+    resumed = builder(cal)
+    for name, state in saved.items():
+        resumed.restore(name, state)
+    tail = [resumed.process(c) for c in parts[4:]]
+
+    def run(scale):
+        q = builder(cal)
+        return [q.process(c) for c in session_chunks(cal, t.scaled(**scale), cov)]
+
+    scaled = [run({"price_factor": 3}), run({"size_factor": 7})]
+    for stage in SERIES:
+        a, an = join(whole, stage.NAME)
+        ea, ean = events_of(whole, stage.NAME)
+        for other in (stepwise, head + tail):
+            b, bn = join(other, stage.NAME)
+            for k in a:
+                np.testing.assert_array_equal(a[k], b[k], err_msg=f"{stage.NAME} {k}")
+                np.testing.assert_array_equal(an[k], bn[k], err_msg=f"{stage.NAME} {k} NULL")
+            eb, ebn = events_of(other, stage.NAME)
+            for k in ea:
+                np.testing.assert_array_equal(ea[k], eb[k], err_msg=f"{stage.NAME} event {k}")
+                np.testing.assert_array_equal(ean[k], ebn[k], err_msg=f"{stage.NAME} event {k}")
+        features = [c.name for c in stage.COLUMNS if c.unit]
+        for other in scaled:
+            b, bn = join(other, stage.NAME)
+            for name in features:
+                np.testing.assert_array_equal(bn[name], an[name], err_msg=name)
+                np.testing.assert_allclose(
+                    b[name], a[name], rtol=1e-9, atol=1e-9, equal_nan=True,
+                    err_msg=f"{stage.NAME} {name}",
+                )  # fmt: skip
+            eb = events_of(other, stage.NAME)[0]
+            for name in ("kind", "slot_ordinal", "seq", "ext_ordinal", "class", "run", "trend"):
+                np.testing.assert_array_equal(eb[name], ea[name], err_msg=f"{stage.NAME} {name}")
+    # a CVD level is in contracts: it scales with size, which is why it is context
+    stage = next(s for s in SERIES if s.SOURCE == CVD and s.TF.rows == "10s" and s.K == 1)
+    a, an = join(whole, stage.NAME)
+    b, _ = join(scaled[1], stage.NAME)
+    np.testing.assert_array_equal(b["ext"][~an["ext"]], 7 * a["ext"][~an["ext"]])
+
+
+def test_cvd_swings_read_changes_only_so_a_shifted_level_changes_no_feature(days, whole):
+    """A backtest that starts after a contract's first stored session counts CVD from zero
+    there, so its level differs from the stored one by a constant. Every feature is a
+    difference inside a segment, so only the levels (context) move with it."""
+    cal = days[0]
+    shift = 1_000_003.0
+    for stage in (s for s in SERIES if s.SOURCE == CVD and s.K == 0.5):
+        tables = {}
+        for name in stage.INPUTS:
+            values, nulls = join(whole, name)
+            tables[name] = Table(dict(values), {k: v for k, v in nulls.items() if v.any()})
+        moved = dict(tables)
+        base = tables[f"bar_{stage.TF.rows}"]
+        moved[f"bar_{stage.TF.rows}"] = Table(
+            base.values | {"cvd": base.values["cvd"] + shift}, base.nulls
+        )
+        out = []
+        for inputs in (tables, moved):
+            products = {"tables": inputs}
+            rows_ = builder(cal).stages[stage.NAME].process(None, products)
+            out.append((rows_, products["events"][stage.NAME]))
+        (a, ea), (b, eb) = out
+        assert len(ea) > 10
+        for c in stage.COLUMNS:
+            null = a.nulls.get(c.name, np.zeros(len(a), bool))
+            np.testing.assert_array_equal(null, b.nulls.get(c.name, np.zeros(len(b), bool)))
+            if c.name in ("ext", "high_level", "low_level"):
+                want = a.values[c.name][~null] + shift
+            else:
+                want = a.values[c.name][~null]
+            np.testing.assert_array_equal(b.values[c.name][~null], want, err_msg=c.name)
+        for name in ea.values:
+            null = ea.nulls.get(name, np.zeros(len(ea), bool))
+            want = ea.values[name][~null] + (shift if name == "level" else 0)
+            np.testing.assert_array_equal(eb.values[name][~null], want, err_msg=name)
+
+
+def flat_market(tail_trades: bool, shift: int):
+    """The review's reproduction (PR #103): 6,000 seconds of a random walk with a trade every
+    second, then an hour in which price does not move, with no trades or with one a second at
+    the last price. The walk starts `shift` seconds into the session: at another phase."""
+    cal = calendar((0, 9660 / 3600))
+    start = int(cal.opens[0]) + shift * S
+    walk = 10000 + np.cumsum(np.random.default_rng(1).choice([-1, 0, 1], 6000))
+    rows = [
+        (start + k * S + S // 2, float(p) / 10, 1, 1 if k % 2 else -1) for k, p in enumerate(walk)
+    ]
+    if tail_trades:
+        rows += [(start + k * S + S // 2, float(walk[-1]) / 10, 1, 1) for k in range(6000, 9600)]
+    t = trades(rows)
+    cov = np.array([[int(cal.opens[0]), int(cal.closes[0])]], np.int64)
+    return cal, session_chunks(cal, t, cov)
+
+
+@pytest.mark.parametrize("tail_trades", [False, True], ids=["no_trades", "flat_trades"])
+@pytest.mark.parametrize("shift", [0, 17])
+def test_rsi_swings_settle_when_every_phase_of_the_rsi_has_settled(tail_trades, shift):
+    """Each phase's RSI rests at its own level once price stops moving. Read row by row those
+    levels look like reversals; the mean over the 60 phases is constant, so after one full
+    cycle no RSI scale confirms anything. (Before, the 0.5 ATR scale confirmed 60 pivots in the
+    last half hour.)"""
+    cal, chunks = flat_market(tail_trades, shift)
+    p = Pipeline(cal, feed_latency=0, close_delay=CONFIG.close_delay,
+                 stages=tuple(s for s in STAGES if s.RESOLUTION == "1s"))  # fmt: skip
+    parts = [p.process(c) for c in chunks]
+    candle, cn = join(parts, "candle_1m_1s")
+    rsi = nan_null(candle, cn, "rsi")
+    first = int(candle["slot_ordinal"][0])
+    settled = shift + 6000 + 60 + 60  # the last move's window has passed, then a full cycle
+    by_phase = rsi[settled : settled + 3420].reshape(-1, 60)
+    assert np.ptp(by_phase, axis=0).max() < 1e-9  # every phase is steady ...
+    assert np.ptp(by_phase[0]) > 1.0  # ... at its own level: the rotation the old series read
+    for stage in (s for s in SERIES if s.SOURCE == RSI and s.TF.rows == "1s"):
+        ev, _ = events_of(parts, stage.NAME)
+        late = ev["slot_ordinal"] - first >= settled
+        assert (ev["kind"] <= LOW).sum() > 5, stage.NAME  # it did find swings while price moved
+        assert not late.any(), (stage.NAME, int(late.sum()))
+
+
+@pytest.mark.parametrize("tf", ["1m@1s", "10m@10s", "1h@1m"])
+def test_the_rsi_series_is_constant_under_any_rotation_of_steady_phases(tf):
+    """On every timeframe, from any starting phase: 60 phases each steady at its own level give
+    one constant value, and a move in one phase moves the mean by a sixtieth of it."""
+    stage = next(s for s in SERIES_BY_TIMEFRAME[tf] if s.SOURCE == RSI and s.K == 0.5)
+    levels = np.random.default_rng(5).uniform(20, 80, 60)
+    for start in (0, 23, 59):
+        n = 600
+        ordinal = np.arange(start + 1, start + 1 + n, dtype=np.int64)
+        rsi = levels[ordinal % 60].copy()
+        rsi[400:] += np.where(ordinal[400:] % 60 == 7, 6.0, 0.0)  # one phase steps up 6 points
+        end = ordinal * stage.TF.seconds * S
+        tables = {
+            f"bar_{stage.TF.rows}": Table(
+                {"slot_ordinal": ordinal, "end_ns": end, "status": np.full(n, 2, np.int8)}, {}
+            ),
+            f"candle_{stage.TF.window}": Table({"end_ns": end, "rsi": rsi}, {}),
+        }
+        products = {"tables": tables}
+        instance = builder(calendar((0, 1))).stages[stage.NAME]
+        x, _ = instance.series(tables[f"bar_{stage.TF.rows}"], tables[f"candle_{stage.TF.window}"])
+        assert np.isnan(x[:59]).all() and np.ptp(x[59:400]) == 0
+        assert x[59] == pytest.approx(levels.mean(), abs=1e-6)
+        after = x[400 + 60 :]
+        assert np.ptp(after) == 0 and after[0] - x[399] == pytest.approx(0.1, abs=1e-6)
+        instance = builder(calendar((0, 1))).stages[stage.NAME]
+        instance.process(None, products)
+        assert not len(products["events"][stage.NAME])

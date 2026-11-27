@@ -204,6 +204,35 @@ def test_the_model_decides_only_on_rows_it_could_have_been_fitted_on():
     assert derived.signals(f).tolist() == [1, 0, -1, 0]
 
 
+def test_a_saved_model_is_checked_against_the_engine_before_it_is_replayed(tmp_path):
+    """Regression (PR #103 review): run 11's models read the RSI scales first built, which
+    have other names now, and replay failed on a KeyError inside a worker. A model is checked
+    before anything starts, and is never given a renamed scale in place of the one it read."""
+    import joblib
+    from backtest_runner import policy
+    from strategy_core.pipeline import StageFeatures
+
+    names = list(StageFeatures.sources())[:40]
+    folder = tmp_path / "run-7"
+    folder.mkdir()
+    current = folder / "2026-05.joblib"
+    joblib.dump({"names": names, "ready": names[:2]}, current)
+    assert policy.incompatible(current) is None
+    retired = folder / "2026-06.joblib"
+    old = ["1m@1s.fast_rsi_atr_0p5.ext", "1m@1s.fast_rsi_atr_0p5.progress", "1h@1m.gone.x"]
+    joblib.dump({"names": [*names, *old]}, retired)
+    why = policy.incompatible(retired)
+    assert "run-7/2026-06.joblib reads 3 features" in why and "from 2 scales or stages" in why
+    assert "1h@1m.gone" in why and "research.run" in why  # no commit recorded: where to look
+    joblib.dump(
+        {"names": names, "ready": old[:1], "source": {"commit": "abc123", "dirty": True}}, retired
+    )
+    why = policy.incompatible(retired)  # a feature needed only to decide counts too
+    assert "reads 1 features" in why and "commit abc123 with uncommitted changes" in why
+    revision = yardstick.source_revision()
+    assert set(revision) == {"commit", "dirty"} and len(revision["commit"]) == 40
+
+
 def test_the_holdout_is_refused():
     with pytest.raises(ValueError, match="holdout"):
         yardstick.run(["GC"], date(2026, 8, 1), date(2026, 9, 1))

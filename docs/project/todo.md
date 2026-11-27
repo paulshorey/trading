@@ -33,6 +33,16 @@ the [build log](build-log.md).
 - [ ] **Delete the rows of the retired RSI scales** (`<stream>_rsi_atr_<k>`: about half of
       each `pivot_rsi_*` table and 4.6 million events). Nothing reads them. Needs Paul's
       agreement, then a `VACUUM`.
+- [ ] **The current pullback over the frozen threshold**, as a feature of its own beside
+      `progress` (the deepest pullback): the "how close is this swing to confirming now"
+      that decision 31 meant. `ext_dist_atr` over the multiple gives it only where the
+      threshold's floor does not bind. A new column means a rebuild of the swing stages, so
+      do it with the comparison codes.
+- [ ] **Does the minute-end result hold between minute ends?** The dataset has one row a
+      minute, at its last second, where every slower timeframe has just completed a row.
+      Add one predeclared second a minute, rotating through the offsets, with the
+      minute-end rows as the control, and compare the model with and without the swing
+      inputs on it.
 - [ ] **The codes comparing the three structures** (the rest of item 11): agreement,
       divergence at the latest highs and lows, a level one series has broken that another
       holds. Specify them first; they are a new stage, and inputs like any other.

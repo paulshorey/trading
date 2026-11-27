@@ -410,10 +410,11 @@ def cached(
     if path.exists() and meta.exists() and not rebuild:
         log(f"Dataset: reading {path.relative_to(ROOT)}")
         with np.load(path) as stored:
-            return {k: stored[k] for k in ARRAYS} | json.loads(meta.read_text())
+            found = {k: stored[k] for k in ARRAYS} | json.loads(meta.read_text())
+        return found | {"cache_key": key}
     data = build(products, start, end, workers, url, log, selection)
     CACHE.mkdir(parents=True, exist_ok=True)
     np.savez(path, **{k: data[k] for k in ARRAYS})
     meta.write_text(json.dumps({k: v for k, v in data.items() if k not in ARRAYS}))
     log(f"Dataset: wrote {path.relative_to(ROOT)}")
-    return data
+    return data | {"cache_key": key}

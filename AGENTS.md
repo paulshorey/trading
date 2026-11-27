@@ -40,8 +40,10 @@ once, for any timeframe. The state of each step is in the
    when price has moved the threshold (about 3 ATR) away from it, and a confirmed swing
    never changes. From the confirmed highs and lows and the current price: higher or lower
    highs and lows, the trend they make, which levels the current price has broken, and how
-   far the open move has come toward confirming the next swing (`progress`, the pullback so
-   far over the threshold: on a random walk, the chance it confirms). No model predicts a
+   far the open move has come toward confirming the next swing: `progress`, the deepest
+   pullback since the running extreme over the threshold, which does not come back down
+   when the move recovers, and `ext_dist_atr`, the distance from that extreme now, in ATRs.
+   Neither is a probability. No model predicts a
    reversal: the swings are computed by rule only (Paul, November 23, 2026).
 5. **Swings and structure of derived series, and their agreement with price.** The same
    zigzag and structure on RSI, on net volume flow (CVD), and on other indicators, then

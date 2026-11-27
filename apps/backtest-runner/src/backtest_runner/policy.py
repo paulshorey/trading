@@ -17,6 +17,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -25,6 +26,7 @@ from psycopg.types.range import DateRange
 from strategy_core.engine import Engine
 from strategy_core.features import FeatureFrame
 from strategy_core.market import PRODUCTS
+from strategy_core.pipeline import StageFeatures
 from strategy_core.strategies import STRATEGIES, Bracket, Entry, trend_gate
 from strategy_core.timeframes import SLOW
 
@@ -146,6 +148,31 @@ class ModelPolicy:
 
 
 STRATEGIES["model"] = ModelPolicy
+
+
+def incompatible(artifact: Path, offered: set[str] | None = None) -> str | None:
+    """Why a saved model cannot be replayed by this code, or None when it can: the features it
+    reads, to forecast and to decide, must all be ones the engine computes. A model fitted on a
+    retired definition (its variant has another name now) is never given the new one in its
+    place: that would be another experiment. The message says how to find the code it needs."""
+    kept = joblib.load(artifact)
+    offered = set(StageFeatures.sources()) if offered is None else offered
+    needed = [*kept["names"], *kept.get("ready", [])]
+    missing = sorted({n for n in needed if n not in offered})
+    if not missing:
+        return None
+    families = sorted({n.rsplit(".", 1)[0] for n in missing})
+    source = kept.get("source") or {}
+    where = (
+        f"commit {source['commit']}" + (" with uncommitted changes" if source.get("dirty") else "")
+        if source.get("commit")
+        else "the commit of its `research.run` row (code_sha256; the artifact names none)"
+    )
+    return (
+        f"{artifact.parent.name}/{artifact.name} reads {len(missing)} features this code does "
+        f"not compute, from {len(families)} scales or stages (first: {families[0]}). It was "
+        f"fitted on other definitions; replay it with the code that made it: {where}"
+    )
 
 
 def month_dates(month: int) -> tuple[date, date]:
@@ -350,6 +377,9 @@ def run(
         artifact = folder / f"2026-{month:02d}.joblib"
         if not artifact.exists():
             raise ValueError(f"No model for 2026-{month:02d} in {folder}: run `research yardstick`")
+        problem = incompatible(artifact)
+        if problem:  # before any worker starts or a run is recorded
+            raise ValueError(problem)
         tasks += [(p, month, str(artifact.relative_to(ROOT))) for p in products]
     start, end = month_dates(TEST_MONTHS[0])[0], month_dates(TEST_MONTHS[-1])[1]
     with db.connect(url) as conn:  # recorded before anything is read

@@ -78,8 +78,10 @@ rows apart. The series is now the mean of the last 60 rows' RSI, each phase once
 smallest swing measured again at 0.25 points; the scales are renamed
 `<stream>_rsi_mean_atr_<k>` and rebuilt (run 8), and the first ones are retired with their
 rows left in place. Both flat-price reproductions are tests. The stored pivots no longer
-repeat (0.0%), and the model is the same with these RSI swings, with the first ones, or
-with none ([measurements, the choice, and run 12](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). The table of swing counts above
+repeat (0.0%). On minute-end forecasts at the bracket horizon, over 86 trade dates, no
+difference is detectable between the model with these RSI swings, with the first ones, or
+with none; shorter horizons, the seconds between minute ends, and results after costs were
+not tested ([measurements, the choice, and run 12](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). The table of swing counts above
 and run 11 below are of the first RSI series. `research verify` again
 finds features and all 18 trades identical. The fingerprint (`~/fingerprint-series.txt`,
 1,296 lines) holds every earlier line unchanged, CVD's included, and 288 new ones for the
@@ -90,6 +92,14 @@ a row where a swing scale has no confirmed high or low yet; the policy opened on
 there. It now opens and closes nothing on such a row, and the artifact names the features
 that decide it (`ModelPolicy.decides`, `dataset.readiness`). Run 11's forecast was zero
 throughout, so nothing recorded changes.
+
+**Three corrections from a second review** (November 27). `progress` is the deepest
+pullback since the running extreme over the threshold, not the chance of confirmation: the
+project instructions and decision 31 said otherwise, and a test now shows it staying at 0.8
+after a recovery to one point from the high. Run 12's result is stated for what it tested.
+A saved model is checked against the engine's features before it is replayed, so run 11
+(fitted on the first RSI scales) stops with its reason instead of a KeyError in a worker,
+and new artifacts record their commit and dataset file.
 
 **The engine** now holds 1,449 features (741 before). Its per-second cost grows with the
 number of features, so a second in which no slower row completes now reuses the last row's

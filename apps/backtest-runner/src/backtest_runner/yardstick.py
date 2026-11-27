@@ -15,6 +15,7 @@ The run is recorded in `research.run` before it starts. The fitted models are ke
 """
 
 import hashlib
+import subprocess
 import time
 import warnings
 from datetime import date, timedelta
@@ -556,6 +557,23 @@ def settings() -> dict:
     }
 
 
+def source_revision() -> dict:
+    """The commit of the working tree and whether it has uncommitted changes (None outside a
+    git checkout)."""
+
+    def git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(
+                ["git", "-C", str(ROOT), *args], capture_output=True, text=True, timeout=10
+            )
+        except OSError:
+            return None
+        return done.stdout.strip() if done.returncode == 0 else None
+
+    status = git("status", "--porcelain", "--untracked-files=no")
+    return {"commit": git("rev-parse", "HEAD"), "dirty": None if status is None else bool(status)}
+
+
 def code_digest() -> str:
     digest = hashlib.sha256()
     for base in (ROOT / "lib/strategy-core/src", ROOT / "apps/backtest-runner/src"):
@@ -658,7 +676,16 @@ def run(
     folder.mkdir(parents=True, exist_ok=True)
     for month, kept in fitted.items():
         joblib.dump(
-            kept | {"names": names, "ready": dataset.readiness(names), "settings": settings()},
+            kept
+            | {
+                "names": names,
+                "ready": dataset.readiness(names),
+                "settings": settings(),
+                # what reproduces it: the commit its code was (with uncommitted changes or
+                # not), the hash of that code, and the dataset file its rows came from
+                "source": source_revision() | {"code_sha256": code_digest()},
+                "dataset": data.get("cache_key"),
+            },
             folder / f"2026-{month:02d}.joblib",
         )
     out["models"][YARDSTICK]["artifacts"] = str(folder.relative_to(ROOT))

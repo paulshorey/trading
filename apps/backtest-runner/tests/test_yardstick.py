@@ -48,7 +48,7 @@ def test_every_feature_belongs_to_one_kind_of_input():
     assert yardstick.group_of("10m@10s.imbalance_vw") == "book"
     assert yardstick.group_of("1h@1m.atr5_bps") == "volatility"
     assert yardstick.group_of("1h@1m.slow_atr_3.structure") == "swings"
-    assert yardstick.group_of("1h@1m.slow_rsi_atr_3.structure") == "series"
+    assert yardstick.group_of("1h@1m.slow_rsi_mean_atr_3.structure") == "series"
     assert yardstick.group_of("10m@10s.mid_cvd_atr_1.progress") == "series"
     assert yardstick.group_of("1m@1s.session_elapsed_s") == "session"
     assert yardstick.group_of("1h@1m.age_s") == "session"
@@ -178,7 +178,8 @@ def test_the_model_decides_only_on_rows_it_could_have_been_fitted_on():
     opens nothing and closes nothing; the artifact names the features that decide it."""
     from backtest_runner import policy
 
-    names = ["1m@1s.rsi", "1h@1m.slow_rsi_atr_1.high_age_s", "1h@1m.slow_rsi_atr_1.low_age_s",
+    slow = "1h@1m.slow_rsi_mean_atr_1"
+    names = ["1m@1s.rsi", f"{slow}.high_age_s", f"{slow}.low_age_s",
              "1m@1s.fast_atr_1.low_age_s", "1m@1s.session_elapsed_s"]  # fmt: skip
     assert dataset.readiness(names) == names[1:4]
     f = {

@@ -647,7 +647,7 @@ def test_a_gap_between_downloads_is_missing_rows_and_each_range_picks_its_front(
         # A built swing scale can be cold at some decisions. Its session stays available
         # to the yardstick, while a missing stage slice or an unsettled indicator excludes it.
         day = date(2026, 9, 1)
-        vid = dataset.variant_ids(conn)["pivot_rsi_1m:slow_rsi_atr_3"]
+        vid = dataset.variant_ids(conn)["pivot_rsi_1m:slow_rsi_mean_atr_3"]
         stages = [("pivot_rsi_1m", vid)]
         assert dataset.front_sessions(conn, "GC", day, day, stages)[0][-1]
         assert not dataset.front_sessions(conn, "GC", day, day, [("pivot_rsi_1m", 0)])[0][-1]

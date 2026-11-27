@@ -1,5 +1,8 @@
 # Build log
 
+The full text before it was shortened on November 27, 2026 is
+[archived](../archive/build-log-original-2026-11-27.md).
+
 What was built, how it was checked, and what each experiment found, newest first. The
 [status](status.md) says where the work stands and what to do next; this page is the
 record behind it. Add a section when a stage, a rebuild, or an experiment is finished. The

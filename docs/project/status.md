@@ -80,6 +80,8 @@ Smaller than a build-order item, or waiting for one.
 - **A data audit command:** the checks made by hand on new files (decode, record types,
   receive order, tick sizes, crossed books, flags) as one command, before more products.
 - **Contract definitions** are not downloaded (free; the job needs the account owner).
+- **Backtests recompute their warm-up** from the files instead of reading stored rows:
+  about a third of a year-long run.
 - **Return the database's dead space:** 375 GB on disk after rebuilds; `VACUUM FULL` one
   partition at a time.
 - **CI:** the GitHub Actions warn about Node 20.

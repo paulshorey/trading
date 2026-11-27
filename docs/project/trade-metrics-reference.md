@@ -256,6 +256,12 @@ and `features.py` (features).
 | Volatility family              | `vol_*`: `atr5_bps`, `atr50_bps`, `atr_*_log`, `bull_atr_bps`, `bear_atr_bps`, `bull_bear_skew`, `*_adverse_atr_bps`, `*_excursion_atr`, `*_dist_atr`, `*_age_s`, `atr_tod_log`, `day_*`, `tr_atr`, `parkinson_bps`, `gk_bps`, `spread_atr` |
 | Session context                | `session_elapsed_s`, `session_ret_bps`, `session_high_bps`, `session_low_bps`, `session_delta_ratio` |
 
+**Scales of the stored ratios.** Section 5 writes several of these as scores from 0 to 100.
+The stored columns are the plain ratios: `alignment` runs from −1 to 1, and `imbalance_mean`,
+`imbalance_vw`, `order_imbalance`, and `take_ratio` from 0 to 1 (`indicators.py`). A high
+`alignment` holds both buying into a bid-heavy book and selling into an ask-heavy one: it
+measures agreement of trades with the book, and is not a probability that price rises.
+
 Some of these names are for the `1m@1s` candle only, or are renamed per timeframe; the column
 registry is exact. Swings, structure, and their columns are described in
 [pivot-structure-design](pivot-structure-design.md) and [series-structure-spec](series-structure-spec.md).

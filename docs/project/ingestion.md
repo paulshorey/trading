@@ -1,5 +1,8 @@
 # Ingestion: market data files and stored rows
 
+The full text before it was shortened on November 27, 2026 is
+[archived](../archive/ingestion-original-2026-11-27.md).
+
 The one reference for how the Databento files on this machine become the rows in PostgreSQL:
 what data exists, how files are registered and checked, what `research ingest` does, which
 tables it fills, and how to change or rebuild them. Metric definitions are in the

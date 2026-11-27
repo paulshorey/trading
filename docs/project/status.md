@@ -131,8 +131,8 @@ Ingestion, its failures, and adding files: [ingestion.md](ingestion.md).
   `data/databento/mbp-1/`, 27 GB, gitignored.
 - **Database:** PostgreSQL 18 (Homebrew), database `trading`, 375 GB; migrations to `0016`;
   `ingest plan GC SI` reports every contract `current`.
-- **Baseline:** `~/fingerprint-series.txt` (`scripts/db-fingerprint.sh`), 1,008 lines; a
-  rebuild by the same code must reproduce it.
+- **Baseline:** `~/tmp_trading/fingerprint-series.txt` has 1,008 lines. A rebuild by the
+  same code must reproduce it.
 - **Model runs:** `research.run`; the latest yardstick run is 12. Models and each row's
   forecasts are in `data/models/yardstick/run-<n>/`.
 - **Services:** UI on 4400 and API on 4401 under `~/git/local-dev`.
@@ -143,7 +143,8 @@ Ingestion, its failures, and adding files: [ingestion.md](ingestion.md).
 Nothing in the database is copied: every row is rebuilt from the files.
 
 1. **Copy** the repository folders under `~/git`, `data/databento/` (keep each job folder
-   unchanged), and the shared agent configuration.
+   unchanged), the shared agent configuration, and the baseline at
+   `~/tmp_trading/fingerprint-series.txt`.
 2. **Install** PostgreSQL 18, uv, and pnpm; `pnpm deps:install`; apply the bulk-load server
    settings ([storage](../../lib/db-research/README.md#local-setup)).
 3. **Build:**
@@ -154,10 +155,19 @@ Nothing in the database is copied: every row is rebuilt from the files.
    uv run research catalog --verify
    uv run research db migrate
    uv run research db register
-   caffeinate -i uv run research ingest run GC SI 2> ~/ingest.log
+   mkdir -p "$HOME/tmp_trading"
+   trading_ingest_output=$(mktemp -d "$HOME/tmp_trading/ingest.XXXXXX") &&
+     caffeinate -i uv run research ingest run GC SI 2> "$trading_ingest_output/ingest.log"
    uv run research ingest plan GC SI     # every contract `current`
    ```
 
-4. **Compare** `scripts/db-fingerprint.sh` with the baseline. Row counts and integer
-   columns must match; if a float column differs, find out by how much before going on.
+4. **Compare with the baseline** in the same shell as the ingest command.
+
+   ```sh
+   scripts/db-fingerprint.sh > "${trading_ingest_output:?Run step 3 in this shell}/fingerprint.txt" &&
+     diff "$HOME/tmp_trading/fingerprint-series.txt" "$trading_ingest_output/fingerprint.txt"
+   ```
+
+   Row counts and integer columns must match. If a float column differs, find out by how
+   much before going on.
 5. **Check:** `pnpm lint && pnpm test && pnpm build` and `research verify`.

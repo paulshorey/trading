@@ -203,6 +203,11 @@ For code changes, run `pnpm lint`, `pnpm test`, and `pnpm build`. For documentat
 changes, check accuracy and links; they need no test run. Keep documentation short, avoid duplicated
 instructions, and distinguish implemented behavior from planned capabilities.
 
+Keep temporary Trading logs, redirected command output, fingerprints, and review notes in
+`~/tmp_trading/`. Create it with `mkdir -p "$HOME/tmp_trading"` before redirecting output.
+Use a distinct name or subdirectory for each run so concurrent work does not overwrite evidence.
+For artifacts moved from the home directory, older notes may still show the original `~/` paths.
+
 **The PR check on GitHub is deliberately small**: lint, `pnpm test:fast` (every test not
 marked `slow`, with one short whole-session against second-by-second replay), and the
 build. The slow tests, which replay long sessions second by second and rebuild a test

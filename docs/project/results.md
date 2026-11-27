@@ -89,7 +89,7 @@ Other numbers: `trees` is 0.067 for GC and -0.002 for SI; by month -0.134, 0.011
 `trees_coarse` is 0.015 (-0.071 to 0.096). All four calibration slopes are zero in every
 month, so the yardstick is still the flat forecast and no policy was replayed.
 
-**Evidence.** Run 12 in `research.run`; `~/yardstick-rsi-mean.json`; each row's forecasts in
+**Evidence.** Run 12 in `research.run`; `~/tmp_trading/yardstick-rsi-mean.json`; each row's forecasts in
 `data/models/yardstick/run-12/forecasts.npz`.
 
 ### Run 11 (November 25, 2026): the first RSI swings and the CVD swings
@@ -122,7 +122,7 @@ stopped by the session's time limit on the last of its five horizons, before any
 saved. Run 11 used `--no-horizons`. To get the map, run `research yardstick GC SI` from a
 terminal, where nothing limits it.
 
-**Evidence.** `~/yardstick-series.json`.
+**Evidence.** `~/tmp_trading/yardstick-series.json`.
 
 ### Replaying an earlier run
 
@@ -265,7 +265,7 @@ leaves them too wide.
 
 ### Runs 4 and 5 (November 24, 2026): the first slope
 
-`~/yardstick-calibrated.json` and `~/policy-calibrated.json`. **The slope is zero in all
+`~/tmp_trading/yardstick-calibrated.json` and `~/tmp_trading/policy-calibrated.json`. **The slope is zero in all
 four months, for both kinds of trees.** The yardstick then forecast zero, opened no position
 in any of the sixteen replays, and equalled staying flat.
 
@@ -299,7 +299,7 @@ two-sided, by-row slope is the first run's, kept as `trees_coarse_shrunk`. `tree
 no longer refitted: its slope was zero in every month of run 4. Runs from 7 on report
 `trees` unshrunk and calibrate `trees_coarse` only.
 
-**Result** (run 7, on the rows rebuilt after the review; `~/yardstick-review.json`). All
+**Result** (run 7, on the rows rebuilt after the review; `~/tmp_trading/yardstick-review.json`). All
 four slopes are zero in every month, so neither the direction of the fit nor the weighting
 changes anything, and the yardstick is still the flat forecast.
 
@@ -317,7 +317,7 @@ the stored rows: `trees` 0.051 (-0.027 to 0.126) with a squared error 12% above 
 
 ### Run 9: one row a session fewer
 
-`~/yardstick-review2.json`. The row exactly one hour before the forced exit was eligible,
+`~/tmp_trading/yardstick-review2.json`. The row exactly one hour before the forced exit was eligible,
 while the engine opens nothing with an hour or less left; eligibility now needs more than an
 hour. 432,185 eligible rows, from 432,513. All four slopes are again zero in every month.
 `trees` 0.044 (-0.030 to 0.116), 12% above `flat`; `trees_coarse` 0.029 (-0.049 to 0.111),
@@ -338,8 +338,8 @@ positions or none, so the closing rules can hardly be told apart.
 
 **Result (November 24, 2026).** GC and SI, January 2 to August 31, 2026; test months May to
 August, 86 trade dates. Recorded as runs 1 to 3 in `research.run` (3 is the forecast with
-the corrected measure, 2 the policy). Evidence: `~/yardstick-gc-si-2.json`,
-`~/policy-gc-si.json`, and their logs. **The model has no skill at the bracket's horizon and
+the corrected measure, 2 the policy). Evidence: `~/tmp_trading/yardstick-gc-si-2.json`,
+`~/tmp_trading/policy-gc-si.json`, and their logs. **The model has no skill at the bracket's horizon and
 every policy cell loses.**
 
 **Rows.** 470,100 rows, one a minute over 171 sessions a product, with 741 features (the

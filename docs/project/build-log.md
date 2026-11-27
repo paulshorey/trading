@@ -61,17 +61,16 @@ table is of the first RSI series (see the replacement below).
 chunking and from checkpoints; features are unchanged when all prices or all sizes are
 multiplied; shifting CVD's level by a constant changes no feature; a backtest warmed for the
 lead computes the stored rows. `ingest run GC SI` added the stages to all 12 contracts
-without rebuilding any other (858 sessions, run 6). The new fingerprint
-(`~/fingerprint-series.txt`) holds the 432 lines of `~/fingerprint-new.txt` unchanged and 576
-new ones. `research verify` on the example day: features and all 18 trades identical, at
-9.8 ms a market second (8.8 ms with 741 features).
+without rebuilding any other (858 sessions, run 6). The fingerprint kept the 432 lines of
+the prior baseline and added 576. `research verify` on the example day found identical
+features and all 18 trades at 9.8 ms a market second (8.8 ms with 741 features).
 
 **A fix after review** (November 25). The detector was given a size of zero for every row,
 so the events of these stages stored a leg's volume as 0, 0, 0 where it is unknown: no
 trade is read. They are NULL now (3,634,539 pivot events), and a test requires it. The 24
 stages were rebuilt (run 7). Against the fingerprint before the fix, only their 288 event
 lines differ, with the same counts; every row table is identical, so no feature changed and
-the model run below stands. `~/fingerprint-series.txt` is the one after the fix.
+the model run below stands.
 
 **The RSI series was wrong, and is replaced** (November 26 and 27; found in review). The
 stored RSI is one history per phase. Read row by row it steps as the rows rotate through
@@ -85,11 +84,10 @@ minute-end forecasts at the bracket horizon, over 86 trade dates, no difference 
 detectable between the model with these RSI swings, with the first ones, or with none;
 shorter horizons, the seconds between minute ends, and results after costs were not tested
 ([measurements, the choice, and run 12](results.md#how-should-the-rsi-series-be-read)).
-`research verify` again finds features and all 18 trades identical. The fingerprint
-(`~/fingerprint-series.txt`, 1,296 lines) holds every earlier line unchanged, CVD's
-included, and 288 new ones for the new RSI scales. The retired scales' rows were then
-deleted with Paul's agreement (61.3 million rows, 4.6 million events) and their 288 lines
-taken out of the baseline: 1,008.
+`research verify` again found identical features and all 18 trades. The 1,296-line
+fingerprint kept every earlier line and added 288 for the new RSI scales. The retired
+scales' rows were then deleted with Paul's agreement (61.3 million rows, 4.6 million
+events). Removing their 288 lines left 1,008 in the [baseline](status.md#this-machine).
 
 **Two more corrections from review** (November 27). The policy opens and closes nothing on a
 row where a swing scale has no confirmed high or low yet, which training leaves out
@@ -118,7 +116,7 @@ The new inputs add no measurable skill, as expected before the run. The forecast
 them reproduces run 9 (0.044), so the comparison is on the same footing. By product `trees`
 is 0.082 for GC and 0.000 for SI; by month -0.101, 0.097, 0.151, and 0.069. All four
 calibration slopes are zero in every month, so the yardstick is still the flat forecast and
-the policy was not replayed. Evidence: `~/yardstick-series.json`.
+the policy was not replayed. Evidence: `~/tmp_trading/yardstick-series.json`.
 
 **The horizon map was not rerun.** With 1,449 features it takes more than two hours; the
 first attempt (run 10, left unfinished in `research.run`) was stopped by the session's time
@@ -335,11 +333,10 @@ The database was rebuilt from the DBN files on the new Mac (Apple M1 Max, 10 cor
   the second tables, 7,073,190 in the ten-second tables, 21,219,570 `pivot_10s`, 31,095,900
   `pivot_1s`, 3,536,595 `pivot_1m`, 2,787,648 events (2,403,082 and 384,566), and 5,029,757,
   915,075, and 197,721 label rows.
-- **The fingerprints could not be compared.** The old machine's fingerprint file is not on
-  this machine. Whether the two processors give bit-identical floats is therefore not shown,
-  and will not be: Paul decided the same day that this build is the starting point, so
-  `~/fingerprint-new.txt` (576 lines: per table, contract, and variant) is the baseline for
-  later rebuilds.
+- **The fingerprints could not be compared.** The old machine's fingerprint file was
+  unavailable, so the two processors' floats could not be compared bit for bit. Paul chose
+  the new machine's build as the starting point. Its fingerprint then had 576 lines by
+  table, contract, and variant. See the [current baseline](status.md#this-machine).
 - **What stands in for it, in part:** a replay of the candidates on the rebuilt database
   reproduced every number of the two tables recorded on November 19, so the results that
   depend on the fast labels, both ATRs, the slow swings, and every trade and book record of

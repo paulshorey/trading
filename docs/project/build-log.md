@@ -70,6 +70,27 @@ stages were rebuilt (run 7). Against the fingerprint before the fix, only their 
 lines differ, with the same counts; every row table is identical, so no feature changed and
 run 11 below stands. `~/fingerprint-series.txt` is the one after the fix.
 
+**The RSI series was wrong, and is replaced** (November 26 and 27; found in review). The
+stored RSI is one history per phase. Read row by row it steps as the rows rotate through
+the phases, and the zigzag confirmed swings no phase had made: 60 pivots in 30 minutes at
+a constant price, and 5% to 11% of the stored pivots at 0.5 and 1 ATR repeating exactly 60
+rows apart. The series is now the mean of the last 60 rows' RSI, each phase once, with its
+smallest swing measured again at 0.25 points; the scales are renamed
+`<stream>_rsi_mean_atr_<k>` and rebuilt (run 8), and the first ones are retired with their
+rows left in place. Both flat-price reproductions are tests. The stored pivots no longer
+repeat (0.0%), and the model is the same with these RSI swings, with the first ones, or
+with none ([measurements, the choice, and run 12](series-structure-spec.md#the-rsi-series-the-mean-over-the-60-phases-decided-november-26-2026)). The table of swing counts above
+and run 11 below are of the first RSI series. `research verify` again
+finds features and all 18 trades identical. The fingerprint (`~/fingerprint-series.txt`,
+1,296 lines) holds every earlier line unchanged, CVD's included, and 288 new ones for the
+new RSI scales.
+
+**The model decides only on rows it was fitted on** (found in review). Training leaves out
+a row where a swing scale has no confirmed high or low yet; the policy opened on a forecast
+there. It now opens and closes nothing on such a row, and the artifact names the features
+that decide it (`ModelPolicy.decides`, `dataset.readiness`). Run 11's forecast was zero
+throughout, so nothing recorded changes.
+
 **The engine** now holds 1,449 features (741 before). Its per-second cost grows with the
 number of features, so a second in which no slower row completes now reuses the last row's
 values instead of joining them again (`StageFeatures.as_of`); the second-by-second

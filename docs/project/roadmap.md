@@ -267,7 +267,12 @@ and 34 (replaced by 35), 19 (replaced by 36).
     threshold away from the extreme and never changed afterwards. The scales at 0.5, 1, and
     2 ATR stay; the model reads all of them.
 31. **The confidence of an unconfirmed swing is arithmetic:** the pullback so far divided by
-    the threshold (2 of 3 ATR: 67%; 2.5 of 3: 83%). This is the stored `progress`.
+    the threshold (2 of 3 ATR: 67%; 2.5 of 3: 83%). Corrected November 27: the stored
+    `progress` is the *deepest* pullback since the running extreme over the threshold, so
+    it stays at 0.8 after a move has recovered to within a point of its extreme, and it is
+    not a probability. Where the move stands now is `ext_dist_atr`, in ATRs; the current
+    pullback over the frozen threshold is not stored as its own feature yet
+    ([to-do](todo.md)).
 32. **Structure is a code computed from confirmed swings and the current price:** higher or
     lower highs and lows, and whether the current price has broken the last confirmed low
     or high.

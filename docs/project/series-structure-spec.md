@@ -217,13 +217,27 @@ did no harm. No policy is replayed while the yardstick's slope is zero.
 | The first built less none | 0.014 (-0.035 to 0.066) |
 | RSI's and CVD's swings less neither | -0.012 (-0.056 to 0.029) |
 
-No difference is measurable, as expected: every interval spans zero. The fix changes what
-the RSI swings mean, and it did no measurable harm or good to the model. `trees` is 0.067
+**What this does and does not show.** No improvement is detectable, as expected: every
+interval spans zero, and each is about 0.09 wide, so a real difference of a few hundredths
+either way is not excluded. The test covers one kind of row and one horizon: forecasts at
+the last second of a minute, where both slower timeframes have just completed a row, of the
+move to the bracket's barriers. On most seconds at which the model would decide live, the
+slower timeframes' values are older; that has not been tested. The comparison at shorter
+horizons (the horizon map) was not run with these inputs, and no policy was replayed after
+costs, the forecast being zero. So: no detectable gain on minute-end forecasts at the
+bracket horizon, on 86 trade dates. `trees` is 0.067
 for GC and -0.002 for SI; by month -0.134, 0.011, 0.174, 0.136. `ridge` fell to 0.003
 (-0.074 to 0.078) from 0.042, inside its interval. `trees_coarse` is 0.015 (-0.071 to
 0.096). All four calibration slopes are zero in every month, so the yardstick is still the
 flat forecast and no policy was replayed. Each row's forecasts are kept in
 `data/models/yardstick/run-12/forecasts.npz`. Evidence: `~/yardstick-rsi-mean.json`.
+
+**Replaying an earlier run.** Run 11's models read the RSI scales first built, which this
+code no longer computes, and they are never given the renamed ones in their place.
+`research policy 11` now stops before it starts and says so (`policy.incompatible`); to
+replay run 11, check out commit `6916ed8`, the code it was fitted with. Runs 9 and 12
+replay. From now on an artifact records its commit, whether the tree had uncommitted
+changes, and the dataset file its rows came from.
 
 **Stored** (ingest run 8, all 12 contracts `current`). On the dates above, no RSI pivot at
 any size or timeframe has its extreme exactly 60 rows after the previous one of its kind

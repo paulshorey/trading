@@ -234,16 +234,17 @@ def london(day, rules, calendar):
         yield wall_occurrence(rule, day)
 
 
-# The session calendar names each open interval. A Globex holiday interval may have
-# the same order trade date as the interval after the holiday.
-CME_NEXT_TRADE_DATE = {
-    "2025-11-27": "2025-11-28",
-    "2026-01-19": "2026-01-20",
-    "2026-02-16": "2026-02-17",
-    "2026-05-25": "2026-05-26",
-    "2026-09-07": "2026-09-08",
-    "2026-11-26": "2026-11-27",
-}
+@cache
+def globex_trade_date(day):
+    # Until CME's 2026-06-19 Globex change, a traded Friday holiday kept
+    # Friday's electronic trade date. Afterward it uses the next clearing date.
+    if day.weekday() == 4 and day < date(2026, 6, 19):
+        return day
+    labels = schedule("CME_TradeDate", day.year).index
+    i = labels.searchsorted(pd.Timestamp(day))
+    if i == len(labels):
+        return schedule("CME_TradeDate", day.year + 1).index[0].date()
+    return labels[i].date()
 
 
 def _calendar_records(calendar, year, product_calendar):
@@ -308,8 +309,9 @@ def _calendar_records(calendar, year, product_calendar):
         day = row.Index.date()
         if not START <= day <= END:
             continue
+        trade_date = globex_trade_date(day) if calendar == "product" else day
         for r in rules:
-            if not r.applies(day):
+            if not r.applies(trade_date):
                 continue
             if calendar in ("regular_metals", "metal_settlement", "index_settlement"):
                 item = cme_rule(r, row, day)
@@ -339,9 +341,6 @@ def _calendar_records(calendar, year, product_calendar):
             local = (getattr(row, field) - pd.Timedelta(minutes=minutes)).tz_convert(
                 mcal_zone(exchange)
             )
-            trade_date = day
-            if calendar == "product" and day.isoformat() in CME_NEXT_TRADE_DATE:
-                trade_date = date.fromisoformat(CME_NEXT_TRADE_DATE[day.isoformat()])
             yield Occurrence(
                 r.event, trade_date, instant(local.date(), local.time(), r.zone), r.source
             )

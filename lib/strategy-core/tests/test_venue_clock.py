@@ -93,3 +93,23 @@ def test_the_effective_tokyo_rule_and_its_dated_close_change_together():
     assert "lbma_gold_pm" not in session(date(2024, 11, 5))
     assert session(date(2026, 11, 27))["gc_tas_end"].at == pd.Timestamp("2026-11-27 18:30Z")
     assert session(date(2025, 12, 24))["lme_ring_close"].at == pd.Timestamp("2025-12-24 14:40Z")
+
+
+@pytest.mark.parametrize(
+    ("interval_date", "trade_date"),
+    [
+        ("2021-01-18", "2021-01-19"),
+        ("2025-07-04", "2025-07-04"),
+        ("2026-06-19", "2026-06-22"),
+        ("2026-07-03", "2026-07-06"),
+        ("2027-01-18", "2027-01-19"),
+        ("2027-11-25", "2027-11-26"),
+    ],
+)
+def test_globex_holiday_intervals_keep_the_exchange_trade_date(interval_date, trade_date):
+    events = session(date.fromisoformat(interval_date))
+    for event in ("globex_open", "globex_close"):
+        assert events[event].trade_date == date.fromisoformat(trade_date)
+    assert (
+        events["globex_close"].at.tz_convert("America/Chicago").date().isoformat() == interval_date
+    )

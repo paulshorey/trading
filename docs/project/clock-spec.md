@@ -110,6 +110,9 @@ The package uses the pinned tzdata wheel to resolve each actual source-local dat
 time. Venue calendars select holiday hours and overnight dates. An ordinary Shanghai
 Friday night belongs to the following Monday's trading date. The session-based NYSE,
 Tokyo and Globex calendars cover 2016–27, subject to the effective bounds of each rule.
+Globex interval endpoints use each product's calendar. Their trade-date labels use
+CME clearing business dates, with the historical Friday holiday exception through
+June 18, 2026. [CME's effective-date notice](https://www.cmegroup.com/notices/electronic-trading/2026/06/20260615.html).
 The detailed metals and publication calendars cover portions of the 2025–26 research
 archive. Dates outside a rule's coverage stay missing. The 2026 LME Christmas and
 New Year's Eve exceptions need a dated exchange notice before they are used.
